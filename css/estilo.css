@@ -175,6 +175,26 @@ html, body {
   border-bottom: 1px dotted rgba(240, 194, 116, .14); padding-bottom: 3px; }
 .somas b { color: var(--ambar); }
 
+/* O que sobrou na mão. Herda a lista de .somas mas NÃO o âmbar do <b>: com a mesma cor
+   e peso do placar do topo, o número lia-se como pontuação — e é o contrário, é o que
+   ficou por jogar. Classe própria porque .somas também veste a sala online. */
+.rotBloco { margin-top: 16px; }
+.sobrou { display: grid; gap: 4px; margin: 6px 0 2px; font-size: 13.5px; }
+.sobrou div { display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  border-bottom: 1px dotted rgba(240, 194, 116, .14); padding-bottom: 3px; }
+.sobrou b { color: var(--texto); opacity: .8; font-variant-numeric: tabular-nums; }
+/* em duplas, as parcelas de cada parceiro ao lado do nome da dupla */
+.sobrou i { font-style: normal; opacity: .45; font-size: 12px; margin-left: 8px; }
+
+/* placar final, na tela de campeão: mesmo desenho do placar do topo */
+#placarFinal { display: flex; align-items: center; gap: 18px; margin: 10px 0 14px; }
+#placarFinal .time { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+#placarFinal .time i { font-style: normal; font-size: 12px; opacity: .6; max-width: 190px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#placarFinal .time b { font-size: 34px; line-height: 1; opacity: .45; }
+#placarFinal .time.venceu b { color: var(--ambar-forte); opacity: 1; }
+#placarFinal .x { opacity: .3; font-size: 18px; align-self: flex-end; padding-bottom: 4px; }
+
 .regras { margin-top: 20px; font-size: 13px; opacity: .72; }
 .regras summary { cursor: pointer; opacity: .8; }
 .regras ul { margin: 10px 0 0; padding-left: 20px; line-height: 1.75; }

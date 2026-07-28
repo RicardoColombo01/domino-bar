@@ -114,6 +114,13 @@ function passar(P, cadeira) {
 
 function fecharMao(P, res) {
   const somas = P.maos.map(somaMao);
+  // O subtotal por time serve a duas coisas: decidir a tranca (quem ficou com a mão
+  // mais leve) e a tela de fim de mão, que em duplas precisa mostrar o que a DUPLA
+  // deixou na mão — quatro números soltos não dizem quem pagou mais caro. Fica aqui
+  // fora do if porque a batida também precisa dele, e antes ele só existia na tranca.
+  const porTime = {};
+  somas.forEach((s, c) => { const t = timeDe(P, c); porTime[t] = (porTime[t] || 0) + s; });
+
   let time = null, pontos = 0, vencedor = res.vencedor === undefined ? null : res.vencedor;
   const tipo = res.tipo || 'tranca';
 
@@ -122,8 +129,6 @@ function fecharMao(P, res) {
     pontos = PONTOS[tipo];
   } else {
     // Trancou: marca quem tem a menor soma na mão. Em duplas, soma as duas mãos do time.
-    const porTime = {};
-    somas.forEach((s, c) => { const t = timeDe(P, c); porTime[t] = (porTime[t] || 0) + s; });
     const ordem = Object.keys(porTime).map(Number).sort((a, b) => porTime[a] - porTime[b]);
     if (ordem.length > 1 && porTime[ordem[0]] === porTime[ordem[1]]) {
       time = null;                                   // empate na soma: a mão morre, ninguém marca
@@ -140,7 +145,10 @@ function fecharMao(P, res) {
 
   if (time !== null) P.placar[time] += pontos;
   P.abridor = vencedor === null ? P.vez : vencedor;
-  P.resultado = { motivo: res.motivo, tipo, vencedor, time, pontos, somas };
+  P.resultado = {
+    motivo: res.motivo, tipo, vencedor, time, pontos, somas,
+    somasPorTime: P.placar.map((_, t) => porTime[t] || 0),   // mesmo índice do placar
+  };
   P.fase = P.placar.some(v => v >= P.regras.alvo) ? 'fim' : 'fimDeMao';
   P.log.push(Object.assign({ t: 'fimDeMao' }, P.resultado));
   return { ok: true, fim: P.resultado };
