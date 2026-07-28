@@ -44,6 +44,15 @@
     <p class="sub">Dupla-seis, regras de bar. Você escolhe quem senta em cada cadeira.</p>
 
     <div class="linha">
+      <span class="rot">Mesa</span>
+      <div class="grupo" id="modoMesa">
+        <button class="btn peq on" data-modo="classico">Clássico <i>7 peças</i></button>
+        <button class="btn peq" data-modo="duelo">Duelo <i>14, 1v1</i></button>
+        <button class="btn peq" data-modo="trio">Trio <i>9, sem 0|0</i></button>
+      </div>
+    </div>
+
+    <div class="linha">
       <span class="rot">Jogadores</span>
       <div class="grupo" id="qtdJogadores">
         <button class="btn peq" data-n="2">2</button>
@@ -76,9 +85,13 @@
     <details class="regras">
       <summary>As regras desta casa</summary>
       <ul>
-        <li>28 peças. Cada um recebe 7.</li>
-        <li><b>4 jogadores:</b> duplas em cruz (1&amp;3 × 2&amp;4) e <b>sem monte</b> — quem não pode jogar, passa.</li>
-        <li><b>2 ou 3:</b> o resto vira monte. Quem não pode jogar <b>compra até conseguir</b>; só passa se o monte secar.</li>
+        <li><b>Clássico:</b> 28 peças, 7 para cada, de 2 a 4 jogadores.</li>
+        <li><b>Duelo:</b> 1v1 com o baralho inteiro na mão — 14 para cada, sem monte.</li>
+        <li><b>Trio:</b> a bucha de zero sai do baralho, sobram 27 e dão 9 para cada um dos três, sem monte.</li>
+        <li><b>Sem monte</b> (Duelo, Trio e o Clássico de 4): quem não pode jogar, passa.</li>
+        <li><b>Com monte</b> (Clássico de 2 ou 3): quem não pode jogar <b>compra até conseguir</b>; só passa se o monte secar.</li>
+        <li>No Clássico de 4, duplas em cruz (1&amp;3 × 2&amp;4).</li>
+        <li>Mão carroçuda demais volta para a mesa e todo mundo embaralha de novo.</li>
         <li>A primeira mão abre com o <b>6|6</b>. Depois, abre quem bateu.</li>
         <li>Batida: simples <b>1</b> · carroça <b>2</b> · lá-e-lô <b>3</b> · cruzada <b>4</b>.</li>
         <li>Trancou: marca 1 ponto quem tiver a mão mais leve. Empatou, a mão morre.</li>
@@ -154,7 +167,27 @@
 /* GERADO por build.mjs a partir de src/ — não edite este bloco à mão. */
 /* ····· 01-constantes.js ····· */
 const MAX_PINTAS = 6;            // dupla-seis → 28 peças
-const NA_MAO = 7;                // quantas cada jogador recebe
+
+// Os modos da casa. Um modo é só quantas peças cada um recebe, com quantas cadeiras
+// isso fecha, e se alguma peça sai do baralho.
+//
+// Repare que Duelo e Trio ESGOTAM o baralho na distribuição (2×14 = 28, 3×9 = 27) —
+// então caem sozinhos no caminho "sem monte, quem trava passa" que a mesa de 4 já
+// usava, sem uma linha de regra nova. E o 27 do Trio não é coincidência: tirar a
+// bucha de zero é justamente o que faz o baralho dividir exato entre três.
+//
+// `carrocasDemais` é a munição de maoRuim() (02-baralho.js): a partir de quantas
+// carroças a mesa embaralha de novo.
+const MODOS = {
+  classico: { rotulo: 'Clássico', nota: '7 peças',  pecasPorMao: 7,  cadeiras: [2, 3, 4], semZeroZero: false, carrocasDemais: 5 },
+  duelo:    { rotulo: 'Duelo',    nota: '14, 1v1',  pecasPorMao: 14, cadeiras: [2],       semZeroZero: false, carrocasDemais: 7 },
+  trio:     { rotulo: 'Trio',     nota: '9, sem 0|0', pecasPorMao: 9, cadeiras: [3],      semZeroZero: true,  carrocasDemais: 5 },
+};
+const MODO_PADRAO = 'classico';
+
+// Trava do laço de re-embaralho. Um critério exigente demais em maoRuim() faria a
+// distribuição rodar para sempre; aqui ela desiste e entrega a última mão.
+const MAX_EMBARALHOS = 100;
 
 // Medidas da peça em unidades de mundo. O comprimento é EXATAMENTE o dobro da
 // largura — é isso que faz uma carroça atravessada ocupar meia peça no braço e
@@ -195,6 +228,10 @@ const CORES = {
 };
 
 /* ····· 02-baralho.js ····· */
+// O baralho: as peças, o embaralho e quem abre a mão. Quantas peças e quantas na mão
+// depende do modo da mesa (MODOS, em 01-constantes.js).
+// (parte de src/js — mesmo escopo, concatenado por build.mjs)
+
 const chave = p => p[0] + '|' + p[1];
 const valor = p => p[0] + p[1];
 const carroca = p => p[0] === p[1];
@@ -208,6 +245,37 @@ function baralhoCompleto() {
   return pecas;                                              // 28
 }
 
+// Aceita a chave do modo ('trio') ou o próprio objeto — o objeto serve aos testes,
+// que montam modos de mentira para exercitar os limites sem mexer na tabela real.
+const modoDe = regras => {
+  const m = (regras || {}).modo;
+  return (typeof m === 'object' && m) || MODOS[m] || MODOS[MODO_PADRAO];
+};
+
+// O Trio joga sem a bucha de zero: 27 peças, que dividem exato entre três.
+function baralhoDoModo(modo) {
+  const pecas = baralhoCompleto();
+  return modo.semZeroZero ? pecas.filter(p => !mesmaPeca(p, [0, 0])) : pecas;
+}
+
+// A REGRA DA CASA: quando a mão saiu ruim demais e a mesa embaralha tudo de novo.
+//
+// Devolver true joga a distribuição INTEIRA fora — não só esta mão — e redistribui,
+// até MAX_EMBARALHOS vezes. `modo.carrocasDemais` traz o número combinado: 5 no
+// clássico e no trio, 7 no duelo (lá são as sete, a mão inteira de carroça). Mas o
+// campo é só munição: o critério é seu.
+//
+// O que pesar, se quiser ir além de contar carroça: mão só de dois ou três números
+// diferentes trava a mesa tanto quanto mão de carroça, e é bem mais comum. Do outro
+// lado, critério exigente demais deixa o laço rodando à toa — tests/test-regras.mjs
+// mede quantos embaralhos cada modo gasta e reprova se a média subir.
+//
+// Ferramentas prontas aqui do lado: carroca(p), valor(p), somaMao(mao).
+function maoRuim(mao, modo) {
+  // TODO (Ricardo)
+  return false;
+}
+
 // Fisher-Yates. Usa Math.random de propósito: os testes trocam Math.random por uma
 // versão com semente, e aí uma partida que falhou é sempre reproduzível.
 function embaralhar(lista) {
@@ -218,11 +286,24 @@ function embaralhar(lista) {
   return lista;
 }
 
-function distribuir(nJogadores) {
-  const monte = embaralhar(baralhoCompleto());
-  const maos = [];
-  for (let i = 0; i < nJogadores; i++) maos.push(monte.splice(0, NA_MAO));
-  return { maos, monte };            // com 4 jogadores o monte sai vazio, por construção
+function distribuir(nJogadores, regras) {
+  const modo = modoDe(regras);
+  const total = baralhoDoModo(modo).length;
+  // Sem isto o splice devolveria mãos curtas EM SILÊNCIO — o menu já barra a
+  // combinação, mas os testes e a ponte window.__jogo entram por baixo dele.
+  if (nJogadores * modo.pecasPorMao > total) {
+    throw new Error(`${nJogadores} jogadores × ${modo.pecasPorMao} peças não cabem num baralho de ${total}`);
+  }
+
+  for (let embaralhos = 1; ; embaralhos++) {
+    const monte = embaralhar(baralhoDoModo(modo));
+    const maos = [];
+    for (let i = 0; i < nJogadores; i++) maos.push(monte.splice(0, modo.pecasPorMao));
+    // No clássico com 4, no duelo e no trio o monte sai vazio, por construção.
+    if (embaralhos >= MAX_EMBARALHOS || !maos.some(m => maoRuim(m, modo))) {
+      return { maos, monte, embaralhos };
+    }
+  }
 }
 
 // Quem abre a primeira mão da partida: quem tem o 6|6. Se ninguém tiver — só acontece
@@ -318,7 +399,7 @@ function novaPartida(cadeiras, regras) {
     cadeiras,
     n: cadeiras.length,
     duplas: cadeiras.length === 4,            // 4 jogadores → 1&3 contra 2&4, em cruz
-    regras: Object.assign({ alvo: ALVO_PADRAO, compraVoluntaria: false }, regras || {}),
+    regras: Object.assign({ alvo: ALVO_PADRAO, compraVoluntaria: false, modo: MODO_PADRAO }, regras || {}),
     placar: cadeiras.length === 4 ? [0, 0] : new Array(cadeiras.length).fill(0),
     maoNum: 0,
     abridor: null,
@@ -329,7 +410,9 @@ function novaPartida(cadeiras, regras) {
 }
 
 function novaMao(P) {
-  const { maos, monte } = distribuir(P.n);
+  // O tamanho da mão vem de P.regras, e não de parâmetro, porque o botão "Próxima mão"
+  // chama novaMao(P) sem mais nada — a mesa não pode trocar de modo no meio da partida.
+  const { maos, monte } = distribuir(P.n, P.regras);
   P.maos = maos;
   P.monte = monte;
   P.linha = [];
@@ -476,6 +559,7 @@ function visaoDe(P, cadeira) {
     maoNum: P.maoNum,
     duplas: P.duplas,
     alvo: P.regras.alvo,
+    modo: P.regras.modo,                         // o convidado não vê MESA nem P.regras
     cadeiras: P.cadeiras.map(c => ({ nome: c.nome, tipo: c.tipo })),
     acoes: acoesDe(P, cadeira),
   };
@@ -1085,7 +1169,15 @@ scene.add(grupoMao, grupoOutros, grupoMonte);
 const MAO_Z = 4.75, MAO_Y = 1.15, MAO_TOMBO = 0.58;
 const LARGURA_MAO = 8.2;             // o quanto cabe na frente da câmera, em unidades
 const FOLGA_LEQUE = 1.08;            // respiro entre uma peça e a seguinte
-const naMao = [];                    // { obj, peca, xBase, jogavel, erguida }
+const naMao = [];                    // { obj, peca, xBase, yBase, zBase, jogavel, erguida }
+
+// Quantas peças cabem numa fileira sem passar do piso de escala. Acima disso a mão vai
+// para DUAS fileiras em vez de continuar encolhendo: com 14 peças (o Duelo inteiro,
+// não mais o caso raro de quem comprou muito) uma fileira só sobrepõe quase um quinto
+// de cada peça, e o que some é sempre a beirada direita — ou seja, o segundo número.
+const ESCALA_MIN = 0.72;
+const porFileira = n => (n <= Math.floor(LARGURA_MAO / (PECA_C * ESCALA_MIN * FOLGA_LEQUE))
+  ? n : Math.ceil(n / 2));
 let assinaturaMao = '';
 let escolhida = null;                // índice da peça levantada, ou null
 
@@ -1103,23 +1195,32 @@ function sincronizarMao(vista) {
     // a peça nasce com o valor [0] à esquerda e o [1] à direita, o que sumia era sempre
     // o segundo número. Dava para ler meia mão.
     //
-    // Primeiro garante que não sobrepõe; só encolhe depois, se a mão for grande. O piso
-    // de 0.72 é proposital: com 14 peças compradas é melhor sobrepor 26% da beirada do
-    // que encolher tudo até as pintas sumirem.
+    // Primeiro garante que não sobrepõe; só encolhe depois, se a mão for grande. E
+    // quando nem encolhendo cabe, a mão quebra em duas fileiras em vez de virar tira.
     const n = Math.max(vista.mao.length, 1);
-    const escala = Math.max(0.72, Math.min(1.3, LARGURA_MAO / (n * PECA_C * FOLGA_LEQUE)));
-    const espaco = Math.min(PECA_C * escala * FOLGA_LEQUE, LARGURA_MAO / n);
+    const cabem = porFileira(n);
+    const escala = Math.max(ESCALA_MIN, Math.min(1.3, LARGURA_MAO / (cabem * PECA_C * FOLGA_LEQUE)));
+    const espaco = Math.min(PECA_C * escala * FOLGA_LEQUE, LARGURA_MAO / cabem);
+
     vista.mao.forEach((peca, i) => {
+      const fila = Math.floor(i / cabem);
+      const nesta = Math.min(cabem, n - fila * cabem);      // a de cima pode ser menor
       const obj = criarPeca(peca, true);
-      const x = (i - (vista.mao.length - 1) / 2) * espaco;
-      obj.position.set(x, MAO_Y, MAO_Z + Math.abs(x) * 0.05);
-      obj.rotation.set(MAO_TOMBO, 0, 0);
+      // A fileira de trás sobe, recua e tomba um pouco mais. Com a mesma altura e o
+      // mesmo tombo ela ficaria escondida atrás da da frente — a ideia é o leque de
+      // quem segura as peças em duas camadas, não duas linhas na mesma altura.
+      const x = ((i % cabem) - (nesta - 1) / 2) * espaco;
+      const y = MAO_Y + fila * 0.34 * escala;
+      const z = MAO_Z - fila * 0.66 * escala + Math.abs(x) * 0.05;
+      const tombo = MAO_TOMBO + fila * 0.13;
+      obj.position.set(x, y, z);
+      obj.rotation.set(tombo, 0, 0);
       obj.scale.setScalar(escala);
       // Peça na mão está NA SUA MÃO, não na mesa: se ela projetar sombra, vira um
       // borrão preto do tamanho de um tijolo no tampo logo atrás.
       obj.userData.corpo.castShadow = false;
       grupoMao.add(obj);
-      naMao.push({ obj, peca, xBase: x, jogavel: false });
+      naMao.push({ obj, peca, xBase: x, yBase: y, zBase: z, tombo, jogavel: false });
     });
   }
 
@@ -1192,9 +1293,11 @@ function sincronizarMonte(vista) {
 function animarMao(dt, apontada) {
   naMao.forEach((m, i) => {
     const sobe = i === escolhida ? 0.42 : (i === apontada && m.jogavel ? 0.2 : 0);
-    m.obj.position.y = chegarPerto(m.obj.position.y, MAO_Y + sobe, 14, dt);
-    m.obj.position.z = chegarPerto(m.obj.position.z, MAO_Z + Math.abs(m.xBase) * 0.05 - sobe * 0.35, 14, dt);
-    m.obj.rotation.x = chegarPerto(m.obj.rotation.x, MAO_TOMBO + sobe * 0.22, 14, dt);
+    // O repouso sai do que sincronizarMao calculou para ESTA peça (a fileira de trás
+    // mora mais alta e mais ao fundo), e não de MAO_Y/MAO_Z direto.
+    m.obj.position.y = chegarPerto(m.obj.position.y, m.yBase + sobe, 14, dt);
+    m.obj.position.z = chegarPerto(m.obj.position.z, m.zBase - sobe * 0.35, 14, dt);
+    m.obj.rotation.x = chegarPerto(m.obj.rotation.x, m.tombo + sobe * 0.22, 14, dt);
   });
 }
 
@@ -1413,7 +1516,10 @@ function desenharHUD(vista) {
 
   HUD.placar.innerHTML = vista.placar
     .map((p, i) => `<span class="time"><i>${nomeDoTime(vista, i)}</i><b>${p}</b></span>`)
-    .join('<span class="x">×</span>') + `<span class="ate">até ${vista.alvo}</span>`;
+    // O rótulo do modo só aparece quando não é o clássico, e é a única coisa que diz
+    // ao convidado em que mesa ele sentou — ele não tem MESA nem P.regras.
+    .join('<span class="x">×</span>') +
+    `<span class="ate">${vista.modo && vista.modo !== MODO_PADRAO ? MODOS[vista.modo].rotulo + ' · ' : ''}até ${vista.alvo}</span>`;
 
   // Um cartão por cadeira, na ordem em que a vez anda. O da vez acende.
   HUD.jogadores.innerHTML = vista.cadeiras.map((c, i) => `
@@ -1544,6 +1650,7 @@ const TIPOS = [
 
 const MESA = {
   n: 3,
+  modo: MODO_PADRAO,
   alvo: 6,
   compraVoluntaria: false,
   cadeiras: NOMES.slice(0, 4).map((nome, i) => (
@@ -1576,10 +1683,32 @@ function montarCadeiras() {
     };
   });
 
-  el('notaDuplas').textContent = MESA.n === 4
-    ? 'em duplas: 1 e 3 contra 2 e 4 · sem monte'
-    : `sem duplas · monte com ${28 - 7 * MESA.n} peças`;
+  el('notaDuplas').textContent = notaDaMesa();
   atualizarBotaoComecar();
+}
+
+// O tamanho do baralho sai de baralhoDoModo, não de um 28 escrito aqui — foi assim que
+// esta linha quebrou quando os modos chegaram.
+function notaDaMesa() {
+  const m = MODOS[MESA.modo];
+  const baralho = baralhoDoModo(m).length;
+  const monte = baralho - m.pecasPorMao * MESA.n;
+  return (MESA.n === 4 ? 'em duplas: 1 e 3 contra 2 e 4' : 'sem duplas') +
+    ` · ${baralho} peças, ${m.pecasPorMao} para cada · ` +
+    (monte > 0 ? `monte com ${monte}` : 'sem monte — quem não pode jogar, passa');
+}
+
+// Duelo é 1v1 e Trio é para três porque o baralho divide EXATO nessas contas: fora
+// delas não sobra peça, sobra erro. Em vez de deixar escolher e reclamar depois, as
+// cadeiras que não fecham ficam apagadas.
+function ajustarCadeirasAoModo() {
+  const cabem = MODOS[MESA.modo].cadeiras;
+  if (!cabem.includes(MESA.n)) MESA.n = cabem[0];
+  el('qtdJogadores').querySelectorAll('button').forEach(b => {
+    const n = +b.dataset.n;
+    b.disabled = !cabem.includes(n);
+    b.classList.toggle('on', !b.disabled && n === MESA.n);
+  });
 }
 
 const cadeirasOnline = () => MESA.cadeiras.slice(0, MESA.n).filter(c => c.tipo === 'online').length;
@@ -1602,6 +1731,7 @@ function grupo(id, attr, aplicar) {
     };
   });
 }
+grupo('modoMesa', 'modo', v => { MESA.modo = v; ajustarCadeirasAoModo(); montarCadeiras(); });
 grupo('qtdJogadores', 'n', v => { MESA.n = +v; montarCadeiras(); });
 grupo('alvoPontos', 'alvo', v => { MESA.alvo = +v; });
 grupo('compraLivre', 'livre', v => { MESA.compraVoluntaria = v === '1'; });
@@ -1615,6 +1745,7 @@ el('btComecar').onclick = () => {
 el('btEntrar').onclick = () => entrarNumaMesa();
 el('btMenu').onclick = () => { encerrarRede(); mostrarTela('telaMenu'); };
 
+ajustarCadeirasAoModo();
 montarCadeiras();
 
 /* ····· 15-rede.js ····· */
@@ -1820,7 +1951,9 @@ const podeAgirAgora = () =>
 function comecarLocal() {
   const cadeiras = MESA.cadeiras.slice(0, MESA.n)
     .map(c => ({ nome: c.nome, tipo: c.tipo, nivel: c.nivel }));
-  P = novaPartida(cadeiras, { alvo: MESA.alvo, compraVoluntaria: MESA.compraVoluntaria });
+  P = novaPartida(cadeiras, {
+    alvo: MESA.alvo, compraVoluntaria: MESA.compraVoluntaria, modo: MESA.modo,
+  });
   euNaTela = 0;
   travado = false;
   linhasDoLog.length = 0;

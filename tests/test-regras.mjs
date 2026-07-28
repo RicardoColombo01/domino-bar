@@ -8,6 +8,7 @@ const mod = await import(buildModule([
   'pontas', 'orientar', 'jogadasValidas', 'aplicar', 'tipoDaBatida',
   'novaPartida', 'novaMao', 'acoesDe', 'jogar', 'comprar', 'passar', 'visaoDe',
   'jogadaDoBot', 'timeDe', 'valor', 'carroca', 'chave', 'somaMao', 'mesmaPeca', 'PONTOS',
+  'MODOS', 'MODO_PADRAO', 'MAX_EMBARALHOS', 'baralhoDoModo', 'maoRuim',
 ]));
 
 let falhas = 0;
@@ -24,13 +25,73 @@ secao('baralho');
   ok(mod.somaMao(b) === 168, `soma de todas as peças = ${mod.somaMao(b)}, esperado 168`);
 
   seedRandom(7);
-  for (const n of [2, 3, 4]) {
-    const { maos, monte } = mod.distribuir(n);
-    ok(maos.length === n && maos.every(m => m.length === 7), `distribuir(${n}) deu mão errada`);
-    ok(monte.length === 28 - 7 * n, `distribuir(${n}) deixou monte de ${monte.length}`);
-    const todas = maos.flat().concat(monte).map(mod.chave);
-    ok(new Set(todas).size === 28, `distribuir(${n}) duplicou ou perdeu peça`);
+  // Cada modo é uma conta fechada: o baralho dele dividido pelas cadeiras que aceita.
+  for (const [nome, modo] of Object.entries(mod.MODOS)) {
+    const baralho = mod.baralhoDoModo(modo);
+    const tamanho = modo.semZeroZero ? 27 : 28;
+    ok(baralho.length === tamanho, `baralho do ${nome} tem ${baralho.length} peças, esperado ${tamanho}`);
+    ok(new Set(baralho.map(mod.chave)).size === tamanho, `peça repetida no baralho do ${nome}`);
+    ok(baralho.filter(mod.carroca).length === (modo.semZeroZero ? 6 : 7), `carroças erradas no ${nome}`);
+    // O 0|0 vale zero, então tirar ele não muda a soma — é a peça mais barata de sacar.
+    ok(mod.somaMao(baralho) === 168, `soma do baralho do ${nome} = ${mod.somaMao(baralho)}, esperado 168`);
+    ok(baralho.some(p => mod.mesmaPeca(p, [0, 0])) === !modo.semZeroZero, `o 0|0 no ${nome} está do lado errado`);
+
+    for (const n of modo.cadeiras) {
+      const { maos, monte } = mod.distribuir(n, { modo: nome });
+      ok(maos.length === n && maos.every(m => m.length === modo.pecasPorMao),
+        `${nome} com ${n}: mão de ${maos.map(m => m.length)}, esperado ${modo.pecasPorMao} para cada`);
+      ok(monte.length === tamanho - modo.pecasPorMao * n,
+        `${nome} com ${n}: monte de ${monte.length}`);
+      const todas = maos.flat().concat(monte).map(mod.chave);
+      ok(new Set(todas).size === tamanho, `${nome} com ${n}: duplicou ou perdeu peça`);
+      // Quem abre a primeira mão é quem tem o 6|6 — ele não pode ter saído do baralho.
+      ok(todas.includes('6|6'), `${nome} com ${n}: o 6|6 sumiu e ninguém abre a primeira mão`);
+    }
   }
+
+  // Duelo (2×14) e Trio (3×9) esgotam o baralho. É o que os faz cair sozinhos no
+  // caminho "sem monte, quem trava passa" que a mesa de 4 já usava.
+  ok(mod.distribuir(2, { modo: 'duelo' }).monte.length === 0, 'o Duelo deveria consumir as 28 peças');
+  ok(mod.distribuir(3, { modo: 'trio' }).monte.length === 0, 'o Trio deveria consumir as 27 peças');
+
+  // Antes o splice devolvia mão curta em silêncio.
+  let barrou = false;
+  try { mod.distribuir(4, { modo: 'duelo' }); } catch { barrou = true; }
+  ok(barrou, '4 × 14 peças não cabem em 28 e deveria estourar, não dar mão curta');
+}
+
+// ─── a mão ruim volta para a mesa ───────────────────────────────────────────
+secao('re-embaralho');
+{
+  const todasCarrocas = [[0, 0], [1, 1], [2, 2], [3, 3], [4, 4], [5, 5], [6, 6]];
+  if (!mod.maoRuim(todasCarrocas, mod.MODOS.duelo)) {
+    console.log('  ⚠ maoRuim() ainda é o placeholder (devolve sempre false): as asserções');
+    console.log('    abaixo passam vazias e viram teste de verdade quando o critério existir.');
+  }
+
+  seedRandom(4242);
+  const RODADAS = 2000;
+  for (const [nome, modo] of Object.entries(mod.MODOS)) {
+    const n = modo.cadeiras[modo.cadeiras.length - 1];
+    let gasto = 0, escaparam = 0;
+    for (let i = 0; i < RODADAS; i++) {
+      const { maos, embaralhos } = mod.distribuir(n, { modo: nome });
+      gasto += embaralhos;
+      if (maos.some(m => mod.maoRuim(m, modo))) escaparam++;
+    }
+    const media = gasto / RODADAS;
+    ok(escaparam === 0, `${nome}: ${escaparam} mãos ruins escaparam do re-embaralho`);
+    // Critério exigente demais faz o laço rodar à toa e a mesa demorar a distribuir.
+    ok(media < 1.2, `${nome}: ${media.toFixed(2)} embaralhos por mão — critério exigente demais?`);
+    console.log(`  ${nome}: ${media.toFixed(3)} embaralhos por distribuição`);
+  }
+
+  // A trava tem de segurar mesmo um critério impossível: entrega a última mão em vez
+  // de deixar a mesa rodando para sempre.
+  const impossivel = Object.assign({}, mod.MODOS.classico, { carrocasDemais: 0 });
+  const r = mod.distribuir(2, { modo: impossivel });
+  ok(r.maos.length === 2 && r.maos.every(m => m.length === 7), 'a distribuição tem de devolver mão mesmo assim');
+  ok(r.embaralhos <= mod.MAX_EMBARALHOS, `o laço passou da trava: ${r.embaralhos} embaralhos`);
 }
 
 // ─── encaixe e orientação ───────────────────────────────────────────────────
@@ -127,6 +188,54 @@ secao('partidas bot × bot');
     ok(vistos.has(t), `nunca aconteceu uma ${t} em 900 partidas — regra provavelmente inalcançável`);
   ok(trancas > 0, 'nenhum jogo trancou em 900 partidas');
   ok(compras > 0, 'ninguém comprou do monte em 900 partidas');
+}
+
+// ─── os modos novos, do começo ao fim ───────────────────────────────────────
+// Duelo e Trio nunca tinham rodado: são 2 e 3 jogadores SEM monte, um caminho que só
+// a mesa de 4 exercitava. Se travar sem saída, trava aqui.
+secao('partidas bot × bot no Duelo e no Trio');
+{
+  const cadeiras = n => Array.from({ length: n }, (_, i) => ({ nome: 'bot' + i, tipo: 'bot', nivel: 'normal' }));
+  seedRandom(31415);
+
+  for (const nome of ['duelo', 'trio']) {
+    const modo = mod.MODOS[nome];
+    const n = modo.cadeiras[0];
+    const doBaralho = mod.baralhoDoModo(modo).length;
+    let maos = 0, batidas = 0, trancas = 0, comprou = 0, maiorLinha = 0;
+
+    for (let partida = 0; partida < 60; partida++) {
+      const P = mod.novaPartida(cadeiras(n), { alvo: 6, modo: nome });
+      ok(P.monte.length === 0, `${nome}: sobrou monte de ${P.monte.length}`);
+      ok(P.maos.every(m => m.length === modo.pecasPorMao), `${nome}: mão inicial errada`);
+
+      for (let passo = 0; P.fase !== 'fim'; passo++) {
+        if (passo > 4000) { ok(false, `${nome}: partida ${partida} não terminou`); break; }
+        if (P.fase === 'fimDeMao') {
+          maos++;
+          P.resultado.motivo === 'batida' ? batidas++ : trancas++;
+          mod.novaMao(P);
+          continue;
+        }
+        const total = P.maos.reduce((s, m) => s + m.length, 0) + P.monte.length + P.linha.length;
+        ok(total === doBaralho, `${nome}: sumiram peças — ${total} em vez de ${doBaralho}`);
+        maiorLinha = Math.max(maiorLinha, P.linha.length);
+
+        const vez = P.vez;
+        const j = mod.jogadaDoBot(P, vez);
+        const r = j.acao === 'jogar' ? mod.jogar(P, vez, j.peca, j.ponta)
+          : j.acao === 'comprar' ? mod.comprar(P, vez) : mod.passar(P, vez);
+        ok(!r.erro, `${nome}: bot fez jogada recusada (${j.acao}): ${r.erro}`);
+        if (j.acao === 'comprar') comprou++;
+      }
+      ok(P.placar.some(v => v >= 6), `${nome}: partida acabou sem ninguém chegar a 6`);
+      ok(P.placar.length === n, `${nome}: placar deveria ser por cadeira, não por dupla`);
+    }
+
+    console.log(`  ${nome}: ${maos} mãos · ${batidas} batidas · ${trancas} trancas · maior linha ${maiorLinha}`);
+    ok(comprou === 0, `${nome} não tem monte e mesmo assim houve ${comprou} compras`);
+    ok(trancas > 0, `${nome}: nunca trancou em 60 partidas — sem monte, deveria acontecer`);
+  }
 }
 
 console.log(falhas ? `\n${falhas} falha(s)` : '\ntudo certo');

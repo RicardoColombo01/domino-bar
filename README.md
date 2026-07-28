@@ -39,18 +39,31 @@ graça. Bot nunca é obrigatório: dá para montar mesa só de gente.
 
 Dominó varia de bar para bar. Aqui vale:
 
-- 28 peças (0|0 a 6|6). Cada jogador recebe 7.
-- **4 jogadores:** duplas em cruz (1&3 × 2&4) e **sem monte** — quem não pode jogar passa.
-- **2 ou 3 jogadores:** o resto vira monte. Quem não pode jogar **compra até conseguir**;
-  só passa se o monte secar.
+São três mesas, e o que muda entre elas é quantas peças cada um segura:
+
+| mesa | na mão | jogadores | baralho | monte |
+|---|---|---|---|---|
+| **Clássico** | 7 | 2 a 4 | 28 | o que sobrar |
+| **Duelo** | 14 | 2 | 28 | nenhum |
+| **Trio** | 9 | 3 | 27, sem o `0\|0` | nenhum |
+
+O Trio tira a bucha de zero porque é justamente isso que faz o baralho dividir exato
+entre três — 27 ÷ 9. E como Duelo e Trio esgotam o baralho na distribuição, os dois caem
+na mesma regra da mesa de 4 sem precisar de regra nova.
+
+- **Sem monte** (Duelo, Trio e o Clássico de 4): quem não pode jogar, passa.
+- **Com monte** (Clássico de 2 ou 3): quem não pode jogar **compra até conseguir**; só
+  passa se o monte secar.
+- **Clássico de 4:** duplas em cruz (1&3 × 2&4).
+- Mão carroçuda demais volta para a mesa e todo mundo embaralha de novo.
 - A primeira mão da partida abre com o **6|6**. As seguintes, abre quem bateu.
 - Batida: **simples 1** · **carroça 2** · **lá-e-lô 3** · **cruzada 4**.
 - Trancou: 1 ponto para a mão mais leve (somando a dupla, quando há duplas). Empatou na
   soma, a mão morre e ninguém marca.
 - Partida até 6 pontos (ou 10, no menu).
 
-Duas regras da casa ficam alternáveis no menu, porque são as que mais variam:
-**compra voluntária** (comprar mesmo podendo jogar) e o **alvo da partida**.
+No menu dá para trocar a mesa (Clássico · Duelo · Trio) e mais duas regras que variam de
+bar para bar: **compra voluntária** (comprar mesmo podendo jogar) e o **alvo da partida**.
 
 ## Online
 
@@ -111,10 +124,11 @@ Primeira vez:  cd tests && npm install
                git config merge.ours.driver true      ← ver "Branches", abaixo
 ```
 
-O que os testes cobrem: 900 partidas bot×bot conferindo que ninguém joga peça inválida,
-que toda mão termina, que as 28 peças nunca somem e que os quatro tipos de batida
-acontecem; 53 mil tabuleiros conferindo que nenhuma peça se sobrepõe e que a fila não
-tem buraco; e o jogo inteiro montado em Node, com cena Three.js de verdade.
+O que os testes cobrem: mais de mil partidas bot×bot — nos três modos — conferindo que
+ninguém joga peça inválida, que toda mão termina, que nenhuma peça some do baralho e que
+os quatro tipos de batida acontecem; 53 mil tabuleiros conferindo que nenhuma peça se
+sobrepõe e que a fila não tem buraco; e o jogo inteiro montado em Node, com cena Three.js
+de verdade, incluindo a mão de 14 do Duelo em duas fileiras.
 
 ### Branches
 
