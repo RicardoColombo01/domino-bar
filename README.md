@@ -108,9 +108,41 @@ npm run online    testa o online abrindo duas abas e uma mesa real
 npm run servir    sobe um servidor local (necessário para o online)
 
 Primeira vez:  cd tests && npm install
+               git config merge.ours.driver true      ← ver "Branches", abaixo
 ```
 
 O que os testes cobrem: 900 partidas bot×bot conferindo que ninguém joga peça inválida,
 que toda mão termina, que as 28 peças nunca somem e que os quatro tipos de batida
 acontecem; 53 mil tabuleiros conferindo que nenhuma peça se sobrepõe e que a fila não
 tem buraco; e o jogo inteiro montado em Node, com cena Three.js de verdade.
+
+### Branches
+
+GitFlow, com uma regra local: **`main` é literalmente o que está no ar.** O GitHub Pages
+publica dessa branch, então ela só recebe merge `--no-ff` de `release/*` ou `hotfix/*`, e
+sempre com tag.
+
+```
+main      v1.0.0 ─────────────────────────── v1.0.1 ──────── v1.1.0
+               ╲                            ╱               ╱
+develop         ●───●───●───●──────────────●───●───●───────●
+                 ╲     ╱                        ╲         ╱
+feature      fim-de-mao-com-pontos           modos-de-jogo
+```
+
+O dia a dia sai de `develop`: `feature/x` nasce dela e volta com `--no-ff`. Quando
+`develop` está redonda, `release/x.y.z` sobe a `version` do `package.json`, roda
+`npm test`, e é mergeada em `main` (com a tag) e de volta em `develop`.
+
+**O `index.html` é gerado e mesmo assim commitado** — não tem como não ser, é o arquivo
+que o Pages serve e o que abre no duplo-clique. Para não gastar tempo resolvendo conflito
+num bundle de 80 KB, o `.gitattributes` marca ele como `merge=ours`, o que exige uma vez
+por clone:
+
+```
+git config merge.ours.driver true
+```
+
+E a regra que vem junto: **todo merge que tocou `src/` termina com
+`npm run build && git add index.html`** antes de fechar o commit de merge. Antes de
+qualquer push para `main`, `npm run check` diz se o bundle está desatualizado.
