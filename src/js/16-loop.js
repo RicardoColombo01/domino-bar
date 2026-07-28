@@ -15,6 +15,7 @@ let vistaAtual = null;         // o que a tela está desenhando
 let euNaTela = 0;              // qual cadeira a tela mostra agora (o hotseat troca isto)
 let modo = 'local';            // 'local' | 'anfitriao' | 'convidado'
 let travado = false;           // tela de troca no ar: não desenha mão nenhuma
+let viuOFimDaMao = false;      // já passou pelo fim de mão que encerrou a partida
 let timerBot = 0;
 
 const podeAgirAgora = () =>
@@ -66,7 +67,16 @@ function atualizarVista(v) {
   sincronizarMonte(v);
   desenharHUD(v);
   reavaliarEscolha(v);
-  if (v.fase === 'fimDeMao') mostrarFimDeMao(v);
+  // A mão que fecha a partida também mostra os pontos: fase 'fim' cai primeiro na tela
+  // de fim de mão, e só depois do clique é que o campeão entra.
+  //
+  // O flag é obrigatório, e não dá para viver dentro do HUD: a tela é função pura da
+  // fase e esta função roda em TODO publicar() — a cada jogada e, no online, a cada
+  // vista que chega pelo fio. Sem memória, a publicação seguinte reabriria o fim de mão
+  // por cima do campeão. Zerar quando a fase sai de 'fim' cobre revanche, próxima
+  // partida e o convidado, que nunca passa por comecarLocal().
+  if (v.fase !== 'fim') viuOFimDaMao = false;
+  if (v.fase === 'fimDeMao' || (v.fase === 'fim' && !viuOFimDaMao)) mostrarFimDeMao(v);
   else if (v.fase === 'fim') mostrarFimDePartida(v);
   else if (!travado) esconderTelas();
 }
@@ -139,6 +149,14 @@ el('btPronto').onclick = () => {
 };
 
 el('btProxima').onclick = () => {
+  // O mesmo botão faz duas coisas. Com a partida encerrada ele é só navegação — se
+  // caísse no novaMao(P) começaria uma mão nova e apagaria o fim que acabou de ser
+  // mostrado. E o convidado não tem P: aqui ele redesenha a vista que já tem.
+  if (vistaAtual && vistaAtual.fase === 'fim') {
+    viuOFimDaMao = true;
+    if (P) publicar(); else atualizarVista(vistaAtual);
+    return;
+  }
   novaMao(P);
   tocarEmbaralho();
   anunciarAbertura();

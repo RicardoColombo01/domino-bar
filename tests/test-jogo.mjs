@@ -9,7 +9,7 @@ seedRandom(99);
 
 const mod = await import(buildModule([
   'MESA', 'comecarLocal', 'pedirAcao', 'aplicarIntencao', 'atualizarVista', 'jogadaDoBot',
-  'visaoDe', 'novaMao', 'P', 'vistaAtual', 'euNaTela', 'travado', 'naMao', 'naMesa',
+  'visaoDe', 'novaMao', 'publicar', 'P', 'vistaAtual', 'euNaTela', 'travado', 'naMao', 'naMesa',
   'grupoMao', 'grupoOutros', 'grupoMonte', 'grupoMesa', 'scene', 'renderer',
   'selecionarPeca', 'cancelarEscolha', 'confirmarJogada', 'escolhida', 'grupoPrevia', 'chave',
 ], undefined, path.join(import.meta.dirname, 'built-jogo.mjs')));
@@ -81,6 +81,51 @@ console.log('\npartida solo contra bots');
   }
   console.log(`  ${maos} mãos, ${jogadas} jogadas até alguém fechar a partida`);
   ok(maos >= 1, 'a partida acabou na primeira mão sem passar pelo fim de mão');
+}
+
+console.log('\na mão que decide a partida mostra os pontos');
+{
+  mod.MESA.n = 2;
+  mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[1].nivel = 'normal';
+  mod.comecarLocal();
+
+  // Deixa todo mundo a um ponto do alvo: a próxima mão a fechar encerra a partida. É
+  // exatamente o caso em que fecharMao põe fase='fim' direto — e em que a tela dos
+  // pontos vinha sendo pulada, então você caía no campeão sem saber de onde veio.
+  const quaseLa = () => mod.P.placar.forEach((_, i) => { mod.P.placar[i] = mod.P.regras.alvo - 1; });
+  quaseLa();
+
+  for (let passo = 0; mod.P.fase !== 'fim'; passo++) {
+    if (passo > 3000) { ok(false, 'a partida não terminou'); break; }
+    if (mod.P.fase === 'fimDeMao') { quaseLa(); els.get('btProxima').onclick(); continue; }
+    const vez = mod.P.vez;
+    if (mod.P.cadeiras[vez].tipo === 'bot') { mod.aplicarIntencao(vez, mod.jogadaDoBot(mod.P, vez)); continue; }
+    const a = mod.vistaAtual.acoes;
+    if (a.jogadas.length) mod.pedirAcao({ acao: 'jogar', peca: a.jogadas[0].peca, ponta: a.jogadas[0].ponta });
+    else if (a.comprar) mod.pedirAcao({ acao: 'comprar' });
+    else mod.pedirAcao({ acao: 'passar' });
+  }
+
+  const fimMao = els.get('telaFimMao'), fimPartida = els.get('telaFimPartida');
+  ok(!fimMao._cls.has('oculta'),
+     'a mão que encerrou a partida pulou a tela de pontos e caiu direto no campeão');
+  ok(fimPartida._cls.has('oculta'), 'as duas telas de fim apareceram ao mesmo tempo');
+  ok(els.get('btProxima').textContent === 'Ver o resultado',
+     `com a partida encerrada o botão deveria dizer "Ver o resultado", e diz "${els.get('btProxima').textContent}"`);
+  ok(/\d/.test(els.get('fimSobrou').innerHTML), 'não listou o que sobrou na mão de cada um');
+
+  els.get('btProxima').onclick();
+  ok(!fimPartida._cls.has('oculta'), 'o clique não abriu a tela de campeão');
+  ok(fimMao._cls.has('oculta'), 'a tela de fim de mão continuou por cima do campeão');
+  ok(/\d/.test(els.get('placarFinal').innerHTML), 'a tela de campeão não mostrou o placar final');
+  ok(mod.P.fase === 'fim', 'o botão começou uma mão nova numa partida já encerrada');
+
+  // A REGRESSÃO QUE IMPORTA: a tela é função pura da fase e atualizarVista roda em todo
+  // publicar() — a cada jogada e, no online, a cada vista que chega pelo fio. Sem o
+  // flag de memória, esta única linha traria o fim de mão de volta por cima do campeão.
+  mod.publicar();
+  ok(!fimPartida._cls.has('oculta') && fimMao._cls.has('oculta'),
+     'publicar() de novo reabriu o fim de mão por cima da tela de campeão');
 }
 
 console.log('\na prévia promete onde a peça cai');

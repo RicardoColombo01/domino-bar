@@ -93,7 +93,8 @@
     <h2 id="fimTitulo">Bateu!</h2>
     <div class="grandao" id="fimTipo">batida simples</div>
     <div class="sub" id="fimQuem"></div>
-    <div id="fimSomas" class="somas"></div>
+    <div class="rot rotBloco">sobrou na mão</div>
+    <div id="fimSobrou" class="sobrou"></div>
     <div class="linha acoesMenu"><button class="btn principal" id="btProxima">Próxima mão</button></div>
   </div>
 </div>
@@ -102,6 +103,8 @@
   <div class="carta">
     <h2 id="campeaoTitulo">Fim de partida</h2>
     <div class="grandao" id="campeao"></div>
+    <div id="placarFinal"></div>
+    <div class="sub" id="fimResumo"></div>
     <div class="linha acoesMenu">
       <button class="btn principal" id="btRevanche">Revanche</button>
       <button class="btn" id="btMenu">Trocar a mesa</button>
@@ -413,6 +416,13 @@ function passar(P, cadeira) {
 
 function fecharMao(P, res) {
   const somas = P.maos.map(somaMao);
+  // O subtotal por time serve a duas coisas: decidir a tranca (quem ficou com a mão
+  // mais leve) e a tela de fim de mão, que em duplas precisa mostrar o que a DUPLA
+  // deixou na mão — quatro números soltos não dizem quem pagou mais caro. Fica aqui
+  // fora do if porque a batida também precisa dele, e antes ele só existia na tranca.
+  const porTime = {};
+  somas.forEach((s, c) => { const t = timeDe(P, c); porTime[t] = (porTime[t] || 0) + s; });
+
   let time = null, pontos = 0, vencedor = res.vencedor === undefined ? null : res.vencedor;
   const tipo = res.tipo || 'tranca';
 
@@ -421,8 +431,6 @@ function fecharMao(P, res) {
     pontos = PONTOS[tipo];
   } else {
     // Trancou: marca quem tem a menor soma na mão. Em duplas, soma as duas mãos do time.
-    const porTime = {};
-    somas.forEach((s, c) => { const t = timeDe(P, c); porTime[t] = (porTime[t] || 0) + s; });
     const ordem = Object.keys(porTime).map(Number).sort((a, b) => porTime[a] - porTime[b]);
     if (ordem.length > 1 && porTime[ordem[0]] === porTime[ordem[1]]) {
       time = null;                                   // empate na soma: a mão morre, ninguém marca
@@ -439,7 +447,10 @@ function fecharMao(P, res) {
 
   if (time !== null) P.placar[time] += pontos;
   P.abridor = vencedor === null ? P.vez : vencedor;
-  P.resultado = { motivo: res.motivo, tipo, vencedor, time, pontos, somas };
+  P.resultado = {
+    motivo: res.motivo, tipo, vencedor, time, pontos, somas,
+    somasPorTime: P.placar.map((_, t) => porTime[t] || 0),   // mesmo índice do placar
+  };
   P.fase = P.placar.some(v => v >= P.regras.alvo) ? 'fim' : 'fimDeMao';
   P.log.push(Object.assign({ t: 'fimDeMao' }, P.resultado));
   return { ok: true, fim: P.resultado };
@@ -1452,20 +1463,42 @@ function anotar(txt) {
   HUD.log.innerHTML = linhasDoLog.map(t => `<div>${t}</div>`).join('');
 }
 
+// O que sobrou na mão de cada um. Tinha rótulo nenhum e o mesmo âmbar do placar do
+// topo, então lia-se como pontuação — e é o contrário: é o que ficou por jogar. Em
+// duplas mostra o subtotal do time, porque quem pontua é a dupla.
+function sobrouNaMao(vista) {
+  const r = vista.resultado;
+  if (!vista.duplas) {
+    return r.somas
+      .map((s, i) => `<div><span>${vista.cadeiras[i].nome}</span><b>${s}</b></div>`).join('');
+  }
+  return (r.somasPorTime || []).map((total, t) => {
+    const parcelas = r.somas.filter((_, i) => timeDe(vista, i) === t).join(' + ');
+    return `<div><span>${nomeDoTime(vista, t)}<i>${parcelas}</i></span><b>${total}</b></div>`;
+  }).join('');
+}
+
 function mostrarFimDeMao(vista) {
   const r = vista.resultado;
   const bateu = r.motivo === 'batida';
+  // Esta tela vinha sendo PULADA na mão que decide a partida: fecharMao põe fase='fim'
+  // direto quando alguém chega ao alvo, e você caía no campeão sem nunca ver de onde
+  // vieram os pontos. Agora ela aparece sempre, e o botão vira o passo para o resultado.
+  const acabou = vista.fase === 'fim';
   el('fimTitulo').textContent = bateu ? 'Bateu!' : 'Trancou';
   el('fimTipo').textContent = NOME_BATIDA[r.tipo];
+  // "Zé e Tião fazem", não "faz": em duplas o sujeito é a dupla.
+  const fazem = vista.duplas ? 'fazem' : 'faz';
   el('fimQuem').textContent = r.time === null
     ? 'Empate na contagem — ninguém marca.'
-    : `${nomeDoTime(vista, r.time)} ${r.pontos === 1 ? 'faz 1 ponto' : `faz ${r.pontos} pontos`}` +
+    : `${nomeDoTime(vista, r.time)} ${fazem} ${r.pontos === 1 ? '1 ponto' : `${r.pontos} pontos`}` +
       (bateu ? '' : ` · mão mais leve com ${vista.cadeiras[r.vencedor].nome}`);
-  el('fimSomas').innerHTML = r.somas
-    .map((s, i) => `<div><span>${vista.cadeiras[i].nome}</span><b>${s}</b></div>`).join('');
-  // Quem manda na mesa é o anfitrião: o convidado não tem partida na memória, e o
-  // botão chamaria novaMao(null). Ele vê o resultado e espera a próxima chegar.
-  el('btProxima').classList.toggle('oculta', modo === 'convidado');
+  el('fimSobrou').innerHTML = sobrouNaMao(vista);
+  el('btProxima').textContent = acabou ? 'Ver o resultado' : 'Próxima mão';
+  // São duas condições diferentes, não uma. "Próxima mão" mexe na partida e o convidado
+  // não tem uma na memória — o botão chamaria novaMao(null). "Ver o resultado" é
+  // navegação local pura e é dele também: sem isso ele fica preso aqui, sem campeão.
+  el('btProxima').classList.toggle('oculta', modo === 'convidado' && !acabou);
   mostrarTela('telaFimMao');
 }
 
@@ -1474,6 +1507,13 @@ function mostrarFimDePartida(vista) {
   el('campeao').textContent = nomeDoTime(vista, campeao);
   el('campeaoTitulo').textContent = campeao === (vista.duplas ? vista.cadeira % 2 : vista.cadeira)
     ? 'Você ganhou a partida' : 'Fim de partida';
+  // A tela dizia quem ganhou e não de quanto. Mesmo template do placar do topo.
+  el('placarFinal').innerHTML = vista.placar
+    .map((p, i) => `<span class="time${i === campeao ? ' venceu' : ''}">` +
+      `<i>${nomeDoTime(vista, i)}</i><b>${p}</b></span>`)
+    .join('<span class="x">×</span>');
+  el('fimResumo').textContent =
+    `${vista.maoNum} ${vista.maoNum === 1 ? 'mão' : 'mãos'} · partida até ${vista.alvo}`;
   el('btRevanche').classList.toggle('oculta', modo === 'convidado');
   mostrarTela('telaFimPartida');
 }
@@ -1771,6 +1811,7 @@ let vistaAtual = null;         // o que a tela está desenhando
 let euNaTela = 0;              // qual cadeira a tela mostra agora (o hotseat troca isto)
 let modo = 'local';            // 'local' | 'anfitriao' | 'convidado'
 let travado = false;           // tela de troca no ar: não desenha mão nenhuma
+let viuOFimDaMao = false;      // já passou pelo fim de mão que encerrou a partida
 let timerBot = 0;
 
 const podeAgirAgora = () =>
@@ -1822,7 +1863,16 @@ function atualizarVista(v) {
   sincronizarMonte(v);
   desenharHUD(v);
   reavaliarEscolha(v);
-  if (v.fase === 'fimDeMao') mostrarFimDeMao(v);
+  // A mão que fecha a partida também mostra os pontos: fase 'fim' cai primeiro na tela
+  // de fim de mão, e só depois do clique é que o campeão entra.
+  //
+  // O flag é obrigatório, e não dá para viver dentro do HUD: a tela é função pura da
+  // fase e esta função roda em TODO publicar() — a cada jogada e, no online, a cada
+  // vista que chega pelo fio. Sem memória, a publicação seguinte reabriria o fim de mão
+  // por cima do campeão. Zerar quando a fase sai de 'fim' cobre revanche, próxima
+  // partida e o convidado, que nunca passa por comecarLocal().
+  if (v.fase !== 'fim') viuOFimDaMao = false;
+  if (v.fase === 'fimDeMao' || (v.fase === 'fim' && !viuOFimDaMao)) mostrarFimDeMao(v);
   else if (v.fase === 'fim') mostrarFimDePartida(v);
   else if (!travado) esconderTelas();
 }
@@ -1895,6 +1945,14 @@ el('btPronto').onclick = () => {
 };
 
 el('btProxima').onclick = () => {
+  // O mesmo botão faz duas coisas. Com a partida encerrada ele é só navegação — se
+  // caísse no novaMao(P) começaria uma mão nova e apagaria o fim que acabou de ser
+  // mostrado. E o convidado não tem P: aqui ele redesenha a vista que já tem.
+  if (vistaAtual && vistaAtual.fase === 'fim') {
+    viuOFimDaMao = true;
+    if (P) publicar(); else atualizarVista(vistaAtual);
+    return;
+  }
   novaMao(P);
   tocarEmbaralho();
   anunciarAbertura();

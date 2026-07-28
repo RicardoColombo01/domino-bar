@@ -30,6 +30,18 @@ const AUTO = `
     for (let i = 1; i < 4; i++) { j.MESA.cadeiras[i].tipo = 'bot'; j.MESA.cadeiras[i].nivel = 'normal'; }
     j.comecarLocal();
   };
+  // Deixa todo mundo a um ponto do alvo e joga até a partida fechar. É a mão em que
+  // fecharMao põe fase='fim' direto — o caso em que a tela dos pontos era pulada.
+  const ateODecisivo = (n) => {
+    const j = window.__jogo;
+    soBots(n);
+    const quase = () => j.P.placar.forEach((_, i) => { j.P.placar[i] = j.P.regras.alvo - 1; });
+    quase();
+    for (let i = 0; i < 600 && j.P.fase !== 'fim'; i++) {
+      if (j.P.fase === 'fimDeMao') { quase(); document.getElementById('btProxima').click(); continue; }
+      auto(1);
+    }
+  };
 `;
 
 const CENAS = [
@@ -61,6 +73,12 @@ const CENAS = [
       }`,
   })),
   { nome: 'fim-de-mao', telas: ['wide'], montar: `soBots(3); auto(400);` },
+  // Em duplas, porque é onde o "sobrou na mão" precisa mostrar o subtotal do time.
+  { nome: 'fim-de-mao-decisivo', telas: ['wide'], montar: `ateODecisivo(4);` },
+  {
+    nome: 'fim-de-partida', telas: ['wide'],
+    montar: `ateODecisivo(4); document.getElementById('btProxima').click();`,
+  },
 ];
 
 fs.mkdirSync(DIR, { recursive: true });
