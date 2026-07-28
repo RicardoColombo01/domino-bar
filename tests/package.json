@@ -1,0 +1,13 @@
+{
+  "name": "domino-bar-tests",
+  "private": true,
+  "scripts": {
+    "test": "node test-regras.mjs && node test-mesa.mjs && node test-jogo.mjs",
+    "shots": "node shots.mjs",
+    "online": "node test-online.mjs"
+  },
+  "dependencies": {
+    "puppeteer-core": "^25.3.0",
+    "three": "^0.160.0"
+  }
+}

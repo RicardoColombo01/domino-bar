@@ -1,0 +1,1942 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dominó de Bar · 2 a 4 jogadores</title>
+<link rel="stylesheet" href="css/estilo.css" />
+</head>
+<body>
+<div id="app"></div>
+
+<div id="topo">
+  <div class="painel" id="placar"></div>
+  <div class="painel dado"><span class="rot">Pontas</span><b id="pontasVal">—</b></div>
+  <div class="painel dado"><span class="rot">Monte</span><b id="monteVal">0</b></div>
+  <div class="painel dado"><span class="rot">Mão</span><b id="maoVal">1</b></div>
+</div>
+
+<div id="jogadores"></div>
+
+<div id="acoes">
+  <button class="btn" id="btComprar">Comprar do monte</button>
+  <button class="btn" id="btPassar">Passar a vez</button>
+</div>
+
+<div id="confirmar" class="painel oculta">
+  <span class="pecaEscolhida" id="confPeca">—</span>
+  <div class="grupo" id="confBotoes"></div>
+  <button class="btn peq" id="btCancelar">Cancelar</button>
+</div>
+
+<div id="vez" class="painel"></div>
+<div id="aviso"></div>
+<div id="log" class="painel"></div>
+<button id="btSom" class="painel canto" title="Som">♪</button>
+
+<!-- ─── montagem da mesa ─────────────────────────────────────────────────── -->
+<div class="tela" id="telaMenu">
+  <div class="carta">
+    <h1>Dominó de Bar</h1>
+    <p class="sub">Dupla-seis, regras de bar. Você escolhe quem senta em cada cadeira.</p>
+
+    <div class="linha">
+      <span class="rot">Jogadores</span>
+      <div class="grupo" id="qtdJogadores">
+        <button class="btn peq" data-n="2">2</button>
+        <button class="btn peq on" data-n="3">3</button>
+        <button class="btn peq" data-n="4">4</button>
+      </div>
+      <span class="nota" id="notaDuplas"></span>
+    </div>
+
+    <div id="cadeiras"></div>
+
+    <div class="linha">
+      <span class="rot">Partida até</span>
+      <div class="grupo" id="alvoPontos">
+        <button class="btn peq on" data-alvo="6">6 pontos</button>
+        <button class="btn peq" data-alvo="10">10 pontos</button>
+      </div>
+      <span class="rot" style="margin-left:18px">Compra livre</span>
+      <div class="grupo" id="compraLivre">
+        <button class="btn peq on" data-livre="0">não</button>
+        <button class="btn peq" data-livre="1">sim</button>
+      </div>
+    </div>
+
+    <div class="linha acoesMenu">
+      <button class="btn principal" id="btComecar">Sentar e jogar</button>
+      <button class="btn" id="btEntrar">Entrar numa mesa pelo código</button>
+    </div>
+
+    <details class="regras">
+      <summary>As regras desta casa</summary>
+      <ul>
+        <li>28 peças. Cada um recebe 7.</li>
+        <li><b>4 jogadores:</b> duplas em cruz (1&amp;3 × 2&amp;4) e <b>sem monte</b> — quem não pode jogar, passa.</li>
+        <li><b>2 ou 3:</b> o resto vira monte. Quem não pode jogar <b>compra até conseguir</b>; só passa se o monte secar.</li>
+        <li>A primeira mão abre com o <b>6|6</b>. Depois, abre quem bateu.</li>
+        <li>Batida: simples <b>1</b> · carroça <b>2</b> · lá-e-lô <b>3</b> · cruzada <b>4</b>.</li>
+        <li>Trancou: marca 1 ponto quem tiver a mão mais leve. Empatou, a mão morre.</li>
+      </ul>
+    </details>
+  </div>
+</div>
+
+<!-- ─── fim de mão / fim de partida ──────────────────────────────────────── -->
+<div class="tela oculta" id="telaFimMao">
+  <div class="carta">
+    <h2 id="fimTitulo">Bateu!</h2>
+    <div class="grandao" id="fimTipo">batida simples</div>
+    <div class="sub" id="fimQuem"></div>
+    <div id="fimSomas" class="somas"></div>
+    <div class="linha acoesMenu"><button class="btn principal" id="btProxima">Próxima mão</button></div>
+  </div>
+</div>
+
+<div class="tela oculta" id="telaFimPartida">
+  <div class="carta">
+    <h2 id="campeaoTitulo">Fim de partida</h2>
+    <div class="grandao" id="campeao"></div>
+    <div class="linha acoesMenu">
+      <button class="btn principal" id="btRevanche">Revanche</button>
+      <button class="btn" id="btMenu">Trocar a mesa</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── revezamento na mesma tela ────────────────────────────────────────── -->
+<div class="tela oculta" id="telaPasse">
+  <div class="carta">
+    <h2>Passe o computador</h2>
+    <div class="grandao" id="passeNome">—</div>
+    <p class="sub">Ninguém mais deve estar olhando.</p>
+    <div class="linha acoesMenu"><button class="btn principal" id="btPronto">Peguei, pode mostrar</button></div>
+  </div>
+</div>
+
+<!-- ─── online ───────────────────────────────────────────────────────────── -->
+<div class="tela oculta" id="telaOnline">
+  <div class="carta">
+    <h2 id="onlineTitulo">Mesa aberta</h2>
+    <p class="sub" id="onlineSub">Passe este código para quem vai jogar.</p>
+    <div class="codigo" id="onlineCodigo">····</div>
+    <input id="onlineEntrada" class="entrada oculta" placeholder="código da mesa" maxlength="12" autocomplete="off" />
+    <div id="onlineLista" class="somas"></div>
+    <div class="linha acoesMenu">
+      <button class="btn principal oculta" id="btConectar">Entrar</button>
+      <button class="btn oculta" id="btIniciarOnline">Começar a partida</button>
+      <button class="btn" id="btCancelarOnline">Voltar</button>
+    </div>
+    <p class="nota" id="onlineErro"></p>
+  </div>
+</div>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+/* GERADO por build.mjs a partir de src/ — não edite este bloco à mão. */
+/* ····· 01-constantes.js ····· */
+const MAX_PINTAS = 6;            // dupla-seis → 28 peças
+const NA_MAO = 7;                // quantas cada jogador recebe
+
+// Medidas da peça em unidades de mundo. O comprimento é EXATAMENTE o dobro da
+// largura — é isso que faz uma carroça atravessada ocupar meia peça no braço e
+// o tabuleiro fechar sem sobra em 06-layout.js. Mexer num, mexer no outro.
+const PECA_C = 1.0;
+const PECA_L = 0.5;
+const PECA_E = 0.18;
+
+// A MALHA é desenhada um tico menor que o espaço que a peça ocupa. Encostadas exatamente
+// uma na outra, marfim contra marfim, oito peças na mesa lêem como uma tábua só — a folga
+// abre uma linha de sombra entre elas e a fileira volta a ser contável de relance.
+// O layout continua avançando o tamanho cheio: isto aqui é casca, não geometria de jogo.
+const FOLGA_C = 0.965;
+const FOLGA_L = 0.93;
+
+// Até onde o tabuleiro pode se espalhar antes de dobrar (meia-largura, em unidades).
+const ESPALHA_X = 4.0;
+const ESPALHA_Z = 2.2;
+
+const PONTOS = { simples: 1, carroca: 2, laelo: 3, cruzada: 4, tranca: 1 };
+const ALVO_PADRAO = 6;
+
+const NOME_BATIDA = {
+  simples: 'batida simples',
+  carroca: 'batida de carroça',
+  laelo: 'batida de lá-e-lô',
+  cruzada: 'batida cruzada',
+  tranca: 'jogo trancado',
+};
+
+const CORES = {
+  feltro: 0x1e5f3d,
+  madeira: 0x53331d,
+  marfim: 0xf4ecd9,
+  pinta: 0x191512,
+  luz: 0xffd7a0,
+  parede: 0x241a16,
+};
+
+/* ····· 02-baralho.js ····· */
+const chave = p => p[0] + '|' + p[1];
+const valor = p => p[0] + p[1];
+const carroca = p => p[0] === p[1];
+const somaMao = mao => mao.reduce((s, p) => s + valor(p), 0);
+const mesmaPeca = (a, b) => (a[0] === b[0] && a[1] === b[1]) || (a[0] === b[1] && a[1] === b[0]);
+
+function baralhoCompleto() {
+  const pecas = [];
+  for (let a = 0; a <= MAX_PINTAS; a++)
+    for (let b = a; b <= MAX_PINTAS; b++) pecas.push([a, b]);
+  return pecas;                                              // 28
+}
+
+// Fisher-Yates. Usa Math.random de propósito: os testes trocam Math.random por uma
+// versão com semente, e aí uma partida que falhou é sempre reproduzível.
+function embaralhar(lista) {
+  for (let i = lista.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [lista[i], lista[j]] = [lista[j], lista[i]];
+  }
+  return lista;
+}
+
+function distribuir(nJogadores) {
+  const monte = embaralhar(baralhoCompleto());
+  const maos = [];
+  for (let i = 0; i < nJogadores; i++) maos.push(monte.splice(0, NA_MAO));
+  return { maos, monte };            // com 4 jogadores o monte sai vazio, por construção
+}
+
+// Quem abre a primeira mão da partida: quem tem o 6|6. Se ninguém tiver — só acontece
+// quando existe monte, com 2 ou 3 jogadores — a maior carroça; e se não houver carroça
+// nenhuma na mesa, a peça de maior valor.
+function quemAbre(maos) {
+  let melhor = null;
+  maos.forEach((mao, cadeira) => {
+    for (const p of mao) {
+      const nota = (carroca(p) ? 100 : 0) + valor(p);
+      if (!melhor || nota > melhor.nota) melhor = { cadeira, peca: p, nota };
+    }
+  });
+  return melhor;
+}
+
+/* ····· 03-regras.js ····· */
+// As regras propriamente ditas. Tudo aqui é função pura sobre a linha da mesa:
+// nenhum estado guardado, nenhum Three.js — é o que permite rodar mil partidas
+// no terminal em segundos e achar erro de regra antes de existir um pixel.
+// (parte de src/js — mesmo escopo, concatenado por build.mjs)
+//
+// A LINHA É GUARDADA JÁ ORIENTADA da esquerda para a direita:
+//
+//     [[6,5],[5,3],[3,3],[3,0]]     →  linha[i][1] === linha[i+1][0], sempre.
+//      └──┘ └──┘                       as pontas são só o primeiro e o último número
+//
+// Com essa invariante, "qual é a ponta?" é um índice e "jogar na esquerda" é um
+// unshift. Sem ela, toda consulta de ponta viraria uma busca pela linha inteira.
+
+function pontas(linha) {
+  return linha.length ? [linha[0][0], linha[linha.length - 1][1]] : null;
+}
+
+// Vira a peça para encaixar naquela ponta, ou devolve null se ela não serve.
+// Na ponta direita o número que encosta é o PRIMEIRO da peça; na esquerda, o último.
+function orientar(peca, ponta, valorDaPonta) {
+  const [a, b] = peca;
+  if (ponta === 'dir') return a === valorDaPonta ? [a, b] : b === valorDaPonta ? [b, a] : null;
+  return b === valorDaPonta ? [a, b] : a === valorDaPonta ? [b, a] : null;
+}
+
+function jogadasValidas(mao, linha) {
+  if (!linha.length) return mao.map(peca => ({ peca, ponta: 'dir' }));
+  const [e, d] = pontas(linha);
+  const jogadas = [];
+  for (const peca of mao) {
+    if (orientar(peca, 'esq', e)) jogadas.push({ peca, ponta: 'esq' });
+    if (orientar(peca, 'dir', d)) jogadas.push({ peca, ponta: 'dir' });
+  }
+  return jogadas;
+}
+
+function aplicar(linha, peca, ponta) {
+  if (!linha.length) return [peca.slice()];
+  const [e, d] = pontas(linha);
+  const posta = orientar(peca, ponta, ponta === 'esq' ? e : d);
+  if (!posta) throw new Error(`peça ${chave(peca)} não encaixa na ponta ${ponta}`);
+  return ponta === 'esq' ? [posta, ...linha] : [...linha, posta];
+}
+
+// Que tipo de batida foi. Tem de ser consultado ANTES de jogar a última peça,
+// porque o nome depende das pontas que ainda existiam na mesa:
+//
+//   serve nas duas pontas?   não          sim
+//        peça comum      →  simples (1)   lá-e-lô (3)
+//        carroça         →  carroça (2)   cruzada (4)
+//
+// Repare que uma carroça [x,x] só "serve nas duas" quando as DUAS pontas são x —
+// que é exatamente o que a mesa chama de cruzada. A tabela cai sozinha.
+function tipoDaBatida(peca, linha) {
+  if (!linha.length) return 'simples';
+  const [e, d] = pontas(linha);
+  const nasDuas = (peca[0] === e || peca[1] === e) && (peca[0] === d || peca[1] === d);
+  if (carroca(peca)) return nasDuas ? 'cruzada' : 'carroca';
+  return nasDuas ? 'laelo' : 'simples';
+}
+
+/* ····· 04-partida.js ····· */
+//
+// A IDEIA QUE SEGURA O PROJETO INTEIRO: uma cadeira é só
+//     { nome, tipo: 'voce' | 'local' | 'bot' | 'online', nivel }
+// e o motor NÃO sabe a diferença entre os tipos. Ele diz de quem é a vez e espera.
+// Quem responde — o mouse, o bot ou a rede — é problema de outra camada. Por isso
+// solo, hotseat e online rodam exatamente este mesmo código, e por isso dá para
+// sentar 2 humanos online + 2 bots na mesma mesa sem uma linha a mais.
+
+const timeDe = (P, cadeira) => (P.duplas ? cadeira % 2 : cadeira);
+const parceiroDe = (P, cadeira) => (P.duplas ? (cadeira + 2) % 4 : null);
+
+function novaPartida(cadeiras, regras) {
+  const P = {
+    cadeiras,
+    n: cadeiras.length,
+    duplas: cadeiras.length === 4,            // 4 jogadores → 1&3 contra 2&4, em cruz
+    regras: Object.assign({ alvo: ALVO_PADRAO, compraVoluntaria: false }, regras || {}),
+    placar: cadeiras.length === 4 ? [0, 0] : new Array(cadeiras.length).fill(0),
+    maoNum: 0,
+    abridor: null,
+    log: [],
+  };
+  novaMao(P);
+  return P;
+}
+
+function novaMao(P) {
+  const { maos, monte } = distribuir(P.n);
+  P.maos = maos;
+  P.monte = monte;
+  P.linha = [];
+  // Onde está, na fila, a peça de abertura. Jogar na esquerda empurra todo mundo um
+  // índice para a frente — sem isso o tabuleiro inteiro escorregaria na tela a cada
+  // jogada pela esquerda, em vez de crescer para os lados a partir do centro.
+  P.iAncora = 0;
+  P.passesSeguidos = 0;
+  P.resultado = null;
+  P.fase = 'mao';
+  P.maoNum++;
+  // Dedução pública: o que cada jogador JÁ MOSTROU não ter, por ter passado.
+  P.faltaNo = maos.map(() => new Set());
+
+  if (P.abridor === null) {
+    // Primeira mão da partida: quem tem o 6|6 abre, e abre COM ele.
+    const a = quemAbre(maos);
+    P.vez = a.cadeira;
+    P.pecaObrigatoria = a.peca;
+  } else {
+    P.vez = P.abridor;                        // nas seguintes, abre quem bateu, com o que quiser
+    P.pecaObrigatoria = null;
+  }
+  P.log.push({ t: 'mao', num: P.maoNum, abre: P.vez, obrigatoria: P.pecaObrigatoria });
+  return P;
+}
+
+// O que esta cadeira pode fazer agora. Serve para três coisas de uma vez: acender os
+// botões na tela, alimentar o bot, e validar o que chega pela rede. Uma fonte só.
+function acoesDe(P, cadeira) {
+  if (P.fase !== 'mao' || P.vez !== cadeira) return { jogadas: [], comprar: false, passar: false };
+  let jogadas = jogadasValidas(P.maos[cadeira], P.linha);
+  if (P.pecaObrigatoria) jogadas = jogadas.filter(j => mesmaPeca(j.peca, P.pecaObrigatoria));
+  const temMonte = P.monte.length > 0;
+  return {
+    jogadas,
+    // Sem monte (mesa de 4) ninguém compra: quem não pode jogar, passa.
+    comprar: temMonte && (!jogadas.length || P.regras.compraVoluntaria),
+    passar: !jogadas.length && !temMonte,
+  };
+}
+
+function jogar(P, cadeira, peca, ponta) {
+  const { jogadas } = acoesDe(P, cadeira);
+  if (!jogadas.some(j => mesmaPeca(j.peca, peca) && j.ponta === ponta)) return { erro: 'jogada inválida' };
+
+  // O tipo da batida depende das pontas de ANTES da jogada — por isso olha aqui.
+  const ultima = P.maos[cadeira].length === 1;
+  const tipo = ultima ? tipoDaBatida(peca, P.linha) : null;
+
+  const i = P.maos[cadeira].findIndex(p => mesmaPeca(p, peca));
+  P.maos[cadeira].splice(i, 1);
+  if (ponta === 'esq' && P.linha.length) P.iAncora++;
+  P.linha = aplicar(P.linha, peca, ponta);
+  P.pecaObrigatoria = null;
+  P.passesSeguidos = 0;
+  P.log.push({ t: 'jogou', cadeira, peca, ponta });
+
+  if (ultima) return fecharMao(P, { motivo: 'batida', tipo, vencedor: cadeira });
+  P.vez = (cadeira + 1) % P.n;
+  return { ok: true };
+}
+
+function comprar(P, cadeira) {
+  if (!acoesDe(P, cadeira).comprar) return { erro: 'não dá para comprar agora' };
+  const peca = P.monte.pop();
+  P.maos[cadeira].push(peca);
+  P.log.push({ t: 'comprou', cadeira });
+  return { ok: true, peca };
+}
+
+function passar(P, cadeira) {
+  if (!acoesDe(P, cadeira).passar) return { erro: 'ainda dá para jogar' };
+  // Um passe é informação pública e de graça: ele não tem NENHUM dos dois números
+  // das pontas. É com isso que os bots (e você) deduzem a mão alheia.
+  const pt = pontas(P.linha);
+  if (pt) { P.faltaNo[cadeira].add(pt[0]); P.faltaNo[cadeira].add(pt[1]); }
+  P.passesSeguidos++;
+  P.log.push({ t: 'passou', cadeira });
+  if (P.passesSeguidos >= P.n) return fecharMao(P, { motivo: 'tranca' });
+  P.vez = (cadeira + 1) % P.n;
+  return { ok: true };
+}
+
+function fecharMao(P, res) {
+  const somas = P.maos.map(somaMao);
+  let time = null, pontos = 0, vencedor = res.vencedor === undefined ? null : res.vencedor;
+  const tipo = res.tipo || 'tranca';
+
+  if (res.motivo === 'batida') {
+    time = timeDe(P, vencedor);
+    pontos = PONTOS[tipo];
+  } else {
+    // Trancou: marca quem tem a menor soma na mão. Em duplas, soma as duas mãos do time.
+    const porTime = {};
+    somas.forEach((s, c) => { const t = timeDe(P, c); porTime[t] = (porTime[t] || 0) + s; });
+    const ordem = Object.keys(porTime).map(Number).sort((a, b) => porTime[a] - porTime[b]);
+    if (ordem.length > 1 && porTime[ordem[0]] === porTime[ordem[1]]) {
+      time = null;                                   // empate na soma: a mão morre, ninguém marca
+    } else {
+      time = ordem[0];
+      pontos = PONTOS.tranca;
+      // Abre a próxima quem, dentro do time vencedor, ficou com a mão mais leve.
+      vencedor = somas
+        .map((s, c) => [s, c])
+        .filter(par => timeDe(P, par[1]) === time)
+        .sort((a, b) => a[0] - b[0])[0][1];
+    }
+  }
+
+  if (time !== null) P.placar[time] += pontos;
+  P.abridor = vencedor === null ? P.vez : vencedor;
+  P.resultado = { motivo: res.motivo, tipo, vencedor, time, pontos, somas };
+  P.fase = P.placar.some(v => v >= P.regras.alvo) ? 'fim' : 'fimDeMao';
+  P.log.push(Object.assign({ t: 'fimDeMao' }, P.resultado));
+  return { ok: true, fim: P.resultado };
+}
+
+// O QUE ESTA CADEIRA PODE VER. No online é literalmente o que trafega — o anfitrião
+// nunca manda a mão alheia, então não adianta abrir o DevTools. No hotseat local é o
+// que a tela desenha entre um jogador e outro. Segurança e apresentação são o mesmo
+// problema ("quem pode ver o quê"), então são a mesma função.
+function visaoDe(P, cadeira) {
+  return {
+    cadeira,
+    linha: P.linha,
+    iAncora: P.iAncora,
+    pontas: pontas(P.linha),
+    mao: P.maos[cadeira],                        // só a sua
+    naMao: P.maos.map(m => m.length),            // dos outros, só a contagem
+    monte: P.monte.length,
+    vez: P.vez,
+    fase: P.fase,
+    placar: P.placar,
+    resultado: P.resultado,
+    maoNum: P.maoNum,
+    duplas: P.duplas,
+    alvo: P.regras.alvo,
+    cadeiras: P.cadeiras.map(c => ({ nome: c.nome, tipo: c.tipo })),
+    acoes: acoesDe(P, cadeira),
+  };
+}
+
+/* ····· 05-bot.js ····· */
+//
+// A dificuldade aqui NÃO é um algoritmo diferente por nível — é QUANTA INFORMAÇÃO o
+// bot recebe e quanto ele erra no impulso. O bot fácil não presta atenção em quem
+// passou; o difícil lembra de tudo. Assim existe uma decisão só para manter, em vez
+// de três que divergem com o tempo.
+
+const NIVEIS = {
+  facil: { ruido: 0.35, memoria: false },   // distraído: joga no impulso e não repara em quem passou
+  normal: { ruido: 0.10, memoria: true },
+  dificil: { ruido: 0, memoria: true },
+};
+
+const VAZIO = [new Set(), new Set(), new Set(), new Set()];
+
+// Tudo que um jogador atento pode saber sem trapacear.
+function informacao(P, cadeira, cfg) {
+  return {
+    pontas: pontas(P.linha),
+    faltaNo: cfg.memoria ? P.faltaNo : VAZIO,   // quem passou mostrou o que não tem
+    pecasRestantes: P.maos.map(m => m.length),
+    monte: P.monte.length,
+    parceiro: parceiroDe(P, cadeira),
+    cadeira,
+    n: P.n,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A DECISÃO DO BOT — escrita pelo Ricardo.
+//
+//   opcoes: [{ peca:[a,b], ponta:'esq'|'dir', valor:a+b, carroca:bool }]  (nunca vazio)
+//   mao:    as peças que o bot ainda tem, incluindo a que ele vai jogar
+//   info:   { pontas:[e,d], faltaNo, pecasRestantes, monte, parceiro, cadeira, n }
+//
+// Devolve uma das opcoes. Devolver null cai no desempate seguro (a primeira).
+// ─────────────────────────────────────────────────────────────────────────────
+function escolherJogada(opcoes, mao, info) {
+  // PLACEHOLDER — troca esta linha pela sua heurística.
+  // Hoje ele só descarrega a peça mais pesada, que é o bot mais burro que ainda
+  // parece intencional: sobrevive à tranca, mas entrega as peças versáteis cedo.
+  return opcoes.reduce((a, b) => (b.valor > a.valor ? b : a));
+}
+
+// A vez do bot: joga, compra ou passa. Devolve a intenção, não mexe na partida —
+// quem aplica é o loop, e é o mesmo caminho de uma jogada que chega pela rede.
+function jogadaDoBot(P, cadeira) {
+  const acoes = acoesDe(P, cadeira);
+  if (!acoes.jogadas.length) return { acao: acoes.comprar ? 'comprar' : 'passar' };
+
+  const cfg = NIVEIS[P.cadeiras[cadeira].nivel] || NIVEIS.normal;
+  const opcoes = acoes.jogadas.map(j => ({
+    peca: j.peca, ponta: j.ponta, valor: valor(j.peca), carroca: carroca(j.peca),
+  }));
+
+  const escolha = Math.random() < cfg.ruido
+    ? opcoes[Math.floor(Math.random() * opcoes.length)]
+    : escolherJogada(opcoes, P.maos[cadeira], informacao(P, cadeira, cfg)) || opcoes[0];
+
+  return { acao: 'jogar', peca: escolha.peca, ponta: escolha.ponta };
+}
+
+/* ····· 06-layout.js ····· */
+// Onde cada peça fica na mesa. Puro cálculo — nada de Three.js aqui, o que deixa
+// o serpenteio testável no terminal.
+// (parte de src/js — mesmo escopo, concatenado por build.mjs)
+//
+// A linha do motor é uma fila reta; a mesa não é. Dois BRAÇOS crescem a partir da
+// peça de abertura, cada um com o próprio cursor e a própria direção:
+//
+//        ┌──────────────────────┐        peça comum avança o comprimento inteiro
+//        │   ╔═╗                │        carroça entra ATRAVESSADA e avança só
+//        └───╫─╫────┬───────────┘        a largura — como na mesa de verdade
+//     ◄──────╨─╨────┘  ▲
+//     braço esquerdo    braço direito, dobrando ao chegar na borda
+//
+// Duas dobras por braço e depois segue reto: mais que isso e o jogo se enrola em
+// cima de si mesmo. Quando estoura, quem resolve é a escala do grupo inteiro.
+
+const DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];   // +x, +z, -x, -z
+const MAX_DOBRAS = 2;
+
+const avanco = p => (carroca(p) ? PECA_L : PECA_C);   // quanto a peça ocupa NO SENTIDO do braço
+const travessa = p => (carroca(p) ? PECA_C : PECA_L); // ... e de lado a lado
+const foraDaMesa = (x, z) => Math.abs(x) > ESPALHA_X || Math.abs(z) > ESPALHA_Z;
+
+// linha: a fila orientada do motor · iAncora: onde está, nela, a peça de abertura
+// (ela muda de índice toda vez que alguém joga na esquerda).
+function layoutDaMesa(linha, iAncora) {
+  const postas = new Array(linha.length);
+  const nada = { x: 0, z: 0 };
+  if (!linha.length) return { postas, caixa: { x: 0, z: 0, l: 0, a: 0 }, alvos: { esq: nada, dir: nada } };
+
+  const ancora = Math.min(Math.max(iAncora | 0, 0), linha.length - 1);
+  const meio = avanco(linha[ancora]) / 2;
+  postas[ancora] = posta(linha[ancora], 0, 0, carroca(linha[ancora]) ? Math.PI / 2 : 0);
+
+  // sentido: +1 anda para a frente na fila, -1 para trás. sinal: para que lado aponta
+  // o "a→b" da peça — no braço esquerdo a fila corre ao contrário do avanço.
+  const braco = (de, ate, sentido, dir0, sinal) => {
+    let x = sentido > 0 ? meio : -meio, z = 0, dir = dir0, dobras = 0;
+    let anterior = linha[ancora];
+    for (let i = de; sentido > 0 ? i <= ate : i >= ate; i += sentido) {
+      const peca = linha[i];
+      const comp = avanco(peca);
+      let d = DIRS[dir];
+      if (dobras < MAX_DOBRAS && foraDaMesa(x + d[0] * comp, z + d[1] * comp)) {
+        const velho = d;
+        dir = (dir + 1) % 4;
+        dobras++;
+        d = DIRS[dir];
+        // A QUINA. Sem este desvio as duas peças disputariam o mesmo quadradinho do
+        // canto: a de trás ainda ocupa meia travessa para os lados, e a nova nasceria
+        // dentro dela. Sai da faixa da anterior (avança) e encosta nela de lado (recua).
+        x += d[0] * travessa(anterior) / 2 - velho[0] * travessa(peca) / 2;
+        z += d[1] * travessa(anterior) / 2 - velho[1] * travessa(peca) / 2;
+      }
+      const gx = d[0] * sinal, gz = d[1] * sinal;
+      postas[i] = posta(peca, x + d[0] * comp / 2, z + d[1] * comp / 2,
+        Math.atan2(-gz, gx) + (carroca(peca) ? Math.PI / 2 : 0));
+      x += d[0] * comp;
+      z += d[1] * comp;
+      anterior = peca;
+    }
+    // Onde o braço parou é exatamente onde a próxima peça encosta — é isso que vira
+    // o marcador de "encaixa aqui" na tela quando a peça serve nas duas pontas.
+    return { x, z };
+  };
+
+  const alvoDir = braco(ancora + 1, linha.length - 1, +1, 0, +1);
+  const alvoEsq = braco(ancora - 1, 0, -1, 2, -1);
+
+  return { postas, caixa: envolver(postas), alvos: { esq: alvoEsq, dir: alvoDir } };
+}
+
+// Rotação múltipla de 90° ⇒ toda peça na mesa é um retângulo alinhado aos eixos.
+// Guardar l/a aqui deixa a caixa do tabuleiro exata e dá um teste de sobreposição
+// que é só comparar retângulos.
+function posta(peca, x, z, rotY) {
+  const deitadaEmX = Math.abs(Math.cos(rotY)) > 0.5;
+  return {
+    peca, x, z, rotY,
+    l: deitadaEmX ? PECA_C : PECA_L,
+    a: deitadaEmX ? PECA_L : PECA_C,
+  };
+}
+
+function envolver(postas) {
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (const p of postas) {
+    if (!p) continue;
+    x0 = Math.min(x0, p.x - p.l / 2); x1 = Math.max(x1, p.x + p.l / 2);
+    z0 = Math.min(z0, p.z - p.a / 2); z1 = Math.max(z1, p.z + p.a / 2);
+  }
+  return { x: (x0 + x1) / 2, z: (z0 + z1) / 2, l: x1 - x0, a: z1 - z0 };
+}
+
+// O tabuleiro cresce; a mesa não. Em vez de limitar o jogo, encolhe o grupo inteiro
+// até caber — duas linhas que resolvem todos os casos extremos de uma vez.
+function escalaDoTabuleiro(caixa) {
+  if (!caixa.l) return 1;
+  return Math.min(1, (ESPALHA_X * 2.1) / caixa.l, (ESPALHA_Z * 2.4) / caixa.a);
+}
+
+/* ····· 07-cena.js ····· */
+//
+// Nenhum arquivo de imagem no projeto: madeira, piso e as pintas das peças são
+// desenhados em canvas na hora. Textura procedural custa ~40 linhas e economiza
+// download, pasta de assets e o risco de abrir o jogo em file:// sem elas.
+import * as THREE from 'three';
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.getElementById('app').appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d0908);
+scene.fog = new THREE.Fog(0x0d0908, 16, 34);
+
+const camera = new THREE.PerspectiveCamera(46, innerWidth / innerHeight, 0.1, 100);
+camera.position.set(0, 8.3, 9.3);
+camera.lookAt(0, 0, 0.8);
+
+function pintar(w, h, desenho) {
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  desenho(cv.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(cv);
+  t.anisotropy = 4;
+  return t;
+}
+
+const texMadeira = pintar(512, 512, (c, w, h) => {
+  c.fillStyle = '#5b3a22'; c.fillRect(0, 0, w, h);
+  for (let i = 0; i < 260; i++) {                       // veios: faixas horizontais tortas
+    c.strokeStyle = `rgba(${30 + Math.random() * 60},${15 + Math.random() * 30},0,${0.06 + Math.random() * 0.12})`;
+    c.lineWidth = 0.5 + Math.random() * 2.5;
+    c.beginPath();
+    const y = Math.random() * h;
+    c.moveTo(0, y);
+    for (let x = 0; x <= w; x += 32) c.lineTo(x, y + Math.sin(x / 40 + i) * 3);
+    c.stroke();
+  }
+  for (let i = 0; i < 60; i++) {                        // marcas de copo e de uso
+    c.fillStyle = `rgba(0,0,0,${0.03 + Math.random() * 0.05})`;
+    c.beginPath();
+    c.arc(Math.random() * w, Math.random() * h, 6 + Math.random() * 30, 0, 7);
+    c.fill();
+  }
+});
+texMadeira.wrapS = texMadeira.wrapT = THREE.RepeatWrapping;
+
+const texPiso = pintar(256, 256, (c, w, h) => {
+  c.fillStyle = '#2a2320'; c.fillRect(0, 0, w, h);
+  c.fillStyle = '#332a26';
+  for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++)
+    if ((x + y) % 2) c.fillRect(x * w / 4, y * h / 4, w / 4, h / 4);
+  c.strokeStyle = 'rgba(0,0,0,.4)'; c.lineWidth = 2;
+  for (let i = 0; i <= 4; i++) {
+    c.beginPath(); c.moveTo(i * w / 4, 0); c.lineTo(i * w / 4, h); c.stroke();
+    c.beginPath(); c.moveTo(0, i * h / 4); c.lineTo(w, i * h / 4); c.stroke();
+  }
+});
+texPiso.wrapS = texPiso.wrapT = THREE.RepeatWrapping;
+texPiso.repeat.set(9, 9);
+
+// ─── luz ─────────────────────────────────────────────────────────────────────
+// Uma lâmpada baixa em cima da mesa, e o resto na penumbra: é o contraste que faz
+// parecer boteco à noite em vez de sala de reunião. Mas contraste demais custa leitura
+// — o piso subiu para dar de CONTAR as peças na beirada do cone sem virar dia claro.
+scene.add(new THREE.AmbientLight(0x6b5744, 0.95));
+scene.add(new THREE.HemisphereLight(0xffe0b8, 0x241a12, 0.35));
+
+const lampada = new THREE.SpotLight(CORES.luz, 300, 30, 0.85, 0.55, 1.45);
+lampada.position.set(0, 7.6, 0.4);
+lampada.target.position.set(0, 0, 0.4);
+lampada.castShadow = true;
+lampada.shadow.mapSize.set(1024, 1024);
+lampada.shadow.camera.near = 2;
+lampada.shadow.camera.far = 20;
+lampada.shadow.bias = -0.0012;
+scene.add(lampada, lampada.target);
+
+// Uma luz fraca só na sua beirada da mesa. Sem ela a mão fica fora do cone da lâmpada
+// e as pintas somem justamente nas peças que você precisa ler para decidir.
+const luzDaMao = new THREE.PointLight(0xffd8ab, 13, 13, 1.8);
+luzDaMao.position.set(0, 2.7, 6.8);
+scene.add(luzDaMao);
+
+const cupula = new THREE.Mesh(
+  new THREE.ConeGeometry(1.15, 0.9, 24, 1, true),
+  new THREE.MeshStandardMaterial({ color: 0x1b1512, side: THREE.DoubleSide, roughness: 0.85 })
+);
+cupula.position.set(0, 8.05, 0.4);
+scene.add(cupula);
+const bulbo = new THREE.Mesh(
+  new THREE.SphereGeometry(0.22, 16, 12),
+  new THREE.MeshBasicMaterial({ color: 0xfff1cf })
+);
+bulbo.position.set(0, 7.62, 0.4);
+scene.add(bulbo);
+const fio = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.02, 0.02, 4, 6),
+  new THREE.MeshStandardMaterial({ color: 0x110d0b })
+);
+fio.position.set(0, 10.4, 0.4);
+scene.add(fio);
+
+// ─── cenário ─────────────────────────────────────────────────────────────────
+const piso = new THREE.Mesh(
+  new THREE.PlaneGeometry(46, 46),
+  new THREE.MeshStandardMaterial({ map: texPiso, roughness: 0.95 })
+);
+piso.rotation.x = -Math.PI / 2;
+piso.position.y = -2.4;
+piso.receiveShadow = true;
+scene.add(piso);
+
+const parede = new THREE.Mesh(
+  new THREE.PlaneGeometry(46, 20),
+  new THREE.MeshStandardMaterial({ color: CORES.parede, roughness: 1 })
+);
+parede.position.set(0, 7.6, -13);
+scene.add(parede);
+
+// A mesa é redonda e o jogo cabe nela: o tabuleiro pode ir a ~8.4 de largura e o
+// tampo tem 12 de diâmetro. Quando não cabe, quem encolhe é o tabuleiro (06-layout).
+const MESA_R = 6.1;
+const tampo = new THREE.Mesh(
+  new THREE.CylinderGeometry(MESA_R, MESA_R, 0.34, 64),
+  new THREE.MeshStandardMaterial({ map: texMadeira, roughness: 0.62, metalness: 0.04 })
+);
+tampo.position.y = -0.17;
+tampo.receiveShadow = true;
+scene.add(tampo);
+
+const borda = new THREE.Mesh(
+  new THREE.TorusGeometry(MESA_R, 0.13, 10, 64),
+  new THREE.MeshStandardMaterial({ color: 0x2f1d12, roughness: 0.7 })
+);
+borda.rotation.x = Math.PI / 2;
+borda.position.y = -0.05;
+scene.add(borda);
+
+const pe = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.34, 0.9, 2.4, 16),
+  new THREE.MeshStandardMaterial({ color: 0x241811, roughness: 0.8 })
+);
+pe.position.y = -1.55;
+pe.castShadow = true;
+scene.add(pe);
+
+// ─── as tralhas em cima da mesa ──────────────────────────────────────────────
+// Ficam nas quinas, fora do caminho do tabuleiro (ESPALHA_X × ESPALHA_Z).
+const vidro = new THREE.MeshPhysicalMaterial({
+  color: 0xcfe3dc, roughness: 0.06, metalness: 0, transmission: 0.9,
+  transparent: true, opacity: 0.45, thickness: 0.3,
+});
+
+function copo(x, z, cheio) {
+  const g = new THREE.Group();
+  const c = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.24, 0.85, 20, 1, true), vidro);
+  c.position.y = 0.42;
+  const cerveja = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.27, 0.22, 0.62 * cheio, 20),
+    new THREE.MeshStandardMaterial({ color: 0xd99420, roughness: 0.25 })
+  );
+  cerveja.position.y = 0.31 * cheio + 0.06;
+  const espuma = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.28, 0.28, 0.1, 20),
+    new THREE.MeshStandardMaterial({ color: 0xfdf6e6, roughness: 0.9 })
+  );
+  espuma.position.y = 0.62 * cheio + 0.11;
+  g.add(c, cerveja, espuma);
+  g.position.set(x, 0, z);
+  g.children.forEach(m => (m.castShadow = true));
+  scene.add(g);
+  return g;
+}
+copo(-5.35, -0.3, 0.75);      // longe do monte: em (-5, 1.9) o copo nascia dentro da pilha
+copo(4.9, 2.2, 0.4);
+copo(5.2, -1.4, 0.95);
+
+const cinzeiro = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.46, 0.4, 0.14, 20),
+  new THREE.MeshStandardMaterial({ color: 0x4a4440, roughness: 0.5 })
+);
+cinzeiro.position.set(-5.1, 0.07, -1.7);
+cinzeiro.castShadow = true;
+scene.add(cinzeiro);
+
+function ajustarTela() {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+}
+addEventListener('resize', ajustarTela);
+
+/* ····· 08-peca3d.js ····· */
+//
+// As 28 peças saem de UMA textura só. Em vez de desenhar 28 combinações, o atlas tem
+// as sete meias-faces (0 a 6) lado a lado, e cada metade da peça é um plano cuja UV
+// aponta para a célula certa — sete geometrias em cache dão conta das 28 peças.
+//
+//   atlas ▸ │ ·  │ ·· │ ⁚  │ ⁙  │ ⁘  │ ⁙· │ ⁚⁚ │      peça [3,5] = célula 3 + célula 5
+//            0    1    2    3    4    5    6
+
+const ATLAS_N = 7, CELULA = 128;
+const G3 = [0.28, 0.5, 0.72];                     // as três colunas/linhas do desenho
+const PINTAS = [
+  [],
+  [[1, 1]],
+  [[0, 0], [2, 2]],
+  [[0, 0], [1, 1], [2, 2]],
+  [[0, 0], [2, 0], [0, 2], [2, 2]],
+  [[0, 0], [2, 0], [1, 1], [0, 2], [2, 2]],
+  [[0, 0], [2, 0], [0, 1], [2, 1], [0, 2], [2, 2]],
+];
+
+const texPintas = pintar(CELULA * ATLAS_N, CELULA, (c) => {
+  for (let n = 0; n < ATLAS_N; n++) {
+    const ox = n * CELULA;
+    c.fillStyle = '#f4ecd9';
+    c.fillRect(ox, 0, CELULA, CELULA);
+    for (const [gx, gy] of PINTAS[n]) {
+      const x = ox + G3[gx] * CELULA, y = G3[gy] * CELULA, r = CELULA * 0.088;
+      c.fillStyle = 'rgba(255,255,255,.65)';      // lasquinha clara embaixo: dá relevo de furo
+      c.beginPath(); c.arc(x + 1.5, y + 1.5, r, 0, 7); c.fill();
+      c.fillStyle = '#191512';
+      c.beginPath(); c.arc(x, y, r, 0, 7); c.fill();
+      c.fillStyle = 'rgba(0,0,0,.35)';
+      c.beginPath(); c.arc(x - r * 0.25, y - r * 0.25, r * 0.75, 0, 7); c.fill();
+    }
+  }
+});
+
+const geomCorpo = new THREE.BoxGeometry(PECA_C * FOLGA_C, PECA_E, PECA_L * FOLGA_L);
+const geomRisco = new THREE.BoxGeometry(0.022, 0.005, PECA_L * FOLGA_L * 0.8);
+const matMarfim = new THREE.MeshStandardMaterial({ color: CORES.marfim, roughness: 0.4, metalness: 0.03 });
+const matVerso = new THREE.MeshStandardMaterial({ color: 0x6b4f34, roughness: 0.6 });
+const matPintas = new THREE.MeshStandardMaterial({ map: texPintas, roughness: 0.38 });
+const matRisco = new THREE.MeshStandardMaterial({ color: 0x8a7660, roughness: 0.85 });
+
+const geomFace = [];
+function faceDaPinta(n) {
+  if (geomFace[n]) return geomFace[n];
+  const g = new THREE.PlaneGeometry(PECA_C * FOLGA_C / 2, PECA_L * FOLGA_L);
+  const uv = g.attributes.uv;
+  for (let i = 0; i < uv.count; i++) uv.setX(i, (n + uv.getX(i)) / ATLAS_N);
+  uv.needsUpdate = true;
+  return (geomFace[n] = g);
+}
+
+// A peça nasce deitada com o eixo longo em X: o valor [0] à esquerda, o [1] à direita.
+// É a mesma convenção da linha do motor, e é o que faz o rotY do layout já vir certo.
+function criarPeca(peca, proprio) {
+  const g = new THREE.Group();
+  // Peça na mão ganha material próprio para poder acender no hover sem acender as outras.
+  const corpo = new THREE.Mesh(geomCorpo, proprio ? matMarfim.clone() : matMarfim);
+  corpo.castShadow = true;
+  corpo.receiveShadow = true;
+  const y = PECA_E / 2 + 0.003;
+  const fa = new THREE.Mesh(faceDaPinta(peca[0]), matPintas);
+  const fb = new THREE.Mesh(faceDaPinta(peca[1]), matPintas);
+  fa.rotation.x = fb.rotation.x = -Math.PI / 2;
+  fa.position.set(-PECA_C * FOLGA_C / 4, y, 0);
+  fb.position.set(PECA_C * FOLGA_C / 4, y, 0);
+  const risco = new THREE.Mesh(geomRisco, matRisco);
+  risco.position.y = y;
+  g.add(corpo, fa, fb, risco);
+  g.userData = { peca, corpo };
+  return g;
+}
+
+// A mesma peça, translúcida: é a PRÉVIA de onde ela vai cair. Mostrar a peça inteira em
+// vez de um marcador abstrato é o que deixa conferir antes de soltar — dá para ver que
+// número vai encostar em qual, e se ela entra atravessada por ser carroça.
+// Âmbar saturado, não marfim claro: sobre um tampo de madeira iluminado, um fantasma
+// da cor da peça de verdade some. Ele tem de ser reconhecível como "ainda não é peça".
+const matPreviaCorpo = new THREE.MeshStandardMaterial({
+  color: 0xffb43c, emissive: 0xc06800, emissiveIntensity: 1.1, roughness: 0.45,
+  transparent: true, opacity: 0.66, depthWrite: false,
+});
+const matPreviaPinta = new THREE.MeshStandardMaterial({
+  map: texPintas, transparent: true, opacity: 0.8, depthWrite: false,
+});
+
+function criarFantasma(peca) {
+  const g = new THREE.Group();
+  const corpo = new THREE.Mesh(geomCorpo, matPreviaCorpo);
+  corpo.position.y = PECA_E / 2;
+  const y = PECA_E + 0.004;
+  const fa = new THREE.Mesh(faceDaPinta(peca[0]), matPreviaPinta);
+  const fb = new THREE.Mesh(faceDaPinta(peca[1]), matPreviaPinta);
+  fa.rotation.x = fb.rotation.x = -Math.PI / 2;
+  fa.position.set(-PECA_C * FOLGA_C / 4, y, 0);
+  fb.position.set(PECA_C * FOLGA_C / 4, y, 0);
+  g.add(corpo, fa, fb);
+  return g;
+}
+
+// Peça de costas: é o que se vê da mão dos outros. Só o corpo, sem pinta nenhuma —
+// e é essa a garantia visual de que o jogo não desenha o que não deve mostrar.
+function criarVerso() {
+  const m = new THREE.Mesh(geomCorpo, matVerso);
+  m.castShadow = true;
+  return m;
+}
+
+function porNaMesa(obj, posta) {
+  obj.position.set(posta.x, PECA_E / 2, posta.z);
+  obj.rotation.set(0, posta.rotY, 0);
+}
+
+/* ····· 09-tabuleiro.js ····· */
+//
+// Não existe "animar a jogada X". A cada mudança o tabuleiro é RECONCILIADO com a
+// visão: cria o que falta, tira o que sobra, e manda todo mundo deslizar para o novo
+// lugar. Assim a peça nova cai do alto e, de brinde, quando o jogo dobra ou encolhe,
+// o tabuleiro inteiro se reacomoda sozinho — sem uma linha a mais de animação.
+
+const grupoMesa = new THREE.Group();
+scene.add(grupoMesa);
+
+const naMesa = new Map();          // chave da peça → { obj, alvo }
+let escalaAlvo = 1, posAlvo = new THREE.Vector3();
+
+// A prévia da jogada: a peça translúcida no lugar exato, com um brilho por baixo.
+const grupoPrevia = new THREE.Group();
+grupoMesa.add(grupoPrevia);
+const matBrilho = new THREE.MeshBasicMaterial({ color: 0xffc451, transparent: true, opacity: 0.5 });
+const geomBrilho = new THREE.CircleGeometry(PECA_C * 0.8, 28);
+
+function sincronizarTabuleiro(vista) {
+  const { postas, caixa } = layoutDaMesa(vista.linha, vista.iAncora);
+
+  const e = escalaDoTabuleiro(caixa);
+  escalaAlvo = e;
+  posAlvo.set(-caixa.x * e, 0, -caixa.z * e + 0.4);
+
+  const vivas = new Set();
+  postas.forEach(p => {
+    const k = chave(p.peca);
+    vivas.add(k);
+    let reg = naMesa.get(k);
+    if (!reg) {
+      const obj = criarPeca(p.peca);
+      // Nasce no alto e um pouco torta: é a queda que dá o "toc" na mesa.
+      obj.position.set(p.x, 2.4, p.z);
+      obj.rotation.set(0, p.rotY + 0.5, 0);
+      grupoMesa.add(obj);
+      reg = { obj, alvo: p };
+      naMesa.set(k, reg);
+      tocarBaque(0.55);
+    }
+    reg.alvo = p;
+  });
+
+  for (const [k, reg] of naMesa)
+    if (!vivas.has(k)) { grupoMesa.remove(reg.obj); naMesa.delete(k); }
+
+  esconderPrevia();
+}
+
+// ONDE A PEÇA VAI CAIR — sem uma linha de geometria nova. Simula a jogada com o mesmo
+// `aplicar` das regras, entrega a linha resultante ao mesmo `layoutDaMesa` que posiciona
+// o tabuleiro, e lê de volta a peça recém-colocada. Por isso a prévia acerta até o caso
+// difícil: se aquela peça é a que vai DOBRAR na borda, o fantasma já nasce virado na
+// quina, porque quem respondeu foi o código que vai posicioná-la de verdade.
+function previaDaJogada(vista, peca, ponta) {
+  const linha = aplicar(vista.linha, peca, ponta);
+  const ancora = vista.iAncora + (ponta === 'esq' && vista.linha.length ? 1 : 0);
+  const { postas } = layoutDaMesa(linha, ancora);
+  return postas[ponta === 'esq' ? 0 : postas.length - 1];
+}
+
+function mostrarPrevia(vista, peca, pontas) {
+  esconderPrevia();
+  for (const lado of pontas) {
+    const p = previaDaJogada(vista, peca, lado);
+    const g = new THREE.Group();
+    const brilho = new THREE.Mesh(geomBrilho, matBrilho);
+    brilho.rotation.x = -Math.PI / 2;
+    brilho.position.y = 0.014;
+    const fantasma = criarFantasma(peca);
+    fantasma.rotation.y = p.rotY;
+    g.add(brilho, fantasma);
+    g.position.set(p.x, 0, p.z);
+    g.userData.lado = lado;
+    grupoPrevia.add(g);
+  }
+}
+
+const esconderPrevia = () => grupoPrevia.clear();
+const temPrevia = () => grupoPrevia.children.length > 0;
+
+// Interpolação exponencial: independe do framerate e não precisa de biblioteca.
+const chegarPerto = (atual, alvo, k, dt) => atual + (alvo - atual) * (1 - Math.exp(-k * dt));
+
+function animarTabuleiro(dt) {
+  grupoMesa.scale.setScalar(chegarPerto(grupoMesa.scale.x, escalaAlvo, 8, dt));
+  grupoMesa.position.x = chegarPerto(grupoMesa.position.x, posAlvo.x, 8, dt);
+  grupoMesa.position.z = chegarPerto(grupoMesa.position.z, posAlvo.z, 8, dt);
+
+  // O fantasma pulsa e paira um dedo acima do tampo: peça pousada não flutua, então
+  // flutuar é o sinal mais direto de "ainda não joguei, ainda dá para desistir".
+  const pulso = 0.5 + 0.5 * Math.sin(performance.now() / 300);
+  matBrilho.opacity = 0.3 + 0.34 * pulso;
+  matPreviaCorpo.opacity = 0.56 + 0.16 * pulso;
+  // só a peça paira; o brilho fica colado no tampo, marcando o lugar
+  for (const g of grupoPrevia.children) g.children[1].position.y = 0.07 + 0.035 * pulso;
+
+  for (const { obj, alvo } of naMesa.values()) {
+    obj.position.x = chegarPerto(obj.position.x, alvo.x, 13, dt);
+    obj.position.z = chegarPerto(obj.position.z, alvo.z, 13, dt);
+    obj.position.y = chegarPerto(obj.position.y, PECA_E / 2, 15, dt);
+    // Gira pelo caminho mais curto, senão uma peça vira 350° em vez de -10°.
+    let d = alvo.rotY - obj.rotation.y;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    obj.rotation.y = chegarPerto(obj.rotation.y, obj.rotation.y + d, 13, dt);
+  }
+}
+
+/* ····· 10-mao.js ····· */
+//
+// Quem está na sua frente depende de quem é "você": a cadeira mostrada vai sempre
+// para a beirada de baixo da tela e as outras se distribuem em volta da mesa. É o que
+// faz o hotseat funcionar — trocar de jogador é só trocar um número.
+
+const grupoMao = new THREE.Group();
+const grupoOutros = new THREE.Group();
+const grupoMonte = new THREE.Group();
+scene.add(grupoMao, grupoOutros, grupoMonte);
+
+// O tombo é POSITIVO: rotação +X joga a normal da face para +Z, que é onde está a
+// câmera. Com o sinal trocado a peça encara o fundo da mesa e você vê o verso dela.
+// A conta: a câmera olha a mão de ~57° acima do horizonte, então 90° − 57° ≈ 0.58 rad.
+const MAO_Z = 4.75, MAO_Y = 1.15, MAO_TOMBO = 0.58;
+const LARGURA_MAO = 8.2;             // o quanto cabe na frente da câmera, em unidades
+const FOLGA_LEQUE = 1.08;            // respiro entre uma peça e a seguinte
+const naMao = [];                    // { obj, peca, xBase, jogavel, erguida }
+let assinaturaMao = '';
+let escolhida = null;                // índice da peça levantada, ou null
+
+const anguloDaCadeira = (i, eu, n) => ((i - eu + n) % n) * Math.PI * 2 / n;
+
+function sincronizarMao(vista) {
+  const assinatura = vista.mao.map(chave).join(',') + '#' + vista.cadeira;
+  if (assinatura !== assinaturaMao) {
+    assinaturaMao = assinatura;
+    escolhida = null;
+    naMao.forEach(m => grupoMao.remove(m.obj));
+    naMao.length = 0;
+    // O ESPAÇO SAI DO COMPRIMENTO DA PEÇA, não de um número escolhido a olho. Com um
+    // valor fixo menor que a peça, cada uma cobre a metade DIREITA da anterior — e como
+    // a peça nasce com o valor [0] à esquerda e o [1] à direita, o que sumia era sempre
+    // o segundo número. Dava para ler meia mão.
+    //
+    // Primeiro garante que não sobrepõe; só encolhe depois, se a mão for grande. O piso
+    // de 0.72 é proposital: com 14 peças compradas é melhor sobrepor 26% da beirada do
+    // que encolher tudo até as pintas sumirem.
+    const n = Math.max(vista.mao.length, 1);
+    const escala = Math.max(0.72, Math.min(1.3, LARGURA_MAO / (n * PECA_C * FOLGA_LEQUE)));
+    const espaco = Math.min(PECA_C * escala * FOLGA_LEQUE, LARGURA_MAO / n);
+    vista.mao.forEach((peca, i) => {
+      const obj = criarPeca(peca, true);
+      const x = (i - (vista.mao.length - 1) / 2) * espaco;
+      obj.position.set(x, MAO_Y, MAO_Z + Math.abs(x) * 0.05);
+      obj.rotation.set(MAO_TOMBO, 0, 0);
+      obj.scale.setScalar(escala);
+      // Peça na mão está NA SUA MÃO, não na mesa: se ela projetar sombra, vira um
+      // borrão preto do tamanho de um tijolo no tampo logo atrás.
+      obj.userData.corpo.castShadow = false;
+      grupoMao.add(obj);
+      naMao.push({ obj, peca, xBase: x, jogavel: false });
+    });
+  }
+
+  // Quais dessas dá para jogar agora — vem da MESMA função que valida a jogada de
+  // verdade (acoesDe), então a tela nunca acende uma peça que o motor recusaria.
+  const jogaveis = new Map();
+  for (const j of vista.acoes.jogadas) {
+    const k = chave(j.peca);
+    jogaveis.set(k, (jogaveis.get(k) || []).concat(j.ponta));
+  }
+  for (const m of naMao) {
+    m.pontas = jogaveis.get(chave(m.peca)) || [];
+    m.jogavel = m.pontas.length > 0;
+    // Apagar a peça que não serve não pode custar a LEITURA dela: você ainda precisa
+    // enxergar as pintas para planejar. Escurece de leve e tira o brilho, só isso.
+    const mat = m.obj.userData.corpo.material;
+    mat.color.setHex(m.jogavel ? CORES.marfim : 0xcdc3ae);
+    mat.emissive.setHex(m.jogavel ? 0x33240a : 0x000000);
+  }
+  if (escolhida !== null && !naMao[escolhida]) escolhida = null;
+}
+
+// Some com a mão da tela ANTES de anunciar a troca de jogador no hotseat. Cobrir com
+// um overlay não bastaria: as peças continuariam existindo na cena, a um F12 de
+// distância. Aqui elas somem de verdade e só voltam depois do "peguei".
+function esconderMao() {
+  naMao.forEach(m => grupoMao.remove(m.obj));
+  naMao.length = 0;
+  assinaturaMao = '';
+  cancelarEscolha();
+}
+
+function sincronizarOutros(vista) {
+  grupoOutros.clear();
+  const raio = MESA_R * 0.80;
+  vista.naMao.forEach((quantas, i) => {
+    if (i === vista.cadeira) return;
+    const a = anguloDaCadeira(i, vista.cadeira, vista.naMao.length);
+    const g = new THREE.Group();
+    g.position.set(Math.sin(a) * raio, PECA_E / 2, Math.cos(a) * raio);
+    g.rotation.y = -a;
+    // Cada peça atravessada na fileira, lado a lado. Enfileiradas no comprimento elas
+    // se sobrepõem e o que aparece na mesa é uma tábua preta, não uma mão de dominó.
+    const espaco = Math.min(0.56, 4.2 / Math.max(quantas, 1));
+    for (let k = 0; k < quantas; k++) {
+      const v = criarVerso();
+      v.position.set((k - (quantas - 1) / 2) * espaco, 0, 0);
+      v.rotation.y = Math.PI / 2;
+      g.add(v);
+    }
+    grupoOutros.add(g);
+  });
+}
+
+// O monte fica ao alcance da mão, na beirada esquerda: comprar é uma ação sua e o
+// bolo precisa estar visível para o número no HUD significar alguma coisa. São duas
+// pilhas empilhadas de verdade — espalhado no tampo ele ocuparia meia mesa.
+function sincronizarMonte(vista) {
+  grupoMonte.clear();
+  for (let i = 0; i < vista.monte; i++) {
+    const v = criarVerso();
+    const pilha = Math.floor(i / 4);                              // quatro bolinhos de 4
+    v.position.set(-4.98 + (pilha % 2) * 0.6, PECA_E / 2 + (i % 4) * PECA_E,
+      2.15 + Math.floor(pilha / 2) * 1.12);
+    v.rotation.y = Math.PI / 2 + (Math.random() - 0.5) * 0.06;   // nada de pilha de régua
+    grupoMonte.add(v);
+  }
+}
+
+function animarMao(dt, apontada) {
+  naMao.forEach((m, i) => {
+    const sobe = i === escolhida ? 0.42 : (i === apontada && m.jogavel ? 0.2 : 0);
+    m.obj.position.y = chegarPerto(m.obj.position.y, MAO_Y + sobe, 14, dt);
+    m.obj.position.z = chegarPerto(m.obj.position.z, MAO_Z + Math.abs(m.xBase) * 0.05 - sobe * 0.35, 14, dt);
+    m.obj.rotation.x = chegarPerto(m.obj.rotation.x, MAO_TOMBO + sobe * 0.22, 14, dt);
+  });
+}
+
+/* ····· 11-interacao.js ····· */
+//
+// SEMPRE dois passos, inclusive quando só existe uma ponta possível. Antes o clique na
+// peça já a jogava nesses casos, e um deslize do mouse virava jogada — num jogo em que
+// a peça errada custa a mão inteira, isso é caro demais para economizar um clique.
+//
+//   clique na peça  →  ela levanta, o fantasma aparece onde ela vai cair
+//                      (um por ponta, quando serve nas duas), e a barra confirma
+//   clique no fantasma ou no botão  →  joga
+//   Esc, clique na mesa vazia, ou clique na mesma peça  →  cancela
+//   clique em OUTRA peça  →  troca a seleção direto, sem cancelar antes
+//
+// Trocar direto é o que impede o passo a mais de virar dois passos a mais: passear pela
+// mão vendo cada encaixe custa um clique por peça, não dois.
+
+const raio = new THREE.Raycaster();
+const ponteiro = new THREE.Vector2();
+let apontada = null;
+
+addEventListener('pointermove', ev => {
+  ponteiro.x = (ev.clientX / innerWidth) * 2 - 1;
+  ponteiro.y = -(ev.clientY / innerHeight) * 2 + 1;
+});
+
+function alvoSob() {
+  raio.setFromCamera(ponteiro, camera);
+
+  if (temPrevia()) {
+    const nasPrevias = raio.intersectObjects(grupoPrevia.children, true);
+    if (nasPrevias.length) {
+      let o = nasPrevias[0].object;
+      while (o && o.userData.lado === undefined) o = o.parent;
+      if (o) return { tipo: 'previa', lado: o.userData.lado };
+    }
+  }
+
+  const naSua = raio.intersectObjects(grupoMao.children, true);
+  if (naSua.length) {
+    let o = naSua[0].object;
+    while (o && !naMao.some(m => m.obj === o)) o = o.parent;
+    const i = naMao.findIndex(m => m.obj === o);
+    if (i >= 0) return { tipo: 'peca', i };
+  }
+  return null;
+}
+
+function atualizarPonteiro() {
+  const alvo = alvoSob();
+  apontada = alvo && alvo.tipo === 'peca' ? alvo.i : null;
+  const clicavel = alvo && (alvo.tipo === 'previa' || naMao[alvo.i].jogavel);
+  renderer.domElement.style.cursor = clicavel ? 'pointer' : 'default';
+}
+
+function selecionarPeca(i) {
+  const m = naMao[i];
+  if (!m || !m.jogavel || !vistaAtual) return;
+  escolhida = i;
+  mostrarPrevia(vistaAtual, m.peca, m.pontas);
+  mostrarConfirmacao(vistaAtual, m);
+  tocarClique();
+}
+
+// Chamado a cada redesenho. O tabuleiro se reconcilia e apaga a prévia junto; se a peça
+// escolhida continua valendo, ela é reposicionada contra a linha nova. É o que segura o
+// caso do online: uma visão pode chegar do anfitrião enquanto você ainda decide, e sem
+// isto o fantasma sumiria calado, deixando a barra prometendo uma jogada sem alvo.
+function reavaliarEscolha(vista) {
+  const m = escolhida === null ? null : naMao[escolhida];
+  if (!m || !m.jogavel || vista.fase !== 'mao' || vista.vez !== vista.cadeira) { cancelarEscolha(); return; }
+  mostrarPrevia(vista, m.peca, m.pontas);
+  mostrarConfirmacao(vista, m);
+}
+
+function cancelarEscolha() {
+  escolhida = null;
+  esconderPrevia();
+  esconderConfirmacao();
+}
+
+function confirmarJogada(lado) {
+  const m = naMao[escolhida];
+  if (!m || !m.pontas.includes(lado)) return;
+  const peca = m.peca;
+  cancelarEscolha();
+  pedirAcao({ acao: 'jogar', peca, ponta: lado });
+}
+
+addEventListener('pointerdown', ev => {
+  // Só reage a clique na MESA. Sem isto, clicar num botão da barra de confirmação
+  // dispararia este handler primeiro (pointerdown vem antes de click), o raycast não
+  // acharia nada, a escolha seria cancelada — e o botão abriria uma jogada vazia.
+  if (ev.target !== renderer.domElement) return;
+  if (!vistaAtual || !podeAgirAgora()) return;
+
+  const alvo = alvoSob();
+  if (!alvo) { cancelarEscolha(); return; }
+  if (alvo.tipo === 'previa') { confirmarJogada(alvo.lado); return; }
+  if (alvo.i === escolhida) { cancelarEscolha(); return; }
+
+  if (!naMao[alvo.i].jogavel) { avisar('Essa peça não encaixa em nenhuma ponta.'); return; }
+  selecionarPeca(alvo.i);
+});
+
+/* ····· 12-audio.js ····· */
+//
+// Uma peça batendo na madeira é um estalo curto de ruído filtrado somado a um baque
+// grave — dá para descrever isso em dez linhas, e aí o jogo continua sendo um arquivo
+// só, sem pasta de mp3 e sem esperar download nenhum para começar.
+
+let ac = null, ruidoBuf = null, murmuro = null;
+
+function ligarAudio() {
+  if (ac || typeof AudioContext === 'undefined') return ac;
+  ac = new AudioContext();
+  const n = Math.floor(ac.sampleRate * 2);
+  ruidoBuf = ac.createBuffer(1, n, ac.sampleRate);
+  const d = ruidoBuf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+  return ac;
+}
+// Navegador só deixa tocar som depois de um gesto do usuário — este é o gesto.
+addEventListener('pointerdown', () => { ligarAudio(); if (ac && ac.state === 'suspended') ac.resume(); });
+
+function estalo({ dur = 0.09, freq = 1500, q = 1.1, vol = 0.3, tipo = 'bandpass' }) {
+  if (!ligarAudio()) return;
+  const s = ac.createBufferSource(); s.buffer = ruidoBuf;
+  s.loop = true;
+  const f = ac.createBiquadFilter(); f.type = tipo; f.frequency.value = freq; f.Q.value = q;
+  const g = ac.createGain();
+  const t = ac.currentTime;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.004);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  s.connect(f).connect(g).connect(ac.destination);
+  s.start(t); s.stop(t + dur + 0.02);
+}
+
+function nota(freq, dur, vol, onda = 'triangle', atraso = 0) {
+  if (!ligarAudio()) return;
+  const o = ac.createOscillator(), g = ac.createGain();
+  const t = ac.currentTime + atraso;
+  o.type = onda; o.frequency.setValueAtTime(freq, t);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(ac.destination);
+  o.start(t); o.stop(t + dur + 0.02);
+}
+
+const tocarBaque = (f = 1) => { estalo({ dur: 0.08, freq: 1700, vol: 0.26 * f }); nota(96, 0.11, 0.16 * f, 'sine'); };
+const tocarClique = () => estalo({ dur: 0.035, freq: 2600, q: 2, vol: 0.13 });
+const tocarCompra = () => estalo({ dur: 0.13, freq: 900, q: 0.7, vol: 0.16 });
+const tocarPasse = () => { estalo({ dur: 0.05, freq: 420, q: 0.8, vol: 0.2 }); estalo({ dur: 0.05, freq: 420, q: 0.8, vol: 0.18 }); };
+const tocarEmbaralho = () => estalo({ dur: 0.85, freq: 2300, q: 0.35, vol: 0.15 });
+function tocarBatida() {
+  [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => nota(f, 0.32, 0.16, 'triangle', i * 0.075));
+}
+
+// Murmurinho do salão: ruído grave filtrado, bem baixo. Mantém o silêncio de estúdio
+// longe sem virar trilha sonora.
+function ligarMurmuro() {
+  if (murmuro || !ligarAudio()) return;
+  const s = ac.createBufferSource(); s.buffer = ruidoBuf; s.loop = true;
+  const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 330;
+  const g = ac.createGain(); g.gain.value = 0.022;
+  s.connect(f).connect(g).connect(ac.destination);
+  s.start();
+  murmuro = g;
+}
+
+function silenciar(mudo) {
+  if (ac) ac[mudo ? 'suspend' : 'resume']();
+}
+
+/* ····· 13-hud.js ····· */
+//
+// Tudo aqui lê a VISÃO, nunca a partida. É o mesmo objeto que chega pela rede no
+// modo online, então a tela do convidado não tem como mostrar mais do que ele pode
+// saber — e não existe um caminho de desenho para local e outro para online.
+
+const el = id => document.getElementById(id);
+const HUD = {
+  placar: el('placar'), pontas: el('pontasVal'), monte: el('monteVal'), maoN: el('maoVal'),
+  jogadores: el('jogadores'), vez: el('vez'), aviso: el('aviso'), log: el('log'),
+  comprar: el('btComprar'), passar: el('btPassar'), acoes: el('acoes'),
+};
+
+const ETIQUETA = { voce: 'você', local: 'nesta tela', bot: 'bot', online: 'online' };
+
+function mostrarTela(id) {
+  for (const t of ['telaMenu', 'telaFimMao', 'telaFimPartida', 'telaPasse', 'telaOnline'])
+    el(t).classList.toggle('oculta', t !== id);
+}
+const esconderTelas = () => mostrarTela(null);
+
+let avisoTimer = 0;
+function avisar(txt, ms = 2200) {
+  HUD.aviso.textContent = txt;
+  HUD.aviso.classList.add('vendo');
+  clearTimeout(avisoTimer);
+  avisoTimer = setTimeout(() => HUD.aviso.classList.remove('vendo'), ms);
+}
+
+function nomeDoTime(vista, time) {
+  if (!vista.duplas) return vista.cadeiras[time].nome;
+  return `${vista.cadeiras[time].nome} e ${vista.cadeiras[time + 2].nome}`;
+}
+
+function desenharHUD(vista) {
+  HUD.pontas.textContent = vista.pontas ? vista.pontas.join('  ·  ') : '—';
+  HUD.monte.textContent = vista.monte;
+  HUD.maoN.textContent = vista.maoNum;
+
+  HUD.placar.innerHTML = vista.placar
+    .map((p, i) => `<span class="time"><i>${nomeDoTime(vista, i)}</i><b>${p}</b></span>`)
+    .join('<span class="x">×</span>') + `<span class="ate">até ${vista.alvo}</span>`;
+
+  // Um cartão por cadeira, na ordem em que a vez anda. O da vez acende.
+  HUD.jogadores.innerHTML = vista.cadeiras.map((c, i) => `
+    <div class="jog ${i === vista.vez ? 'davez' : ''} ${i === vista.cadeira ? 'euu' : ''}">
+      <span class="nome">${c.nome}</span>
+      <span class="tipo">${ETIQUETA[c.tipo] || c.tipo}</span>
+      <span class="pecas">${'▮'.repeat(Math.min(vista.naMao[i], 9))}<i>${vista.naMao[i]}</i></span>
+    </div>`).join('');
+
+  const minhaVez = vista.vez === vista.cadeira && vista.fase === 'mao';
+  HUD.vez.textContent = minhaVez ? 'Sua vez' : `Vez de ${vista.cadeiras[vista.vez].nome}`;
+  HUD.vez.classList.toggle('minha', minhaVez);
+
+  const a = vista.acoes;
+  HUD.comprar.classList.toggle('oculta', !a.comprar);
+  HUD.passar.classList.toggle('oculta', !a.passar);
+  HUD.acoes.classList.toggle('oculta', !a.comprar && !a.passar);
+  // Quando a única saída é comprar, o botão precisa gritar: o jogador está travado.
+  HUD.comprar.classList.toggle('principal', a.comprar && !a.jogadas.length);
+}
+
+// A barra de confirmação. O rótulo diz o NÚMERO da ponta, não "esquerda/direita" sozinho:
+// na hora de decidir o que importa é em que número a peça vai encostar.
+function mostrarConfirmacao(vista, m) {
+  el('confPeca').textContent = m.peca[0] + ' | ' + m.peca[1];
+  const pt = vista.pontas;
+  el('confBotoes').innerHTML = m.pontas.map(lado => {
+    const rotulo = !pt ? 'Abrir a mão com ela'
+      : lado === 'esq' ? `◀ encaixar no ${pt[0]}` : `encaixar no ${pt[1]} ▶`;
+    return `<button class="btn peq principal" data-lado="${lado}">${rotulo}</button>`;
+  }).join('');
+  el('confBotoes').querySelectorAll('button').forEach(b => {
+    b.onclick = () => confirmarJogada(b.dataset.lado);
+  });
+  el('confirmar').classList.remove('oculta');
+}
+
+function esconderConfirmacao() {
+  el('confirmar').classList.add('oculta');
+}
+el('btCancelar').onclick = () => cancelarEscolha();
+
+const linhasDoLog = [];
+function anotar(txt) {
+  linhasDoLog.push(txt);
+  if (linhasDoLog.length > 5) linhasDoLog.shift();
+  HUD.log.innerHTML = linhasDoLog.map(t => `<div>${t}</div>`).join('');
+}
+
+function mostrarFimDeMao(vista) {
+  const r = vista.resultado;
+  const bateu = r.motivo === 'batida';
+  el('fimTitulo').textContent = bateu ? 'Bateu!' : 'Trancou';
+  el('fimTipo').textContent = NOME_BATIDA[r.tipo];
+  el('fimQuem').textContent = r.time === null
+    ? 'Empate na contagem — ninguém marca.'
+    : `${nomeDoTime(vista, r.time)} ${r.pontos === 1 ? 'faz 1 ponto' : `faz ${r.pontos} pontos`}` +
+      (bateu ? '' : ` · mão mais leve com ${vista.cadeiras[r.vencedor].nome}`);
+  el('fimSomas').innerHTML = r.somas
+    .map((s, i) => `<div><span>${vista.cadeiras[i].nome}</span><b>${s}</b></div>`).join('');
+  // Quem manda na mesa é o anfitrião: o convidado não tem partida na memória, e o
+  // botão chamaria novaMao(null). Ele vê o resultado e espera a próxima chegar.
+  el('btProxima').classList.toggle('oculta', modo === 'convidado');
+  mostrarTela('telaFimMao');
+}
+
+function mostrarFimDePartida(vista) {
+  const campeao = vista.placar.indexOf(Math.max(...vista.placar));
+  el('campeao').textContent = nomeDoTime(vista, campeao);
+  el('campeaoTitulo').textContent = campeao === (vista.duplas ? vista.cadeira % 2 : vista.cadeira)
+    ? 'Você ganhou a partida' : 'Fim de partida';
+  el('btRevanche').classList.toggle('oculta', modo === 'convidado');
+  mostrarTela('telaFimPartida');
+}
+
+let mudo = false;
+el('btSom').onclick = () => {
+  mudo = !mudo;
+  silenciar(mudo);
+  el('btSom').textContent = mudo ? '✕' : '♪';
+  el('btSom').classList.toggle('desligado', mudo);
+};
+
+/* ····· 14-menu.js ····· */
+//
+// Esta tela é a interface da ideia central do projeto: não se escolhe um "modo de
+// jogo", escolhe-se quem ocupa cada cadeira. Solo é uma mesa em que as outras são
+// bots; hotseat é uma mesa de gente na mesma tela; online é uma mesa com vaga aberta.
+// Misturar (2 online + 1 bot) não é um caso especial — é só outro preenchimento.
+
+const NOMES = ['Você', 'Zé', 'Dona Cida', 'Tião', 'Careca', 'Bigode'];
+const TIPOS = [
+  ['bot:facil', 'Bot · fácil'],
+  ['bot:normal', 'Bot · normal'],
+  ['bot:dificil', 'Bot · difícil'],
+  ['local', 'Pessoa nesta tela'],
+  ['online', 'Pessoa online'],
+];
+
+const MESA = {
+  n: 3,
+  alvo: 6,
+  compraVoluntaria: false,
+  cadeiras: NOMES.slice(0, 4).map((nome, i) => (
+    i === 0 ? { nome, tipo: 'voce' } : { nome, tipo: 'bot', nivel: 'normal' }
+  )),
+};
+
+function montarCadeiras() {
+  el('cadeiras').innerHTML = MESA.cadeiras.slice(0, MESA.n).map((c, i) => {
+    const val = c.tipo === 'bot' ? 'bot:' + c.nivel : c.tipo;
+    return `<div class="cadeira">
+      <span class="num">${i === 0 ? 'Você' : 'Cadeira ' + (i + 1)}</span>
+      <input class="entrada nome" data-i="${i}" value="${c.nome}" maxlength="14" />
+      ${i === 0 ? '<span class="fixo">nesta tela</span>' :
+        `<select data-i="${i}">${TIPOS.map(([v, t]) =>
+          `<option value="${v}"${v === val ? ' selected' : ''}>${t}</option>`).join('')}</select>`}
+    </div>`;
+  }).join('');
+
+  el('cadeiras').querySelectorAll('input.nome').forEach(inp => {
+    inp.oninput = () => { MESA.cadeiras[+inp.dataset.i].nome = inp.value.trim() || 'Sem nome'; };
+  });
+  el('cadeiras').querySelectorAll('select').forEach(sel => {
+    sel.onchange = () => {
+      const c = MESA.cadeiras[+sel.dataset.i];
+      const [tipo, nivel] = sel.value.split(':');
+      c.tipo = tipo;
+      c.nivel = nivel || undefined;
+      atualizarBotaoComecar();
+    };
+  });
+
+  el('notaDuplas').textContent = MESA.n === 4
+    ? 'em duplas: 1 e 3 contra 2 e 4 · sem monte'
+    : `sem duplas · monte com ${28 - 7 * MESA.n} peças`;
+  atualizarBotaoComecar();
+}
+
+const cadeirasOnline = () => MESA.cadeiras.slice(0, MESA.n).filter(c => c.tipo === 'online').length;
+
+function atualizarBotaoComecar() {
+  const online = cadeirasOnline();
+  el('btComecar').textContent = online
+    ? `Abrir mesa e esperar ${online === 1 ? '1 pessoa' : online + ' pessoas'}`
+    : 'Sentar e jogar';
+}
+
+// grupos de botões que só ligam/desligam um valor
+function grupo(id, attr, aplicar) {
+  el(id).querySelectorAll('button').forEach(b => {
+    b.onclick = () => {
+      el(id).querySelectorAll('button').forEach(o => o.classList.remove('on'));
+      b.classList.add('on');
+      aplicar(b.dataset[attr]);
+      tocarClique();
+    };
+  });
+}
+grupo('qtdJogadores', 'n', v => { MESA.n = +v; montarCadeiras(); });
+grupo('alvoPontos', 'alvo', v => { MESA.alvo = +v; });
+grupo('compraLivre', 'livre', v => { MESA.compraVoluntaria = v === '1'; });
+
+el('btComecar').onclick = () => {
+  ligarMurmuro();
+  tocarEmbaralho();
+  if (cadeirasOnline()) abrirMesaOnline();
+  else comecarLocal();
+};
+el('btEntrar').onclick = () => entrarNumaMesa();
+el('btMenu').onclick = () => { encerrarRede(); mostrarTela('telaMenu'); };
+
+montarCadeiras();
+
+/* ····· 15-rede.js ····· */
+//
+// O ANFITRIÃO É A AUTORIDADE. Ele embaralha, guarda o estado e valida tudo. O
+// convidado não tem partida nenhuma na memória: ele manda INTENÇÃO ("quero jogar 3|5
+// na esquerda") e recebe de volta a visaoDe dele — que nunca inclui a mão dos outros.
+// Trapacear pelo DevTools não é difícil, é impossível: o dado não está lá.
+//
+//   convidado ──{t:'acao'}──►  anfitrião ──valida com acoesDe()──► aplica
+//   convidado  ◄─{t:'vista'}── anfitrião ──uma visão diferente para cada cadeira
+
+const ALFABETO = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // sem I/O/0/1: código é para ditar em voz alta
+const PREFIXO = 'dominobar-';
+const OPCOES_PEER = { config: { iceServers: [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:global.stun.twilio.com:3478' },
+] } };
+
+let peer = null;
+let conexoes = new Map();      // cadeira → conn (no anfitrião)
+let linkAnfitriao = null;      // conn (no convidado)
+
+const codigoNovo = () => Array.from({ length: 4 }, () => ALFABETO[Math.floor(Math.random() * ALFABETO.length)]).join('');
+const temPeerJS = () => typeof Peer !== 'undefined';
+
+function erroOnline(txt) {
+  el('onlineErro').textContent = txt;
+}
+
+function encerrarRede() {
+  conexoes.forEach(c => { try { c.close(); } catch (e) { void e; } });
+  conexoes.clear();
+  if (linkAnfitriao) { try { linkAnfitriao.close(); } catch (e) { void e; } linkAnfitriao = null; }
+  if (peer) { try { peer.destroy(); } catch (e) { void e; } peer = null; }
+  modo = 'local';
+}
+
+// ─── anfitrião ───────────────────────────────────────────────────────────────
+function abrirMesaOnline() {
+  if (!temPeerJS()) { avisar('A biblioteca de rede não carregou — sem internet, só dá para jogar local.'); return; }
+  encerrarRede();
+  modo = 'anfitriao';
+  mostrarTela('telaOnline');
+  el('onlineTitulo').textContent = 'Mesa aberta';
+  el('onlineSub').textContent = 'Passe este código para quem vai jogar.';
+  el('onlineEntrada').classList.add('oculta');
+  el('btConectar').classList.add('oculta');
+  el('btIniciarOnline').classList.remove('oculta');
+  el('onlineCodigo').textContent = '····';
+  erroOnline('');
+  tentarAbrir(0);
+}
+
+function tentarAbrir(tentativa) {
+  const codigo = codigoNovo();
+  peer = new Peer(PREFIXO + codigo, OPCOES_PEER);
+
+  peer.on('open', () => {
+    el('onlineCodigo').textContent = codigo;
+    listarSala();
+  });
+
+  peer.on('connection', conn => {
+    const cadeira = MESA.cadeiras.slice(0, MESA.n)
+      .findIndex((c, i) => c.tipo === 'online' && !conexoes.has(i));
+    if (cadeira < 0) { conn.on('open', () => { conn.send({ t: 'cheio' }); setTimeout(() => conn.close(), 0); }); return; }
+
+    conexoes.set(cadeira, conn);
+    conn.on('open', () => {
+      conn.send({ t: 'sentou', cadeira, cadeiras: MESA.cadeiras.slice(0, MESA.n).map(c => c.nome) });
+      listarSala();
+      if (P) publicar();                                  // entrou no meio da partida: já recebe a mesa
+    });
+    conn.on('data', m => {
+      if (m.t === 'nome') { MESA.cadeiras[cadeira].nome = String(m.nome).slice(0, 14) || 'Visita'; listarSala(); if (P) publicar(); }
+      if (m.t === 'acao' && P) aplicarIntencao(cadeira, m);
+    });
+    conn.on('close', () => {
+      conexoes.delete(cadeira);
+      // Caiu no meio do jogo? A cadeira vira bot em vez de travar a mesa inteira.
+      if (P && P.fase !== 'fim') {
+        P.cadeiras[cadeira].tipo = 'bot';
+        P.cadeiras[cadeira].nivel = 'normal';
+        anotar(`${P.cadeiras[cadeira].nome} caiu — um bot assumiu a cadeira.`);
+        publicar();
+        seguirOTurno();
+      }
+      listarSala();
+    });
+  });
+
+  peer.on('error', e => {
+    // Código sorteado já em uso: tenta outro. Qualquer outro erro, avisa em português.
+    if (e.type === 'unavailable-id' && tentativa < 4) { peer.destroy(); tentarAbrir(tentativa + 1); return; }
+    erroOnline(explicarErroDeRede(e));
+  });
+}
+
+function listarSala() {
+  const faltam = MESA.cadeiras.slice(0, MESA.n).filter((c, i) => c.tipo === 'online' && !conexoes.has(i)).length;
+  el('onlineLista').innerHTML = MESA.cadeiras.slice(0, MESA.n).map((c, i) => {
+    const estado = c.tipo === 'online' ? (conexoes.has(i) ? 'chegou' : 'esperando…') : (ETIQUETA[c.tipo] || c.tipo);
+    return `<div><span>${c.nome}</span><b>${estado}</b></div>`;
+  }).join('');
+  el('btIniciarOnline').textContent = faltam ? `Faltam ${faltam} · começar assim mesmo` : 'Começar a partida';
+}
+
+el('btIniciarOnline').onclick = () => {
+  // Cadeira online vazia na hora de começar vira bot: melhor jogar do que esperar.
+  MESA.cadeiras.slice(0, MESA.n).forEach((c, i) => {
+    if (c.tipo === 'online' && !conexoes.has(i)) { c.tipo = 'bot'; c.nivel = 'normal'; }
+  });
+  comecarLocal();
+};
+
+el('btCancelarOnline').onclick = () => { encerrarRede(); mostrarTela('telaMenu'); };
+
+// ─── convidado ───────────────────────────────────────────────────────────────
+function entrarNumaMesa() {
+  if (!temPeerJS()) { avisar('A biblioteca de rede não carregou — sem internet, só dá para jogar local.'); return; }
+  encerrarRede();
+  mostrarTela('telaOnline');
+  el('onlineTitulo').textContent = 'Entrar numa mesa';
+  el('onlineSub').textContent = 'Digite o código que o anfitrião passou.';
+  el('onlineCodigo').textContent = '';
+  el('onlineEntrada').classList.remove('oculta');
+  el('onlineEntrada').value = '';
+  el('onlineEntrada').focus();
+  el('btConectar').classList.remove('oculta');
+  el('btIniciarOnline').classList.add('oculta');
+  el('onlineLista').innerHTML = '';
+  erroOnline('');
+}
+
+el('btConectar').onclick = () => {
+  const codigo = el('onlineEntrada').value.trim().toUpperCase();
+  if (codigo.length < 3) { erroOnline('Faltou o código.'); return; }
+  erroOnline('Procurando a mesa…');
+  modo = 'convidado';
+  peer = new Peer(OPCOES_PEER);
+  peer.on('open', () => {
+    linkAnfitriao = peer.connect(PREFIXO + codigo, { reliable: true });
+    linkAnfitriao.on('open', () => {
+      erroOnline('Conectado. Esperando o anfitrião começar…');
+      linkAnfitriao.send({ t: 'nome', nome: MESA.cadeiras[0].nome });
+    });
+    linkAnfitriao.on('data', m => {
+      if (m.t === 'cheio') { erroOnline('Essa mesa já está cheia.'); return; }
+      if (m.t === 'sentou') { euNaTela = m.cadeira; erroOnline(`Você é a cadeira ${m.cadeira + 1}.`); }
+      if (m.t === 'vista') { esconderTelas(); ligarMurmuro(); atualizarVista(m.v); }
+      if (m.t === 'log') anotar(m.txt);
+    });
+    linkAnfitriao.on('close', () => { avisar('A mesa fechou.'); mostrarTela('telaMenu'); modo = 'local'; });
+  });
+  peer.on('error', e => erroOnline(explicarErroDeRede(e)));
+};
+
+function explicarErroDeRede(e) {
+  const t = e && e.type;
+  if (t === 'peer-unavailable') return 'Não achei essa mesa. Confira o código — e o anfitrião precisa estar com a página aberta.';
+  if (t === 'network' || t === 'server-error' || t === 'socket-error')
+    return 'O servidor gratuito de encontro do PeerJS não respondeu. Tente de novo em alguns segundos.';
+  if (t === 'browser-incompatible') return 'Este navegador não tem WebRTC.';
+  if (t === 'unavailable-id') return 'Não consegui reservar um código. Tente de novo.';
+  if (t === 'webrtc' || t === 'disconnected')
+    return 'A conexão direta não fechou. Redes de empresa e alguns provedores bloqueiam WebRTC — num 4G ou noutra rede costuma passar.';
+  return 'Falha de rede: ' + (t || 'desconhecida') + '.';
+}
+
+// Chamado pelo anfitrião depois de cada mudança: cada cadeira recebe a SUA visão.
+function espalharVistas() {
+  for (const [cadeira, conn] of conexoes) {
+    if (conn.open) conn.send({ t: 'vista', v: visaoDe(P, cadeira) });
+  }
+}
+function espalharLog(txt) {
+  for (const conn of conexoes.values()) if (conn.open) conn.send({ t: 'log', txt });
+}
+
+/* ····· 16-loop.js ····· */
+//
+// Existe UM caminho para uma jogada acontecer, venha ela de onde vier:
+//
+//   seu clique ─┐
+//   bot        ─┼─► pedirAcao ─► aplicarIntencao ─► motor ─► publicar ─► tela + rede
+//   rede       ─┘                (valida com acoesDe)
+//
+// Nada de "se for online faça diferente". O convidado é a única exceção e ela é de
+// uma linha: ele não tem a partida na memória, então empurra a intenção pelo fio.
+
+let P = null;                  // a partida — existe no anfitrião e no jogo local
+let vistaAtual = null;         // o que a tela está desenhando
+let euNaTela = 0;              // qual cadeira a tela mostra agora (o hotseat troca isto)
+let modo = 'local';            // 'local' | 'anfitriao' | 'convidado'
+let travado = false;           // tela de troca no ar: não desenha mão nenhuma
+let timerBot = 0;
+
+const podeAgirAgora = () =>
+  !!vistaAtual && !travado && vistaAtual.fase === 'mao' && vistaAtual.vez === vistaAtual.cadeira;
+
+function comecarLocal() {
+  const cadeiras = MESA.cadeiras.slice(0, MESA.n)
+    .map(c => ({ nome: c.nome, tipo: c.tipo, nivel: c.nivel }));
+  P = novaPartida(cadeiras, { alvo: MESA.alvo, compraVoluntaria: MESA.compraVoluntaria });
+  euNaTela = 0;
+  travado = false;
+  linhasDoLog.length = 0;
+  tocarEmbaralho();
+  anunciarAbertura();
+  avancar();
+}
+
+function anunciarAbertura() {
+  narrar(`Mão ${P.maoNum} · abre ${P.cadeiras[P.vez].nome}` +
+    (P.pecaObrigatoria ? ` com o ${P.pecaObrigatoria.join('|')}` : ''));
+}
+
+function narrar(txt) {
+  anotar(txt);
+  if (modo === 'anfitriao') espalharLog(txt);
+}
+
+// Primeiro decide de quem é a vez (pode abrir a tela de troca), só então desenha —
+// invertido, a mão do jogador anterior pisca por um quadro antes de sumir.
+function avancar() {
+  seguirOTurno();
+  publicar();
+}
+
+function publicar() {
+  if (!P) return;
+  if (modo === 'anfitriao') espalharVistas();
+  const v = visaoDe(P, euNaTela);
+  atualizarVista(travado
+    ? Object.assign({}, v, { mao: [], acoes: { jogadas: [], comprar: false, passar: false } })
+    : v);
+}
+
+function atualizarVista(v) {
+  vistaAtual = v;
+  sincronizarTabuleiro(v);
+  sincronizarMao(v);
+  sincronizarOutros(v);
+  sincronizarMonte(v);
+  desenharHUD(v);
+  reavaliarEscolha(v);
+  if (v.fase === 'fimDeMao') mostrarFimDeMao(v);
+  else if (v.fase === 'fim') mostrarFimDePartida(v);
+  else if (!travado) esconderTelas();
+}
+
+function seguirOTurno() {
+  clearTimeout(timerBot);
+  if (!P || P.fase !== 'mao' || modo === 'convidado') return;
+  const c = P.cadeiras[P.vez];
+
+  if (c.tipo === 'bot') {
+    // setTimeout, e NÃO um contador dentro do requestAnimationFrame: navegador para o
+    // rAF em aba de fundo. Com o relógio do bot preso ao quadro, o anfitrião trocar de
+    // aba congelava a mesa inteira — inclusive para quem está jogando online.
+    const quem = P.vez, naMao = P.maoNum;
+    timerBot = setTimeout(() => {
+      if (P && P.fase === 'mao' && P.vez === quem && P.maoNum === naMao && P.cadeiras[quem].tipo === 'bot')
+        aplicarIntencao(quem, jogadaDoBot(P, quem));
+    }, 550 + Math.random() * 600);                       // pausa para dar para acompanhar
+    return;
+  }
+
+  if (c.tipo !== 'online' && P.vez !== euNaTela) pedirTroca(P.vez);
+}
+
+function pedirAcao(intencao) {
+  if (!podeAgirAgora()) return;
+  if (modo === 'convidado') {
+    if (linkAnfitriao && linkAnfitriao.open) linkAnfitriao.send(Object.assign({ t: 'acao' }, intencao));
+    else avisar('Sem conexão com a mesa.');
+    return;
+  }
+  aplicarIntencao(vistaAtual.cadeira, intencao);
+}
+
+// O único lugar que mexe na partida. Vale para o seu clique, para o bot e para o que
+// chega pela rede — e valida os três do mesmo jeito.
+function aplicarIntencao(cadeira, i) {
+  if (!P || P.fase !== 'mao') return;
+  let r;
+  if (i.acao === 'jogar') r = jogar(P, cadeira, i.peca, i.ponta);
+  else if (i.acao === 'comprar') r = comprar(P, cadeira);
+  else r = passar(P, cadeira);
+
+  if (r.erro) { if (cadeira === euNaTela) avisar(r.erro); return; }
+
+  const nome = P.cadeiras[cadeira].nome;
+  if (i.acao === 'jogar') narrar(`${nome} jogou ${i.peca[0]}|${i.peca[1]}`);
+  else if (i.acao === 'comprar') { tocarCompra(); narrar(`${nome} comprou do monte`); }
+  else { tocarPasse(); narrar(`${nome} passou`); }
+
+  if (r.fim) {
+    tocarBatida();
+    narrar(r.fim.motivo === 'batida' ? `${nome} bateu — ${NOME_BATIDA[r.fim.tipo]}` : 'Jogo trancado');
+  }
+  avancar();
+}
+
+// ─── revezamento na mesma tela ───────────────────────────────────────────────
+function pedirTroca(cadeira) {
+  travado = true;
+  esconderMao();                       // as peças somem da CENA, não só da vista
+  el('passeNome').textContent = P.cadeiras[cadeira].nome;
+  mostrarTela('telaPasse');
+}
+
+el('btPronto').onclick = () => {
+  euNaTela = P.vez;
+  travado = false;
+  publicar();
+};
+
+el('btProxima').onclick = () => {
+  novaMao(P);
+  tocarEmbaralho();
+  anunciarAbertura();
+  avancar();
+};
+
+el('btRevanche').onclick = () => comecarLocal();
+
+addEventListener('keydown', ev => {
+  if (ev.key === 'Escape') cancelarEscolha();
+});
+
+HUD.comprar.onclick = () => pedirAcao({ acao: 'comprar' });
+HUD.passar.onclick = () => pedirAcao({ acao: 'passar' });
+
+// ─── loop ────────────────────────────────────────────────────────────────────
+let ultimoQuadro = performance.now();
+
+function quadro(agora) {
+  requestAnimationFrame(quadro);
+  const dt = Math.min((agora - ultimoQuadro) / 1000, 0.1);
+  ultimoQuadro = agora;
+
+  atualizarPonteiro();
+  animarTabuleiro(dt);
+  animarMao(dt, apontada);
+
+  // A lâmpada respira de leve: mesa parada com luz parada parece render, não boteco.
+  const tremor = 0.86 + Math.sin(agora / 640) * 0.02 + Math.sin(agora / 197) * 0.012;
+  bulbo.material.color.setHSL(0.1, 0.5, tremor);
+  lampada.intensity = 280 + tremor * 30;
+
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(quadro);
+
+// Ponte para os testes de aparência (tests/shots.mjs): monta situações específicas —
+// tabuleiro longo, lá-e-lô com as duas pontas acesas — sem ter de jogar de verdade.
+window.__jogo = {
+  pronto: true, MESA, comecarLocal, aplicarIntencao, pedirAcao, jogadaDoBot, mostrarTela, grupoPrevia,
+  get P() { return P; },
+  get vista() { return vistaAtual; },
+  // Faz exatamente o que o clique faria: levanta a peça, mostra os fantasmas e a barra.
+  selecionar: i => selecionarPeca(i),
+};
+</script>
+</body>
+</html>

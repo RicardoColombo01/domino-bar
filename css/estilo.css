@@ -1,0 +1,188 @@
+/* Dominó de Bar — a camada de HTML por cima do 3D.
+   Paleta de luz de lâmpada amarelada sobre madeira escura: âmbar sobre marrom. */
+:root {
+  --ambar: #f0c274;
+  --ambar-forte: #ffd98f;
+  --escuro: rgba(20, 13, 9, .82);
+  --borda: rgba(240, 194, 116, .22);
+  --texto: #efe3cf;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; height: 100%; overflow: hidden;
+  background: #0d0908; color: var(--texto);
+  font: 15px/1.45 "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app { position: fixed; inset: 0; }
+#app canvas { display: block; }
+
+.oculta { display: none !important; }
+
+/* ── caixinhas do HUD ─────────────────────────────────────────────────────── */
+.painel {
+  background: var(--escuro);
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  padding: 8px 13px;
+  backdrop-filter: blur(7px);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, .5);
+}
+
+.rot { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; opacity: .58; }
+
+#topo {
+  position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 9px; align-items: stretch; z-index: 5; pointer-events: none;
+}
+.dado { display: flex; flex-direction: column; align-items: center; min-width: 74px; }
+.dado b { font-size: 17px; font-variant-numeric: tabular-nums; color: var(--ambar); }
+
+#placar { display: flex; align-items: center; gap: 11px; }
+#placar .time { display: flex; flex-direction: column; align-items: center; }
+#placar .time i { font-style: normal; font-size: 11px; opacity: .65; max-width: 130px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#placar .time b { font-size: 22px; line-height: 1; color: var(--ambar-forte); }
+#placar .x { opacity: .35; }
+#placar .ate { font-size: 10.5px; opacity: .5; margin-left: 4px; }
+
+/* lista de jogadores, canto superior direito */
+#jogadores { position: fixed; top: 14px; right: 14px; z-index: 5; display: grid; gap: 6px; }
+.jog {
+  background: var(--escuro); border: 1px solid var(--borda); border-left: 3px solid transparent;
+  border-radius: 9px; padding: 6px 11px; min-width: 176px;
+  display: grid; grid-template-columns: 1fr auto; gap: 1px 8px; align-items: center;
+}
+.jog.davez { border-left-color: var(--ambar); background: rgba(58, 38, 16, .88); }
+.jog.euu .nome::after { content: " ·"; color: var(--ambar); }
+.jog .nome { font-weight: 600; }
+.jog .tipo { font-size: 10.5px; opacity: .5; text-align: right; }
+.jog .pecas { grid-column: 1/3; font-size: 10px; letter-spacing: -1px; color: var(--ambar); opacity: .8; }
+.jog .pecas i { font-style: normal; opacity: .6; margin-left: 6px; letter-spacing: 0; }
+
+/* Coluna inferior esquerda: ações em cima, de quem é a vez embaixo. No centro elas
+   cobririam a sua mão, que é justamente onde os olhos estão. */
+#vez {
+  position: fixed; bottom: 16px; left: 16px; z-index: 5;
+  font-size: 13px; opacity: .8;
+}
+#vez.minha { color: #101010; background: var(--ambar); font-weight: 700; opacity: 1; border-color: transparent; }
+
+#log {
+  position: fixed; bottom: 16px; right: 16px; z-index: 5;
+  font-size: 11.5px; opacity: .55; max-width: 250px; text-align: right; line-height: 1.7;
+}
+
+#acoes { position: fixed; bottom: 60px; left: 16px; z-index: 6; display: flex; gap: 9px; }
+
+/* Barra de confirmação: no centro, acima da mão, porque é onde os olhos já estão
+   quando você acabou de levantar uma peça. */
+#confirmar {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 7;
+  display: flex; align-items: center; gap: 10px; padding: 9px 13px;
+  border-color: rgba(240, 194, 116, .45);
+  animation: subir .16s ease-out;
+}
+@keyframes subir { from { opacity: 0; transform: translate(-50%, 8px); } }
+.pecaEscolhida {
+  font: 700 18px/1 ui-monospace, Consolas, monospace; letter-spacing: .06em;
+  color: #17100a; background: var(--ambar-forte);
+  padding: 7px 11px; border-radius: 7px;
+}
+
+#aviso {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(.94);
+  background: rgba(28, 18, 11, .95); border: 1px solid var(--borda); color: var(--ambar-forte);
+  padding: 11px 20px; border-radius: 11px; z-index: 20;
+  opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s;
+}
+#aviso.vendo { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+.canto {
+  position: fixed; top: 14px; left: 14px; z-index: 6;
+  width: 36px; height: 36px; padding: 0; cursor: pointer; color: var(--ambar);
+  font-size: 15px; line-height: 1;
+}
+.canto.desligado { opacity: .45; }
+
+/* ── botões ───────────────────────────────────────────────────────────────── */
+.btn {
+  background: rgba(52, 34, 20, .92); color: var(--texto);
+  border: 1px solid var(--borda); border-radius: 9px;
+  padding: 10px 17px; font: inherit; font-weight: 600; cursor: pointer;
+  transition: background .14s, transform .08s, border-color .14s;
+}
+.btn:hover { background: rgba(80, 52, 28, .95); border-color: rgba(240, 194, 116, .45); }
+.btn:active { transform: translateY(1px); }
+.btn.principal { background: var(--ambar); color: #17100a; border-color: transparent; }
+.btn.principal:hover { background: var(--ambar-forte); }
+.btn.peq { padding: 6px 13px; font-size: 13px; font-weight: 500; }
+.btn.peq.on { background: var(--ambar); color: #17100a; border-color: transparent; }
+
+/* ── telas cheias ─────────────────────────────────────────────────────────── */
+.tela {
+  position: fixed; inset: 0; z-index: 30;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at 50% 40%, rgba(60, 38, 20, .74), rgba(8, 5, 4, .95));
+  backdrop-filter: blur(4px); padding: 20px; overflow: auto;
+}
+.carta {
+  background: linear-gradient(180deg, rgba(38, 25, 16, .97), rgba(22, 14, 9, .97));
+  border: 1px solid var(--borda); border-radius: 16px;
+  padding: 26px 30px; max-width: 620px; width: 100%;
+  box-shadow: 0 26px 70px rgba(0, 0, 0, .7);
+}
+.carta h1 { margin: 0 0 4px; font-size: 30px; letter-spacing: -.01em; color: var(--ambar-forte); }
+.carta h2 { margin: 0 0 6px; font-size: 22px; color: var(--ambar-forte); }
+.sub { margin: 0 0 18px; opacity: .62; font-size: 13.5px; }
+.nota { font-size: 12px; opacity: .5; }
+.grandao { font-size: 27px; font-weight: 700; color: var(--ambar); margin: 6px 0 10px; }
+
+.linha { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 14px 0; }
+.grupo { display: flex; gap: 5px; }
+.acoesMenu { margin-top: 20px; }
+
+#cadeiras { display: grid; gap: 7px; margin: 6px 0 4px; }
+.cadeira {
+  display: grid; grid-template-columns: 84px 1fr 190px; gap: 10px; align-items: center;
+  background: rgba(0, 0, 0, .26); border: 1px solid rgba(240, 194, 116, .12);
+  border-radius: 10px; padding: 8px 12px;
+}
+.cadeira .num { font-size: 11.5px; opacity: .55; text-transform: uppercase; letter-spacing: .07em; }
+.cadeira .fixo { font-size: 12px; opacity: .45; text-align: center; }
+
+.entrada, .cadeira select {
+  background: rgba(0, 0, 0, .35); color: var(--texto);
+  border: 1px solid var(--borda); border-radius: 7px;
+  padding: 7px 10px; font: inherit; font-size: 14px; width: 100%;
+}
+.entrada:focus, .cadeira select:focus { outline: none; border-color: var(--ambar); }
+.cadeira select option { background: #241811; }
+
+.codigo {
+  font: 700 42px/1.1 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  letter-spacing: .22em; color: var(--ambar-forte); text-align: center;
+  background: rgba(0, 0, 0, .32); border: 1px dashed var(--borda);
+  border-radius: 12px; padding: 16px 10px; margin: 6px 0 14px;
+  user-select: all;
+}
+
+.somas { display: grid; gap: 4px; margin: 12px 0 2px; font-size: 13.5px; }
+.somas div { display: flex; justify-content: space-between; gap: 12px;
+  border-bottom: 1px dotted rgba(240, 194, 116, .14); padding-bottom: 3px; }
+.somas b { color: var(--ambar); }
+
+.regras { margin-top: 20px; font-size: 13px; opacity: .72; }
+.regras summary { cursor: pointer; opacity: .8; }
+.regras ul { margin: 10px 0 0; padding-left: 20px; line-height: 1.75; }
+.regras b { color: var(--ambar); }
+
+@media (max-width: 720px) {
+  #jogadores { top: auto; bottom: 70px; right: 10px; }
+  #log { display: none; }
+  .cadeira { grid-template-columns: 1fr; gap: 6px; }
+  .carta { padding: 20px; }
+}

@@ -1,0 +1,103 @@
+// Escolher a peça, ver onde ela cai, confirmar. Raycast puro, sem arrastar.
+// (parte de src/js — mesmo escopo, concatenado por build.mjs)
+//
+// SEMPRE dois passos, inclusive quando só existe uma ponta possível. Antes o clique na
+// peça já a jogava nesses casos, e um deslize do mouse virava jogada — num jogo em que
+// a peça errada custa a mão inteira, isso é caro demais para economizar um clique.
+//
+//   clique na peça  →  ela levanta, o fantasma aparece onde ela vai cair
+//                      (um por ponta, quando serve nas duas), e a barra confirma
+//   clique no fantasma ou no botão  →  joga
+//   Esc, clique na mesa vazia, ou clique na mesma peça  →  cancela
+//   clique em OUTRA peça  →  troca a seleção direto, sem cancelar antes
+//
+// Trocar direto é o que impede o passo a mais de virar dois passos a mais: passear pela
+// mão vendo cada encaixe custa um clique por peça, não dois.
+
+const raio = new THREE.Raycaster();
+const ponteiro = new THREE.Vector2();
+let apontada = null;
+
+addEventListener('pointermove', ev => {
+  ponteiro.x = (ev.clientX / innerWidth) * 2 - 1;
+  ponteiro.y = -(ev.clientY / innerHeight) * 2 + 1;
+});
+
+function alvoSob() {
+  raio.setFromCamera(ponteiro, camera);
+
+  if (temPrevia()) {
+    const nasPrevias = raio.intersectObjects(grupoPrevia.children, true);
+    if (nasPrevias.length) {
+      let o = nasPrevias[0].object;
+      while (o && o.userData.lado === undefined) o = o.parent;
+      if (o) return { tipo: 'previa', lado: o.userData.lado };
+    }
+  }
+
+  const naSua = raio.intersectObjects(grupoMao.children, true);
+  if (naSua.length) {
+    let o = naSua[0].object;
+    while (o && !naMao.some(m => m.obj === o)) o = o.parent;
+    const i = naMao.findIndex(m => m.obj === o);
+    if (i >= 0) return { tipo: 'peca', i };
+  }
+  return null;
+}
+
+function atualizarPonteiro() {
+  const alvo = alvoSob();
+  apontada = alvo && alvo.tipo === 'peca' ? alvo.i : null;
+  const clicavel = alvo && (alvo.tipo === 'previa' || naMao[alvo.i].jogavel);
+  renderer.domElement.style.cursor = clicavel ? 'pointer' : 'default';
+}
+
+function selecionarPeca(i) {
+  const m = naMao[i];
+  if (!m || !m.jogavel || !vistaAtual) return;
+  escolhida = i;
+  mostrarPrevia(vistaAtual, m.peca, m.pontas);
+  mostrarConfirmacao(vistaAtual, m);
+  tocarClique();
+}
+
+// Chamado a cada redesenho. O tabuleiro se reconcilia e apaga a prévia junto; se a peça
+// escolhida continua valendo, ela é reposicionada contra a linha nova. É o que segura o
+// caso do online: uma visão pode chegar do anfitrião enquanto você ainda decide, e sem
+// isto o fantasma sumiria calado, deixando a barra prometendo uma jogada sem alvo.
+function reavaliarEscolha(vista) {
+  const m = escolhida === null ? null : naMao[escolhida];
+  if (!m || !m.jogavel || vista.fase !== 'mao' || vista.vez !== vista.cadeira) { cancelarEscolha(); return; }
+  mostrarPrevia(vista, m.peca, m.pontas);
+  mostrarConfirmacao(vista, m);
+}
+
+function cancelarEscolha() {
+  escolhida = null;
+  esconderPrevia();
+  esconderConfirmacao();
+}
+
+function confirmarJogada(lado) {
+  const m = naMao[escolhida];
+  if (!m || !m.pontas.includes(lado)) return;
+  const peca = m.peca;
+  cancelarEscolha();
+  pedirAcao({ acao: 'jogar', peca, ponta: lado });
+}
+
+addEventListener('pointerdown', ev => {
+  // Só reage a clique na MESA. Sem isto, clicar num botão da barra de confirmação
+  // dispararia este handler primeiro (pointerdown vem antes de click), o raycast não
+  // acharia nada, a escolha seria cancelada — e o botão abriria uma jogada vazia.
+  if (ev.target !== renderer.domElement) return;
+  if (!vistaAtual || !podeAgirAgora()) return;
+
+  const alvo = alvoSob();
+  if (!alvo) { cancelarEscolha(); return; }
+  if (alvo.tipo === 'previa') { confirmarJogada(alvo.lado); return; }
+  if (alvo.i === escolhida) { cancelarEscolha(); return; }
+
+  if (!naMao[alvo.i].jogavel) { avisar('Essa peça não encaixa em nenhuma ponta.'); return; }
+  selecionarPeca(alvo.i);
+});

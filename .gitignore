@@ -1,0 +1,4 @@
+node_modules/
+tests/built*.mjs
+tests/shots/
+.build-check.mjs

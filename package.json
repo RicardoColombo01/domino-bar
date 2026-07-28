@@ -1,0 +1,13 @@
+{
+  "name": "domino-bar",
+  "private": true,
+  "description": "Dominó de bar em 3D: 2 a 4 jogadores, bots opcionais e online P2P sem servidor",
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "node build.mjs --check",
+    "test": "node build.mjs && cd tests && npm test",
+    "shots": "node build.mjs && cd tests && npm run shots",
+    "online": "node build.mjs && cd tests && npm run online",
+    "servir": "npx --yes serve ."
+  }
+}
