@@ -121,6 +121,11 @@ html, body {
 .btn.principal:hover { background: var(--ambar-forte); }
 .btn.peq { padding: 6px 13px; font-size: 13px; font-weight: 500; }
 .btn.peq.on { background: var(--ambar); color: #17100a; border-color: transparent; }
+/* cadeira que não fecha com o modo escolhido (Duelo é 1v1, Trio é 3) */
+.btn:disabled { opacity: .28; cursor: not-allowed; }
+.btn:disabled:hover { background: rgba(52, 34, 20, .92); border-color: var(--borda); }
+.btn.peq i { font-style: normal; opacity: .55; font-size: 11.5px; margin-left: 5px; }
+.btn.peq.on i { opacity: .65; }
 
 /* ── telas cheias ─────────────────────────────────────────────────────────── */
 .tela {

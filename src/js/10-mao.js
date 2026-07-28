@@ -16,7 +16,15 @@ scene.add(grupoMao, grupoOutros, grupoMonte);
 const MAO_Z = 4.75, MAO_Y = 1.15, MAO_TOMBO = 0.58;
 const LARGURA_MAO = 8.2;             // o quanto cabe na frente da câmera, em unidades
 const FOLGA_LEQUE = 1.08;            // respiro entre uma peça e a seguinte
-const naMao = [];                    // { obj, peca, xBase, jogavel, erguida }
+const naMao = [];                    // { obj, peca, xBase, yBase, zBase, jogavel, erguida }
+
+// Quantas peças cabem numa fileira sem passar do piso de escala. Acima disso a mão vai
+// para DUAS fileiras em vez de continuar encolhendo: com 14 peças (o Duelo inteiro,
+// não mais o caso raro de quem comprou muito) uma fileira só sobrepõe quase um quinto
+// de cada peça, e o que some é sempre a beirada direita — ou seja, o segundo número.
+const ESCALA_MIN = 0.72;
+const porFileira = n => (n <= Math.floor(LARGURA_MAO / (PECA_C * ESCALA_MIN * FOLGA_LEQUE))
+  ? n : Math.ceil(n / 2));
 let assinaturaMao = '';
 let escolhida = null;                // índice da peça levantada, ou null
 
@@ -34,23 +42,32 @@ function sincronizarMao(vista) {
     // a peça nasce com o valor [0] à esquerda e o [1] à direita, o que sumia era sempre
     // o segundo número. Dava para ler meia mão.
     //
-    // Primeiro garante que não sobrepõe; só encolhe depois, se a mão for grande. O piso
-    // de 0.72 é proposital: com 14 peças compradas é melhor sobrepor 26% da beirada do
-    // que encolher tudo até as pintas sumirem.
+    // Primeiro garante que não sobrepõe; só encolhe depois, se a mão for grande. E
+    // quando nem encolhendo cabe, a mão quebra em duas fileiras em vez de virar tira.
     const n = Math.max(vista.mao.length, 1);
-    const escala = Math.max(0.72, Math.min(1.3, LARGURA_MAO / (n * PECA_C * FOLGA_LEQUE)));
-    const espaco = Math.min(PECA_C * escala * FOLGA_LEQUE, LARGURA_MAO / n);
+    const cabem = porFileira(n);
+    const escala = Math.max(ESCALA_MIN, Math.min(1.3, LARGURA_MAO / (cabem * PECA_C * FOLGA_LEQUE)));
+    const espaco = Math.min(PECA_C * escala * FOLGA_LEQUE, LARGURA_MAO / cabem);
+
     vista.mao.forEach((peca, i) => {
+      const fila = Math.floor(i / cabem);
+      const nesta = Math.min(cabem, n - fila * cabem);      // a de cima pode ser menor
       const obj = criarPeca(peca, true);
-      const x = (i - (vista.mao.length - 1) / 2) * espaco;
-      obj.position.set(x, MAO_Y, MAO_Z + Math.abs(x) * 0.05);
-      obj.rotation.set(MAO_TOMBO, 0, 0);
+      // A fileira de trás sobe, recua e tomba um pouco mais. Com a mesma altura e o
+      // mesmo tombo ela ficaria escondida atrás da da frente — a ideia é o leque de
+      // quem segura as peças em duas camadas, não duas linhas na mesma altura.
+      const x = ((i % cabem) - (nesta - 1) / 2) * espaco;
+      const y = MAO_Y + fila * 0.34 * escala;
+      const z = MAO_Z - fila * 0.66 * escala + Math.abs(x) * 0.05;
+      const tombo = MAO_TOMBO + fila * 0.13;
+      obj.position.set(x, y, z);
+      obj.rotation.set(tombo, 0, 0);
       obj.scale.setScalar(escala);
       // Peça na mão está NA SUA MÃO, não na mesa: se ela projetar sombra, vira um
       // borrão preto do tamanho de um tijolo no tampo logo atrás.
       obj.userData.corpo.castShadow = false;
       grupoMao.add(obj);
-      naMao.push({ obj, peca, xBase: x, jogavel: false });
+      naMao.push({ obj, peca, xBase: x, yBase: y, zBase: z, tombo, jogavel: false });
     });
   }
 
@@ -123,8 +140,10 @@ function sincronizarMonte(vista) {
 function animarMao(dt, apontada) {
   naMao.forEach((m, i) => {
     const sobe = i === escolhida ? 0.42 : (i === apontada && m.jogavel ? 0.2 : 0);
-    m.obj.position.y = chegarPerto(m.obj.position.y, MAO_Y + sobe, 14, dt);
-    m.obj.position.z = chegarPerto(m.obj.position.z, MAO_Z + Math.abs(m.xBase) * 0.05 - sobe * 0.35, 14, dt);
-    m.obj.rotation.x = chegarPerto(m.obj.rotation.x, MAO_TOMBO + sobe * 0.22, 14, dt);
+    // O repouso sai do que sincronizarMao calculou para ESTA peça (a fileira de trás
+    // mora mais alta e mais ao fundo), e não de MAO_Y/MAO_Z direto.
+    m.obj.position.y = chegarPerto(m.obj.position.y, m.yBase + sobe, 14, dt);
+    m.obj.position.z = chegarPerto(m.obj.position.z, m.zBase - sobe * 0.35, 14, dt);
+    m.obj.rotation.x = chegarPerto(m.obj.rotation.x, m.tombo + sobe * 0.22, 14, dt);
   });
 }

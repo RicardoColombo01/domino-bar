@@ -72,6 +72,9 @@ const CENAS = [
         if (window.__jogo.P.fase !== 'mao') soBots(3);
       }`,
   })),
+  // Os modos novos: 14 peças na mão (duas fileiras) e o trio sem a bucha de zero.
+  { nome: 'duelo-14', telas: ['wide'], montar: `window.__jogo.MESA.modo = 'duelo'; soBots(2); auto(3);` },
+  { nome: 'trio-9', telas: ['wide'], montar: `window.__jogo.MESA.modo = 'trio'; soBots(3); auto(5);` },
   { nome: 'fim-de-mao', telas: ['wide'], montar: `soBots(3); auto(400);` },
   // Em duplas, porque é onde o "sobrou na mão" precisa mostrar o subtotal do time.
   { nome: 'fim-de-mao-decisivo', telas: ['wide'], montar: `ateODecisivo(4);` },

@@ -24,7 +24,9 @@ const podeAgirAgora = () =>
 function comecarLocal() {
   const cadeiras = MESA.cadeiras.slice(0, MESA.n)
     .map(c => ({ nome: c.nome, tipo: c.tipo, nivel: c.nivel }));
-  P = novaPartida(cadeiras, { alvo: MESA.alvo, compraVoluntaria: MESA.compraVoluntaria });
+  P = novaPartida(cadeiras, {
+    alvo: MESA.alvo, compraVoluntaria: MESA.compraVoluntaria, modo: MESA.modo,
+  });
   euNaTela = 0;
   travado = false;
   linhasDoLog.length = 0;

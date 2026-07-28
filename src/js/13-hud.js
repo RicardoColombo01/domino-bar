@@ -40,7 +40,10 @@ function desenharHUD(vista) {
 
   HUD.placar.innerHTML = vista.placar
     .map((p, i) => `<span class="time"><i>${nomeDoTime(vista, i)}</i><b>${p}</b></span>`)
-    .join('<span class="x">×</span>') + `<span class="ate">até ${vista.alvo}</span>`;
+    // O rótulo do modo só aparece quando não é o clássico, e é a única coisa que diz
+    // ao convidado em que mesa ele sentou — ele não tem MESA nem P.regras.
+    .join('<span class="x">×</span>') +
+    `<span class="ate">${vista.modo && vista.modo !== MODO_PADRAO ? MODOS[vista.modo].rotulo + ' · ' : ''}até ${vista.alvo}</span>`;
 
   // Um cartão por cadeira, na ordem em que a vez anda. O da vez acende.
   HUD.jogadores.innerHTML = vista.cadeiras.map((c, i) => `

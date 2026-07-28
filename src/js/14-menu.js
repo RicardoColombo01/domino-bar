@@ -17,6 +17,7 @@ const TIPOS = [
 
 const MESA = {
   n: 3,
+  modo: MODO_PADRAO,
   alvo: 6,
   compraVoluntaria: false,
   cadeiras: NOMES.slice(0, 4).map((nome, i) => (
@@ -49,10 +50,32 @@ function montarCadeiras() {
     };
   });
 
-  el('notaDuplas').textContent = MESA.n === 4
-    ? 'em duplas: 1 e 3 contra 2 e 4 · sem monte'
-    : `sem duplas · monte com ${28 - 7 * MESA.n} peças`;
+  el('notaDuplas').textContent = notaDaMesa();
   atualizarBotaoComecar();
+}
+
+// O tamanho do baralho sai de baralhoDoModo, não de um 28 escrito aqui — foi assim que
+// esta linha quebrou quando os modos chegaram.
+function notaDaMesa() {
+  const m = MODOS[MESA.modo];
+  const baralho = baralhoDoModo(m).length;
+  const monte = baralho - m.pecasPorMao * MESA.n;
+  return (MESA.n === 4 ? 'em duplas: 1 e 3 contra 2 e 4' : 'sem duplas') +
+    ` · ${baralho} peças, ${m.pecasPorMao} para cada · ` +
+    (monte > 0 ? `monte com ${monte}` : 'sem monte — quem não pode jogar, passa');
+}
+
+// Duelo é 1v1 e Trio é para três porque o baralho divide EXATO nessas contas: fora
+// delas não sobra peça, sobra erro. Em vez de deixar escolher e reclamar depois, as
+// cadeiras que não fecham ficam apagadas.
+function ajustarCadeirasAoModo() {
+  const cabem = MODOS[MESA.modo].cadeiras;
+  if (!cabem.includes(MESA.n)) MESA.n = cabem[0];
+  el('qtdJogadores').querySelectorAll('button').forEach(b => {
+    const n = +b.dataset.n;
+    b.disabled = !cabem.includes(n);
+    b.classList.toggle('on', !b.disabled && n === MESA.n);
+  });
 }
 
 const cadeirasOnline = () => MESA.cadeiras.slice(0, MESA.n).filter(c => c.tipo === 'online').length;
@@ -75,6 +98,7 @@ function grupo(id, attr, aplicar) {
     };
   });
 }
+grupo('modoMesa', 'modo', v => { MESA.modo = v; ajustarCadeirasAoModo(); montarCadeiras(); });
 grupo('qtdJogadores', 'n', v => { MESA.n = +v; montarCadeiras(); });
 grupo('alvoPontos', 'alvo', v => { MESA.alvo = +v; });
 grupo('compraLivre', 'livre', v => { MESA.compraVoluntaria = v === '1'; });
@@ -88,4 +112,5 @@ el('btComecar').onclick = () => {
 el('btEntrar').onclick = () => entrarNumaMesa();
 el('btMenu').onclick = () => { encerrarRede(); mostrarTela('telaMenu'); };
 
+ajustarCadeirasAoModo();
 montarCadeiras();

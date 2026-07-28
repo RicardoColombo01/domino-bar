@@ -2,7 +2,27 @@
 // (parte de src/js — todos os arquivos compartilham o mesmo escopo)
 
 const MAX_PINTAS = 6;            // dupla-seis → 28 peças
-const NA_MAO = 7;                // quantas cada jogador recebe
+
+// Os modos da casa. Um modo é só quantas peças cada um recebe, com quantas cadeiras
+// isso fecha, e se alguma peça sai do baralho.
+//
+// Repare que Duelo e Trio ESGOTAM o baralho na distribuição (2×14 = 28, 3×9 = 27) —
+// então caem sozinhos no caminho "sem monte, quem trava passa" que a mesa de 4 já
+// usava, sem uma linha de regra nova. E o 27 do Trio não é coincidência: tirar a
+// bucha de zero é justamente o que faz o baralho dividir exato entre três.
+//
+// `carrocasDemais` é a munição de maoRuim() (02-baralho.js): a partir de quantas
+// carroças a mesa embaralha de novo.
+const MODOS = {
+  classico: { rotulo: 'Clássico', nota: '7 peças',  pecasPorMao: 7,  cadeiras: [2, 3, 4], semZeroZero: false, carrocasDemais: 5 },
+  duelo:    { rotulo: 'Duelo',    nota: '14, 1v1',  pecasPorMao: 14, cadeiras: [2],       semZeroZero: false, carrocasDemais: 7 },
+  trio:     { rotulo: 'Trio',     nota: '9, sem 0|0', pecasPorMao: 9, cadeiras: [3],      semZeroZero: true,  carrocasDemais: 5 },
+};
+const MODO_PADRAO = 'classico';
+
+// Trava do laço de re-embaralho. Um critério exigente demais em maoRuim() faria a
+// distribuição rodar para sempre; aqui ela desiste e entrega a última mão.
+const MAX_EMBARALHOS = 100;
 
 // Medidas da peça em unidades de mundo. O comprimento é EXATAMENTE o dobro da
 // largura — é isso que faz uma carroça atravessada ocupar meia peça no braço e
