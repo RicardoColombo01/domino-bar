@@ -23,6 +23,17 @@ node tests/test-online.mjs https://ricardocolombo01.github.io/domino-bar/
 Primeira vez:  cd tests && npm install
 ```
 
+## Branches
+
+GitFlow. `main` é **exatamente o que está publicado** (o Pages serve dela): só recebe
+merge `--no-ff` de `release/*` ou `hotfix/*`, sempre com tag `vX.Y.Z`. O trabalho sai de
+`develop` em `feature/*`.
+
+`index.html` é gerado e commitado, então está marcado `merge=ours` no `.gitattributes` —
+**todo merge que tocou `src/` termina com `npm run build && git add index.html`**, e
+`npm run check` reprova bundle desatualizado. O driver exige `git config
+merge.ours.driver true` uma vez por clone.
+
 ---
 
 ## Invariantes — não quebrar

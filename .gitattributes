@@ -1,0 +1,12 @@
+# O index.html da raiz é GERADO por build.mjs (é o que o GitHub Pages serve, por isso
+# está commitado). Duas branches que mexam em src/ conflitam nele todas as vezes, e
+# resolver conflito à mão num bundle de 80 KB é trabalho jogado fora: o arquivo certo
+# sai de `npm run build`.
+#
+# merge=ours mantém a versão da branch atual no merge — e a regra que vem junto é
+# rodar `npm run build && git add index.html` antes de fechar o commit de merge.
+# `npm run check` reprova se o bundle estiver desatualizado.
+#
+# Exige uma vez por clone (o git não versiona a definição do driver):
+#     git config merge.ours.driver true
+index.html   merge=ours   linguist-generated=true
