@@ -16,7 +16,7 @@ function novaPartida(cadeiras, regras) {
     cadeiras,
     n: cadeiras.length,
     duplas: cadeiras.length === 4,            // 4 jogadores → 1&3 contra 2&4, em cruz
-    regras: Object.assign({ alvo: ALVO_PADRAO, compraVoluntaria: false }, regras || {}),
+    regras: Object.assign({ alvo: ALVO_PADRAO, compraVoluntaria: false, modo: MODO_PADRAO }, regras || {}),
     placar: cadeiras.length === 4 ? [0, 0] : new Array(cadeiras.length).fill(0),
     maoNum: 0,
     abridor: null,
@@ -27,7 +27,9 @@ function novaPartida(cadeiras, regras) {
 }
 
 function novaMao(P) {
-  const { maos, monte } = distribuir(P.n);
+  // O tamanho da mão vem de P.regras, e não de parâmetro, porque o botão "Próxima mão"
+  // chama novaMao(P) sem mais nada — a mesa não pode trocar de modo no meio da partida.
+  const { maos, monte } = distribuir(P.n, P.regras);
   P.maos = maos;
   P.monte = monte;
   P.linha = [];
@@ -174,6 +176,7 @@ function visaoDe(P, cadeira) {
     maoNum: P.maoNum,
     duplas: P.duplas,
     alvo: P.regras.alvo,
+    modo: P.regras.modo,                         // o convidado não vê MESA nem P.regras
     cadeiras: P.cadeiras.map(c => ({ nome: c.nome, tipo: c.tipo })),
     acoes: acoesDe(P, cadeira),
   };

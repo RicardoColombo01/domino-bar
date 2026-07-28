@@ -226,5 +226,35 @@ console.log('\ndesenho a partir de uma visão que veio da rede');
   frames(4);
 }
 
+console.log('\na mão de 14 do Duelo cabe na tela');
+{
+  mod.MESA.modo = 'duelo';
+  mod.MESA.n = 2;
+  mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[1].nivel = 'normal';
+  mod.comecarLocal();
+
+  ok(mod.naMao.length === 14, `a mão desenhada tem ${mod.naMao.length} peças, esperado 14`);
+  ok(contarMalhas(mod.grupoMonte) === 0, 'o Duelo consome o baralho e mesmo assim desenhou monte');
+
+  const ys = mod.naMao.map(m => m.yBase);
+  const frente = Math.min(...ys);
+  ok(new Set(ys).size === 2, `14 peças deveriam ficar em 2 fileiras, ficaram em ${new Set(ys).size}`);
+  ok(mod.naMao.every(m => m.yBase === frente || m.zBase < mod.naMao.find(o => o.yBase === frente).zBase),
+     'a fileira de trás não recuou — ela ficaria escondida atrás da da frente');
+
+  // O que a mão de 14 quebrava: espremida numa fileira só, cada peça cobria a beirada
+  // DIREITA da anterior — e como a peça nasce com o [0] à esquerda, o que sumia era
+  // sempre o segundo número. Aqui o passo entre peças tem de ser >= a peça inteira.
+  const escala = mod.naMao[0].obj.scale.x;
+  const daFrente = mod.naMao.filter(m => m.yBase === frente).map(m => m.xBase).sort((a, b) => a - b);
+  const passo = daFrente[1] - daFrente[0];
+  ok(passo >= escala - 1e-9,
+     `as peças da fileira se sobrepõem: passo ${passo.toFixed(3)} contra peça de ${escala.toFixed(3)}`);
+
+  // E a mão inteira tem de caber na largura visível na frente da câmera.
+  const usada = daFrente[daFrente.length - 1] - daFrente[0] + escala;
+  ok(usada <= 8.2 + 1e-9, `a mão ocupou ${usada.toFixed(2)} de largura, mais que os 8.2 visíveis`);
+}
+
 console.log(falhas ? `\n${falhas} falha(s)` : '\ntudo certo');
 process.exit(falhas ? 1 : 0);

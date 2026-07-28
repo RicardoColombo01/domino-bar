@@ -61,8 +61,8 @@ As pontas são o primeiro e o último número; jogar na esquerda é um `unshift`
 ### Mapa
 
 ```
-01-constantes  peças, medidas, pontuação, folgas visuais
-02-baralho     embaralhar, distribuir, quem abre
+01-constantes  peças, medidas, pontuação, folgas visuais, tabela MODOS
+02-baralho     embaralhar, distribuir (com re-embaralho), quem abre
 03-regras      encaixes, pontas, jogadas válidas, tipo de batida     ← puro
 04-partida     turnos, compra, passe, placar, visaoDe()
 05-bot         níveis = quanta informação o bot recebe
@@ -93,35 +93,32 @@ As pontas são o primeiro e o último número; jogar na esquerda é um `unshift`
   `setTimeout` de verdade (`tests/harness.mjs`), senão temporizadores nunca disparam e o
   teste passa sem ter rodado nada.
 - **Buscar peça por texto no JSON dá falso positivo:** `[0,0]` também é um placar 0×0.
+- **`naMao` já é dois nomes** — o array de contagens em `visaoDe` e o array de peças 3D em
+  `10-mao.js`. Como tudo é o mesmo escopo concatenado, um terceiro `naMao` seria colisão
+  silenciosa; o tamanho da mão chama-se `pecasPorMao`.
+- **Aritmética de baralho fora do motor apodrece.** `14-menu.js` tinha `28 - 7 * MESA.n`
+  escrito à mão e foi a primeira linha a quebrar com os modos. Tamanho de baralho sai de
+  `baralhoDoModo()`, sempre.
+- **`distribuir` dava mão curta em silêncio** quando `n × peças` não cabia no baralho. Hoje
+  estoura com mensagem — o menu barra a combinação, mas os testes entram por baixo dele.
 
 ---
 
 # FILA DE TRABALHO
 
-Ordem sugerida: 1 → 3 → 2 → 4. A fila 3 antes da 2 de propósito: é o teste que torna a
+Ordem sugerida: 3 → 2 → 4. A fila 3 antes da 2 de propósito: é o teste que torna a
 adaptação para celular verificável em vez de opinião.
 
-## Fila 1 — o bug dos pontos (pequeno e fechado)
+## Fila 1 — o bug dos pontos ✔ feito (v1.0.1)
 
-Três defeitos na mesma tela. O primeiro é o que o Ricardo viu no celular.
+A mão que decide a partida mostra os pontos antes do campeão; a tela de campeão ganhou
+placar final e número de mãos; `#fimSomas` virou `#fimSobrou`, com título "sobrou na mão"
+e subtotal por dupla (`fecharMao` grava `somasPorTime`).
 
-**a) A mão que decide a partida nunca mostra os pontos.**
-`16-loop.js:69` faz `if (fase==='fimDeMao') mostrarFimDeMao(); else if (fase==='fim')
-mostrarFimDePartida()`. Mas `fecharMao()` em `04-partida.js` põe `fase='fim'` **direto**
-quando alguém chega ao alvo. Na mão que ganha o jogo, a tela "Bateu! batida de carroça ·
-2 pontos" é **pulada** — você cai no campeão sem ver de onde vieram os pontos.
-→ Mostrar sempre o fim de mão; com `fase==='fim'` o botão vira "Ver o resultado" e só
-então abre a tela de campeão.
-
-**b) A tela de fim de partida não tem placar nenhum**, só o nome do campeão
-(`mostrarFimDePartida`, `13-hud.js`). → Placar final e número de mãos.
-
-**c) `#fimSomas` engana.** Um número por jogador, sem rótulo e no mesmo estilo do placar:
-lê-se como pontuação, mas é **o que sobrou na mão**. Em duplas é pior — quem pontua é a
-dupla e a tela mostra quatro números soltos. → Título "sobrou na mão" e subtotal por dupla
-quando `vista.duplas`.
-
-Arquivos: `13-hud.js`, `16-loop.js`, `src/pagina.html`, `css/estilo.css`.
+**O que ficou de lição:** a tela é função pura de `vista.fase` e `atualizarVista()` roda
+em **todo** `publicar()`. Qualquer passo de UI com mais de um estado para a mesma fase
+precisa de um flag de módulo em `16-loop.js` (`viuOFimDaMao`), zerado quando a fase muda —
+não dá para resolver dentro do HUD.
 
 ## Fila 2 — celular (retrato está quebrado)
 
@@ -140,10 +137,9 @@ mesa saia do quadro.
 2. **`LARGURA_MAO` deixa de ser a constante `8.2`** (`10-mao.js:17`) e passa a ser a
    largura de mundo realmente visível na profundidade da mão, menos margem. Isso resolve
    celular e o pedido de "adaptar à quantidade de peças" com a mesma conta.
-3. **Mão em fileiras.** `porFileira = floor(LARGURA / (PECA_C · escalaMínima · folga))`;
-   acima disso, duas fileiras — a de trás mais alta, mais ao fundo e um pouco mais
-   inclinada, para não tapar a da frente. Hoje, com 14 peças compradas, o leque encolhe
-   até virar tira (piso de escala `0.72` em `10-mao.js:41`).
+3. ~~**Mão em fileiras.**~~ ✔ feito na v1.1.0, junto do Duelo de 14 — `porFileira()` em
+   `10-mao.js` quebra em duas fileiras acima de 10 peças, e a de trás sobe, recua e tomba
+   mais. Falta só reagir à largura de verdade, que é o item 2 acima.
 4. **HUD responsivo por orientação**, não só por largura: painéis do topo viram faixa
    compacta, `#jogadores` vira linha horizontal, alvos de toque ≥ 44 px, `#log` só em tela
    larga, barra de confirmação ocupando a largura inteira embaixo. Hoje só existe um
@@ -173,8 +169,13 @@ Seguir o padrão de `tests/shots.mjs` (puppeteer-core + Chrome instalado) e usar
 
 ## Fila 4 — jogabilidade
 
+0. **`maoRuim` em `02-baralho.js` é placeholder** (devolve `false`). O laço de
+   re-embaralho, a trava de `MAX_EMBARALHOS` e os testes já existem — falta só o critério.
+   O Ricardo vai escrever; **não escrever por ele.** `tests/test-regras.mjs` avisa no
+   terminal enquanto for placeholder e mede quantos embaralhos cada modo gasta.
 1. **`escolherJogada` em `05-bot.js:39` ainda é o placeholder** que só descarrega a peça
-   mais pesada. É a maior lacuna do projeto — o bot é o adversário na maioria das partidas.
+   mais pesada. É a maior lacuna do projeto — o bot é o adversário na maioria das partidas,
+   e no Duelo de 14 a fraqueza dele fica ainda mais visível.
    O Ricardo quis escrever essa função; **perguntar antes de escrever por ele.** O andaime
    está pronto: `opcoes` já vem com `valor` e `carroca`, e `info.faltaNo` guarda os números
    que cada adversário mostrou não ter.
@@ -194,8 +195,19 @@ Seguir o padrão de `tests/shots.mjs` (puppeteer-core + Chrome instalado) e usar
 
 ## Regras da casa (implementadas)
 
-28 peças, 7 para cada. **4 jogadores:** duplas em cruz (1&3 × 2&4), **sem monte** — quem
-não pode jogar passa. **2 ou 3:** o resto vira monte, e quem não pode jogar **compra até
-conseguir**. Primeira mão abre com o 6|6; as seguintes, quem bateu. Batida: simples 1,
-carroça 2, lá-e-lô 3, cruzada 4. Trancou: 1 ponto para a mão mais leve; empatou, a mão
-morre. Partida até 6 (ou 10, no menu). Compra voluntária é alternável no menu.
+Três modos, na tabela `MODOS` de `01-constantes.js`: **Clássico** (7 na mão, 2 a 4
+jogadores, 28 peças), **Duelo** (14 na mão, 1v1, 28 peças) e **Trio** (9 na mão, 3
+jogadores, 27 peças — o `0|0` sai, e é isso que faz 27 dividir exato por 3).
+
+Duelo e Trio **esgotam o baralho na distribuição**, então caem sozinhos no caminho "sem
+monte, quem trava passa" que a mesa de 4 já usava — não há regra de compra nova. Com
+monte só o Clássico de 2 ou 3, onde quem não pode jogar **compra até conseguir**.
+
+**Clássico de 4:** duplas em cruz (1&3 × 2&4). Primeira mão abre com o 6|6; as seguintes,
+quem bateu. Batida: simples 1, carroça 2, lá-e-lô 3, cruzada 4. Trancou: 1 ponto para a
+mão mais leve; empatou, a mão morre. Partida até 6 (ou 10, no menu). Compra voluntária e
+o modo da mesa são alternáveis no menu.
+
+`maoRuim(mao, modo)` em `02-baralho.js` decide quando a distribuição volta e todo mundo
+embaralha de novo (`distribuir` refaz até `MAX_EMBARALHOS`). **Ainda é o placeholder — o
+Ricardo vai escrever.** `modo.carrocasDemais` é a munição.

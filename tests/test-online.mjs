@@ -58,6 +58,9 @@ try {
   await anfitriao.evaluate(() => {
     const j = window.__jogo;
     j.MESA.n = 2;
+    // De propósito no Duelo: a mesa é 1v1 e serve para provar que o MODO chega ao
+    // convidado. Ele não tem MESA nem P.regras — só o que vier dentro da visão.
+    j.MESA.modo = 'duelo';
     j.MESA.cadeiras[0].nome = 'Anfitriã';
     j.MESA.cadeiras[1].tipo = 'online';
     j.MESA.cadeiras[1].nome = 'Visita';
@@ -81,13 +84,15 @@ try {
   console.log('  o anfitrião viu a visita sentar');
 
   await anfitriao.evaluate(() => document.getElementById('btIniciarOnline').click());
-  await convidado.waitForFunction('window.__jogo.vista && window.__jogo.vista.mao.length === 7', { timeout: 25000, polling: 400 });
+  await convidado.waitForFunction('window.__jogo.vista && window.__jogo.vista.mao.length === 14', { timeout: 25000, polling: 400 });
 
   console.log('\no que o convidado recebeu');
   const v = await convidado.evaluate(() => JSON.parse(JSON.stringify(window.__jogo.vista)));
   ok(v.cadeira === 1, `o convidado deveria ser a cadeira 1, veio ${v.cadeira}`);
-  ok(v.mao.length === 7, 'a mão do convidado não chegou completa');
-  ok(v.naMao.length === 2 && v.naMao[0] === 7, 'a contagem de peças do anfitrião não chegou');
+  ok(v.modo === 'duelo', `o modo da mesa não chegou ao convidado (veio ${v.modo})`);
+  ok(v.mao.length === 14, 'a mão do convidado não chegou completa');
+  ok(v.monte === 0, `o Duelo consome o baralho e o convidado viu monte de ${v.monte}`);
+  ok(v.naMao.length === 2 && v.naMao[0] === 14, 'a contagem de peças do anfitrião não chegou');
   ok(!await convidado.evaluate(() => !!window.__jogo.P), 'o convidado não pode ter a partida na memória');
 
   // O PONTO DE TODO O DESENHO: a mão do anfitrião não existe do lado do convidado.
