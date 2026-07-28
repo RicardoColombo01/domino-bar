@@ -3,7 +3,11 @@
 // PeerJS — quando eles não respondem o teste AVISA em vez de reprovar, senão um
 // problema de rede viraria "o jogo quebrou".
 //
-//   npm run online     (ou: node test-online.mjs)
+//   npm run online                              testa o index.html desta pasta
+//   node test-online.mjs https://algum/endereco  testa o que está PUBLICADO
+//
+// A segunda forma existe porque "passou aqui" e "passa no ar" não são a mesma coisa:
+// no site publicado entram https, o caminho do Pages e o cache do CDN.
 import puppeteer from 'puppeteer-core';
 import http from 'http';
 import fs from 'fs';
@@ -14,15 +18,17 @@ const RAIZ = path.join(import.meta.dirname, '..');
 const PORTA = 8137;
 const TIPOS = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.png': 'image/png' };
 
-const servidor = http.createServer((req, res) => {
+const externo = process.argv[2];
+const servidor = externo ? null : http.createServer((req, res) => {
   const rel = decodeURIComponent(req.url.split('?')[0]);
   const arq = path.join(RAIZ, rel === '/' ? 'index.html' : rel);
   if (!arq.startsWith(RAIZ) || !fs.existsSync(arq)) { res.writeHead(404); res.end(); return; }
   res.writeHead(200, { 'content-type': TIPOS[path.extname(arq)] || 'application/octet-stream' });
   res.end(fs.readFileSync(arq));
 });
-await new Promise(r => servidor.listen(PORTA, r));
-const URL_JOGO = `http://localhost:${PORTA}/index.html`;
+if (servidor) await new Promise(r => servidor.listen(PORTA, r));
+const URL_JOGO = externo || `http://localhost:${PORTA}/index.html`;
+console.log('testando ' + URL_JOGO);
 
 let falhas = 0, avisos = [];
 const ok = (cond, msg) => { if (!cond) { console.error('  ✗ ' + msg); falhas++; } };
@@ -124,7 +130,7 @@ try {
 }
 
 await navegador.close();
-servidor.close();
+if (servidor) servidor.close();
 
 if (avisos.length) {
   console.log('\nNÃO DEU PARA TESTAR O ONLINE:\n  ' + avisos.join('\n  '));
