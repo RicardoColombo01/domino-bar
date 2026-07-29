@@ -26,6 +26,12 @@ const AUTO = `
       j.aplicarIntencao(P.vez, j.jogadaDoBot(P, P.vez));
     }
   };
+  // O localStorage é do file:// inteiro: uma cena que liga a contagem contamina as
+  // seguintes, e a foto sai mentindo. Cada cena diz o que quer.
+  const contar = (ligado) => {
+    const b = document.getElementById('btContagem');
+    if (b.classList.contains('on') !== ligado) b.click();
+  };
   const soBots = (n) => {
     const j = window.__jogo;
     j.MESA.n = n;
@@ -47,10 +53,10 @@ const AUTO = `
 `;
 
 const CENAS = [
-  { nome: 'menu', telas: ['wide', 'retrato'], montar: `window.__jogo.mostrarTela('telaMenu');` },
-  { nome: 'inicio-3', telas: ['wide'], montar: `soBots(3); auto(2);` },
-  { nome: 'meio-de-mao', telas: ['wide', 'retrato'], montar: `soBots(3); auto(9);` },
-  { nome: 'duplas-4', telas: ['wide'], montar: `soBots(4); auto(13);` },
+  { nome: 'menu', telas: ['wide', 'retrato'], montar: `contar(false); window.__jogo.mostrarTela('telaMenu');` },
+  { nome: 'inicio-3', telas: ['wide'], montar: `contar(false); soBots(3); auto(2);` },
+  { nome: 'meio-de-mao', telas: ['wide', 'retrato'], montar: `contar(false); soBots(3); auto(9);` },
+  { nome: 'duplas-4', telas: ['wide'], montar: `contar(false); soBots(4); auto(13);` },
   {
     nome: 'tabuleiro-dobrado', telas: ['wide'],
     montar: `soBots(2);
@@ -68,7 +74,7 @@ const CENAS = [
           const conta = {};
           v.acoes.jogadas.forEach(j => { const k = j.peca.join('|'); conta[k] = (conta[k]||0)+1; });
           const achou = v.mao.findIndex(p => conta[p.join('|')] ${teste});
-          if (achou >= 0 && v.linha.length >= 3) { window.__jogo.selecionar(achou); break; }
+          if (achou >= 0 && v.linha.length >= 3) { window.__jogo.selecionar(v.mao[achou]); break; }
         }
         auto(1);
         if (window.__jogo.P.fase !== 'mao') soBots(3);
@@ -79,6 +85,15 @@ const CENAS = [
   { nome: 'trio-9', telas: ['wide'], montar: `window.__jogo.MESA.modo = 'trio'; soBots(3); auto(5);` },
   // Mesa de 4 com a linha comprida: o pior caso do enquadramento em pé.
   { nome: 'mesa-cheia', telas: ['retrato'], montar: `soBots(4); for (let i = 0; i < 200 && window.__jogo.P.linha.length < 13; i++) auto(1);` },
+  // As ajudas de mesa: contagem ligada e a mão arrumada por naipe.
+  {
+    nome: 'contando', telas: ['wide', 'retrato'],
+    montar: `soBots(3); auto(11); contar(true);`,
+  },
+  {
+    nome: 'mao-arrumada', telas: ['wide'],
+    montar: `contar(false); soBots(3); auto(6); window.__jogo.arrumarMao();`,
+  },
   { nome: 'fim-de-mao', telas: ['wide'], montar: `soBots(3); auto(400);` },
   // Em duplas, porque é onde o "sobrou na mão" precisa mostrar o subtotal do time.
   { nome: 'fim-de-mao-decisivo', telas: ['wide'], montar: `ateODecisivo(4);` },

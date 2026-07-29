@@ -30,6 +30,7 @@ function comecarLocal() {
   });
   euNaTela = 0;
   travado = false;
+  esquecerArrumacao();               // mesa nova, mão nova: a arrumação de antes não vale
   linhasDoLog.length = 0;
   tocarEmbaralho();
   anunciarAbertura();
@@ -220,6 +221,17 @@ addEventListener('keydown', ev => {
 
 HUD.comprar.onclick = () => pedirAcao({ acao: 'comprar' });
 HUD.passar.onclick = () => pedirAcao({ acao: 'passar' });
+// Arrumar e contar não passam pelo motor: são jeitos de OLHAR a sua própria mão, e
+// funcionam fora da sua vez de propósito.
+HUD.arrumar.onclick = () => { arrumarMao(); tocarSoltar(); };
+HUD.contar.onclick = () => {
+  contando = !contando;
+  try { localStorage.setItem('dominobar.contagem', contando ? '1' : '0'); } catch (e) { void e; }
+  if (vistaAtual) atualizarVista(vistaAtual);
+};
+addEventListener('keydown', ev => {
+  if (ev.key === 'a' || ev.key === 'A') arrumarMao();
+});
 
 // ─── loop ────────────────────────────────────────────────────────────────────
 // Primeiro enquadramento. Fica aqui, e não no fim de 07-cena.js, porque enquadrar() lê
@@ -255,8 +267,14 @@ window.__jogo = {
   // coordenadas de tela e reprovar se alguma cair fora — que é o teste que prova "dá
   // para ver a mão" sem ninguém olhar screenshot.
   camera, naMao, enquadrar, grupoMesa, grupoOutros, grupoMonte,
+  arrumarMao, moverNaMao, publicar,
   get P() { return P; },
   get vista() { return vistaAtual; },
+  // A ORDEM DA TELA, que desde a arrumação não é mais a de vista.mao. Quem quiser
+  // selecionar uma peça tem de procurar aqui.
+  get maoNaTela() { return naMao.map(m => m.peca); },
   // Faz exatamente o que o clique faria: levanta a peça, mostra os fantasmas e a barra.
-  selecionar: i => selecionarPeca(i),
+  // Recebe a PEÇA e não o índice — igual ao motor, e pelo mesmo motivo: índice de tela
+  // era o único acoplamento do repositório que quebrava calado quando a mão reordenava.
+  selecionar: peca => selecionarPeca(naMao.findIndex(m => mesmaPeca(m.peca, peca))),
 };

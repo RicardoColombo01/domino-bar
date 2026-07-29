@@ -12,6 +12,7 @@ const mod = await import(buildModule([
   'visaoDe', 'novaMao', 'publicar', 'P', 'vistaAtual', 'euNaTela', 'travado', 'naMao', 'naMesa',
   'grupoMao', 'grupoOutros', 'grupoMonte', 'grupoMesa', 'scene', 'renderer',
   'selecionarPeca', 'cancelarEscolha', 'confirmarJogada', 'escolhida', 'grupoPrevia', 'chave',
+  'arrumarMao', 'moverNaMao', 'carroca',
 ], undefined, path.join(import.meta.dirname, 'built-jogo.mjs')));
 
 let falhas = 0;
@@ -245,7 +246,10 @@ console.log('\na mão de 14 do Duelo cabe na tela');
   // O que a mão de 14 quebrava: espremida numa fileira só, cada peça cobria a beirada
   // DIREITA da anterior — e como a peça nasce com o [0] à esquerda, o que sumia era
   // sempre o segundo número. Aqui o passo entre peças tem de ser >= a peça inteira.
-  const escala = mod.naMao[0].obj.scale.x;
+  // `escalaBase` e não `obj.scale`: desde que a mão passou a ser reconciliada em vez de
+  // recriada, a escala do objeto é interpolada e uma peça que sobreviveu da mão anterior
+  // ainda está a caminho do tamanho novo. Quem diz o tamanho do slot é a base.
+  const escala = mod.naMao[0].escalaBase;
   const daFrente = mod.naMao.filter(m => m.yBase === frente).map(m => m.xBase).sort((a, b) => a - b);
   const passo = daFrente[1] - daFrente[0];
   ok(passo >= escala - 1e-9,
@@ -254,6 +258,75 @@ console.log('\na mão de 14 do Duelo cabe na tela');
   // E a mão inteira tem de caber na largura visível na frente da câmera.
   const usada = daFrente[daFrente.length - 1] - daFrente[0] + escala;
   ok(usada <= 8.2 + 1e-9, `a mão ocupou ${usada.toFixed(2)} de largura, mais que os 8.2 visíveis`);
+}
+
+console.log('\narrumar a mão');
+{
+  mod.MESA.modo = 'classico'; mod.MESA.n = 3;
+  mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[2].tipo = 'bot';
+  mod.comecarLocal();
+  // Anda até ser a sua vez com jogada na mão: quem abre é quem tem o 6|6, então isso
+  // não pode depender da semente.
+  for (let i = 0; i < 200; i++) {
+    const v = mod.vistaAtual;
+    if (v && v.fase === 'mao' && v.vez === v.cadeira && v.acoes.jogadas.length) break;
+    if (!mod.P || mod.P.fase !== 'mao') { mod.comecarLocal(); continue; }
+    mod.aplicarIntencao(mod.P.vez, mod.jogadaDoBot(mod.P, mod.P.vez));
+  }
+
+  const naTela = () => mod.naMao.map(m => mod.chave(m.peca));
+  const ordenado = a => a.slice().sort().join();
+  const inicial = naTela();
+
+  mod.moverNaMao(0, 3);
+  mod.arrumarMao();
+  const arrumada = naTela();
+  ok(ordenado(arrumada) === ordenado(inicial), 'arrumar perdeu ou inventou peça');
+  mod.arrumarMao();
+  ok(naTela().join() === arrumada.join(), 'arrumar duas vezes deveria dar exatamente o mesmo');
+
+  // O naipe mais forte abre a mão num BLOCO — é o que faz a arrumação servir para
+  // alguma coisa: bater o olho e saber em que número você aguenta responder. Com empate
+  // na contagem, qualquer um dos empatados serve; o que não serve é ficar espalhado.
+  const quantos = new Array(7).fill(0);
+  mod.naMao.forEach(m => { quantos[m.peca[0]]++; quantos[m.peca[1]]++; });
+  const maior = Math.max(...quantos);
+  const abreEmBloco = quantos.some((q, n) => {
+    if (q !== maior) return false;
+    const onde = mod.naMao.map((m, i) => (m.peca[0] === n || m.peca[1] === n ? i : -1)).filter(i => i >= 0);
+    return onde.length && onde[0] === 0 && onde[onde.length - 1] === onde.length - 1;
+  });
+  ok(abreEmBloco, `nenhum naipe de ${maior} peças abre a mão em bloco: ${naTela()}`);
+
+  // E a arrumação sobrevive à jogada: some a peça jogada, o resto na mesma ordem.
+  const a = mod.vistaAtual.acoes;
+  ok(a.jogadas.length > 0, 'o cenário não deu jogada nenhuma para testar');
+  if (a.jogadas.length) {
+    const jogada = mod.chave(a.jogadas[0].peca);
+    const esperado = arrumada.filter(k => k !== jogada);
+    mod.pedirAcao({ acao: 'jogar', peca: a.jogadas[0].peca, ponta: a.jogadas[0].ponta });
+    ok(naTela().join() === esperado.join(),
+      `depois de jogar o ${jogada} a ordem deveria ser ${esperado} e ficou ${naTela()}`);
+  }
+}
+
+// Bloco à parte porque ele CONGELA a mão, e a mão congelada é a do motor — que é
+// exatamente o que ele prova. Depois dele não dá para jogar mais nesta partida.
+console.log('\na arrumação não encosta na mão do motor');
+{
+  mod.comecarLocal();
+  // `visaoDe` devolve a MESMA referência de P.maos[cadeira]. Se alguém um dia "resolver"
+  // a arrumação com um vista.mao.sort(), terá ordenado a mão do anfitrião por causa da
+  // preferência visual de um jogador — e no online nem funcionaria, porque a vista do
+  // convidado é regenerada do JSON a cada publicação. Congelar transforma isso num erro
+  // em vez de um bug silencioso.
+  ok(mod.vistaAtual.mao === mod.P.maos[mod.euNaTela], 'a vista deveria entregar a mão do motor por referência');
+  const noMotor = mod.P.maos[mod.euNaTela].map(mod.chave).join();
+  Object.freeze(mod.vistaAtual.mao);
+  let estourou = null;
+  try { mod.moverNaMao(0, 2); mod.arrumarMao(); mod.publicar(); } catch (e) { estourou = e.message; }
+  ok(!estourou, `arrumar tentou escrever na mão do motor: ${estourou}`);
+  ok(mod.P.maos[mod.euNaTela].map(mod.chave).join() === noMotor, 'a mão do motor mudou de ordem');
 }
 
 // Fica por último de propósito: este bloco termina com a partida encerrada.

@@ -50,6 +50,9 @@ const tocarClique = () => estalo({ dur: 0.035, freq: 2600, q: 2, vol: 0.13 });
 const tocarCompra = () => estalo({ dur: 0.13, freq: 900, q: 0.7, vol: 0.16 });
 const tocarPasse = () => { estalo({ dur: 0.05, freq: 420, q: 0.8, vol: 0.2 }); estalo({ dur: 0.05, freq: 420, q: 0.8, vol: 0.18 }); };
 const tocarEmbaralho = () => estalo({ dur: 0.85, freq: 2300, q: 0.35, vol: 0.15 });
+// Peça largada de volta no leque: mais grave e mais mole que o clique de escolher, que
+// é agudo e seco. Os dois gestos começam igual, então precisam terminar diferente.
+const tocarSoltar = () => estalo({ dur: 0.05, freq: 760, q: 1.4, vol: 0.12 });
 function tocarBatida() {
   [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => nota(f, 0.32, 0.16, 'triangle', i * 0.075));
 }
