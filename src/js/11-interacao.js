@@ -18,10 +18,21 @@ const raio = new THREE.Raycaster();
 const ponteiro = new THREE.Vector2();
 let apontada = null;
 
-addEventListener('pointermove', ev => {
+const mirar = ev => {
   ponteiro.x = (ev.clientX / innerWidth) * 2 - 1;
   ponteiro.y = -(ev.clientY / innerHeight) * 2 + 1;
-});
+};
+addEventListener('pointermove', mirar);
+
+// O dedo não fica em cima da tela como o mouse: sem soltar a mira, a peça em que você
+// tocou por último ficava erguida para sempre, como um hover que nunca acaba.
+const soltarMira = ev => {
+  if (ev.pointerType === 'mouse') return;
+  apontada = null;
+  ponteiro.set(9, 9);                 // fora de qualquer coisa
+};
+addEventListener('pointerup', soltarMira);
+addEventListener('pointercancel', soltarMira);
 
 function alvoSob() {
   raio.setFromCamera(ponteiro, camera);
@@ -83,6 +94,8 @@ function confirmarJogada(lado) {
   if (!m || !m.pontas.includes(lado)) return;
   const peca = m.peca;
   cancelarEscolha();
+  // Uma linha, e muda a sensação no celular: encaixar a peça tem um estalo no dedo.
+  if (navigator.vibrate) navigator.vibrate(12);
   pedirAcao({ acao: 'jogar', peca, ponta: lado });
 }
 
@@ -92,6 +105,10 @@ addEventListener('pointerdown', ev => {
   // acharia nada, a escolha seria cancelada — e o botão abriria uma jogada vazia.
   if (ev.target !== renderer.domElement) return;
   if (!vistaAtual || !podeAgirAgora()) return;
+  // O ponteiro só era atualizado no pointermove — o que no mouse é sempre verdade e no
+  // dedo não é: o primeiro toque da tela não move nada antes de tocar, então a mira
+  // ficava na posição do toque ANTERIOR e o raycast acertava outra peça.
+  mirar(ev);
 
   const alvo = alvoSob();
   if (!alvo) { cancelarEscolha(); return; }
