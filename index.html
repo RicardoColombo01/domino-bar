@@ -102,7 +102,7 @@
         <li>A primeira mão abre com o <b>6|6</b> — ou, se ele estiver no monte, com a maior carroça. Depois, abre quem bateu.</li>
         <li>Batida: simples <b>1</b> · carroça <b>2</b> · lá-e-lô <b>2</b> · cruzada <b>4</b>.</li>
         <li>Trancou: marca 1 ponto quem tiver a mão mais leve. Empatou, a mão morre.</li>
-        <li><b>Não dá para trancar de propósito:</b> a jogada que você sabe que trava a mesa fica proibida enquanto houver outra. Carroça não conta — ela não muda o número da ponta.</li>
+        <li><b>Não dá para trancar de propósito:</b> a jogada que você sabe que trava a mesa — <b>você inclusive</b> — fica proibida enquanto houver outra. Se você ainda responde às pontas, o jogo não trava e a jogada vale. Carroça não conta: ela não muda o número da ponta.</li>
         <li>Sair no meio <b>conta como derrota</b>. Quem cai no online tem 30 s para voltar.</li>
       </ul>
     </details>
@@ -407,21 +407,38 @@ function pontasDepois(linha, peca, ponta) {
 // ela deixa a ponta em X, então nunca TRANSFORMA uma ponta viva em morta. Quando ela
 // fecha é por consumir o último X do jogo — consequência, não manobra.
 //
+// E fechar é NINGUÉM conseguir jogar, você inclusive: se você ainda responde às pontas
+// que deixou, os outros passam, a vez volta e você joga de novo. Isso é jogar sozinho —
+// jogo bom, não manobra —, e não pode ser barrado.
+//
 // Quem chama decide o resto (é `acoesDe`, em 04-partida.js): a regra só vale sem monte,
 // não vale na sua última peça (jogar a última é bater), e só barra se sobrar jogada que
 // não seja também um fechamento — senão as duas se barrariam, você ficaria sem jogada, e
 // o motor te mandaria passar: a tranca aconteceria igual, pela porta dos fundos.
 function fechamentosArmados(linha, jogadas, mao, baralho) {
-  const vistas = new Set(linha.map(chave));
-  for (const p of mao) vistas.add(chave(p));            // a que vai ser jogada inclusive
+  // CHAVE CANÔNICA, e é o detalhe que fazia a regra quase não existir: `chave` é
+  // sensível à ordem (p[0]|p[1]) e a linha guarda as peças JÁ ORIENTADAS — uma 2|5
+  // deitada como [5,2] virava '5|2', o baralho tem '2|5', e a peça que estava na mesa
+  // contava como ainda solta no jogo. Quase 40% das peças de uma fileira ficam
+  // invertidas, e a regra errava sempre para menos.
+  //
+  // Só aqui dentro: `chave` continua sensível à orientação de propósito, porque em
+  // 09-tabuleiro.js e 10-mao.js ela é o identificador do objeto 3D.
+  const kc = p => Math.min(p[0], p[1]) + '|' + Math.max(p[0], p[1]);
+
+  const vistas = new Set(linha.map(kc));
+  for (const p of mao) vistas.add(kc(p));               // a que vai ser jogada inclusive
   const morto = [];
   for (let n = 0; n <= MAX_PINTAS; n++) {
-    morto[n] = !baralho.some(p => (p[0] === n || p[1] === n) && !vistas.has(chave(p)));
+    morto[n] = !baralho.some(p => (p[0] === n || p[1] === n) && !vistas.has(kc(p)));
   }
   return jogadas.filter(j => {
     if (carroca(j.peca)) return false;
     const [e, d] = pontasDepois(linha, j.peca, j.ponta);
-    return morto[e] && morto[d];
+    if (!morto[e] || !morto[d]) return false;
+    // ...e você também não pode ter resposta: com resposta na mão, o jogo não trava.
+    const resto = mao.filter(p => !mesmaPeca(p, j.peca));
+    return !resto.some(p => p[0] === e || p[1] === e || p[0] === d || p[1] === d);
   });
 }
 
@@ -462,6 +479,10 @@ function novaPartida(cadeiras, regras) {
     regras: Object.assign({ alvo: ALVO_PADRAO, compraVoluntaria: false, modo: MODO_PADRAO }, regras || {}),
     placar: cadeiras.length === 4 ? [0, 0] : new Array(cadeiras.length).fill(0),
     maoNum: 0,
+    // O baralho do modo não muda durante a partida, e acoesDe precisava dele a cada
+    // chamada — 4 a 6 por lance numa mesa online, cada uma refazendo 28 arrays. Fica
+    // guardado uma vez.
+    baralho: baralhoDoModo(modoDe({ modo: (regras || {}).modo })),
     abridor: null,
     desistiu: null,                           // cadeira que saiu no meio, se alguém saiu
     log: [],
@@ -515,7 +536,7 @@ function acoesDe(P, cadeira) {
   // jogada, o motor te mandaria passar, e o jogo trancava do mesmo jeito.
   if (!temMonte && jogadas.length > 1 && P.maos[cadeira].length > 1) {
     const armadas = fechamentosArmados(P.linha, jogadas, P.maos[cadeira],
-      baralhoDoModo(modoDe(P.regras)));
+      P.baralho || baralhoDoModo(modoDe(P.regras)));
     if (armadas.length && armadas.length < jogadas.length) {
       jogadas = jogadas.filter(j => !armadas.includes(j));
     }
@@ -646,6 +667,9 @@ function visaoDe(P, cadeira) {
     duplas: P.duplas,
     alvo: P.regras.alvo,
     modo: P.regras.modo,                         // o convidado não vê MESA nem P.regras
+    // Pública: a abertura já é narrada para a mesa inteira. A tela precisa dela para
+    // dizer o motivo certo quando você toca numa peça que não é o 6|6 da primeira mão.
+    pecaObrigatoria: P.pecaObrigatoria,
     desistiu: P.desistiu === undefined ? null : P.desistiu,
     // Quem passou mostrou publicamente o que não tem — todo mundo na mesa viu. Só o bot
     // usava isso, o que deixava o humano em desvantagem contra o bot da própria mesa.
@@ -1445,6 +1469,15 @@ const esquecerArrumacao = () => { ordemDaMao.clear(); maoDaOrdem = -1; };
 // destruía e recriava as 7 a 14 peças a cada mudança — e com objetos novos toda
 // reordenação seria teletransporte, porque não há de onde animar.
 function reconciliarMao(vista) {
+  // Vista travada (a tela de passe do hotseat) chega com `mao: []` e ainda com a cadeira
+  // do jogador ANTERIOR. Gravar a ordem aqui apagava a arrumação dele — e como `[]` é
+  // truthy, na volta o sort não reordenava nada. O recurso simplesmente não existia no
+  // hotseat, que é justamente onde o comentário lá em cima promete que existe.
+  if (!vista.mao.length) {
+    naMao.forEach(m => grupoMao.remove(m.obj));
+    naMao.length = 0;
+    return;
+  }
   const querem = new Set(vista.mao.map(chave));
   for (let i = naMao.length - 1; i >= 0; i--) {
     if (!querem.has(chave(naMao[i].peca))) { grupoMao.remove(naMao[i].obj); naMao.splice(i, 1); }
@@ -1670,7 +1703,10 @@ function sincronizarMonte(vista) {
     const pilha = Math.floor(i / 4);                              // quatro bolinhos de 4
     v.position.set(xMonte + (pilha % 2) * 0.6 * aperto, PECA_E / 2 + (i % 4) * PECA_E,
       zMonte + Math.floor(pilha / 2) * 1.12 * aperto);
-    v.rotation.y = Math.PI / 2 + (Math.random() - 0.5) * 0.06;   // nada de pilha de régua
+    // Torto, mas SEMPRE o mesmo torto: com Math.random() aqui a pilha inteira sorteava
+    // ângulos novos a cada publicação — ou seja, a cada lance da mesa — e o que se via
+    // era o monte estremecendo. Derivado do índice, ele fica parado e continua torto.
+    v.rotation.y = Math.PI / 2 + (((i * 2654435761) % 1000) / 1000 - 0.5) * 0.06;
     grupoMonte.add(v);
   }
 }
@@ -1834,6 +1870,10 @@ addEventListener('pointerdown', ev => {
   // acharia nada, a escolha seria cancelada — e o botão abriria uma jogada vazia.
   if (ev.target !== renderer.domElement) return;
   if (!vistaAtual) return;
+  // Um dedo de cada vez. Sem isto, um segundo toque sobrescrevia `arrasto` e a peça do
+  // primeiro dedo ficava com `arrastando = true` para sempre — animarMao a ignora, e ela
+  // congelava no ar. Dois dedos na tela é acidente comum no celular.
+  if (arrasto) return;
   // O ponteiro só era atualizado no pointermove — o que no mouse é sempre verdade e no
   // dedo não é: o primeiro toque da tela não move nada antes de tocar, então a mira
   // ficava na posição do toque ANTERIOR e o raycast acertava outra peça.
@@ -1894,22 +1934,23 @@ function soltarArrasto(ev) {
   const i = naMao.findIndex(m => chave(m.peca) === k);
   if (i < 0) return;
   if (k === escolhida) { cancelarEscolha(); return; }
-  if (!naMao[i].jogavel) {
-    avisar(naMao[i].pontas && naMao[i].pontas.length === 0 && encaixaEmAlgumaPonta(naMao[i].peca)
-      ? 'Essa peça fecharia o jogo de propósito.'
-      : 'Essa peça não encaixa em nenhuma ponta.');
-    return;
-  }
+  if (!naMao[i].jogavel) { avisar(porQueNaoDa(naMao[i].peca)); return; }
   selecionarPeca(i);
 }
 addEventListener('pointerup', soltarArrasto);
 addEventListener('pointercancel', () => encerrarArrasto());
 
-// A peça encaixa numa ponta mas o motor não a ofereceu? Então quem a tirou da lista foi
-// a regra do fechamento — e o aviso tem de dizer isso, não "não encaixa".
-function encaixaEmAlgumaPonta(peca) {
-  const pt = vistaAtual && vistaAtual.pontas;
-  return !!pt && (peca[0] === pt[0] || peca[1] === pt[0] || peca[0] === pt[1] || peca[1] === pt[1]);
+// POR QUE esta peça não dá. São três motivos diferentes e o jogador merece o certo:
+// dizer "não encaixa em nenhuma ponta" com a mesa vazia — onde toda peça encaixa — é
+// mentira, e era o que acontecia na primeira mão, em que só o 6|6 é jogável.
+function porQueNaoDa(peca) {
+  const v = vistaAtual;
+  if (v && v.pecaObrigatoria) return `Esta mão abre com o ${v.pecaObrigatoria.join('|')}.`;
+  const pt = v && v.pontas;
+  const encaixa = !!pt && (peca[0] === pt[0] || peca[1] === pt[0] || peca[0] === pt[1] || peca[1] === pt[1]);
+  // Encaixa numa ponta e mesmo assim o motor não a ofereceu: quem a tirou da lista foi
+  // a regra do fechamento.
+  return encaixa ? 'Essa peça fecharia o jogo de propósito.' : 'Essa peça não encaixa em nenhuma ponta.';
 }
 
 /* ····· 12-audio.js ····· */
@@ -2549,6 +2590,15 @@ const podeAgirAgora = () =>
   !!vistaAtual && !travado && vistaAtual.fase === 'mao' && vistaAtual.vez === vistaAtual.cadeira;
 
 function comecarLocal() {
+  // Sem rede não existe cadeira online: depois de sair de uma mesa, MESA.cadeiras ainda
+  // guarda o tipo 'online' e a revanche montava uma partida com uma cadeira que ninguém
+  // jogava — nem bot, nem troca de tela — e a mesa morria em silêncio. É a mesma
+  // conversão que o btIniciarOnline faz quando a vaga não é preenchida.
+  if (modo === 'local') {
+    MESA.cadeiras.slice(0, MESA.n).forEach(c => {
+      if (c.tipo === 'online') { c.tipo = 'bot'; c.nivel = c.nivel || 'normal'; }
+    });
+  }
   const cadeiras = MESA.cadeiras.slice(0, MESA.n)
     .map(c => ({ nome: c.nome, tipo: c.tipo, nivel: c.nivel }));
   P = novaPartida(cadeiras, {
@@ -2673,6 +2723,11 @@ function aplicarIntencao(cadeira, i) {
 
 // ─── revezamento na mesma tela ───────────────────────────────────────────────
 function pedirTroca(cadeira) {
+  // Irmão dos três `saindo = false` de atualizarVista, e pelo mesmo motivo: esta tela
+  // substitui a de sair, mas o flag ficava ligado — e aí o `!travado && !saindo` do
+  // atualizarVista nunca mais chamava esconderTelas(). A tela de passe ficava para
+  // sempre, sem botão nem tecla que saísse dela.
+  saindo = false;
   travado = true;
   esconderMao();                       // as peças somem da CENA, não só da vista
   el('passeNome').textContent = P.cadeiras[cadeira].nome;

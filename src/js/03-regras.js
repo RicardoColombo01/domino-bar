@@ -66,21 +66,38 @@ function pontasDepois(linha, peca, ponta) {
 // ela deixa a ponta em X, então nunca TRANSFORMA uma ponta viva em morta. Quando ela
 // fecha é por consumir o último X do jogo — consequência, não manobra.
 //
+// E fechar é NINGUÉM conseguir jogar, você inclusive: se você ainda responde às pontas
+// que deixou, os outros passam, a vez volta e você joga de novo. Isso é jogar sozinho —
+// jogo bom, não manobra —, e não pode ser barrado.
+//
 // Quem chama decide o resto (é `acoesDe`, em 04-partida.js): a regra só vale sem monte,
 // não vale na sua última peça (jogar a última é bater), e só barra se sobrar jogada que
 // não seja também um fechamento — senão as duas se barrariam, você ficaria sem jogada, e
 // o motor te mandaria passar: a tranca aconteceria igual, pela porta dos fundos.
 function fechamentosArmados(linha, jogadas, mao, baralho) {
-  const vistas = new Set(linha.map(chave));
-  for (const p of mao) vistas.add(chave(p));            // a que vai ser jogada inclusive
+  // CHAVE CANÔNICA, e é o detalhe que fazia a regra quase não existir: `chave` é
+  // sensível à ordem (p[0]|p[1]) e a linha guarda as peças JÁ ORIENTADAS — uma 2|5
+  // deitada como [5,2] virava '5|2', o baralho tem '2|5', e a peça que estava na mesa
+  // contava como ainda solta no jogo. Quase 40% das peças de uma fileira ficam
+  // invertidas, e a regra errava sempre para menos.
+  //
+  // Só aqui dentro: `chave` continua sensível à orientação de propósito, porque em
+  // 09-tabuleiro.js e 10-mao.js ela é o identificador do objeto 3D.
+  const kc = p => Math.min(p[0], p[1]) + '|' + Math.max(p[0], p[1]);
+
+  const vistas = new Set(linha.map(kc));
+  for (const p of mao) vistas.add(kc(p));               // a que vai ser jogada inclusive
   const morto = [];
   for (let n = 0; n <= MAX_PINTAS; n++) {
-    morto[n] = !baralho.some(p => (p[0] === n || p[1] === n) && !vistas.has(chave(p)));
+    morto[n] = !baralho.some(p => (p[0] === n || p[1] === n) && !vistas.has(kc(p)));
   }
   return jogadas.filter(j => {
     if (carroca(j.peca)) return false;
     const [e, d] = pontasDepois(linha, j.peca, j.ponta);
-    return morto[e] && morto[d];
+    if (!morto[e] || !morto[d]) return false;
+    // ...e você também não pode ter resposta: com resposta na mão, o jogo não trava.
+    const resto = mao.filter(p => !mesmaPeca(p, j.peca));
+    return !resto.some(p => p[0] === e || p[1] === e || p[0] === d || p[1] === d);
   });
 }
 

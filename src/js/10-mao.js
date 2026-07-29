@@ -78,6 +78,15 @@ const esquecerArrumacao = () => { ordemDaMao.clear(); maoDaOrdem = -1; };
 // destruía e recriava as 7 a 14 peças a cada mudança — e com objetos novos toda
 // reordenação seria teletransporte, porque não há de onde animar.
 function reconciliarMao(vista) {
+  // Vista travada (a tela de passe do hotseat) chega com `mao: []` e ainda com a cadeira
+  // do jogador ANTERIOR. Gravar a ordem aqui apagava a arrumação dele — e como `[]` é
+  // truthy, na volta o sort não reordenava nada. O recurso simplesmente não existia no
+  // hotseat, que é justamente onde o comentário lá em cima promete que existe.
+  if (!vista.mao.length) {
+    naMao.forEach(m => grupoMao.remove(m.obj));
+    naMao.length = 0;
+    return;
+  }
   const querem = new Set(vista.mao.map(chave));
   for (let i = naMao.length - 1; i >= 0; i--) {
     if (!querem.has(chave(naMao[i].peca))) { grupoMao.remove(naMao[i].obj); naMao.splice(i, 1); }
@@ -303,7 +312,10 @@ function sincronizarMonte(vista) {
     const pilha = Math.floor(i / 4);                              // quatro bolinhos de 4
     v.position.set(xMonte + (pilha % 2) * 0.6 * aperto, PECA_E / 2 + (i % 4) * PECA_E,
       zMonte + Math.floor(pilha / 2) * 1.12 * aperto);
-    v.rotation.y = Math.PI / 2 + (Math.random() - 0.5) * 0.06;   // nada de pilha de régua
+    // Torto, mas SEMPRE o mesmo torto: com Math.random() aqui a pilha inteira sorteava
+    // ângulos novos a cada publicação — ou seja, a cada lance da mesa — e o que se via
+    // era o monte estremecendo. Derivado do índice, ele fica parado e continua torto.
+    v.rotation.y = Math.PI / 2 + (((i * 2654435761) % 1000) / 1000 - 0.5) * 0.06;
     grupoMonte.add(v);
   }
 }

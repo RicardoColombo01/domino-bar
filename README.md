@@ -68,11 +68,13 @@ na mesma regra da mesa de 4 sem precisar de regra nova.
 - Trancou: 1 ponto para a mão mais leve (somando a dupla, quando há duplas). Empatou na
   soma, a mão morre e ninguém marca.
 - **Não dá para trancar de propósito.** Se, depois da sua jogada, todas as peças que
-  encaixam nas duas pontas já estiverem na mesa ou na sua mão — ou seja, se você *sabe*
-  que travou —, essa jogada fica proibida enquanto houver outra. A conta é feita só com o
-  que você enxerga, de propósito: se o jogo olhasse a mão dos outros para decidir, apagar
-  a peça na tela te contaria que ninguém tem aquele número. Carroça não conta, porque
-  jogada numa ponta ela deixa a ponta no mesmo número.
+  encaixam nas duas pontas já estiverem na mesa ou na sua mão **e você também não tiver
+  resposta** — ou seja, se você *sabe* que a mesa parou de vez —, essa jogada fica
+  proibida enquanto houver outra. Se você ainda responde às pontas, o jogo não trava: os
+  outros passam, a vez volta e você joga de novo. Isso é *jogar sozinho*, e é jogo bom.
+  A conta é feita só com o que você enxerga, de propósito: se o jogo olhasse a mão dos
+  outros para decidir, apagar a peça na tela te contaria que ninguém tem aquele número.
+  Carroça não conta, porque jogada numa ponta ela deixa a ponta no mesmo número.
 - **Sair no meio conta como derrota.** Partida até 6 pontos (ou 10, no menu).
 
 No menu dá para trocar a mesa (Clássico · Duelo · Trio) e mais duas regras que variam de

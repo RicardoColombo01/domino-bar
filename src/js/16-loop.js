@@ -23,6 +23,15 @@ const podeAgirAgora = () =>
   !!vistaAtual && !travado && vistaAtual.fase === 'mao' && vistaAtual.vez === vistaAtual.cadeira;
 
 function comecarLocal() {
+  // Sem rede não existe cadeira online: depois de sair de uma mesa, MESA.cadeiras ainda
+  // guarda o tipo 'online' e a revanche montava uma partida com uma cadeira que ninguém
+  // jogava — nem bot, nem troca de tela — e a mesa morria em silêncio. É a mesma
+  // conversão que o btIniciarOnline faz quando a vaga não é preenchida.
+  if (modo === 'local') {
+    MESA.cadeiras.slice(0, MESA.n).forEach(c => {
+      if (c.tipo === 'online') { c.tipo = 'bot'; c.nivel = c.nivel || 'normal'; }
+    });
+  }
   const cadeiras = MESA.cadeiras.slice(0, MESA.n)
     .map(c => ({ nome: c.nome, tipo: c.tipo, nivel: c.nivel }));
   P = novaPartida(cadeiras, {
@@ -147,6 +156,11 @@ function aplicarIntencao(cadeira, i) {
 
 // ─── revezamento na mesma tela ───────────────────────────────────────────────
 function pedirTroca(cadeira) {
+  // Irmão dos três `saindo = false` de atualizarVista, e pelo mesmo motivo: esta tela
+  // substitui a de sair, mas o flag ficava ligado — e aí o `!travado && !saindo` do
+  // atualizarVista nunca mais chamava esconderTelas(). A tela de passe ficava para
+  // sempre, sem botão nem tecla que saísse dela.
+  saindo = false;
   travado = true;
   esconderMao();                       // as peças somem da CENA, não só da vista
   el('passeNome').textContent = P.cadeiras[cadeira].nome;

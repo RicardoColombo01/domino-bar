@@ -59,9 +59,13 @@ const CENAS = [
   { nome: 'duplas-4', telas: ['wide'], montar: `contar(false); soBots(4); auto(13);` },
   {
     nome: 'tabuleiro-dobrado', telas: ['wide'],
-    montar: `soBots(2);
-      // joga até a linha ficar longa o bastante para dobrar na borda da mesa
-      for (let i = 0; i < 60 && window.__jogo.P.linha.length < 14; i++) auto(1);`,
+    montar: `contar(false); soBots(2);
+      // Joga até a linha ficar longa o bastante para dobrar na borda da mesa — e
+      // RECOMEÇA se a mão acabar antes. Sem isto a foto virava a tela de fim de mão:
+      // desde que o bot ficou bom (v1.4.0), ele fecha antes de a linha chegar a 14.
+      for (let i = 0; i < 400 && window.__jogo.P.linha.length < 14; i++) {
+        if (window.__jogo.P.fase !== 'mao') soBots(2); else auto(1);
+      }`,
   },
   // Procura na SUA vez uma peça que sirva em exatamente `quantas` pontas e a seleciona,
   // que é o mesmo que o seu clique faz: levanta a peça, põe o fantasma e abre a barra.
