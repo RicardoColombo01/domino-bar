@@ -18,7 +18,12 @@ const OPCOES_PEER = { config: { iceServers: [
 
 let peer = null;
 let conexoes = new Map();      // cadeira → conn (no anfitrião)
+let esperando = new Map();     // cadeira → temporizador de volta (no anfitrião)
 let linkAnfitriao = null;      // conn (no convidado)
+
+// Quanto tempo a cadeira fica guardada para quem caiu. Curto o bastante para a mesa não
+// morrer de tédio, longo o bastante para uma troca de wi-fi ou um túnel de metrô.
+const ESPERA_VOLTA = 30000;
 
 const codigoNovo = () => Array.from({ length: 4 }, () => ALFABETO[Math.floor(Math.random() * ALFABETO.length)]).join('');
 const temPeerJS = () => typeof Peer !== 'undefined';
@@ -28,6 +33,8 @@ function erroOnline(txt) {
 }
 
 function encerrarRede() {
+  esperando.forEach(t => clearTimeout(t));
+  esperando.clear();
   conexoes.forEach(c => { try { c.close(); } catch (e) { void e; } });
   conexoes.clear();
   if (linkAnfitriao) { try { linkAnfitriao.close(); } catch (e) { void e; } linkAnfitriao = null; }
@@ -67,6 +74,14 @@ function tentarAbrir(tentativa) {
 
     conexoes.set(cadeira, conn);
     conn.on('open', () => {
+      // Voltou dentro do prazo: cancela o relógio e a cadeira é dele de novo. Funciona
+      // porque a cadeira continua marcada como 'online' — é justamente por isso que ela
+      // não vira bot na hora da queda.
+      if (esperando.has(cadeira)) {
+        clearTimeout(esperando.get(cadeira));
+        esperando.delete(cadeira);
+        if (P && P.fase !== 'fim') narrar(`${MESA.cadeiras[cadeira].nome} voltou para a mesa.`);
+      }
       conn.send({ t: 'sentou', cadeira, cadeiras: MESA.cadeiras.slice(0, MESA.n).map(c => c.nome) });
       listarSala();
       if (P) publicar();                                  // entrou no meio da partida: já recebe a mesa
@@ -74,16 +89,34 @@ function tentarAbrir(tentativa) {
     conn.on('data', m => {
       if (m.t === 'nome') { MESA.cadeiras[cadeira].nome = String(m.nome).slice(0, 14) || 'Visita'; listarSala(); if (P) publicar(); }
       if (m.t === 'acao' && P) aplicarIntencao(cadeira, m);
+      // Saiu de propósito: não há prazo de volta, a partida acaba perdida para ele.
+      if (m.t === 'desisto' && P && P.fase !== 'fim') {
+        clearTimeout(esperando.get(cadeira)); esperando.delete(cadeira);
+        abandonar(P, cadeira);
+        narrar(`${P.cadeiras[cadeira].nome} saiu da mesa — a partida foi dada como perdida para ele.`);
+        publicar();
+      }
     });
     conn.on('close', () => {
       conexoes.delete(cadeira);
-      // Caiu no meio do jogo? A cadeira vira bot em vez de travar a mesa inteira.
+      // Caiu no meio do jogo? A CADEIRA FICA GUARDADA. Antes ela virava bot na hora, e
+      // com isso fechar a aba era a saída de emergência de qualquer partida perdida:
+      // não custava nada. Agora há um prazo para voltar — e, esgotado, a partida conta
+      // como derrota de quem saiu.
       if (P && P.fase !== 'fim') {
-        P.cadeiras[cadeira].tipo = 'bot';
-        P.cadeiras[cadeira].nivel = 'normal';
-        anotar(`${P.cadeiras[cadeira].nome} caiu — um bot assumiu a cadeira.`);
+        const nome = P.cadeiras[cadeira].nome;
+        narrar(`${nome} caiu — a cadeira fica guardada por ${ESPERA_VOLTA / 1000}s.`);
+        clearTimeout(esperando.get(cadeira));
+        // setTimeout e NÃO um contador no requestAnimationFrame: o rAF para em aba de
+        // fundo, e o prazo tem de correr mesmo com o anfitrião noutra aba.
+        esperando.set(cadeira, setTimeout(() => {
+          esperando.delete(cadeira);
+          if (!P || P.fase === 'fim' || conexoes.has(cadeira)) return;
+          abandonar(P, cadeira);
+          narrar(`${nome} não voltou — a partida foi dada como perdida para ele.`);
+          publicar();
+        }, ESPERA_VOLTA));
         publicar();
-        seguirOTurno();
       }
       listarSala();
     });

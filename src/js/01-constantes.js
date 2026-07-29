@@ -42,7 +42,9 @@ const FOLGA_L = 0.93;
 const ESPALHA_X = 4.0;
 const ESPALHA_Z = 2.2;
 
-const PONTOS = { simples: 1, carroca: 2, laelo: 3, cruzada: 4, tranca: 1 };
+// Regra da casa: bater nas duas pontas com peça comum vale o mesmo que bater de
+// carroça. Só a cruzada — carroça servindo nas duas — paga mais.
+const PONTOS = { simples: 1, carroca: 2, laelo: 2, cruzada: 4, tranca: 1 };
 const ALVO_PADRAO = 6;
 
 const NOME_BATIDA = {

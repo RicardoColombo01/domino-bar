@@ -15,7 +15,7 @@ const HUD = {
 const ETIQUETA = { voce: 'você', local: 'nesta tela', bot: 'bot', online: 'online' };
 
 function mostrarTela(id) {
-  for (const t of ['telaMenu', 'telaFimMao', 'telaFimPartida', 'telaPasse', 'telaOnline'])
+  for (const t of ['telaMenu', 'telaFimMao', 'telaFimPartida', 'telaPasse', 'telaOnline', 'telaSair'])
     el(t).classList.toggle('oculta', t !== id);
 }
 const esconderTelas = () => mostrarTela(null);
@@ -133,17 +133,28 @@ function mostrarFimDeMao(vista) {
 }
 
 function mostrarFimDePartida(vista) {
-  const campeao = vista.placar.indexOf(Math.max(...vista.placar));
+  // Quem saiu da mesa não leva a partida nem estando na frente: o time dele fica fora
+  // da conta do campeão. É o que impede fechar a aba de virar saída de emergência.
+  const fora = vista.desistiu === null || vista.desistiu === undefined
+    ? -1 : timeDe(vista, vista.desistiu);
+  let campeao = 0;
+  vista.placar.forEach((p, t) => {
+    if (t === fora) return;
+    if (campeao === fora || p > vista.placar[campeao]) campeao = t;
+  });
+  const meuTime = timeDe(vista, vista.cadeira);
   el('campeao').textContent = nomeDoTime(vista, campeao);
-  el('campeaoTitulo').textContent = campeao === (vista.duplas ? vista.cadeira % 2 : vista.cadeira)
-    ? 'Você ganhou a partida' : 'Fim de partida';
+  el('campeaoTitulo').textContent = fora >= 0
+    ? (fora === meuTime ? 'Você saiu da mesa' : `${vista.cadeiras[vista.desistiu].nome} saiu da mesa`)
+    : (campeao === meuTime ? 'Você ganhou a partida' : 'Fim de partida');
   // A tela dizia quem ganhou e não de quanto. Mesmo template do placar do topo.
   el('placarFinal').innerHTML = vista.placar
     .map((p, i) => `<span class="time${i === campeao ? ' venceu' : ''}">` +
       `<i>${nomeDoTime(vista, i)}</i><b>${p}</b></span>`)
     .join('<span class="x">×</span>');
-  el('fimResumo').textContent =
-    `${vista.maoNum} ${vista.maoNum === 1 ? 'mão' : 'mãos'} · partida até ${vista.alvo}`;
+  el('fimResumo').textContent = fora >= 0
+    ? `Partida encerrada na mão ${vista.maoNum} — quem sai no meio perde.`
+    : `${vista.maoNum} ${vista.maoNum === 1 ? 'mão' : 'mãos'} · partida até ${vista.alvo}`;
   el('btRevanche').classList.toggle('oculta', modo === 'convidado');
   mostrarTela('telaFimPartida');
 }

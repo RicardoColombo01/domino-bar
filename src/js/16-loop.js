@@ -16,6 +16,7 @@ let euNaTela = 0;              // qual cadeira a tela mostra agora (o hotseat tr
 let modo = 'local';            // 'local' | 'anfitriao' | 'convidado'
 let travado = false;           // tela de troca no ar: não desenha mão nenhuma
 let viuOFimDaMao = false;      // já passou pelo fim de mão que encerrou a partida
+let saindo = false;            // a pergunta "sair mesmo?" está no ar
 let timerBot = 0;
 
 const podeAgirAgora = () =>
@@ -78,9 +79,16 @@ function atualizarVista(v) {
   // por cima do campeão. Zerar quando a fase sai de 'fim' cobre revanche, próxima
   // partida e o convidado, que nunca passa por comecarLocal().
   if (v.fase !== 'fim') viuOFimDaMao = false;
-  if (v.fase === 'fimDeMao' || (v.fase === 'fim' && !viuOFimDaMao)) mostrarFimDeMao(v);
-  else if (v.fase === 'fim') mostrarFimDePartida(v);
-  else if (!travado) esconderTelas();
+  // Abandono não tem mão para mostrar: a partida foi interrompida, não terminou.
+  // `saindo` é irmão do `viuOFimDaMao` logo acima, e pela mesma razão: a pergunta "sair
+  // mesmo?" é estado de TELA, e esta função reescreve a tela a cada publicação. Sem o
+  // flag, o primeiro bot a jogar fecharia o diálogo na cara do jogador.
+  if (v.desistiu !== null && v.desistiu !== undefined) { saindo = false; mostrarFimDePartida(v); }
+  else if (v.fase === 'fimDeMao' || (v.fase === 'fim' && !viuOFimDaMao)) { saindo = false; mostrarFimDeMao(v); }
+  else if (v.fase === 'fim') { saindo = false; mostrarFimDePartida(v); }
+  else if (!travado && !saindo) esconderTelas();
+  // O botão de sair só existe enquanto há partida para sair.
+  el('btSair').classList.toggle('oculta', !v || v.fase === 'fim');
 }
 
 function seguirOTurno() {
@@ -166,6 +174,45 @@ el('btProxima').onclick = () => {
 };
 
 el('btRevanche').onclick = () => comecarLocal();
+
+// ─── sair no meio ────────────────────────────────────────────────────────────
+// Antes não havia saída: quem sentava só saía fechando a aba — e no online isso não
+// custava nada, a cadeira virava bot e o resultado sumia junto. Agora sair é uma ação
+// do jogo, com o preço dito antes.
+el('btSair').onclick = () => {
+  el('sairAviso').textContent = modo === 'local'
+    ? 'A partida acaba aqui e você volta para a montagem da mesa.'
+    : 'A mesa continua sem você, e esta partida conta como derrota sua.';
+  saindo = true;
+  mostrarTela('telaSair');
+};
+el('btSairNao').onclick = () => {
+  saindo = false;
+  if (vistaAtual) atualizarVista(vistaAtual); else mostrarTela('telaMenu');
+};
+el('btSairSim').onclick = () => sairDaPartida();
+
+function sairDaPartida() {
+  saindo = false;
+  if (modo === 'convidado') {
+    // O anfitrião é a autoridade: ele é quem registra a derrota. Avisar antes de cair
+    // fora evita depender de o `close` chegar — mas o prazo de volta cobre se não.
+    if (linkAnfitriao && linkAnfitriao.open) linkAnfitriao.send({ t: 'desisto' });
+    encerrarRede();
+    P = null; vistaAtual = null;
+    mostrarTela('telaMenu');
+    return;
+  }
+  if (modo === 'anfitriao' && P && P.fase !== 'fim') {
+    abandonar(P, euNaTela);
+    publicar();                                   // a mesa fica sabendo por que acabou
+    setTimeout(encerrarRede, 400);                // e dá tempo de a mensagem sair
+    return;
+  }
+  encerrarRede();
+  P = null; vistaAtual = null;
+  mostrarTela('telaMenu');
+}
 
 addEventListener('keydown', ev => {
   if (ev.key === 'Escape') cancelarEscolha();

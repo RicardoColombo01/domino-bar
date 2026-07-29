@@ -56,11 +56,18 @@ na mesma regra da mesa de 4 sem precisar de regra nova.
   passa se o monte secar.
 - **Clássico de 4:** duplas em cruz (1&3 × 2&4).
 - Mão carroçuda demais volta para a mesa e todo mundo embaralha de novo.
-- A primeira mão da partida abre com o **6|6**. As seguintes, abre quem bateu.
-- Batida: **simples 1** · **carroça 2** · **lá-e-lô 3** · **cruzada 4**.
+- A primeira mão da partida abre com o **6|6** — ou, quando ele está no monte, com a
+  maior carroça. As seguintes, abre quem bateu.
+- Batida: **simples 1** · **carroça 2** · **lá-e-lô 2** · **cruzada 4**.
 - Trancou: 1 ponto para a mão mais leve (somando a dupla, quando há duplas). Empatou na
   soma, a mão morre e ninguém marca.
-- Partida até 6 pontos (ou 10, no menu).
+- **Não dá para trancar de propósito.** Se, depois da sua jogada, todas as peças que
+  encaixam nas duas pontas já estiverem na mesa ou na sua mão — ou seja, se você *sabe*
+  que travou —, essa jogada fica proibida enquanto houver outra. A conta é feita só com o
+  que você enxerga, de propósito: se o jogo olhasse a mão dos outros para decidir, apagar
+  a peça na tela te contaria que ninguém tem aquele número. Carroça não conta, porque
+  jogada numa ponta ela deixa a ponta no mesmo número.
+- **Sair no meio conta como derrota.** Partida até 6 pontos (ou 10, no menu).
 
 No menu dá para trocar a mesa (Clássico · Duelo · Trio) e mais duas regras que variam de
 bar para bar: **compra voluntária** (comprar mesmo podendo jogar) e o **alvo da partida**.
@@ -79,7 +86,11 @@ não tem partida nenhuma na memória — ele manda a *intenção* ("quero jogar 
 e recebe de volta só a visão dele, que nunca inclui a mão dos outros. Abrir o DevTools não
 mostra a mão alheia porque **o dado não está lá**. Tem teste automatizado só para isso.
 
-Se alguém cair no meio da partida, a cadeira vira bot em vez de travar a mesa.
+Se alguém cair no meio da partida, **a cadeira fica guardada por 30 segundos** — dá para
+voltar pelo mesmo código e retomar a mão. Passado o prazo, a partida é dada como perdida
+para quem saiu, e a mesa fica sabendo o motivo. Fechar a aba deixou de ser a saída de
+emergência de partida mal encaminhada; para sair de verdade existe o **✕** no canto, que
+avisa o preço antes.
 
 ### O que pode dar errado
 

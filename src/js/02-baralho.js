@@ -30,20 +30,15 @@ function baralhoDoModo(modo) {
 
 // A REGRA DA CASA: quando a mão saiu ruim demais e a mesa embaralha tudo de novo.
 //
-// Devolver true joga a distribuição INTEIRA fora — não só esta mão — e redistribui,
-// até MAX_EMBARALHOS vezes. `modo.carrocasDemais` traz o número combinado: 5 no
-// clássico e no trio, 7 no duelo (lá são as sete, a mão inteira de carroça). Mas o
-// campo é só munição: o critério é seu.
+// Devolver true joga a distribuição INTEIRA fora — não só esta mão — e redistribui, até
+// MAX_EMBARALHOS vezes. O critério é só a contagem de buchas, como se combinou:
+// `modo.carrocasDemais` vale 5 no clássico e no trio, e 7 no duelo, onde são as sete e a
+// mão inteira é de carroça.
 //
-// O que pesar, se quiser ir além de contar carroça: mão só de dois ou três números
-// diferentes trava a mesa tanto quanto mão de carroça, e é bem mais comum. Do outro
-// lado, critério exigente demais deixa o laço rodando à toa — tests/test-regras.mjs
-// mede quantos embaralhos cada modo gasta e reprova se a média subir.
-//
-// Ferramentas prontas aqui do lado: carroca(p), valor(p), somaMao(mao).
+// Acontece pouco (menos de 1% das distribuições em qualquer modo), e é assim que tem de
+// ser: o laço de re-embaralho existe para o negócio esquisito, não para editar a sorte.
 function maoRuim(mao, modo) {
-  // TODO (Ricardo)
-  return false;
+  return mao.filter(carroca).length >= modo.carrocasDemais;
 }
 
 // Fisher-Yates. Usa Math.random de propósito: os testes trocam Math.random por uma

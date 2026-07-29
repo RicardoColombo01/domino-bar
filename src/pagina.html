@@ -38,6 +38,7 @@
 <div id="aviso"></div>
 <div id="log" class="painel"></div>
 <button id="btSom" class="painel canto" title="Som">♪</button>
+<button id="btSair" class="painel canto oculta" title="Sair da partida">✕</button>
 
 <!-- ─── montagem da mesa ─────────────────────────────────────────────────── -->
 <div class="tela" id="telaMenu">
@@ -94,9 +95,11 @@
         <li><b>Com monte</b> (Clássico de 2 ou 3): quem não pode jogar <b>compra até conseguir</b>; só passa se o monte secar.</li>
         <li>No Clássico de 4, duplas em cruz (1&amp;3 × 2&amp;4).</li>
         <li>Mão carroçuda demais volta para a mesa e todo mundo embaralha de novo.</li>
-        <li>A primeira mão abre com o <b>6|6</b>. Depois, abre quem bateu.</li>
-        <li>Batida: simples <b>1</b> · carroça <b>2</b> · lá-e-lô <b>3</b> · cruzada <b>4</b>.</li>
+        <li>A primeira mão abre com o <b>6|6</b> — ou, se ele estiver no monte, com a maior carroça. Depois, abre quem bateu.</li>
+        <li>Batida: simples <b>1</b> · carroça <b>2</b> · lá-e-lô <b>2</b> · cruzada <b>4</b>.</li>
         <li>Trancou: marca 1 ponto quem tiver a mão mais leve. Empatou, a mão morre.</li>
+        <li><b>Não dá para trancar de propósito:</b> a jogada que você sabe que trava a mesa fica proibida enquanto houver outra. Carroça não conta — ela não muda o número da ponta.</li>
+        <li>Sair no meio <b>conta como derrota</b>. Quem cai no online tem 30 s para voltar.</li>
       </ul>
     </details>
   </div>
@@ -134,6 +137,18 @@
     <div class="grandao" id="passeNome">—</div>
     <p class="sub">Ninguém mais deve estar olhando.</p>
     <div class="linha acoesMenu"><button class="btn principal" id="btPronto">Peguei, pode mostrar</button></div>
+  </div>
+</div>
+
+<!-- ─── sair no meio da partida ──────────────────────────────────────────── -->
+<div class="tela oculta" id="telaSair">
+  <div class="carta">
+    <h2>Sair da partida</h2>
+    <p class="sub" id="sairAviso"></p>
+    <div class="linha acoesMenu">
+      <button class="btn principal" id="btSairSim">Sair mesmo assim</button>
+      <button class="btn" id="btSairNao">Continuar jogando</button>
+    </div>
   </div>
 </div>
 
