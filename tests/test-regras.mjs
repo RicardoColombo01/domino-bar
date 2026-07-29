@@ -138,18 +138,24 @@ secao('fechar o jogo de propósito');
 {
   const chaves = js => js.map(j => mod.chave(j.peca) + ':' + j.ponta).sort().join(' ');
 
+  // A MESMA MESA LIDA DO OUTRO LADO tem de dar o mesmo veredito. Parece óbvio e não era:
+  // `chave` é sensível à ordem e a linha guarda as peças JÁ ORIENTADAS, então quase 40%
+  // delas ficam gravadas invertidas e não casavam com o baralho canônico — a regra
+  // deixava passar o fechamento armado. O teste antigo passou por acidente, porque na
+  // fileira que estava escrita à mão todas as peças com 3 caíram na ordem canônica.
+  const espelhar = linha => linha.slice().reverse().map(p => [p[1], p[0]]);
+
   {
-    // Duas jogadas fecham e uma não: as duas que fecham são as barradas.
+    // Você ainda responde às duas pontas: os outros passam, a vez volta, você joga de
+    // novo. Isso é jogar sozinho, não fechar o jogo — e não pode ser barrado.
     const baralho = [[1, 2], [2, 3], [1, 3], [3, 4], [2, 5], [5, 5]];
     const linha = [[1, 2]];                                   // pontas 1 e 2
     const mao = [[2, 3], [1, 3], [3, 4], [2, 5]];
     const jogadas = mod.jogadasValidas(mao, linha);
     ok(jogadas.length === 3, `esperava 3 jogadas, deu ${jogadas.length}`);
     const armadas = mod.fechamentosArmados(linha, jogadas, mao, baralho);
-    ok(chaves(armadas) === '1|3:esq 2|3:dir',
-      `as jogadas que fecham deveriam ser 1|3:esq e 2|3:dir, e vieram: ${chaves(armadas) || '(nenhuma)'}`);
-    // 2|5 deixa a ponta em 5 e o 5|5 ainda está solto no jogo: ninguém sabe que travou.
-    ok(!armadas.some(j => mod.mesmaPeca(j.peca, [2, 5])), '2|5 não fecha nada e foi barrada');
+    ok(armadas.length === 0,
+      `com resposta na mão o jogo não trava, e nada devia ser barrado — veio ${chaves(armadas)}`);
   }
 
   {
@@ -184,6 +190,28 @@ secao('fechar o jogo de propósito');
     }, extra || {});
 
     ok(String(mod.pontas(linha)) === '4,3', 'montagem do cenário: as pontas deveriam ser 4 e 3');
+
+    // O 3|4 fecha pela esquerda (os sete 3 ficariam contados) e não fecha pela direita
+    // (o 4|4 continua solto). Mesma peça, vereditos diferentes: a regra discrimina por
+    // PONTA. E a mão que sobra — 0|0 e 2|2 — não responde a 3 nenhum.
+    const mao = [[0, 0], [2, 2], [3, 4]];
+    const armadas = mod.fechamentosArmados(linha, mod.jogadasValidas(mao, linha), mao, mod.baralhoCompleto());
+    ok(chaves(armadas) === '3|4:esq', `esperava 3|4:esq, veio ${chaves(armadas) || '(nenhuma)'}`);
+
+    // A MESMA fileira lida do outro lado: a invariante continua valendo, as pontas
+    // trocam de lado, e o veredito TEM de acompanhar.
+    const outroLado = espelhar(linha);
+    ok(outroLado.every((p, i) => i === 0 || outroLado[i - 1][1] === p[0]),
+      'a fileira espelhada deveria continuar orientada');
+    ok(String(mod.pontas(outroLado)) === '3,4', 'espelhada, as pontas deveriam ser 3 e 4');
+    const daOutraPonta = mod.fechamentosArmados(outroLado, mod.jogadasValidas(mao, outroLado), mao, mod.baralhoCompleto());
+    ok(chaves(daOutraPonta) === '3|4:dir',
+      `a mesma mesa lida do outro lado deu outro veredito: ${chaves(daOutraPonta) || '(nenhuma)'}`);
+
+    // E basta ter uma resposta na mão para deixar de ser fechamento.
+    const comSaida = mao.concat([[1, 3]]);
+    ok(mod.fechamentosArmados(linha, mod.jogadasValidas(comSaida, linha), comSaida, mod.baralhoCompleto()).length === 0,
+      'com o 1|3 na mão o jogo não trava, e nada devia ser barrado');
 
     const P = armar();
     const j = mod.acoesDe(P, 0).jogadas;
@@ -293,7 +321,7 @@ secao('difícil × fácil');
   ];
   let craque = 0, perna = 0;
   seedRandom(777);
-  for (let partida = 0; partida < 300; partida++) {
+  for (let partida = 0; partida < 600; partida++) {
     const P = mod.novaPartida(dupla(), { alvo: 6 });
     for (let passo = 0; P.fase !== 'fim' && passo < 4000; passo++) {
       if (P.fase === 'fimDeMao') { mod.novaMao(P); continue; }
@@ -306,8 +334,14 @@ secao('difícil × fácil');
     P.placar[0] > P.placar[1] ? craque++ : perna++;
   }
   const taxa = craque / (craque + perna);
-  console.log(`  difícil ${craque} × ${perna} fácil (${(taxa * 100).toFixed(1)}%)`);
-  ok(taxa > 0.55, `o bot difícil ganhou só ${(taxa * 100).toFixed(1)}% — a heurística não está valendo nada`);
+  // O desvio-padrão binomial com N partidas é sqrt(p(1-p)/N). Imprimir a margem é o que
+  // impede que uma troca de semente pareça uma regressão: sem ela, um teste a um desvio
+  // do limiar reprova sozinho de vez em quando e ninguém sabe por quê.
+  const sigma = Math.sqrt(0.5 * 0.5 / (craque + perna));
+  console.log(`  difícil ${craque} × ${perna} fácil (${(taxa * 100).toFixed(1)}%, ` +
+    `${((taxa - 0.5) / sigma).toFixed(1)}σ acima do acaso)`);
+  ok(taxa - 0.5 > 2 * sigma,
+    `o bot difícil ganhou ${(taxa * 100).toFixed(1)}%, a menos de 2σ do acaso — a heurística não está valendo nada`);
 }
 
 // ─── os modos novos, do começo ao fim ───────────────────────────────────────

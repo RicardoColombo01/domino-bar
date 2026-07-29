@@ -230,17 +230,24 @@ ou mais e manda `distribuir` refazer tudo (até `MAX_EMBARALHOS`). Acontece em 1
 distribuições no clássico, 0,6% no duelo e 2,6% no trio.
 
 **Não dá para trancar de propósito** (`fechamentosArmados`, `03-regras.js`, filtrado em
-`acoesDe`). Quatro condições para barrar, e cada uma tem um porquê:
+`acoesDe`). Cinco condições para barrar, e cada uma tem um porquê:
 
 1. sem monte — com monte ninguém trava, compra;
 2. não é a sua última peça — jogar a última é bater;
 3. a peça não é carroça — ela deixa a ponta no mesmo número, então nunca transforma
    ponta viva em morta;
 4. sobra outra jogada **que também não feche** — barrar todas te deixaria sem jogada, o
-   motor te mandaria passar, e o jogo trancava do mesmo jeito.
+   motor te mandaria passar, e o jogo trancava do mesmo jeito;
+5. **você também não responde às pontas que deixou** — se responde, os outros passam, a
+   vez volta e você joga de novo. Isso é jogar sozinho, não fechar o jogo.
 
 A conta usa só a mesa e a sua própria mão, e isso é o ponto: se o motor olhasse a mão dos
 outros, apagar a peça na tela contaria ao jogador que ninguém tem aquele número.
+
+**A chave ali dentro é canônica de propósito** (`Math.min|Math.max`). O `chave` global é
+sensível à ordem, e a linha guarda as peças JÁ ORIENTADAS — quase 40% delas ficam
+gravadas invertidas, não casavam com o baralho, e a regra deixava passar o fechamento
+armado. O teste cobre isso rodando cada cenário também na **fileira espelhada**.
 
 **Sair conta como derrota** (`abandonar`, `04-partida.js`): grava `P.desistiu`, põe
 `fase='fim'` e a tela de campeão tira o time do desistente da conta. No online a cadeira

@@ -19,6 +19,10 @@ function novaPartida(cadeiras, regras) {
     regras: Object.assign({ alvo: ALVO_PADRAO, compraVoluntaria: false, modo: MODO_PADRAO }, regras || {}),
     placar: cadeiras.length === 4 ? [0, 0] : new Array(cadeiras.length).fill(0),
     maoNum: 0,
+    // O baralho do modo não muda durante a partida, e acoesDe precisava dele a cada
+    // chamada — 4 a 6 por lance numa mesa online, cada uma refazendo 28 arrays. Fica
+    // guardado uma vez.
+    baralho: baralhoDoModo(modoDe({ modo: (regras || {}).modo })),
     abridor: null,
     desistiu: null,                           // cadeira que saiu no meio, se alguém saiu
     log: [],
@@ -72,7 +76,7 @@ function acoesDe(P, cadeira) {
   // jogada, o motor te mandaria passar, e o jogo trancava do mesmo jeito.
   if (!temMonte && jogadas.length > 1 && P.maos[cadeira].length > 1) {
     const armadas = fechamentosArmados(P.linha, jogadas, P.maos[cadeira],
-      baralhoDoModo(modoDe(P.regras)));
+      P.baralho || baralhoDoModo(modoDe(P.regras)));
     if (armadas.length && armadas.length < jogadas.length) {
       jogadas = jogadas.filter(j => !armadas.includes(j));
     }
@@ -203,6 +207,9 @@ function visaoDe(P, cadeira) {
     duplas: P.duplas,
     alvo: P.regras.alvo,
     modo: P.regras.modo,                         // o convidado não vê MESA nem P.regras
+    // Pública: a abertura já é narrada para a mesa inteira. A tela precisa dela para
+    // dizer o motivo certo quando você toca numa peça que não é o 6|6 da primeira mão.
+    pecaObrigatoria: P.pecaObrigatoria,
     desistiu: P.desistiu === undefined ? null : P.desistiu,
     // Quem passou mostrou publicamente o que não tem — todo mundo na mesa viu. Só o bot
     // usava isso, o que deixava o humano em desvantagem contra o bot da própria mesa.
