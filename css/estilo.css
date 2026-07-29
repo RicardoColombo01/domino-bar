@@ -102,7 +102,25 @@ html, body {
   font-size: 11.5px; opacity: .55; max-width: 250px; text-align: right; line-height: 1.7;
 }
 
-#acoes { position: fixed; bottom: 60px; left: 16px; z-index: 6; display: flex; gap: 9px; }
+#acoes { position: fixed; bottom: 60px; left: 16px; z-index: 6; display: flex; gap: 9px; align-items: center; }
+.btn.peq.on { background: var(--ambar); color: #17100a; border-color: transparent; }
+
+/* Contagem do jogo: uma linha por número, barrinha do que já apareceu e quantas faltam.
+   Fica do lado, ligada por botão — quem já conta de cabeça não quer a tabela na tela. */
+#contagem {
+  position: fixed; right: 14px; bottom: 150px; z-index: 5;   /* acima do #log */
+  display: grid; gap: 2px; font-size: 12px; min-width: 168px;
+  pointer-events: none;
+}
+#contagem > span.rot { margin-bottom: 3px; }
+#contagem div { display: grid; grid-template-columns: 14px 1fr 20px auto; gap: 7px; align-items: center; }
+#contagem b { color: var(--ambar-forte); font-size: 13px; }
+#contagem i { font-style: normal; letter-spacing: -1px; color: var(--ambar); opacity: .85; }
+#contagem s { text-decoration: none; text-align: right; font-variant-numeric: tabular-nums; opacity: .75; }
+#contagem em { font-style: normal; font-size: 10px; opacity: .5; max-width: 92px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* número que já apareceu inteiro: apaga, porque não há mais nada para esperar dele */
+#contagem .zerado { opacity: .38; }
 
 /* Barra de confirmação: no centro, acima da mão, porque é onde os olhos já estão
    quando você acabou de levantar uma peça. */
@@ -277,6 +295,15 @@ html, body {
   .jog .tipo { display: none; }
   #acoes { bottom: 56px; }
   #vez { bottom: 12px; }
+  /* Tela baixa não tem coluna direita sobrando: a contagem vira faixa, como no retrato. */
+  #contagem {
+    top: calc(var(--seg-t) + 62px); bottom: auto;
+    left: 50%; right: auto; transform: translateX(-50%);
+    grid-auto-flow: column; grid-auto-columns: 1fr; gap: 5px; min-width: 0;
+  }
+  #contagem > span.rot, #contagem i, #contagem em { display: none; }
+  #contagem div { grid-template-columns: 1fr; justify-items: center; gap: 0; }
+  #contagem s { text-align: center; }
 }
 
 @media (orientation: portrait) and (max-width: 860px) {
@@ -304,8 +331,11 @@ html, body {
   /* O topo cresce quando os nomes são longos (em duplas o placar tem "Fulano e
      Sicrano"), então a lista de jogadores começa depois da altura do pior caso. */
   #topo .painel { white-space: nowrap; }
+  /* Altura fixa: com 2, 3 ou 4 jogadores a faixa tem de ocupar o mesmo espaço, senão o
+     que vem embaixo dela (a contagem, o "sua vez") não tem onde se ancorar. */
   #jogadores {
     top: calc(var(--seg-t) + 72px); left: calc(var(--seg-l) + 56px); right: var(--seg-r);
+    height: 48px; align-content: center;
     grid-auto-flow: column; grid-auto-columns: minmax(96px, 1fr);
     gap: 5px; padding: 0 6px; overflow-x: auto; scrollbar-width: none;
   }
@@ -320,7 +350,7 @@ html, body {
   /* "Sua vez" é informação, não ação: sobe para junto do resto da informação. Deixado
      no rodapé ele brigava com a barra de confirmação, que é quem manda ali embaixo. */
   #vez {
-    top: calc(var(--seg-t) + 128px); bottom: auto;
+    top: calc(var(--seg-t) + 130px); bottom: auto;
     left: 50%; transform: translateX(-50%); font-size: 12.5px; white-space: nowrap;
   }
 
@@ -336,6 +366,19 @@ html, body {
   #acoes {
     bottom: calc(var(--seg-b) + 74px);
     left: calc(var(--seg-l) + 8px); right: calc(var(--seg-r) + 8px);
+    flex-wrap: wrap; justify-content: center; gap: 7px;
   }
-  #acoes .btn { flex: 1; }
+  #acoes .btn { flex: 1 1 auto; }
+  /* A contagem vira faixa embaixo dos jogadores: em pé não há canto direito sobrando. */
+  #contagem {
+    top: calc(var(--seg-t) + 128px); bottom: auto;
+    left: calc(var(--seg-l) + 6px); right: calc(var(--seg-r) + 6px);
+    grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; min-width: 0;
+  }
+  #contagem > span.rot { display: none; }
+  #contagem div { grid-template-columns: 1fr; justify-items: center; gap: 0; }
+  #contagem i, #contagem em { display: none; }
+  #contagem s { text-align: center; }
+  /* e o "sua vez" desce para não brigar com ela */
+  #vez { top: calc(var(--seg-t) + 186px); }
 }

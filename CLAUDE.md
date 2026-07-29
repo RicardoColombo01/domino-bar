@@ -108,6 +108,17 @@ As pontas são o primeiro e o último número; jogar na esquerda é um `unshift`
 - **`typeof x` sobre um `let` na zona morta LANÇA**, não devolve `'undefined'`. Guarda
   desse tipo em escopo concatenado dá falsa sensação de segurança; o que resolve é a
   ordem de quem chama.
+- **A ordem da mão na tela não pode virar ordem no motor.** `visaoDe` devolve a MESMA
+  referência de `P.maos[cadeira]`: um `vista.mao.sort()` ordenaria a mão do anfitrião por
+  causa da preferência visual de um jogador, e no convidado nem funcionaria (a vista dele
+  é regenerada do JSON a cada publicação). Há teste que congela `vista.mao` para
+  transformar isso em erro em vez de bug silencioso.
+- **Cache com duas dependências tem de olhar para as duas, e não para a ordem.** A
+  assinatura da mão é de CONJUNTO (chaves ordenadas) mais a largura: sensível à ordem,
+  ela entraria em laço com a arrumação — reordena, reconstrói, perde a seleção.
+- **`localStorage` no `file://` é compartilhado entre as abas do teste.** Uma cena que
+  liga a contagem contaminava as seguintes, e a foto saía mentindo. Cada cena diz o que
+  quer, explicitamente.
 - **O que cabe na mesa não é o que cabe na TELA.** O tabuleiro, os adversários e o monte
   cabiam nos 6.1 de raio do tampo e mesmo assim saíam do quadro em retrato. Quem tem a
   palavra final é `larguraVisivelEm()`, em `07-cena.js`.
@@ -175,28 +186,28 @@ duas telas para fora), adversários a 1,57 e tabuleiro a 1,04 em retrato.
 
 ## Fila 4 — jogabilidade
 
-1. **`escolherJogada` em `05-bot.js` ainda é o placeholder** que só descarrega a peça
-   mais pesada. É a maior lacuna do projeto — o bot é o adversário na maioria das partidas,
-   e no Duelo de 14 a fraqueza dele fica ainda mais visível. O andaime está pronto:
-   `opcoes` já vem com `valor` e `carroca`, e `info.faltaNo` guarda os números que cada
-   adversário mostrou não ter.
-   **Cuidado ao mexer:** trocar o placeholder muda a trajetória de TODAS as partidas com
-   semente fixa. `tests/test-mesa.mjs` afirma `comDobra > 0`, `menorEscala > 0.3` e
-   `maiorLinha >= 20`; `tests/test-regras.mjs` afirma que os quatro tipos de batida
-   aparecem em 900 partidas. Nada disso estará errado, mas pode passar a falhar.
-2. **Reordenar a mão** arrastando, ou um botão "agrupar por número". No dominó de verdade
-   todo mundo arruma as peças, e hoje não dá.
-3. **Painel "o que já saiu"**: quantas peças de cada número já estão na mesa. É a conta que
-   jogador bom faz de cabeça, e o jogo já tem o dado.
-4. **Marca de "passou no 4"** na cadeira do adversário. O motor já guarda em `P.faltaNo`
-   para os bots usarem — só a tela não mostra, o que deixa o humano em desvantagem contra
-   o próprio bot da mesa.
-5. **Lembrar preferências** (nomes, número de jogadores, som) em `localStorage`.
-6. **Reconexão no online:** hoje quem cai vira bot na hora (`15-rede.js`, `conn.on('close')`);
-   segurar a cadeira ~30 s antes de entregar ao bot.
-7. **Dica de jogada** para quem está aprendendo as regras de bar.
+Feito na v1.4.0: o bot de verdade (1), arrumar a mão (2), o painel de contagem (3), a
+marca de "passou no número" (4) e a reconexão no online (6, na v1.3.0).
 
----
+**`escolherJogada` (`05-bot.js`)** virou uma nota por opção, e a ordem dos pesos é a
+ordem das prioridades de quem joga bem: bater (e bater caro), **não se enterrar** —
+contar com quantas peças você ainda responde às pontas que acabou de deixar —, apertar
+quem joga depois usando `faltaNo`, e só então descarregar peso. `informacao()` passa a
+entregar `P.linha`, que é público. Os níveis continuam sendo *quanta informação* o bot
+recebe, não três algoritmos. `tests/test-regras.mjs` tem a única asserção do projeto que
+mede QUALIDADE: o difícil ganha ~59% do fácil em 300 partidas.
+
+**Arrumar a mão (`10-mao.js`, `11-interacao.js`).** `sincronizarMao` quebrou em
+`reconciliarMao()` (mantém vivo quem continua na mão) + `posicionarMao()` (só geometria,
+lê a ordem atual de `naMao`). A ordem mora em `ordemDaMao`, um `Map` por cadeira com
+chaves de peça, e **nunca no motor**. Arrastar é uma máquina de estados em
+`pointerdown/move/up`, separada do toque por DISTÂNCIA e não por tempo.
+
+**Painel de contagem (`13-hud.js`).** Sai inteiro de `vista.linha` + `vista.mao` + o
+`faltaNo` novo na visão — tudo público, nada a mudar no motor.
+
+Sobrou: **5. lembrar preferências** (nomes, número de jogadores, som) em `localStorage` —
+só a contagem é lembrada hoje; e **7. dica de jogada** para quem está aprendendo.
 
 ## Regras da casa (implementadas)
 

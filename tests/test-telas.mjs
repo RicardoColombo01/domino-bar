@@ -25,15 +25,22 @@ const TELAS = [
 // As situações que mais apertam o HUD: a mão cheia, a mão de 14 do Duelo, e a barra de
 // confirmação aberta — que é quando o rodapé tem três coisas disputando a mesma faixa.
 const CASOS = [
-  { nome: 'mão de 7', montar: `mesa('classico', 3); auto(6);` },
-  { nome: 'mão de 14', montar: `mesa('duelo', 2); auto(1);` },
-  { nome: 'confirmando', montar: `mesa('classico', 3); escolherUma();` },
+  { nome: 'mão de 7', montar: `mesa('classico', 3); auto(6); contar(false);` },
+  { nome: 'mão de 14', montar: `mesa('duelo', 2); auto(1); contar(false);` },
+  { nome: 'confirmando', montar: `mesa('classico', 3); contar(false); escolherUma();` },
+  { nome: 'contando', montar: `mesa('classico', 4); auto(11); contar(true);` },
   // Tabuleiro comprido: é quando a linha se espalha até a borda da mesa e o círculo dos
   // adversários fica mais apertado. Se algo vai sair do quadro, sai aqui.
-  { nome: 'mesa cheia', montar: `mesa('classico', 4); ateALinha(13);` },
+  { nome: 'mesa cheia', montar: `mesa('classico', 4); contar(true); ateALinha(13);` },
 ];
 
 const AJUDA = `
+  // O localStorage é do file:// inteiro, então uma cena que liga a contagem contamina as
+  // seguintes. Cada caso diz explicitamente o que quer.
+  const contar = (ligado) => {
+    const b = document.getElementById('btContagem');
+    if (b.classList.contains('on') !== ligado) b.click();
+  };
   const mesa = (modo, n) => {
     const j = window.__jogo;
     j.MESA.modo = modo; j.MESA.n = n;
@@ -82,7 +89,7 @@ const MEDIR = `(() => {
       : { x: r.left, y: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height };
   };
   const paineis = {};
-  for (const id of ['topo', 'jogadores', 'vez', 'acoes', 'confirmar', 'btSom', 'btSair', 'log']) {
+  for (const id of ['topo', 'jogadores', 'vez', 'acoes', 'confirmar', 'contagem', 'btSom', 'btSair', 'log']) {
     const r = vis(document.getElementById(id));
     if (r) paineis[id] = r;
   }

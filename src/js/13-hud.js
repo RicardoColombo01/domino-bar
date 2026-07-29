@@ -10,7 +10,14 @@ const HUD = {
   placar: el('placar'), pontas: el('pontasVal'), monte: el('monteVal'), maoN: el('maoVal'),
   jogadores: el('jogadores'), vez: el('vez'), aviso: el('aviso'), log: el('log'),
   comprar: el('btComprar'), passar: el('btPassar'), acoes: el('acoes'),
+  arrumar: el('btArrumar'), contar: el('btContagem'), contagem: el('contagem'),
 };
+
+// "Contar o jogo" é a conta que jogador bom faz de cabeça e novato não faz. Fica
+// desligada por padrão e lembrada entre partidas — quem já conta sozinho não quer a
+// tabela ocupando a tela.
+let contando = false;
+try { contando = localStorage.getItem('dominobar.contagem') === '1'; } catch (e) { void e; }
 
 const ETIQUETA = { voce: 'você', local: 'nesta tela', bot: 'bot', online: 'online' };
 
@@ -60,9 +67,46 @@ function desenharHUD(vista) {
   const a = vista.acoes;
   HUD.comprar.classList.toggle('oculta', !a.comprar);
   HUD.passar.classList.toggle('oculta', !a.passar);
-  HUD.acoes.classList.toggle('oculta', !a.comprar && !a.passar);
+  // Arrumar a mão e contar o jogo não dependem da vez — dá para se organizar enquanto
+  // os outros jogam. Por isso a barra de ações passou a aparecer sempre que há mão.
+  const temMao = vista.mao && vista.mao.length > 0;
+  HUD.arrumar.classList.toggle('oculta', !temMao || vista.mao.length < 2);
+  HUD.contar.classList.toggle('oculta', !temMao);
+  HUD.contar.classList.toggle('on', contando);
+  HUD.acoes.classList.toggle('oculta', !a.comprar && !a.passar && !temMao);
   // Quando a única saída é comprar, o botão precisa gritar: o jogador está travado.
   HUD.comprar.classList.toggle('principal', a.comprar && !a.jogadas.length);
+
+  desenharContagem(vista);
+}
+
+// Quantas peças de cada número já apareceram — as da mesa MAIS as da sua mão, como o
+// Ricardo pediu. Sai inteiro de `vista`: é exatamente o que o jogador enxerga, então não
+// vaza nada e não precisou de nada novo no motor.
+function desenharContagem(vista) {
+  HUD.contagem.classList.toggle('oculta', !contando || !vista.mao);
+  if (!contando || !vista.mao) return;
+
+  const baralho = baralhoDoModo(MODOS[vista.modo] || MODOS[MODO_PADRAO]);
+  const aparecidas = vista.linha.concat(vista.mao);
+  const linhas = [];
+  for (let n = 0; n <= MAX_PINTAS; n++) {
+    // O total NÃO é 7 fixo: no Trio o 0|0 sai do baralho e o zero mora em 6 peças.
+    const total = baralho.filter(p => p[0] === n || p[1] === n).length;
+    if (!total) continue;
+    const visto = aparecidas.filter(p => p[0] === n || p[1] === n).length;
+    // Quem passou numa ponta provou não ter aquele número. É informação pública — a
+    // mesa inteira viu o passe —, e até agora só o bot usava.
+    const semEle = (vista.faltaNo || [])
+      .map((nums, i) => (i !== vista.cadeira && nums.indexOf(n) >= 0 ? vista.cadeiras[i].nome : null))
+      .filter(Boolean);
+    linhas.push(`<div${visto === total ? ' class="zerado"' : ''}>` +
+      `<b>${n}</b>` +
+      `<i>${'▮'.repeat(visto)}${'▯'.repeat(total - visto)}</i>` +
+      `<s>${total - visto || '—'}</s>` +
+      `<em>${semEle.join(', ')}</em></div>`);
+  }
+  HUD.contagem.innerHTML = '<span class="rot">faltam aparecer</span>' + linhas.join('');
 }
 
 // A barra de confirmação. O rótulo diz o NÚMERO da ponta, não "esquerda/direita" sozinho:
