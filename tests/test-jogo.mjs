@@ -2,7 +2,7 @@
 // ao fim. Só o `import` já vale como teste — ele constrói a cena Three.js de verdade,
 // e geometria inválida ou variável indefinida estoura aqui em vez de virar tela preta.
 import path from 'path';
-import { installStubs, seedRandom, buildModule, frames, correrTimers, els } from './harness.mjs';
+import { installStubs, seedRandom, buildModule, frames, correrTimers, els, fire } from './harness.mjs';
 
 installStubs();
 seedRandom(99);
@@ -10,7 +10,7 @@ seedRandom(99);
 const mod = await import(buildModule([
   'MESA', 'comecarLocal', 'pedirAcao', 'aplicarIntencao', 'atualizarVista', 'jogadaDoBot',
   'visaoDe', 'novaMao', 'publicar', 'P', 'vistaAtual', 'euNaTela', 'travado', 'naMao', 'naMesa',
-  'grupoMao', 'grupoOutros', 'grupoMonte', 'grupoMesa', 'scene', 'renderer',
+  'grupoMao', 'grupoOutros', 'grupoMonte', 'grupoMesa', 'scene', 'renderer', 'camera',
   'selecionarPeca', 'cancelarEscolha', 'confirmarJogada', 'escolhida', 'grupoPrevia', 'chave',
   'arrumarMao', 'moverNaMao', 'carroca',
 ], undefined, path.join(import.meta.dirname, 'built-jogo.mjs')));
@@ -308,6 +308,108 @@ console.log('\narrumar a mão');
     ok(naTela().join() === esperado.join(),
       `depois de jogar o ${jogada} a ordem deveria ser ${esperado} e ficou ${naTela()}`);
   }
+}
+
+// O arrasto não tinha um único teste, e é o que deixou passar dois bugs: a peça
+// abandonada pelo segundo dedo e a arrumação apagada na troca de jogador. O harness já
+// registra os listeners de window, então dá para disparar o gesto de verdade.
+console.log('\narrastar a peça');
+{
+  mod.MESA.modo = 'classico'; mod.MESA.n = 3;
+  mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[2].tipo = 'bot';
+  mod.comecarLocal();
+
+  // Duas coisas que no navegador acontecem sozinhas e aqui não:
+  // 1. o leque precisa ASSENTAR — peça que sobrevive de uma mão para a outra é
+  //    reaproveitada e desliza até o lugar novo, e o raycast mira onde ela ESTÁ;
+  // 2. quem atualiza as matrizes de mundo é o renderer a cada quadro, e aqui ele é um
+  //    stub que não faz nada — sem isto o raycast trabalha com a câmera na origem.
+  frames(40);
+  mod.scene.updateMatrixWorld(true);
+  mod.camera.updateMatrixWorld(true);
+
+  const V = mod.naMao[0].obj.position.constructor;
+  // Onde o slot de repouso de uma peça cai na tela — o inverso exato da conta que o
+  // jogo faz para mirar (11-interacao.js).
+  const naTela = m => {
+    const v = new V(m.xBase, m.yBase, m.zBase).project(mod.camera);
+    return { x: (v.x + 1) / 2 * 1600, y: (1 - v.y) / 2 * 900 };
+  };
+  const chaves = () => mod.naMao.map(m => mod.chave(m.peca));
+  const alvo = mod.renderer.domElement;
+
+  const de = 0, para = 3;
+  const antes = chaves();
+  const a = naTela(mod.naMao[de]), b = naTela(mod.naMao[para]);
+
+  fire('pointerdown', { target: alvo, pointerId: 1, clientX: a.x, clientY: a.y });
+  // O primeiro move é curto de propósito: abaixo do limiar ainda é toque, não arrasto.
+  fire('pointermove', { pointerId: 1, clientX: a.x + 3, clientY: a.y });
+  ok(chaves().join() === antes.join(), 'um movimento de 3px não podia ter reordenado nada');
+
+  fire('pointermove', { pointerId: 1, clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 });
+  fire('pointermove', { pointerId: 1, clientX: b.x, clientY: b.y });
+  const arrastada = antes[de];
+  ok(chaves()[para] === arrastada,
+    `a peça ${arrastada} deveria ter ido para o índice ${para}, e a ordem ficou ${chaves()}`);
+  ok(chaves().slice().sort().join() === antes.slice().sort().join(), 'o arrasto perdeu ou inventou peça');
+
+  fire('pointerup', { pointerId: 1 });
+  ok(!mod.naMao.some(m => m.arrastando), 'sobrou peça marcada como arrastando depois do pointerup');
+
+  // O SEGUNDO DEDO: com um arrasto em curso, um toque em outra peça abandonava a
+  // primeira com arrastando=true para sempre — e animarMao a ignora, então ela ficava
+  // congelada no ar até a mão ser reconstruída.
+  const p0 = naTela(mod.naMao[0]), p2 = naTela(mod.naMao[2]);
+  fire('pointerdown', { target: alvo, pointerId: 7, clientX: p0.x, clientY: p0.y });
+  fire('pointermove', { pointerId: 7, clientX: p0.x + 40, clientY: p0.y });
+  fire('pointerdown', { target: alvo, pointerId: 8, clientX: p2.x, clientY: p2.y });
+  fire('pointerup', { pointerId: 7 });
+  ok(!mod.naMao.some(m => m.arrastando),
+    'um segundo dedo deixou a peça do primeiro congelada no ar');
+}
+
+console.log('\na arrumação sobrevive à troca de jogador');
+{
+  // Mesa com DUAS pessoas nesta tela: é o único jeito de `pedirTroca` rodar, e era
+  // justamente por isso que o bug passava — o teste de arrumação usava só bots.
+  mod.MESA.modo = 'classico'; mod.MESA.n = 2;
+  mod.MESA.cadeiras[1].tipo = 'local'; mod.MESA.cadeiras[1].nome = 'Zé';
+  mod.comecarLocal();
+
+  const minhas = () => mod.naMao.map(m => mod.chave(m.peca));
+  const jogarUma = () => {
+    const a = mod.vistaAtual.acoes;
+    if (a.jogadas.length) mod.pedirAcao({ acao: 'jogar', peca: a.jogadas[0].peca, ponta: a.jogadas[0].ponta });
+    else if (a.comprar) mod.pedirAcao({ acao: 'comprar' });
+    else mod.pedirAcao({ acao: 'passar' });
+  };
+
+  // Quem abre é quem tem o 6|6, então a partida pode já começar na tela de troca.
+  for (let i = 0; i < 10 && mod.travado; i++) els.get('btPronto').onclick();
+  const euComecei = mod.euNaTela;
+  mod.arrumarMao();
+  const arrumada = minhas();
+  ok(arrumada.length > 1, 'montagem do cenário: precisa de mão para arrumar');
+
+  // Passa o computador para o outro...
+  const outro = 1 - euComecei;
+  for (let i = 0; i < 80 && !mod.travado; i++) jogarUma();
+  ok(mod.travado, 'a tela de troca deveria ter aparecido');
+  ok(mod.naMao.length === 0, 'as peças do jogador anterior continuaram na cena durante a troca');
+  els.get('btPronto').onclick();
+  ok(mod.euNaTela === outro, 'a troca não passou a tela para o outro jogador');
+
+  // ...e volta.
+  for (let i = 0; i < 80 && !mod.travado; i++) jogarUma();
+  els.get('btPronto').onclick();
+  ok(mod.euNaTela === euComecei, 'a vez não voltou para quem tinha arrumado');
+
+  // A arrumação é por cadeira: a peça jogada saiu, e o resto continua na ordem escolhida.
+  const agora = minhas();
+  const esperado = arrumada.filter(k => agora.includes(k));
+  ok(agora.length > 0 && agora.join() === esperado.join(),
+    `a arrumação não sobreviveu à troca: esperava ${esperado} e veio ${agora}`);
 }
 
 // Bloco à parte porque ele CONGELA a mão, e a mão congelada é a do motor — que é

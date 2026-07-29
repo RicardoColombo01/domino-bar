@@ -132,6 +132,10 @@ addEventListener('pointerdown', ev => {
   // acharia nada, a escolha seria cancelada — e o botão abriria uma jogada vazia.
   if (ev.target !== renderer.domElement) return;
   if (!vistaAtual) return;
+  // Um dedo de cada vez. Sem isto, um segundo toque sobrescrevia `arrasto` e a peça do
+  // primeiro dedo ficava com `arrastando = true` para sempre — animarMao a ignora, e ela
+  // congelava no ar. Dois dedos na tela é acidente comum no celular.
+  if (arrasto) return;
   // O ponteiro só era atualizado no pointermove — o que no mouse é sempre verdade e no
   // dedo não é: o primeiro toque da tela não move nada antes de tocar, então a mira
   // ficava na posição do toque ANTERIOR e o raycast acertava outra peça.
@@ -192,20 +196,21 @@ function soltarArrasto(ev) {
   const i = naMao.findIndex(m => chave(m.peca) === k);
   if (i < 0) return;
   if (k === escolhida) { cancelarEscolha(); return; }
-  if (!naMao[i].jogavel) {
-    avisar(naMao[i].pontas && naMao[i].pontas.length === 0 && encaixaEmAlgumaPonta(naMao[i].peca)
-      ? 'Essa peça fecharia o jogo de propósito.'
-      : 'Essa peça não encaixa em nenhuma ponta.');
-    return;
-  }
+  if (!naMao[i].jogavel) { avisar(porQueNaoDa(naMao[i].peca)); return; }
   selecionarPeca(i);
 }
 addEventListener('pointerup', soltarArrasto);
 addEventListener('pointercancel', () => encerrarArrasto());
 
-// A peça encaixa numa ponta mas o motor não a ofereceu? Então quem a tirou da lista foi
-// a regra do fechamento — e o aviso tem de dizer isso, não "não encaixa".
-function encaixaEmAlgumaPonta(peca) {
-  const pt = vistaAtual && vistaAtual.pontas;
-  return !!pt && (peca[0] === pt[0] || peca[1] === pt[0] || peca[0] === pt[1] || peca[1] === pt[1]);
+// POR QUE esta peça não dá. São três motivos diferentes e o jogador merece o certo:
+// dizer "não encaixa em nenhuma ponta" com a mesa vazia — onde toda peça encaixa — é
+// mentira, e era o que acontecia na primeira mão, em que só o 6|6 é jogável.
+function porQueNaoDa(peca) {
+  const v = vistaAtual;
+  if (v && v.pecaObrigatoria) return `Esta mão abre com o ${v.pecaObrigatoria.join('|')}.`;
+  const pt = v && v.pontas;
+  const encaixa = !!pt && (peca[0] === pt[0] || peca[1] === pt[0] || peca[0] === pt[1] || peca[1] === pt[1]);
+  // Encaixa numa ponta e mesmo assim o motor não a ofereceu: quem a tirou da lista foi
+  // a regra do fechamento.
+  return encaixa ? 'Essa peça fecharia o jogo de propósito.' : 'Essa peça não encaixa em nenhuma ponta.';
 }
