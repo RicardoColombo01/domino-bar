@@ -94,7 +94,11 @@ function envolver(postas) {
 
 // O tabuleiro cresce; a mesa não. Em vez de limitar o jogo, encolhe o grupo inteiro
 // até caber — duas linhas que resolvem todos os casos extremos de uma vez.
-function escalaDoTabuleiro(caixa) {
+// `larguraUtil` entra como parâmetro com o valor de sempre por default: quem chama de
+// dentro do jogo passa a largura que a TELA mostra (num celular em pé o tabuleiro cabia
+// na mesa e não cabia no quadro), e os testes de layout continuam chamando com um
+// argumento só, medindo a mesa e não a tela. A função continua pura.
+function escalaDoTabuleiro(caixa, larguraUtil = ESPALHA_X * 2.1) {
   if (!caixa.l) return 1;
-  return Math.min(1, (ESPALHA_X * 2.1) / caixa.l, (ESPALHA_Z * 2.4) / caixa.a);
+  return Math.min(1, larguraUtil / caixa.l, (ESPALHA_Z * 2.4) / caixa.a);
 }

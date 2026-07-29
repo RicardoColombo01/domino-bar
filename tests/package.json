@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "test": "node test-regras.mjs && node test-mesa.mjs && node test-jogo.mjs",
+    "telas": "node test-telas.mjs",
     "shots": "node shots.mjs",
     "online": "node test-online.mjs"
   },

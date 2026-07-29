@@ -21,7 +21,9 @@ const geomBrilho = new THREE.CircleGeometry(PECA_C * 0.8, 28);
 function sincronizarTabuleiro(vista) {
   const { postas, caixa } = layoutDaMesa(vista.linha, vista.iAncora);
 
-  const e = escalaDoTabuleiro(caixa);
+  // O tabuleiro cabia na mesa e mesmo assim saía da TELA num celular em pé. O limite
+  // passa a ser o menor dos dois: a madeira e o quadro.
+  const e = escalaDoTabuleiro(caixa, Math.min(ESPALHA_X * 2.1, larguraVisivelEm(0, 0.4) * 0.86));
   escalaAlvo = e;
   posAlvo.set(-caixa.x * e, 0, -caixa.z * e + 0.4);
 

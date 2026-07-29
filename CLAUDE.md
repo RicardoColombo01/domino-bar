@@ -13,6 +13,7 @@ WebAudio na hora. Three.js e PeerJS vêm de CDN. ~2.100 linhas no total.
 npm run build     junta src/ num index.html autossuficiente
 npm run check     avisa se o index.html está desatualizado
 npm test          build + as três suítes de lógica
+npm run telas     build + o jogo em cinco tamanhos de tela (retrato, paisagem, wide)
 npm run shots     build + screenshots no Chrome de verdade (tests/shots/)
 npm run online    testa o online abrindo duas abas e uma mesa real
 npm run servir    servidor local (o online não fecha conexão em file://)
@@ -101,13 +102,22 @@ As pontas são o primeiro e o último número; jogar na esquerda é um `unshift`
   `baralhoDoModo()`, sempre.
 - **`distribuir` dava mão curta em silêncio** quando `n × peças` não cabia no baralho. Hoje
   estoura com mensagem — o menu barra a combinação, mas os testes entram por baixo dele.
+- **Cache que depende de duas coisas tem de olhar para as duas.** `assinaturaMao` só via
+  as peças, então mudar a largura da tela não refazia o leque — e invalidar à força a
+  cada `resize` apagava a peça levantada. A largura entrou na assinatura.
+- **`typeof x` sobre um `let` na zona morta LANÇA**, não devolve `'undefined'`. Guarda
+  desse tipo em escopo concatenado dá falsa sensação de segurança; o que resolve é a
+  ordem de quem chama.
+- **O que cabe na mesa não é o que cabe na TELA.** O tabuleiro, os adversários e o monte
+  cabiam nos 6.1 de raio do tampo e mesmo assim saíam do quadro em retrato. Quem tem a
+  palavra final é `larguraVisivelEm()`, em `07-cena.js`.
 
 ---
 
 # FILA DE TRABALHO
 
-Ordem sugerida: 3 → 2 → 4. A fila 3 antes da 2 de propósito: é o teste que torna a
-adaptação para celular verificável em vez de opinião.
+Sobrou a Fila 4. As filas 1, 2 e 3 estão feitas — ficam registradas abaixo porque o que
+elas ensinaram sobre este código continua valendo.
 
 ## Fila 1 — o bug dos pontos ✔ feito (v1.0.1)
 
@@ -120,52 +130,48 @@ em **todo** `publicar()`. Qualquer passo de UI com mais de um estado para a mesm
 precisa de um flag de módulo em `16-loop.js` (`viuOFimDaMao`), zerado quando a fase muda —
 não dá para resolver dentro do HUD.
 
-## Fila 2 — celular (retrato está quebrado)
+## Fila 2 — celular ✔ feito (v1.2.0)
 
-**Diagnóstico:** `ajustarTela()` (`07-cena.js:192`) só atualiza `camera.aspect`. Como o
-`fov` do Three é **vertical**, em retrato (aspect ~0.46) o campo horizontal cai de ~61°
-para ~21° e a mão sai pelos dois lados da tela. **Não é CSS, é câmera.**
+`enquadrar()` substituiu `ajustarTela()` e deriva o `fov` da largura que precisa caber,
+com **piso** nos 46° de sempre (o computador não mudou um pixel) e **teto** em 62°.
+`LARGURA_MAO` virou função da largura de mundo realmente visível, `porFileira` faz N
+fileiras (um Duelo de 14 em pé usa quatro), e o que está na mesa — tabuleiro,
+adversários e monte — aperta junto por `apertoDaMesa()`. HUD com bloco de orientação,
+alvos de 44 px, safe-area, `touch-action: none` e vibração ao encaixar.
 
-Decidido com o Ricardo: **peças grandes e mão em duas fileiras**, aceitando que a borda da
-mesa saia do quadro.
+**O que ficou de lição:**
 
-1. **`enquadrar()` no lugar de `ajustarTela()`** — derivar o `fov` da largura de mundo que
-   precisa caber, e não o contrário: `fovX = 2·atan((L/2)/dist)`, depois
-   `fovY = 2·atan(tan(fovX/2)/aspect)`, com teto para não distorcer e recuo extra da
-   câmera em telas muito altas. Em retrato, aproximar e baixar o `lookAt` para a mesa
-   ficar na metade de cima e a mão na de baixo.
-2. **`LARGURA_MAO` deixa de ser a constante `8.2`** (`10-mao.js:17`) e passa a ser a
-   largura de mundo realmente visível na profundidade da mão, menos margem. Isso resolve
-   celular e o pedido de "adaptar à quantidade de peças" com a mesma conta.
-3. ~~**Mão em fileiras.**~~ ✔ feito na v1.1.0, junto do Duelo de 14 — `porFileira()` em
-   `10-mao.js` quebra em duas fileiras acima de 10 peças, e a de trás sobe, recua e tomba
-   mais. Falta só reagir à largura de verdade, que é o item 2 acima.
-4. **HUD responsivo por orientação**, não só por largura: painéis do topo viram faixa
-   compacta, `#jogadores` vira linha horizontal, alvos de toque ≥ 44 px, `#log` só em tela
-   larga, barra de confirmação ocupando a largura inteira embaixo. Hoje só existe um
-   `@media (max-width: 720px)` com quatro regras.
-5. **Toque:** `touch-action: none` no canvas, `user-select: none`, `viewport-fit=cover` e
-   `env(safe-area-inset-*)` para o notch — sem isso o navegador rola e dá zoom por cima do
-   jogo. Mais `navigator.vibrate(12)` ao encaixar: uma linha, e muda a sensação.
+- **A largura visível é TETO, não alvo.** A primeira versão deixava a mão crescer até a
+  largura real (12.4 no computador) e ela se espalhava de beirada a beirada, por baixo
+  dos painéis. `MAO_CHEIA = 8.2` continua sendo o que a mão *quer*; a tela só pode tirar.
+- **A largura tem de entrar na assinatura da mão** (`10-mao.js`). Invalidar à força
+  reconstruía o leque a cada `resize` — e no iOS a barra de URL dispara `resize` o tempo
+  todo, o que apagava a peça que você tinha levantado.
+- **`typeof x` sobre um `let` na zona morta LANÇA**, não devolve `'undefined'`. O guarda
+  que parecia defensivo não defendia nada; o que segura é a primeira chamada de
+  `enquadrar()` morar em `16-loop.js`, depois de tudo declarado.
+- **`max-width` é a pergunta errada para alvo de toque.** Um tablet de 820 px e um
+  celular deitado de 844 px são largos e continuam sendo dedo — quem responde é
+  `(pointer: coarse)`.
+- **O monte não pode ser apertado pelo fator da mesa:** ele fica muito mais perto da
+  câmera, onde a tela é mais estreita. A posição dele sai da largura visível na
+  profundidade dele mesmo.
 
-Arquivos: `07-cena.js`, `10-mao.js`, `css/estilo.css`, `src/pagina.html`.
+Falta só: `#log` e o painel "Mão" ainda somem em vez de se adaptar, e o HUD de celular
+deitado é o de tela baixa, não um layout próprio.
 
-## Fila 3 — teste de telas (novo: `tests/test-telas.mjs`)
+## Fila 3 — teste de telas ✔ feito (v1.2.0)
 
-Sem isto, "adaptei para celular" é opinião. Abre o jogo em cinco tamanhos — retrato
-390×844 e 360×640, paisagem de celular 844×390, tablet 820×1180, wide 1600×900 — monta uma
-partida e **reprova** se:
+`tests/test-telas.mjs` (`npm run telas`) abre o jogo em cinco tamanhos — retrato 390×844
+e 360×640, paisagem de celular 844×390, tablet 820×1180, wide 1600×900 — em quatro
+situações (mão de 7, mão de 14, confirmando, mesa cheia) e reprova se a página
+transbordar, se um painel do HUD sair da viewport, se dois painéis se sobrepuserem, se o
+alvo de toque for menor que 40 px, ou se **qualquer peça da mão, do tabuleiro, das mãos
+dos adversários ou do monte cair fora do quadro** — projetando com a mesma `camera` que
+desenha, para NDC.
 
-- `documentElement.scrollWidth > innerWidth` (transbordou);
-- qualquer painel do HUD sair da viewport (`getBoundingClientRect`);
-- painéis se sobrepuserem (`#vez` por cima de `#acoes`, por exemplo);
-- **qualquer peça da mão cair fora da tela** — projetar a posição 3D com a `camera` para
-  NDC e conferir `|x| ≤ 1`. Este é o que prova de verdade "dá para ver a mão", e teria
-  pego o bug do retrato sozinho, sem ninguém olhar screenshot.
-
-Seguir o padrão de `tests/shots.mjs` (puppeteer-core + Chrome instalado) e usar
-`window.__jogo` (`16-loop.js`, no fim) para montar as situações. Lembrar de
-`{ polling: 400 }` nos `waitForFunction` quando houver mais de uma aba.
+Foi ele que achou os três defeitos que ninguém tinha visto: monte a 1,9 de NDC (quase
+duas telas para fora), adversários a 1,57 e tabuleiro a 1,04 em retrato.
 
 ## Fila 4 — jogabilidade
 

@@ -116,6 +116,7 @@ sintaxe vira mensagem no terminal em vez de tela preta.
 npm run build     junta src/ num index.html autossuficiente
 npm run check     avisa se o index.html está desatualizado
 npm test          build + as três suítes de lógica
+npm run telas     build + o jogo aberto em cinco tamanhos de tela
 npm run shots     build + screenshots do jogo no Chrome de verdade
 npm run online    testa o online abrindo duas abas e uma mesa real
 npm run servir    sobe um servidor local (necessário para o online)

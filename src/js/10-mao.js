@@ -14,26 +14,59 @@ scene.add(grupoMao, grupoOutros, grupoMonte);
 // câmera. Com o sinal trocado a peça encara o fundo da mesa e você vê o verso dela.
 // A conta: a câmera olha a mão de ~57° acima do horizonte, então 90° − 57° ≈ 0.58 rad.
 const MAO_Z = 4.75, MAO_Y = 1.15, MAO_TOMBO = 0.58;
-const LARGURA_MAO = 8.2;             // o quanto cabe na frente da câmera, em unidades
 const FOLGA_LEQUE = 1.08;            // respiro entre uma peça e a seguinte
 const naMao = [];                    // { obj, peca, xBase, yBase, zBase, jogavel, erguida }
 
-// Quantas peças cabem numa fileira sem passar do piso de escala. Acima disso a mão vai
-// para DUAS fileiras em vez de continuar encolhendo: com 14 peças (o Duelo inteiro,
-// não mais o caso raro de quem comprou muito) uma fileira só sobrepõe quase um quinto
-// de cada peça, e o que some é sempre a beirada direita — ou seja, o segundo número.
+// DEIXOU DE SER A CONSTANTE 8.2: agora é a largura de mundo que a câmera realmente
+// mostra na profundidade da mão, menos uma margem. Era a constante fixa que quebrava o
+// celular — em retrato só cabem ~4.6 unidades ali, e a mão de 8.2 saía pelos dois lados.
+//
+// A largura visível é TETO, não alvo: no computador cabem 12.4 unidades, e deixar a mão
+// crescer até lá espalharia as peças de beirada a beirada, cada uma menor e nas quinas
+// da perspectiva. MAO_CHEIA continua sendo o que a mão QUER; a tela só pode tirar.
+const LARGURA_MAO = () =>
+  Math.max(3.2, Math.min(MAO_CHEIA, larguraVisivelEm(MAO_Y, MAO_Z) - 0.45));
+
+// Quantas peças por fileira. Acima do que cabe, a mão quebra em fileiras em vez de
+// continuar encolhendo: com 14 peças numa fileira só, cada uma cobre quase um quinto da
+// anterior — e o que some é sempre a beirada direita, ou seja, o segundo número.
+//
+// São N fileiras, não duas: no computador cabem 10 por fileira e o Duelo de 14 fecha em
+// duas, mas num celular em pé cabem 5, e aí 14 peças precisam de três.
 const ESCALA_MIN = 0.72;
-const porFileira = n => (n <= Math.floor(LARGURA_MAO / (PECA_C * ESCALA_MIN * FOLGA_LEQUE))
-  ? n : Math.ceil(n / 2));
+function porFileira(n) {
+  const max = Math.max(2, Math.floor(LARGURA_MAO() / (PECA_C * ESCALA_MIN * FOLGA_LEQUE)));
+  if (n <= max) return n;
+  return Math.ceil(n / Math.ceil(n / max));      // equilibra: 14 em 3 fileiras = 5,5,4
+}
+
+// A largura mudou (girou o celular, mudou a janela): o leque tem de ser refeito.
+//
+// A largura entra na ASSINATURA em vez de ser invalidada à força, e isso não é detalhe:
+// no iOS o `resize` dispara a cada vez que a barra de URL encolhe. Com invalidação à
+// força, cada um desses reconstruía a mão e apagava a peça que você tinha levantado.
+// Assim, resize que não muda a largura é no-op.
+//
+// `vistaAtual` mora em 16-loop.js, e é por isso que a primeira chamada de enquadrar()
+// vem de lá: aqui ela ainda estaria na zona morta do `let`.
+function redesenharMao() {
+  if (vistaAtual && vistaAtual.mao) sincronizarMao(vistaAtual);
+}
 let assinaturaMao = '';
 let escolhida = null;                // índice da peça levantada, ou null
 
 const anguloDaCadeira = (i, eu, n) => ((i - eu + n) % n) * Math.PI * 2 / n;
 
 function sincronizarMao(vista) {
-  const assinatura = vista.mao.map(chave).join(',') + '#' + vista.cadeira;
+  const largura = LARGURA_MAO();
+  // A largura entra na assinatura porque o leque depende dela tanto quanto das peças.
+  const assinatura = vista.mao.map(chave).join(',') + '#' + vista.cadeira + '#' + largura.toFixed(2);
   if (assinatura !== assinaturaMao) {
     assinaturaMao = assinatura;
+    // Girar o celular com uma peça levantada não pode perder a peça: sem guardar a
+    // chave aqui, `escolhida` (que é índice) morre no rebuild e a barra de confirmação
+    // fica na tela apontando para nada — o botão vira um return mudo.
+    const erguida = escolhida !== null && naMao[escolhida] ? chave(naMao[escolhida].peca) : null;
     escolhida = null;
     naMao.forEach(m => grupoMao.remove(m.obj));
     naMao.length = 0;
@@ -46,8 +79,8 @@ function sincronizarMao(vista) {
     // quando nem encolhendo cabe, a mão quebra em duas fileiras em vez de virar tira.
     const n = Math.max(vista.mao.length, 1);
     const cabem = porFileira(n);
-    const escala = Math.max(ESCALA_MIN, Math.min(1.3, LARGURA_MAO / (cabem * PECA_C * FOLGA_LEQUE)));
-    const espaco = Math.min(PECA_C * escala * FOLGA_LEQUE, LARGURA_MAO / cabem);
+    const escala = Math.max(ESCALA_MIN, Math.min(1.3, largura / (cabem * PECA_C * FOLGA_LEQUE)));
+    const espaco = Math.min(PECA_C * escala * FOLGA_LEQUE, largura / cabem);
 
     vista.mao.forEach((peca, i) => {
       const fila = Math.floor(i / cabem);
@@ -69,6 +102,18 @@ function sincronizarMao(vista) {
       grupoMao.add(obj);
       naMao.push({ obj, peca, xBase: x, yBase: y, zBase: z, tombo, jogavel: false });
     });
+
+    // A peça que estava levantada volta a estar, no índice novo dela.
+    const volta = erguida === null ? -1 : naMao.findIndex(m => chave(m.peca) === erguida);
+    escolhida = volta < 0 ? null : volta;
+
+    // A luz da mão acompanha o miolo do leque. Com o Duelo de 14 em três ou quatro
+    // fileiras, uma luz parada em cima da primeira deixava a de trás com um terço do
+    // brilho — e é justamente a que precisa ser lida com esforço.
+    const filas = Math.ceil(n / cabem);
+    luzDaMao.position.set(0,
+      MAO_Y + (filas - 1) / 2 * 0.34 * escala + 1.55,
+      MAO_Z - (filas - 1) / 2 * 0.66 * escala + 2.05);
   }
 
   // Quais dessas dá para jogar agora — vem da MESMA função que valida a jogada de
@@ -100,18 +145,24 @@ function esconderMao() {
   cancelarEscolha();
 }
 
+// Quanto o que está NA MESA precisa encolher para caber na tela. 1 é o computador, onde
+// tudo cabe; num celular em pé o círculo dos adversários e o monte ficavam do lado de
+// fora do quadro — o monte chegava a uma vez e meia a largura da tela. Aperta só o eixo
+// X: a profundidade continua a mesma, então os adversários continuam sentados em volta.
+const apertoDaMesa = () => Math.min(1, larguraVisivelEm(0, -MESA_R * 0.5) / 13.5);
+
 function sincronizarOutros(vista) {
   grupoOutros.clear();
-  const raio = MESA_R * 0.80;
+  const raio = MESA_R * 0.80, aperto = apertoDaMesa();
   vista.naMao.forEach((quantas, i) => {
     if (i === vista.cadeira) return;
     const a = anguloDaCadeira(i, vista.cadeira, vista.naMao.length);
     const g = new THREE.Group();
-    g.position.set(Math.sin(a) * raio, PECA_E / 2, Math.cos(a) * raio);
+    g.position.set(Math.sin(a) * raio * aperto, PECA_E / 2, Math.cos(a) * raio);
     g.rotation.y = -a;
     // Cada peça atravessada na fileira, lado a lado. Enfileiradas no comprimento elas
     // se sobrepõem e o que aparece na mesa é uma tábua preta, não uma mão de dominó.
-    const espaco = Math.min(0.56, 4.2 / Math.max(quantas, 1));
+    const espaco = Math.min(0.56, 4.2 * aperto / Math.max(quantas, 1));
     for (let k = 0; k < quantas; k++) {
       const v = criarVerso();
       v.position.set((k - (quantas - 1) / 2) * espaco, 0, 0);
@@ -127,11 +178,19 @@ function sincronizarOutros(vista) {
 // pilhas empilhadas de verdade — espalhado no tampo ele ocuparia meia mesa.
 function sincronizarMonte(vista) {
   grupoMonte.clear();
+  // O monte fica na beirada de baixo, MUITO mais perto da câmera que a mesa — e ali a
+  // tela é bem mais estreita. Apertar pelo fator da mesa não bastava: ele continuava
+  // meia largura para fora num celular. Aqui a posição sai da largura visível na
+  // profundidade dele mesmo, então cabe por construção em qualquer tela.
+  const aperto = apertoDaMesa();
+  const zMonte = 2.15 + (1 - aperto) * 1.6;
+  const beirada = larguraVisivelEm(PECA_E / 2, zMonte) / 2;
+  const xMonte = -Math.min(4.98, beirada * 0.78);
   for (let i = 0; i < vista.monte; i++) {
     const v = criarVerso();
     const pilha = Math.floor(i / 4);                              // quatro bolinhos de 4
-    v.position.set(-4.98 + (pilha % 2) * 0.6, PECA_E / 2 + (i % 4) * PECA_E,
-      2.15 + Math.floor(pilha / 2) * 1.12);
+    v.position.set(xMonte + (pilha % 2) * 0.6 * aperto, PECA_E / 2 + (i % 4) * PECA_E,
+      zMonte + Math.floor(pilha / 2) * 1.12 * aperto);
     v.rotation.y = Math.PI / 2 + (Math.random() - 0.5) * 0.06;   // nada de pilha de régua
     grupoMonte.add(v);
   }

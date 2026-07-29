@@ -15,10 +15,31 @@ html, body {
   background: #0d0908; color: var(--texto);
   font: 15px/1.45 "Segoe UI", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* A mesa não é texto: sem isto, arrastar uma peça no celular seleciona o HUD inteiro
+     e o toque longo abre o menu de contexto por cima do jogo. */
+  user-select: none; -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
 }
 
-#app { position: fixed; inset: 0; }
-#app canvas { display: block; }
+/* Recuo das bordas do aparelho (notch, ilha, barra de gestos). Vira zero em qualquer
+   tela que não tenha entalhe, então serve para os dois casos sem media query. */
+:root {
+  --seg-t: env(safe-area-inset-top, 0px);
+  --seg-b: env(safe-area-inset-bottom, 0px);
+  --seg-l: env(safe-area-inset-left, 0px);
+  --seg-r: env(safe-area-inset-right, 0px);
+}
+
+#app { position: fixed; inset: 0; -webkit-touch-callout: none; }
+/* touch-action: none é a linha sem a qual o jogo não existe no celular — sem ela o
+   navegador entende o arrasto como rolagem, rouba o gesto e ainda dá zoom por cima. */
+#app canvas { display: block; touch-action: none; }
+
+/* O user-select: none do body é para a MESA, não para os campos: sem estas duas linhas
+   o Safari herda e o jogador não consegue selecionar nem colar o código da mesa. */
+.entrada { user-select: text; -webkit-user-select: text; }
+.codigo { -webkit-user-select: all; }
 
 .oculta { display: none !important; }
 
@@ -65,6 +86,11 @@ html, body {
 
 /* Coluna inferior esquerda: ações em cima, de quem é a vez embaixo. No centro elas
    cobririam a sua mão, que é justamente onde os olhos estão. */
+/* Painéis que só informam não podem comer o toque: em retrato eles viram faixas da
+   largura inteira, e o pointerdown do jogo só reage a evento cujo alvo é o canvas —
+   um toque em cima deles não chegaria à mesa nem cancelaria a peça levantada. */
+#vez, #log, #jogadores { pointer-events: none; }
+
 #vez {
   position: fixed; bottom: 16px; left: 16px; z-index: 5;
   font-size: 13px; opacity: .8;
@@ -205,9 +231,106 @@ html, body {
 .regras ul { margin: 10px 0 0; padding-left: 20px; line-height: 1.75; }
 .regras b { color: var(--ambar); }
 
+/* ── tela pequena ─────────────────────────────────────────────────────────────
+   Duas perguntas diferentes: `max-width` é "cabe texto?", `orientation` é "que forma
+   tem a tela?". Girar o celular muda a segunda sem mudar a primeira, e era só a
+   primeira que existia aqui — daí o HUD de retrato ser um empilhamento de painéis
+   brigando pelo mesmo canto. */
 @media (max-width: 720px) {
-  #jogadores { top: auto; bottom: 70px; right: 10px; }
-  #log { display: none; }
   .cadeira { grid-template-columns: 1fr; gap: 6px; }
   .carta { padding: 20px; }
+  .tela { padding: 12px; }
+}
+
+/* Alvo de toque: 36px é o que o dedo erra. 44 é o mínimo que a Apple e o Google
+   recomendam há uma década, e a diferença some no polegar. A pergunta certa aqui é
+   "que apontador?" e não "que largura?" — um tablet de 820px e um celular deitado de
+   844px são largos e continuam sendo dedo. */
+@media (pointer: coarse), (max-width: 900px) {
+  .canto { width: 44px; height: 44px; font-size: 17px; }
+  .btn { padding: 12px 18px; }
+  .btn.peq { padding: 9px 14px; }
+}
+
+/* O log é a primeira coisa a sair de qualquer tela apertada: é enfeite, e mora no mesmo
+   canto que a barra de confirmação ocupa quando você levanta uma peça. */
+@media (pointer: coarse), (max-width: 900px), (max-height: 560px) {
+  #log { display: none; }
+}
+
+/* Celular DEITADO: 390px de altura para caber tudo, e o topo e a lista de jogadores
+   dividem a mesma faixa. Sem isto os dois se encostam. */
+@media (max-height: 560px) {
+  #topo { gap: 6px; }
+  #topo .painel { padding: 5px 9px; }
+  .dado { min-width: 0; }
+  .dado b { font-size: 15px; }
+  .rot { font-size: 9.5px; }
+  #placar .time b { font-size: 18px; }
+  #placar .time i { max-width: 92px; }
+  #jogadores { gap: 4px; }
+  .jog { min-width: 128px; padding: 4px 8px; }
+  .jog .tipo { display: none; }
+  #acoes { bottom: 56px; }
+  #vez { bottom: 12px; }
+}
+
+@media (orientation: portrait) and (max-width: 860px) {
+  /* O topo era um flex centrado por translateX(-50%) com três painéis de min-width 74px:
+     em 360px ele saía pelos dois lados SEM aparecer no scrollWidth, porque overflow
+     negativo em elemento fixo não conta. Agora ele é uma faixa da largura da tela. */
+  /* Em pé o HUD vira duas pilhas e nada no meio: informação em cima, ação embaixo, e a
+     mesa com a mão no miolo. O botão de som fica com os 52px da esquerda só dele. */
+  #topo {
+    left: calc(var(--seg-l) + 52px); right: var(--seg-r); transform: none;
+    top: calc(var(--seg-t) + 8px);
+    justify-content: center; gap: 5px; padding-right: 6px;
+  }
+  #topo .painel { padding: 6px 9px; }
+  .dado { min-width: 0; }
+  .dado b { font-size: 15px; }
+  .rot { font-size: 9px; letter-spacing: .08em; }
+  #placar { gap: 7px; }
+  #placar .time i { font-size: 10px; max-width: 74px; }
+  #placar .time b { font-size: 17px; }
+  #placar .ate { display: none; }
+
+  /* Os jogadores viram uma linha abaixo do topo, rolável se não couber. Em pé não há
+     canto direito sobrando: ele já é do topo. */
+  /* O topo cresce quando os nomes são longos (em duplas o placar tem "Fulano e
+     Sicrano"), então a lista de jogadores começa depois da altura do pior caso. */
+  #topo .painel { white-space: nowrap; }
+  #jogadores {
+    top: calc(var(--seg-t) + 72px); left: var(--seg-l); right: var(--seg-r);
+    grid-auto-flow: column; grid-auto-columns: minmax(96px, 1fr);
+    gap: 5px; padding: 0 6px; overflow-x: auto; scrollbar-width: none;
+  }
+  #jogadores::-webkit-scrollbar { display: none; }
+  .jog { min-width: 0; padding: 5px 8px; }
+  .jog .nome { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .jog .tipo { display: none; }
+
+  .canto { top: calc(var(--seg-t) + 8px); left: calc(var(--seg-l) + 6px); }
+
+  /* "Sua vez" é informação, não ação: sobe para junto do resto da informação. Deixado
+     no rodapé ele brigava com a barra de confirmação, que é quem manda ali embaixo. */
+  #vez {
+    top: calc(var(--seg-t) + 128px); bottom: auto;
+    left: 50%; transform: translateX(-50%); font-size: 12.5px; white-space: nowrap;
+  }
+
+  /* Rodapé, de baixo para cima: confirmação da largura inteira, ações logo acima. */
+  #confirmar {
+    left: calc(var(--seg-l) + 8px); right: calc(var(--seg-r) + 8px); transform: none;
+    bottom: calc(var(--seg-b) + 8px);
+    justify-content: center; flex-wrap: wrap; gap: 8px;
+  }
+  @keyframes subir { from { opacity: 0; transform: translateY(8px); } }
+  #confBotoes { flex: 1 1 auto; }
+  #confBotoes .btn { width: 100%; }
+  #acoes {
+    bottom: calc(var(--seg-b) + 74px);
+    left: calc(var(--seg-l) + 8px); right: calc(var(--seg-r) + 8px);
+  }
+  #acoes .btn { flex: 1; }
 }
