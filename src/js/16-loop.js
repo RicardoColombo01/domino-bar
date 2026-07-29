@@ -175,6 +175,11 @@ HUD.comprar.onclick = () => pedirAcao({ acao: 'comprar' });
 HUD.passar.onclick = () => pedirAcao({ acao: 'passar' });
 
 // ─── loop ────────────────────────────────────────────────────────────────────
+// Primeiro enquadramento. Fica aqui, e não no fim de 07-cena.js, porque enquadrar() lê
+// a profundidade da mão (10-mao.js) e manda refazer o leque — nada disso existe ainda
+// quando o arquivo da cena termina de rodar.
+enquadrar();
+
 let ultimoQuadro = performance.now();
 
 function quadro(agora) {
@@ -199,6 +204,10 @@ requestAnimationFrame(quadro);
 // tabuleiro longo, lá-e-lô com as duas pontas acesas — sem ter de jogar de verdade.
 window.__jogo = {
   pronto: true, MESA, comecarLocal, aplicarIntencao, pedirAcao, jogadaDoBot, mostrarTela, grupoPrevia,
+  // camera e naMao existem aqui para tests/test-telas.mjs projetar cada peça da mão para
+  // coordenadas de tela e reprovar se alguma cair fora — que é o teste que prova "dá
+  // para ver a mão" sem ninguém olhar screenshot.
+  camera, naMao, enquadrar, grupoMesa, grupoOutros, grupoMonte,
   get P() { return P; },
   get vista() { return vistaAtual; },
   // Faz exatamente o que o clique faria: levanta a peça, mostra os fantasmas e a barra.

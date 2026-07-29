@@ -11,7 +11,9 @@ const DIR = path.join(import.meta.dirname, 'shots');
 
 const TELAS = {
   wide: { width: 1600, height: 900 },
-  retrato: { width: 900, height: 1250 },
+  // Celular de verdade, não uma janela alta: 900×1250 tem aspect 0.72 e nunca chegou a
+  // exercitar o enquadramento de retrato, que é onde o jogo quebrava.
+  retrato: { width: 390, height: 844, isMobile: true, hasTouch: true },
 };
 
 // Roda a partida no piloto automático: o mesmo aplicarIntencao das jogadas de verdade.
@@ -73,8 +75,10 @@ const CENAS = [
       }`,
   })),
   // Os modos novos: 14 peças na mão (duas fileiras) e o trio sem a bucha de zero.
-  { nome: 'duelo-14', telas: ['wide'], montar: `window.__jogo.MESA.modo = 'duelo'; soBots(2); auto(3);` },
+  { nome: 'duelo-14', telas: ['wide', 'retrato'], montar: `window.__jogo.MESA.modo = 'duelo'; soBots(2); auto(3);` },
   { nome: 'trio-9', telas: ['wide'], montar: `window.__jogo.MESA.modo = 'trio'; soBots(3); auto(5);` },
+  // Mesa de 4 com a linha comprida: o pior caso do enquadramento em pé.
+  { nome: 'mesa-cheia', telas: ['retrato'], montar: `soBots(4); for (let i = 0; i < 200 && window.__jogo.P.linha.length < 13; i++) auto(1);` },
   { nome: 'fim-de-mao', telas: ['wide'], montar: `soBots(3); auto(400);` },
   // Em duplas, porque é onde o "sobrou na mão" precisa mostrar o subtotal do time.
   { nome: 'fim-de-mao-decisivo', telas: ['wide'], montar: `ateODecisivo(4);` },

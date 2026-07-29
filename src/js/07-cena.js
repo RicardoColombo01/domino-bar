@@ -17,9 +17,34 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0d0908);
 scene.fog = new THREE.Fog(0x0d0908, 16, 34);
 
-const camera = new THREE.PerspectiveCamera(46, innerWidth / innerHeight, 0.1, 100);
-camera.position.set(0, 8.3, 9.3);
-camera.lookAt(0, 0, 0.8);
+// O FOV DO THREE É VERTICAL, e essa única frase é o bug do celular inteiro. A largura
+// de mundo que cabe na tela é `2·d·tan(fovY/2)·aspect`: com fov fixo em 46°, o
+// computador (aspect 1.78) enxerga 12.4 unidades na profundidade da mão e a mão de 8.2
+// cabe folgada — mas um celular em pé (aspect 0.46) enxerga 3.2, e a mão fica duas
+// vezes e meia maior que a tela. Não é CSS, é câmera. Ver enquadrar(), no fim do arquivo.
+const FOV_BASE = 46;                 // o enquadramento de sempre, no computador
+const FOV_TETO = 62;                 // além disso a mesa começa a entortar de perspectiva
+const MAO_CHEIA = 8.2;               // a largura que a mão gostaria de ter, em unidades
+
+const camera = new THREE.PerspectiveCamera(FOV_BASE, innerWidth / innerHeight, 0.1, 100);
+// De onde a câmera olha AGORA. Guardado porque a conta de profundidade precisa disso
+// antes de a matriz de mundo estar atualizada, e porque enquadrar() interpola os quatro.
+const enq = { camY: 8.3, camZ: 9.3, alvoY: 0, alvoZ: 0.8 };
+camera.position.set(0, enq.camY, enq.camZ);
+camera.lookAt(0, enq.alvoY, enq.alvoZ);
+
+// Profundidade de um ponto ao longo do eixo de visada. Câmera e alvo têm x = 0, então
+// a conta é toda no plano YZ.
+function profundidadeDe(y, z) {
+  const uy = enq.alvoY - enq.camY, uz = enq.alvoZ - enq.camZ;
+  return ((y - enq.camY) * uy + (z - enq.camZ) * uz) / Math.hypot(uy, uz);
+}
+
+// Quanta LARGURA de mundo cabe na tela naquela profundidade. É daqui que a mão descobre
+// de quanto espaço dispõe — a mesma conta que enquadrar() usa para escolher o fov, para
+// não existirem duas matemáticas discordando sobre o mesmo enquadramento.
+const larguraVisivelEm = (y, z) =>
+  2 * profundidadeDe(y, z) * Math.tan(camera.fov * Math.PI / 360) * camera.aspect;
 
 function pintar(w, h, desenho) {
   const cv = document.createElement('canvas');
@@ -189,9 +214,54 @@ cinzeiro.position.set(-5.1, 0.07, -1.7);
 cinzeiro.castShadow = true;
 scene.add(cinzeiro);
 
-function ajustarTela() {
-  camera.aspect = innerWidth / innerHeight;
+// Enquadrar é derivar o fov da largura que precisa caber, e não o contrário. Antes isto
+// só mexia em `camera.aspect`, o que em retrato deixava a mão duas vezes e meia maior
+// que a tela (ver a nota do FOV lá em cima).
+//
+// O PISO importa tanto quanto o teto: no computador a largura necessária pede 31°, menos
+// que os 46° de sempre — sem o piso, adaptar o celular teria mudado o enquadramento de
+// quem joga na tela grande, sem nenhum motivo.
+function enquadrar() {
+  const aspect = innerWidth / innerHeight;
+
+  // 0 em paisagem, 1 em retrato fechado. Interpolado, e não um `if`: com dois casos
+  // secos, girar o celular dá um degrau no meio da partida.
+  const t = Math.min(1, Math.max(0, (1.2 - aspect) / 0.7));
+  enq.camY = 8.3 - 1.0 * t;                  // desce
+  enq.camZ = 9.3 - 0.4 * t;
+  enq.alvoY = -0.30 * t;                     // e olha um pouco para baixo e para a
+  enq.alvoZ = 0.8 + 1.05 * t;                // frente: mesa em cima, mão embaixo
+  camera.position.set(0, enq.camY, enq.camZ);
+  camera.lookAt(0, enq.alvoY, enq.alvoZ);
+  camera.aspect = aspect;
+
+  const fovX = 2 * Math.atan((MAO_CHEIA / 2) / profundidadeDe(MAO_Y, MAO_Z));
+  const preciso = 2 * Math.atan(Math.tan(fovX / 2) / aspect) * 180 / Math.PI;
+  // Em retrato o "preciso" passa de 90°, e aí é melhor a mão em mais fileiras do que a
+  // mesa entortada de perspectiva: o teto corta, e 10-mao.js quebra o leque.
+  camera.fov = Math.min(FOV_TETO, Math.max(FOV_BASE, preciso));
   camera.updateProjectionMatrix();
+
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.setSize(innerWidth, innerHeight);
+  // A largura disponível mudou: o leque tem de ser refeito. Quem decide se vale a pena
+  // é a assinatura da mão, em 10-mao.js — resize que não mexe na largura é no-op.
+  redesenharMao();
 }
-addEventListener('resize', ajustarTela);
+
+// Um `resize` pode chegar dezenas de vezes numa rotação, e no iOS a barra de URL
+// colapsando dispara outro tanto. Coalesce num quadro só, e repete depois que o
+// aparelho assenta — a rotação do iOS leva uns 350 ms, e o `resize` chega ANTES de
+// innerHeight estabilizar, com a altura da orientação anterior.
+let quadroDeEnquadre = 0, atrasoDeEnquadre = 0;
+function agendarEnquadre() {
+  cancelAnimationFrame(quadroDeEnquadre);
+  quadroDeEnquadre = requestAnimationFrame(enquadrar);
+  clearTimeout(atrasoDeEnquadre);
+  atrasoDeEnquadre = setTimeout(enquadrar, 350);
+}
+addEventListener('resize', agendarEnquadre);
+addEventListener('orientationchange', agendarEnquadre);
+if (typeof visualViewport !== 'undefined' && visualViewport) {
+  visualViewport.addEventListener('resize', agendarEnquadre);
+}
