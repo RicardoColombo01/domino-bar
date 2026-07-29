@@ -256,5 +256,31 @@ console.log('\na mão de 14 do Duelo cabe na tela');
   ok(usada <= 8.2 + 1e-9, `a mão ocupou ${usada.toFixed(2)} de largura, mais que os 8.2 visíveis`);
 }
 
+// Fica por último de propósito: este bloco termina com a partida encerrada.
+console.log('\nsair da partida');
+{
+  mod.MESA.modo = 'classico'; mod.MESA.n = 3;
+  mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[2].tipo = 'bot';
+  mod.comecarLocal();
+
+  ok(!els.get('btSair')._cls.has('oculta'), 'o ✕ deveria aparecer enquanto há partida');
+  els.get('btSair').onclick();
+  ok(!els.get('telaSair')._cls.has('oculta'), 'a pergunta "sair mesmo?" não apareceu');
+
+  // A REGRESSÃO: a tela é reescrita a cada publicação, e um bot jogando fecharia o
+  // diálogo na cara do jogador. É o mesmo caso do fim de mão, e precisa do mesmo flag.
+  mod.publicar();
+  ok(!els.get('telaSair')._cls.has('oculta'), 'uma publicação apagou a pergunta de sair');
+
+  els.get('btSairNao').onclick();
+  ok(els.get('telaSair')._cls.has('oculta'), '"continuar jogando" não fechou a pergunta');
+  ok(mod.P && mod.P.fase === 'mao', 'desistir de sair não podia mexer na partida');
+
+  els.get('btSair').onclick();
+  els.get('btSairSim').onclick();
+  ok(mod.P === null, 'sair de um jogo local deveria encerrar a partida');
+  ok(!els.get('telaMenu')._cls.has('oculta'), 'sair deveria voltar para a montagem da mesa');
+}
+
 console.log(falhas ? `\n${falhas} falha(s)` : '\ntudo certo');
 process.exit(falhas ? 1 : 0);

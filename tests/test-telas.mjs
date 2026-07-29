@@ -82,7 +82,7 @@ const MEDIR = `(() => {
       : { x: r.left, y: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height };
   };
   const paineis = {};
-  for (const id of ['topo', 'jogadores', 'vez', 'acoes', 'confirmar', 'btSom', 'log']) {
+  for (const id of ['topo', 'jogadores', 'vez', 'acoes', 'confirmar', 'btSom', 'btSair', 'log']) {
     const r = vis(document.getElementById(id));
     if (r) paineis[id] = r;
   }

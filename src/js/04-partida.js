@@ -20,6 +20,7 @@ function novaPartida(cadeiras, regras) {
     placar: cadeiras.length === 4 ? [0, 0] : new Array(cadeiras.length).fill(0),
     maoNum: 0,
     abridor: null,
+    desistiu: null,                           // cadeira que saiu no meio, se alguém saiu
     log: [],
   };
   novaMao(P);
@@ -64,6 +65,18 @@ function acoesDe(P, cadeira) {
   let jogadas = jogadasValidas(P.maos[cadeira], P.linha);
   if (P.pecaObrigatoria) jogadas = jogadas.filter(j => mesmaPeca(j.peca, P.pecaObrigatoria));
   const temMonte = P.monte.length > 0;
+
+  // Não dá para armar a tranca. Com monte ninguém trava (compra), e na última peça você
+  // está batendo, não fechando — daí as duas guardas. E só some com o fechamento se
+  // sobrar outra jogada que não seja fechamento também: barrar todas te deixaria sem
+  // jogada, o motor te mandaria passar, e o jogo trancava do mesmo jeito.
+  if (!temMonte && jogadas.length > 1 && P.maos[cadeira].length > 1) {
+    const armadas = fechamentosArmados(P.linha, jogadas, P.maos[cadeira],
+      baralhoDoModo(modoDe(P.regras)));
+    if (armadas.length && armadas.length < jogadas.length) {
+      jogadas = jogadas.filter(j => !armadas.includes(j));
+    }
+  }
   return {
     jogadas,
     // Sem monte (mesa de 4) ninguém compra: quem não pode jogar, passa.
@@ -156,6 +169,19 @@ function fecharMao(P, res) {
   return { ok: true, fim: P.resultado };
 }
 
+// Alguém saiu da mesa no meio. A partida acaba aqui, e acaba PERDIDA para quem saiu —
+// senão fechar a aba viraria a saída de emergência de toda partida mal encaminhada.
+// Não mexe no placar: quem saiu simplesmente não leva, e quem decide o campeão é a tela
+// (13-hud.js), que tira o time do desistente da conta.
+function abandonar(P, cadeira) {
+  if (P.fase === 'fim') return { erro: 'a partida já acabou' };
+  P.desistiu = cadeira;
+  P.fase = 'fim';
+  P.resultado = null;
+  P.log.push({ t: 'abandono', cadeira });
+  return { ok: true, fim: { motivo: 'abandono', desistiu: cadeira } };
+}
+
 // O QUE ESTA CADEIRA PODE VER. No online é literalmente o que trafega — o anfitrião
 // nunca manda a mão alheia, então não adianta abrir o DevTools. No hotseat local é o
 // que a tela desenha entre um jogador e outro. Segurança e apresentação são o mesmo
@@ -177,6 +203,7 @@ function visaoDe(P, cadeira) {
     duplas: P.duplas,
     alvo: P.regras.alvo,
     modo: P.regras.modo,                         // o convidado não vê MESA nem P.regras
+    desistiu: P.desistiu === undefined ? null : P.desistiu,
     cadeiras: P.cadeiras.map(c => ({ nome: c.nome, tipo: c.tipo })),
     acoes: acoesDe(P, cadeira),
   };

@@ -38,6 +38,7 @@
 <div id="aviso"></div>
 <div id="log" class="painel"></div>
 <button id="btSom" class="painel canto" title="Som">♪</button>
+<button id="btSair" class="painel canto oculta" title="Sair da partida">✕</button>
 
 <!-- ─── montagem da mesa ─────────────────────────────────────────────────── -->
 <div class="tela" id="telaMenu">
@@ -94,9 +95,11 @@
         <li><b>Com monte</b> (Clássico de 2 ou 3): quem não pode jogar <b>compra até conseguir</b>; só passa se o monte secar.</li>
         <li>No Clássico de 4, duplas em cruz (1&amp;3 × 2&amp;4).</li>
         <li>Mão carroçuda demais volta para a mesa e todo mundo embaralha de novo.</li>
-        <li>A primeira mão abre com o <b>6|6</b>. Depois, abre quem bateu.</li>
-        <li>Batida: simples <b>1</b> · carroça <b>2</b> · lá-e-lô <b>3</b> · cruzada <b>4</b>.</li>
+        <li>A primeira mão abre com o <b>6|6</b> — ou, se ele estiver no monte, com a maior carroça. Depois, abre quem bateu.</li>
+        <li>Batida: simples <b>1</b> · carroça <b>2</b> · lá-e-lô <b>2</b> · cruzada <b>4</b>.</li>
         <li>Trancou: marca 1 ponto quem tiver a mão mais leve. Empatou, a mão morre.</li>
+        <li><b>Não dá para trancar de propósito:</b> a jogada que você sabe que trava a mesa fica proibida enquanto houver outra. Carroça não conta — ela não muda o número da ponta.</li>
+        <li>Sair no meio <b>conta como derrota</b>. Quem cai no online tem 30 s para voltar.</li>
       </ul>
     </details>
   </div>
@@ -134,6 +137,18 @@
     <div class="grandao" id="passeNome">—</div>
     <p class="sub">Ninguém mais deve estar olhando.</p>
     <div class="linha acoesMenu"><button class="btn principal" id="btPronto">Peguei, pode mostrar</button></div>
+  </div>
+</div>
+
+<!-- ─── sair no meio da partida ──────────────────────────────────────────── -->
+<div class="tela oculta" id="telaSair">
+  <div class="carta">
+    <h2>Sair da partida</h2>
+    <p class="sub" id="sairAviso"></p>
+    <div class="linha acoesMenu">
+      <button class="btn principal" id="btSairSim">Sair mesmo assim</button>
+      <button class="btn" id="btSairNao">Continuar jogando</button>
+    </div>
   </div>
 </div>
 
@@ -209,7 +224,9 @@ const FOLGA_L = 0.93;
 const ESPALHA_X = 4.0;
 const ESPALHA_Z = 2.2;
 
-const PONTOS = { simples: 1, carroca: 2, laelo: 3, cruzada: 4, tranca: 1 };
+// Regra da casa: bater nas duas pontas com peça comum vale o mesmo que bater de
+// carroça. Só a cruzada — carroça servindo nas duas — paga mais.
+const PONTOS = { simples: 1, carroca: 2, laelo: 2, cruzada: 4, tranca: 1 };
 const ALVO_PADRAO = 6;
 
 const NOME_BATIDA = {
@@ -262,20 +279,15 @@ function baralhoDoModo(modo) {
 
 // A REGRA DA CASA: quando a mão saiu ruim demais e a mesa embaralha tudo de novo.
 //
-// Devolver true joga a distribuição INTEIRA fora — não só esta mão — e redistribui,
-// até MAX_EMBARALHOS vezes. `modo.carrocasDemais` traz o número combinado: 5 no
-// clássico e no trio, 7 no duelo (lá são as sete, a mão inteira de carroça). Mas o
-// campo é só munição: o critério é seu.
+// Devolver true joga a distribuição INTEIRA fora — não só esta mão — e redistribui, até
+// MAX_EMBARALHOS vezes. O critério é só a contagem de buchas, como se combinou:
+// `modo.carrocasDemais` vale 5 no clássico e no trio, e 7 no duelo, onde são as sete e a
+// mão inteira é de carroça.
 //
-// O que pesar, se quiser ir além de contar carroça: mão só de dois ou três números
-// diferentes trava a mesa tanto quanto mão de carroça, e é bem mais comum. Do outro
-// lado, critério exigente demais deixa o laço rodando à toa — tests/test-regras.mjs
-// mede quantos embaralhos cada modo gasta e reprova se a média subir.
-//
-// Ferramentas prontas aqui do lado: carroca(p), valor(p), somaMao(mao).
+// Acontece pouco (menos de 1% das distribuições em qualquer modo), e é assim que tem de
+// ser: o laço de re-embaralho existe para o negócio esquisito, não para editar a sorte.
 function maoRuim(mao, modo) {
-  // TODO (Ricardo)
-  return false;
+  return mao.filter(carroca).length >= modo.carrocasDemais;
 }
 
 // Fisher-Yates. Usa Math.random de propósito: os testes trocam Math.random por uma
@@ -367,11 +379,53 @@ function aplicar(linha, peca, ponta) {
   return ponta === 'esq' ? [posta, ...linha] : [...linha, posta];
 }
 
+// Como ficam as pontas SE eu jogar isto — sem montar a linha nova. Uma carroça deixa a
+// ponta no mesmo número, e é essa propriedade que faz a regra do fechamento tratá-la à
+// parte lá embaixo.
+function pontasDepois(linha, peca, ponta) {
+  if (!linha.length) return [peca[0], peca[1]];
+  const [e, d] = pontas(linha);
+  const posta = orientar(peca, ponta, ponta === 'esq' ? e : d);
+  return ponta === 'esq' ? [posta[0], d] : [e, posta[1]];
+}
+
+// FECHAR O JOGO DE PROPÓSITO. O motor já impede passar quando se pode jogar, então a
+// única tranca armável é escolher, entre as jogadas válidas, a que deixa as duas pontas
+// em números que ninguém mais consegue casar — e ganhar 1 ponto na contagem sem ter
+// batido. Estas são essas jogadas.
+//
+// A CONTA É FEITA SÓ COM O QUE O JOGADOR ENXERGA: a mesa e a própria mão. Isso não é
+// preguiça, é o ponto. Se o motor olhasse a mão dos outros para decidir, apagar a peça
+// na tela contaria a você que ninguém tem aquele número — e trocaríamos uma trapaça por
+// outra. Aqui a regra só proíbe o que você já sabia de qualquer jeito.
+//
+// Carroça fica de fora por decisão da casa, e a decisão tem lastro: jogada numa ponta X
+// ela deixa a ponta em X, então nunca TRANSFORMA uma ponta viva em morta. Quando ela
+// fecha é por consumir o último X do jogo — consequência, não manobra.
+//
+// Quem chama decide o resto (é `acoesDe`, em 04-partida.js): a regra só vale sem monte,
+// não vale na sua última peça (jogar a última é bater), e só barra se sobrar jogada que
+// não seja também um fechamento — senão as duas se barrariam, você ficaria sem jogada, e
+// o motor te mandaria passar: a tranca aconteceria igual, pela porta dos fundos.
+function fechamentosArmados(linha, jogadas, mao, baralho) {
+  const vistas = new Set(linha.map(chave));
+  for (const p of mao) vistas.add(chave(p));            // a que vai ser jogada inclusive
+  const morto = [];
+  for (let n = 0; n <= MAX_PINTAS; n++) {
+    morto[n] = !baralho.some(p => (p[0] === n || p[1] === n) && !vistas.has(chave(p)));
+  }
+  return jogadas.filter(j => {
+    if (carroca(j.peca)) return false;
+    const [e, d] = pontasDepois(linha, j.peca, j.ponta);
+    return morto[e] && morto[d];
+  });
+}
+
 // Que tipo de batida foi. Tem de ser consultado ANTES de jogar a última peça,
 // porque o nome depende das pontas que ainda existiam na mesa:
 //
 //   serve nas duas pontas?   não          sim
-//        peça comum      →  simples (1)   lá-e-lô (3)
+//        peça comum      →  simples (1)   lá-e-lô (2)
 //        carroça         →  carroça (2)   cruzada (4)
 //
 // Repare que uma carroça [x,x] só "serve nas duas" quando as DUAS pontas são x —
@@ -405,6 +459,7 @@ function novaPartida(cadeiras, regras) {
     placar: cadeiras.length === 4 ? [0, 0] : new Array(cadeiras.length).fill(0),
     maoNum: 0,
     abridor: null,
+    desistiu: null,                           // cadeira que saiu no meio, se alguém saiu
     log: [],
   };
   novaMao(P);
@@ -449,6 +504,18 @@ function acoesDe(P, cadeira) {
   let jogadas = jogadasValidas(P.maos[cadeira], P.linha);
   if (P.pecaObrigatoria) jogadas = jogadas.filter(j => mesmaPeca(j.peca, P.pecaObrigatoria));
   const temMonte = P.monte.length > 0;
+
+  // Não dá para armar a tranca. Com monte ninguém trava (compra), e na última peça você
+  // está batendo, não fechando — daí as duas guardas. E só some com o fechamento se
+  // sobrar outra jogada que não seja fechamento também: barrar todas te deixaria sem
+  // jogada, o motor te mandaria passar, e o jogo trancava do mesmo jeito.
+  if (!temMonte && jogadas.length > 1 && P.maos[cadeira].length > 1) {
+    const armadas = fechamentosArmados(P.linha, jogadas, P.maos[cadeira],
+      baralhoDoModo(modoDe(P.regras)));
+    if (armadas.length && armadas.length < jogadas.length) {
+      jogadas = jogadas.filter(j => !armadas.includes(j));
+    }
+  }
   return {
     jogadas,
     // Sem monte (mesa de 4) ninguém compra: quem não pode jogar, passa.
@@ -541,6 +608,19 @@ function fecharMao(P, res) {
   return { ok: true, fim: P.resultado };
 }
 
+// Alguém saiu da mesa no meio. A partida acaba aqui, e acaba PERDIDA para quem saiu —
+// senão fechar a aba viraria a saída de emergência de toda partida mal encaminhada.
+// Não mexe no placar: quem saiu simplesmente não leva, e quem decide o campeão é a tela
+// (13-hud.js), que tira o time do desistente da conta.
+function abandonar(P, cadeira) {
+  if (P.fase === 'fim') return { erro: 'a partida já acabou' };
+  P.desistiu = cadeira;
+  P.fase = 'fim';
+  P.resultado = null;
+  P.log.push({ t: 'abandono', cadeira });
+  return { ok: true, fim: { motivo: 'abandono', desistiu: cadeira } };
+}
+
 // O QUE ESTA CADEIRA PODE VER. No online é literalmente o que trafega — o anfitrião
 // nunca manda a mão alheia, então não adianta abrir o DevTools. No hotseat local é o
 // que a tela desenha entre um jogador e outro. Segurança e apresentação são o mesmo
@@ -562,6 +642,7 @@ function visaoDe(P, cadeira) {
     duplas: P.duplas,
     alvo: P.regras.alvo,
     modo: P.regras.modo,                         // o convidado não vê MESA nem P.regras
+    desistiu: P.desistiu === undefined ? null : P.desistiu,
     cadeiras: P.cadeiras.map(c => ({ nome: c.nome, tipo: c.tipo })),
     acoes: acoesDe(P, cadeira),
   };
@@ -1645,7 +1726,7 @@ const HUD = {
 const ETIQUETA = { voce: 'você', local: 'nesta tela', bot: 'bot', online: 'online' };
 
 function mostrarTela(id) {
-  for (const t of ['telaMenu', 'telaFimMao', 'telaFimPartida', 'telaPasse', 'telaOnline'])
+  for (const t of ['telaMenu', 'telaFimMao', 'telaFimPartida', 'telaPasse', 'telaOnline', 'telaSair'])
     el(t).classList.toggle('oculta', t !== id);
 }
 const esconderTelas = () => mostrarTela(null);
@@ -1763,17 +1844,28 @@ function mostrarFimDeMao(vista) {
 }
 
 function mostrarFimDePartida(vista) {
-  const campeao = vista.placar.indexOf(Math.max(...vista.placar));
+  // Quem saiu da mesa não leva a partida nem estando na frente: o time dele fica fora
+  // da conta do campeão. É o que impede fechar a aba de virar saída de emergência.
+  const fora = vista.desistiu === null || vista.desistiu === undefined
+    ? -1 : timeDe(vista, vista.desistiu);
+  let campeao = 0;
+  vista.placar.forEach((p, t) => {
+    if (t === fora) return;
+    if (campeao === fora || p > vista.placar[campeao]) campeao = t;
+  });
+  const meuTime = timeDe(vista, vista.cadeira);
   el('campeao').textContent = nomeDoTime(vista, campeao);
-  el('campeaoTitulo').textContent = campeao === (vista.duplas ? vista.cadeira % 2 : vista.cadeira)
-    ? 'Você ganhou a partida' : 'Fim de partida';
+  el('campeaoTitulo').textContent = fora >= 0
+    ? (fora === meuTime ? 'Você saiu da mesa' : `${vista.cadeiras[vista.desistiu].nome} saiu da mesa`)
+    : (campeao === meuTime ? 'Você ganhou a partida' : 'Fim de partida');
   // A tela dizia quem ganhou e não de quanto. Mesmo template do placar do topo.
   el('placarFinal').innerHTML = vista.placar
     .map((p, i) => `<span class="time${i === campeao ? ' venceu' : ''}">` +
       `<i>${nomeDoTime(vista, i)}</i><b>${p}</b></span>`)
     .join('<span class="x">×</span>');
-  el('fimResumo').textContent =
-    `${vista.maoNum} ${vista.maoNum === 1 ? 'mão' : 'mãos'} · partida até ${vista.alvo}`;
+  el('fimResumo').textContent = fora >= 0
+    ? `Partida encerrada na mão ${vista.maoNum} — quem sai no meio perde.`
+    : `${vista.maoNum} ${vista.maoNum === 1 ? 'mão' : 'mãos'} · partida até ${vista.alvo}`;
   el('btRevanche').classList.toggle('oculta', modo === 'convidado');
   mostrarTela('telaFimPartida');
 }
@@ -1921,7 +2013,12 @@ const OPCOES_PEER = { config: { iceServers: [
 
 let peer = null;
 let conexoes = new Map();      // cadeira → conn (no anfitrião)
+let esperando = new Map();     // cadeira → temporizador de volta (no anfitrião)
 let linkAnfitriao = null;      // conn (no convidado)
+
+// Quanto tempo a cadeira fica guardada para quem caiu. Curto o bastante para a mesa não
+// morrer de tédio, longo o bastante para uma troca de wi-fi ou um túnel de metrô.
+const ESPERA_VOLTA = 30000;
 
 const codigoNovo = () => Array.from({ length: 4 }, () => ALFABETO[Math.floor(Math.random() * ALFABETO.length)]).join('');
 const temPeerJS = () => typeof Peer !== 'undefined';
@@ -1931,6 +2028,8 @@ function erroOnline(txt) {
 }
 
 function encerrarRede() {
+  esperando.forEach(t => clearTimeout(t));
+  esperando.clear();
   conexoes.forEach(c => { try { c.close(); } catch (e) { void e; } });
   conexoes.clear();
   if (linkAnfitriao) { try { linkAnfitriao.close(); } catch (e) { void e; } linkAnfitriao = null; }
@@ -1970,6 +2069,14 @@ function tentarAbrir(tentativa) {
 
     conexoes.set(cadeira, conn);
     conn.on('open', () => {
+      // Voltou dentro do prazo: cancela o relógio e a cadeira é dele de novo. Funciona
+      // porque a cadeira continua marcada como 'online' — é justamente por isso que ela
+      // não vira bot na hora da queda.
+      if (esperando.has(cadeira)) {
+        clearTimeout(esperando.get(cadeira));
+        esperando.delete(cadeira);
+        if (P && P.fase !== 'fim') narrar(`${MESA.cadeiras[cadeira].nome} voltou para a mesa.`);
+      }
       conn.send({ t: 'sentou', cadeira, cadeiras: MESA.cadeiras.slice(0, MESA.n).map(c => c.nome) });
       listarSala();
       if (P) publicar();                                  // entrou no meio da partida: já recebe a mesa
@@ -1977,16 +2084,34 @@ function tentarAbrir(tentativa) {
     conn.on('data', m => {
       if (m.t === 'nome') { MESA.cadeiras[cadeira].nome = String(m.nome).slice(0, 14) || 'Visita'; listarSala(); if (P) publicar(); }
       if (m.t === 'acao' && P) aplicarIntencao(cadeira, m);
+      // Saiu de propósito: não há prazo de volta, a partida acaba perdida para ele.
+      if (m.t === 'desisto' && P && P.fase !== 'fim') {
+        clearTimeout(esperando.get(cadeira)); esperando.delete(cadeira);
+        abandonar(P, cadeira);
+        narrar(`${P.cadeiras[cadeira].nome} saiu da mesa — a partida foi dada como perdida para ele.`);
+        publicar();
+      }
     });
     conn.on('close', () => {
       conexoes.delete(cadeira);
-      // Caiu no meio do jogo? A cadeira vira bot em vez de travar a mesa inteira.
+      // Caiu no meio do jogo? A CADEIRA FICA GUARDADA. Antes ela virava bot na hora, e
+      // com isso fechar a aba era a saída de emergência de qualquer partida perdida:
+      // não custava nada. Agora há um prazo para voltar — e, esgotado, a partida conta
+      // como derrota de quem saiu.
       if (P && P.fase !== 'fim') {
-        P.cadeiras[cadeira].tipo = 'bot';
-        P.cadeiras[cadeira].nivel = 'normal';
-        anotar(`${P.cadeiras[cadeira].nome} caiu — um bot assumiu a cadeira.`);
+        const nome = P.cadeiras[cadeira].nome;
+        narrar(`${nome} caiu — a cadeira fica guardada por ${ESPERA_VOLTA / 1000}s.`);
+        clearTimeout(esperando.get(cadeira));
+        // setTimeout e NÃO um contador no requestAnimationFrame: o rAF para em aba de
+        // fundo, e o prazo tem de correr mesmo com o anfitrião noutra aba.
+        esperando.set(cadeira, setTimeout(() => {
+          esperando.delete(cadeira);
+          if (!P || P.fase === 'fim' || conexoes.has(cadeira)) return;
+          abandonar(P, cadeira);
+          narrar(`${nome} não voltou — a partida foi dada como perdida para ele.`);
+          publicar();
+        }, ESPERA_VOLTA));
         publicar();
-        seguirOTurno();
       }
       listarSala();
     });
@@ -2097,6 +2222,7 @@ let euNaTela = 0;              // qual cadeira a tela mostra agora (o hotseat tr
 let modo = 'local';            // 'local' | 'anfitriao' | 'convidado'
 let travado = false;           // tela de troca no ar: não desenha mão nenhuma
 let viuOFimDaMao = false;      // já passou pelo fim de mão que encerrou a partida
+let saindo = false;            // a pergunta "sair mesmo?" está no ar
 let timerBot = 0;
 
 const podeAgirAgora = () =>
@@ -2159,9 +2285,16 @@ function atualizarVista(v) {
   // por cima do campeão. Zerar quando a fase sai de 'fim' cobre revanche, próxima
   // partida e o convidado, que nunca passa por comecarLocal().
   if (v.fase !== 'fim') viuOFimDaMao = false;
-  if (v.fase === 'fimDeMao' || (v.fase === 'fim' && !viuOFimDaMao)) mostrarFimDeMao(v);
-  else if (v.fase === 'fim') mostrarFimDePartida(v);
-  else if (!travado) esconderTelas();
+  // Abandono não tem mão para mostrar: a partida foi interrompida, não terminou.
+  // `saindo` é irmão do `viuOFimDaMao` logo acima, e pela mesma razão: a pergunta "sair
+  // mesmo?" é estado de TELA, e esta função reescreve a tela a cada publicação. Sem o
+  // flag, o primeiro bot a jogar fecharia o diálogo na cara do jogador.
+  if (v.desistiu !== null && v.desistiu !== undefined) { saindo = false; mostrarFimDePartida(v); }
+  else if (v.fase === 'fimDeMao' || (v.fase === 'fim' && !viuOFimDaMao)) { saindo = false; mostrarFimDeMao(v); }
+  else if (v.fase === 'fim') { saindo = false; mostrarFimDePartida(v); }
+  else if (!travado && !saindo) esconderTelas();
+  // O botão de sair só existe enquanto há partida para sair.
+  el('btSair').classList.toggle('oculta', !v || v.fase === 'fim');
 }
 
 function seguirOTurno() {
@@ -2247,6 +2380,45 @@ el('btProxima').onclick = () => {
 };
 
 el('btRevanche').onclick = () => comecarLocal();
+
+// ─── sair no meio ────────────────────────────────────────────────────────────
+// Antes não havia saída: quem sentava só saía fechando a aba — e no online isso não
+// custava nada, a cadeira virava bot e o resultado sumia junto. Agora sair é uma ação
+// do jogo, com o preço dito antes.
+el('btSair').onclick = () => {
+  el('sairAviso').textContent = modo === 'local'
+    ? 'A partida acaba aqui e você volta para a montagem da mesa.'
+    : 'A mesa continua sem você, e esta partida conta como derrota sua.';
+  saindo = true;
+  mostrarTela('telaSair');
+};
+el('btSairNao').onclick = () => {
+  saindo = false;
+  if (vistaAtual) atualizarVista(vistaAtual); else mostrarTela('telaMenu');
+};
+el('btSairSim').onclick = () => sairDaPartida();
+
+function sairDaPartida() {
+  saindo = false;
+  if (modo === 'convidado') {
+    // O anfitrião é a autoridade: ele é quem registra a derrota. Avisar antes de cair
+    // fora evita depender de o `close` chegar — mas o prazo de volta cobre se não.
+    if (linkAnfitriao && linkAnfitriao.open) linkAnfitriao.send({ t: 'desisto' });
+    encerrarRede();
+    P = null; vistaAtual = null;
+    mostrarTela('telaMenu');
+    return;
+  }
+  if (modo === 'anfitriao' && P && P.fase !== 'fim') {
+    abandonar(P, euNaTela);
+    publicar();                                   // a mesa fica sabendo por que acabou
+    setTimeout(encerrarRede, 400);                // e dá tempo de a mensagem sair
+    return;
+  }
+  encerrarRede();
+  P = null; vistaAtual = null;
+  mostrarTela('telaMenu');
+}
 
 addEventListener('keydown', ev => {
   if (ev.key === 'Escape') cancelarEscolha();

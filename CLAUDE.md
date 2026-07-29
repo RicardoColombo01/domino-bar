@@ -175,16 +175,15 @@ duas telas para fora), adversários a 1,57 e tabuleiro a 1,04 em retrato.
 
 ## Fila 4 — jogabilidade
 
-0. **`maoRuim` em `02-baralho.js` é placeholder** (devolve `false`). O laço de
-   re-embaralho, a trava de `MAX_EMBARALHOS` e os testes já existem — falta só o critério.
-   O Ricardo vai escrever; **não escrever por ele.** `tests/test-regras.mjs` avisa no
-   terminal enquanto for placeholder e mede quantos embaralhos cada modo gasta.
-1. **`escolherJogada` em `05-bot.js:39` ainda é o placeholder** que só descarrega a peça
+1. **`escolherJogada` em `05-bot.js` ainda é o placeholder** que só descarrega a peça
    mais pesada. É a maior lacuna do projeto — o bot é o adversário na maioria das partidas,
-   e no Duelo de 14 a fraqueza dele fica ainda mais visível.
-   O Ricardo quis escrever essa função; **perguntar antes de escrever por ele.** O andaime
-   está pronto: `opcoes` já vem com `valor` e `carroca`, e `info.faltaNo` guarda os números
-   que cada adversário mostrou não ter.
+   e no Duelo de 14 a fraqueza dele fica ainda mais visível. O andaime está pronto:
+   `opcoes` já vem com `valor` e `carroca`, e `info.faltaNo` guarda os números que cada
+   adversário mostrou não ter.
+   **Cuidado ao mexer:** trocar o placeholder muda a trajetória de TODAS as partidas com
+   semente fixa. `tests/test-mesa.mjs` afirma `comDobra > 0`, `menorEscala > 0.3` e
+   `maiorLinha >= 20`; `tests/test-regras.mjs` afirma que os quatro tipos de batida
+   aparecem em 900 partidas. Nada disso estará errado, mas pode passar a falhar.
 2. **Reordenar a mão** arrastando, ou um botão "agrupar por número". No dominó de verdade
    todo mundo arruma as peças, e hoje não dá.
 3. **Painel "o que já saiu"**: quantas peças de cada número já estão na mesa. É a conta que
@@ -209,11 +208,30 @@ Duelo e Trio **esgotam o baralho na distribuição**, então caem sozinhos no ca
 monte, quem trava passa" que a mesa de 4 já usava — não há regra de compra nova. Com
 monte só o Clássico de 2 ou 3, onde quem não pode jogar **compra até conseguir**.
 
-**Clássico de 4:** duplas em cruz (1&3 × 2&4). Primeira mão abre com o 6|6; as seguintes,
-quem bateu. Batida: simples 1, carroça 2, lá-e-lô 3, cruzada 4. Trancou: 1 ponto para a
+**Clássico de 4:** duplas em cruz (1&3 × 2&4). Primeira mão abre com o 6|6 — ou, quando
+ele está no monte, com a maior carroça (`quemAbre`, `02-baralho.js`); as seguintes, quem
+bateu. Batida: simples 1, carroça 2, **lá-e-lô 2**, cruzada 4. Trancou: 1 ponto para a
 mão mais leve; empatou, a mão morre. Partida até 6 (ou 10, no menu). Compra voluntária e
 o modo da mesa são alternáveis no menu.
 
-`maoRuim(mao, modo)` em `02-baralho.js` decide quando a distribuição volta e todo mundo
-embaralha de novo (`distribuir` refaz até `MAX_EMBARALHOS`). **Ainda é o placeholder — o
-Ricardo vai escrever.** `modo.carrocasDemais` é a munição.
+`maoRuim(mao, modo)` em `02-baralho.js` reprova a mão com `modo.carrocasDemais` carroças
+ou mais e manda `distribuir` refazer tudo (até `MAX_EMBARALHOS`). Acontece em 1,4% das
+distribuições no clássico, 0,6% no duelo e 2,6% no trio.
+
+**Não dá para trancar de propósito** (`fechamentosArmados`, `03-regras.js`, filtrado em
+`acoesDe`). Quatro condições para barrar, e cada uma tem um porquê:
+
+1. sem monte — com monte ninguém trava, compra;
+2. não é a sua última peça — jogar a última é bater;
+3. a peça não é carroça — ela deixa a ponta no mesmo número, então nunca transforma
+   ponta viva em morta;
+4. sobra outra jogada **que também não feche** — barrar todas te deixaria sem jogada, o
+   motor te mandaria passar, e o jogo trancava do mesmo jeito.
+
+A conta usa só a mesa e a sua própria mão, e isso é o ponto: se o motor olhasse a mão dos
+outros, apagar a peça na tela contaria ao jogador que ninguém tem aquele número.
+
+**Sair conta como derrota** (`abandonar`, `04-partida.js`): grava `P.desistiu`, põe
+`fase='fim'` e a tela de campeão tira o time do desistente da conta. No online a cadeira
+fica guardada `ESPERA_VOLTA` (30 s) antes de virar derrota — e continua marcada `online`
+justamente para o mesmo código reclamá-la.

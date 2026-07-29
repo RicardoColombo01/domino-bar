@@ -133,6 +133,10 @@ html, body {
   font-size: 15px; line-height: 1;
 }
 .canto.desligado { opacity: .45; }
+/* O de sair fica ao lado do som no computador, e embaixo dele no celular em pé, onde a
+   coluna da esquerda é dos dois e a faixa do topo começa depois dela. */
+#btSair { left: 58px; }
+#btSair:hover { color: #ff9b86; border-color: rgba(255, 155, 134, .5); }
 
 /* ── botões ───────────────────────────────────────────────────────────────── */
 .btn {
@@ -301,7 +305,7 @@ html, body {
      Sicrano"), então a lista de jogadores começa depois da altura do pior caso. */
   #topo .painel { white-space: nowrap; }
   #jogadores {
-    top: calc(var(--seg-t) + 72px); left: var(--seg-l); right: var(--seg-r);
+    top: calc(var(--seg-t) + 72px); left: calc(var(--seg-l) + 56px); right: var(--seg-r);
     grid-auto-flow: column; grid-auto-columns: minmax(96px, 1fr);
     gap: 5px; padding: 0 6px; overflow-x: auto; scrollbar-width: none;
   }
@@ -311,6 +315,7 @@ html, body {
   .jog .tipo { display: none; }
 
   .canto { top: calc(var(--seg-t) + 8px); left: calc(var(--seg-l) + 6px); }
+  #btSair { top: calc(var(--seg-t) + 58px); left: calc(var(--seg-l) + 6px); }
 
   /* "Sua vez" é informação, não ação: sobe para junto do resto da informação. Deixado
      no rodapé ele brigava com a barra de confirmação, que é quem manda ali embaixo. */
