@@ -9,6 +9,7 @@ const mod = await import(buildModule([
   'novaPartida', 'novaMao', 'acoesDe', 'jogar', 'comprar', 'passar', 'visaoDe',
   'jogadaDoBot', 'timeDe', 'valor', 'carroca', 'chave', 'somaMao', 'mesmaPeca', 'PONTOS',
   'MODOS', 'MODO_PADRAO', 'MAX_EMBARALHOS', 'baralhoDoModo', 'maoRuim',
+  'fechamentosArmados', 'pontasDepois', 'abandonar',
 ]));
 
 let falhas = 0;
@@ -127,6 +128,94 @@ secao('tipos de batida');
   const iguais = [[3, 5], [5, 5], [5, 3]];                 // pontas 3 e 3
   ok(mod.tipoDaBatida([3, 3], iguais) === 'cruzada', 'carroça com as duas pontas iguais = cruzada');
   ok(mod.tipoDaBatida([3, 6], iguais) === 'laelo', 'peça comum com as duas pontas iguais = lá-e-lô');
+}
+
+// ─── não dá para armar a tranca ─────────────────────────────────────────────
+// Baralhos de mentira, pequenos e fechados: `fechamentosArmados` recebe o baralho de
+// fora justamente para dar para montar a situação inteira à mão em vez de caçar, no
+// meio de mil partidas, uma em que a tranca estava armável.
+secao('fechar o jogo de propósito');
+{
+  const chaves = js => js.map(j => mod.chave(j.peca) + ':' + j.ponta).sort().join(' ');
+
+  {
+    // Duas jogadas fecham e uma não: as duas que fecham são as barradas.
+    const baralho = [[1, 2], [2, 3], [1, 3], [3, 4], [2, 5], [5, 5]];
+    const linha = [[1, 2]];                                   // pontas 1 e 2
+    const mao = [[2, 3], [1, 3], [3, 4], [2, 5]];
+    const jogadas = mod.jogadasValidas(mao, linha);
+    ok(jogadas.length === 3, `esperava 3 jogadas, deu ${jogadas.length}`);
+    const armadas = mod.fechamentosArmados(linha, jogadas, mao, baralho);
+    ok(chaves(armadas) === '1|3:esq 2|3:dir',
+      `as jogadas que fecham deveriam ser 1|3:esq e 2|3:dir, e vieram: ${chaves(armadas) || '(nenhuma)'}`);
+    // 2|5 deixa a ponta em 5 e o 5|5 ainda está solto no jogo: ninguém sabe que travou.
+    ok(!armadas.some(j => mod.mesmaPeca(j.peca, [2, 5])), '2|5 não fecha nada e foi barrada');
+  }
+
+  {
+    // Carroça nunca é fechamento armado: ela deixa a ponta no mesmo número, então não
+    // TRANSFORMA ponta viva em morta — quando fecha, é por consumir a última do número.
+    const baralho = [[1, 2], [2, 5], [5, 5], [1, 3], [3, 3]];
+    const linha = [[2, 5]];                                   // pontas 2 e 5
+    const mao = [[5, 5], [1, 2]];
+    const armadas = mod.fechamentosArmados(linha, mod.jogadasValidas(mao, linha), mao, baralho);
+    ok(armadas.length === 0, `carroça não pode contar como fechamento armado (${chaves(armadas)})`);
+  }
+
+  {
+    // pontasDepois é a conta que a regra usa, e ela não monta a linha nova.
+    ok(String(mod.pontasDepois([[1, 2]], [2, 3], 'dir')) === '1,3', 'jogar 2|3 à direita deixa 1 e 3');
+    ok(String(mod.pontasDepois([[1, 2]], [1, 3], 'esq')) === '3,2', 'jogar 1|3 à esquerda deixa 3 e 2');
+    ok(String(mod.pontasDepois([[2, 5]], [5, 5], 'dir')) === '2,5', 'carroça não muda o número da ponta');
+    ok(String(mod.pontasDepois([], [6, 6], 'dir')) === '6,6', 'na mesa vazia as pontas são a própria peça');
+  }
+
+  // Pelo MOTOR, com o baralho de 28 de verdade. Este caso é bonito porque é a MESMA
+  // peça: o 3|4 fecha o jogo pela esquerda (todos os sete 3 estariam contados) e não
+  // fecha pela direita (o 4|4 continua solto). Prova que a regra discrimina por ponta.
+  {
+    const linha = [[4, 5], [5, 5], [5, 2], [2, 1], [1, 5], [5, 0], [0, 3], [3, 6], [6, 2], [2, 4],
+      [4, 0], [0, 2], [2, 3], [3, 5], [5, 6], [6, 6], [6, 4], [4, 1], [1, 3], [3, 3]];
+    const armar = extra => Object.assign({
+      fase: 'mao', vez: 0, n: 2, duplas: false,
+      regras: { alvo: 6, compraVoluntaria: false, modo: 'classico' },
+      linha, monte: [], pecaObrigatoria: null,
+      maos: [[[0, 0], [2, 2], [3, 4]], []],
+    }, extra || {});
+
+    ok(String(mod.pontas(linha)) === '4,3', 'montagem do cenário: as pontas deveriam ser 4 e 3');
+
+    const P = armar();
+    const j = mod.acoesDe(P, 0).jogadas;
+    ok(j.length === 1 && j[0].ponta === 'dir',
+      `só a direita deveria sobrar, e sobrou: ${chaves(j) || '(nada)'}`);
+    ok(mod.jogar(P, 0, [3, 4], 'esq').erro, 'o motor tem de recusar o fechamento armado');
+
+    // Com monte ninguém trava — quem não pode jogar compra. A regra sai de cena.
+    const comMonte = armar({ monte: [[0, 1]] });
+    ok(mod.acoesDe(comMonte, 0).jogadas.length === 2, 'com monte não há tranca para armar');
+
+    // Na última peça você está BATENDO, não fechando.
+    const ultima = armar({ maos: [[[3, 4]], []] });
+    ok(mod.acoesDe(ultima, 0).jogadas.length === 2, 'jogar a última peça é bater, não trancar');
+  }
+}
+
+// ─── sair no meio ───────────────────────────────────────────────────────────
+secao('abandono');
+{
+  const cadeiras = n => Array.from({ length: n }, (_, i) => ({ nome: 'bot' + i, tipo: 'bot', nivel: 'normal' }));
+  const P = mod.novaPartida(cadeiras(2), { alvo: 6 });
+  ok(P.desistiu === null, 'partida nova não tem desistente');
+
+  P.placar[0] = 4; P.placar[1] = 1;                    // quem vai sair está GANHANDO
+  const r = mod.abandonar(P, 0);
+  ok(r.ok && P.fase === 'fim' && P.desistiu === 0, 'abandonar deveria encerrar a partida');
+  ok(P.placar[0] === 4 && P.placar[1] === 1,
+    'abandonar não mexe no placar — quem sai simplesmente não leva, e quem decide o campeão é a tela');
+  ok(P.resultado === null, 'abandono não tem resultado de mão: a partida foi interrompida, não terminou');
+  ok(mod.visaoDe(P, 1).desistiu === 0, 'o desistente tem de chegar na visão de quem ficou');
+  ok(mod.abandonar(P, 1).erro, 'não dá para abandonar uma partida já encerrada');
 }
 
 // ─── partidas inteiras ──────────────────────────────────────────────────────
