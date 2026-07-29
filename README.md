@@ -19,7 +19,7 @@ a 4 **cadeiras**, e cada uma é preenchida por uma destas quatro coisas:
 |---|---|
 | **Você** | o mouse, nesta tela |
 | **Pessoa nesta tela** | outra pessoa, revezando o computador |
-| **Bot** | fácil, normal ou difícil |
+| **Bot** | fácil, normal ou difícil (o difícil ganha ~59% contra o fácil) |
 | **Pessoa online** | alguém que entrou com o código da mesa |
 
 O motor de regras não sabe a diferença. Ele diz de quem é a vez e espera. Por isso
@@ -31,6 +31,12 @@ graça. Bot nunca é obrigatório: dá para montar mesa só de gente.
 - **Clique na peça** que quer jogar. Se ela só serve numa ponta, ela vai sozinha.
 - Se ela serve **nas duas** (o lá-e-lô), as duas pontas acendem — clique na que quiser.
 - Peça que não encaixa fica apagada. `Esc` desfaz a escolha.
+- **Arraste a peça** para mudar o lugar dela na sua mão — dá para arrumar o jogo enquanto
+  os outros jogam. O botão **⇄ Arrumar** (ou a tecla `A`) agrupa tudo pelo seu número
+  mais forte de uma vez.
+- **Contar** liga uma tabelinha do lado com quantas peças de cada número ainda não
+  apareceram, contando as da mesa e as da sua mão — e quem já mostrou não ter o número,
+  por ter passado. É a conta que jogador bom faz de cabeça; fica desligada por padrão.
 - **Comprar do monte** e **Passar a vez** aparecem no canto quando são possíveis.
 - No revezamento local, a tela avisa "passe o computador para o Zé" e **apaga as peças
   da cena** antes de trocar — não é só um overlay por cima.

@@ -53,67 +53,175 @@ function redesenharMao() {
   if (vistaAtual && vistaAtual.mao) sincronizarMao(vistaAtual);
 }
 let assinaturaMao = '';
-let escolhida = null;                // índice da peça levantada, ou null
+let escolhida = null;                // CHAVE da peça levantada, ou null
+
+// A ARRUMAÇÃO DA MÃO, por cadeira, guardada por chave de peça.
+//
+// Fica no cliente e nunca no motor, e cada um dos três motivos bastaria sozinho:
+// `visaoDe` devolve a MESMA referência de `P.maos[cadeira]`, então ordenar a vista
+// ordenaria a mão do anfitrião por causa da preferência visual de um jogador; no
+// convidado não funcionaria, porque a vista dele é regenerada do JSON a cada publicação;
+// e no hotseat dois humanos dividem o mesmo `P`, então a arrumação de um viraria a do
+// outro. Guardar por chave também sobrevive à peça jogada — índice de motor muda a cada
+// `splice`, chave não muda nunca.
+//
+// Por cadeira por causa do hotseat, e de brinde: quando a vez volta para você, a sua
+// arrumação ainda está lá.
+const ordemDaMao = new Map();        // cadeira → [chave, chave, ...]
+let maoDaOrdem = -1;                 // de qual vista.maoNum essas arrumações são
 
 const anguloDaCadeira = (i, eu, n) => ((i - eu + n) % n) * Math.PI * 2 / n;
+const naMaoPorChave = k => naMao.find(m => chave(m.peca) === k) || null;
+const esquecerArrumacao = () => { ordemDaMao.clear(); maoDaOrdem = -1; };
+
+// Cria o que falta e remove o que saiu, MANTENDO VIVO o que continua na mão. Antes isto
+// destruía e recriava as 7 a 14 peças a cada mudança — e com objetos novos toda
+// reordenação seria teletransporte, porque não há de onde animar.
+function reconciliarMao(vista) {
+  const querem = new Set(vista.mao.map(chave));
+  for (let i = naMao.length - 1; i >= 0; i--) {
+    if (!querem.has(chave(naMao[i].peca))) { grupoMao.remove(naMao[i].obj); naMao.splice(i, 1); }
+  }
+  const tem = new Set(naMao.map(m => chave(m.peca)));
+  for (const peca of vista.mao) {
+    if (tem.has(chave(peca))) continue;
+    const obj = criarPeca(peca, true);
+    // Peça na mão está NA SUA MÃO, não na mesa: se ela projetar sombra, vira um borrão
+    // preto do tamanho de um tijolo no tampo logo atrás.
+    obj.userData.corpo.castShadow = false;
+    grupoMao.add(obj);
+    // Peça comprada entra no FIM: é onde a mão física recebe, e é o único lugar em que
+    // você vê o que comprou sem procurar.
+    naMao.push({ obj, peca, nova: true, jogavel: false, xBase: 0, yBase: MAO_Y, zBase: MAO_Z, tombo: MAO_TOMBO, escalaBase: 1 });
+  }
+
+  const guardada = ordemDaMao.get(vista.cadeira);
+  if (guardada) {
+    const pos = new Map(guardada.map((k, i) => [k, i]));
+    const posto = naMao.map((m, i) => [m, pos.has(chave(m.peca)) ? pos.get(chave(m.peca)) : Infinity, i]);
+    posto.sort((a, b) => a[1] - b[1] || a[2] - b[2]);
+    posto.forEach((par, i) => { naMao[i] = par[0]; });
+  }
+  ordemDaMao.set(vista.cadeira, naMao.map(m => chave(m.peca)));
+}
+
+// Onde cada peça descansa. SÓ geometria, e lê a ordem atual de `naMao` — é isso que faz
+// arrastar e "arrumar" custarem um splice mais uma chamada aqui.
+function posicionarMao() {
+  // O ESPAÇO SAI DO COMPRIMENTO DA PEÇA, não de um número escolhido a olho. Com um valor
+  // fixo menor que a peça, cada uma cobre a metade DIREITA da anterior — e como a peça
+  // nasce com o valor [0] à esquerda e o [1] à direita, o que sumia era sempre o segundo
+  // número. Primeiro garante que não sobrepõe; só encolhe depois, se a mão for grande; e
+  // quando nem encolhendo cabe, quebra em fileiras em vez de virar tira.
+  const n = Math.max(naMao.length, 1);
+  const largura = LARGURA_MAO();
+  const cabem = porFileira(n);
+  const escala = Math.max(ESCALA_MIN, Math.min(1.3, largura / (cabem * PECA_C * FOLGA_LEQUE)));
+  const espaco = Math.min(PECA_C * escala * FOLGA_LEQUE, largura / cabem);
+
+  naMao.forEach((m, i) => {
+    const fila = Math.floor(i / cabem);
+    const nesta = Math.min(cabem, n - fila * cabem);        // a de cima pode ser menor
+    // A fileira de trás sobe, recua e tomba um pouco mais. Com a mesma altura e o mesmo
+    // tombo ela ficaria escondida atrás da da frente — a ideia é o leque de quem segura
+    // as peças em duas camadas, não duas linhas na mesma altura.
+    m.xBase = ((i % cabem) - (nesta - 1) / 2) * espaco;
+    m.yBase = MAO_Y + fila * 0.34 * escala;
+    m.zBase = MAO_Z - fila * 0.66 * escala + Math.abs(m.xBase) * 0.05;
+    m.tombo = MAO_TOMBO + fila * 0.13;
+    m.escalaBase = escala;
+    // Peça recém-chegada nasce já no lugar; as outras deslizam até ele.
+    if (m.nova) {
+      m.obj.position.set(m.xBase, m.yBase, m.zBase);
+      m.obj.rotation.set(m.tombo, 0, 0);
+      m.obj.scale.setScalar(escala);
+      m.nova = false;
+    }
+  });
+
+  // A luz da mão acompanha o miolo do leque. Com o Duelo de 14 em três ou quatro
+  // fileiras, uma luz parada em cima da primeira deixava a de trás com um terço do
+  // brilho — e é justamente a que precisa ser lida com esforço.
+  const filas = Math.ceil(n / cabem);
+  luzDaMao.position.set(0,
+    MAO_Y + (filas - 1) / 2 * 0.34 * escala + 1.55,
+    MAO_Z - (filas - 1) / 2 * 0.66 * escala + 2.05);
+}
+
+// Troca duas peças de lugar na tela e guarda a arrumação nova. O motor não fica sabendo,
+// e não precisa: `jogar()` recebe a PEÇA, nunca o índice.
+function moverNaMao(de, para) {
+  if (de === para || !naMao[de]) return false;
+  const m = naMao.splice(de, 1)[0];
+  naMao.splice(Math.max(0, Math.min(naMao.length, para)), 0, m);
+  if (vistaAtual) ordemDaMao.set(vistaAtual.cadeira, naMao.map(x => chave(x.peca)));
+  posicionarMao();
+  return true;
+}
+
+// Arrumar por NAIPE MAIS FORTE. Não é ordenar por peso nem por número: é o que jogador
+// de bar realmente faz, que é olhar a mão e saber "meu forte é o cinco". Conta cada
+// número dos dois lados (carroça soma 2 no próprio, o que é certo — carroça é a
+// evidência mais forte daquele naipe), põe os naipes na ordem da contagem, e dentro de
+// cada um a carroça na frente. É determinístico e idempotente: apertar duas vezes não
+// muda nada.
+function arrumarMao() {
+  if (naMao.length < 2) return;
+  const quantos = new Array(MAX_PINTAS + 1).fill(0);
+  for (const m of naMao) { quantos[m.peca[0]]++; quantos[m.peca[1]]++; }
+  const naipes = quantos.map((q, n) => [q, n]).sort((a, b) => b[0] - a[0] || b[1] - a[1]);
+
+  const nova = [], usadas = new Set();
+  for (const [, naipe] of naipes) {
+    naMao
+      .filter(m => !usadas.has(chave(m.peca)) && (m.peca[0] === naipe || m.peca[1] === naipe))
+      .sort((a, b) => (carroca(b.peca) - carroca(a.peca)) || (valor(b.peca) - valor(a.peca)))
+      .forEach(m => { usadas.add(chave(m.peca)); nova.push(m); });
+  }
+  naMao.length = 0;
+  naMao.push(...nova);
+  if (vistaAtual) ordemDaMao.set(vistaAtual.cadeira, naMao.map(m => chave(m.peca)));
+  posicionarMao();
+}
+
+// Em que slot do leque cai um ponto da tela. Projetar as posições de REPOUSO e pegar a
+// mais próxima resolve fileira e coluna de uma vez, e continua funcionando com uma, duas
+// ou quatro fileiras — que é o caso do retrato. Projetar `obj.position` em vez da base
+// faria os alvos balançarem junto com a animação e o slot ficaria pulando sozinho.
+const _v = new THREE.Vector3();
+const naTela = m => {
+  _v.set(m.xBase, m.yBase, m.zBase).project(camera);
+  return { x: (_v.x + 1) / 2 * innerWidth, y: (1 - _v.y) / 2 * innerHeight };
+};
+function slotSob(cx, cy) {
+  if (!naMao.length) return -1;
+  const pontos = naMao.map(naTela);
+  let melhor = 0, perto = Infinity;
+  pontos.forEach((p, i) => {
+    const d = Math.hypot(p.x - cx, p.y - cy);
+    if (d < perto) { perto = d; melhor = i; }
+  });
+  // "Longe da mão" é longe em relação ao tamanho do slot, e não a um número de pixels
+  // que só valeria numa tela: num celular o leque inteiro é do tamanho de dois slots
+  // de computador.
+  const passo = pontos.length > 1
+    ? Math.hypot(pontos[1].x - pontos[0].x, pontos[1].y - pontos[0].y) : 140;
+  return perto > Math.max(70, passo * 1.5) ? -1 : melhor;
+}
 
 function sincronizarMao(vista) {
-  const largura = LARGURA_MAO();
-  // A largura entra na assinatura porque o leque depende dela tanto quanto das peças.
-  const assinatura = vista.mao.map(chave).join(',') + '#' + vista.cadeira + '#' + largura.toFixed(2);
+  // A assinatura é de CONJUNTO — as chaves ORDENADAS —, e não da ordem em que a mão
+  // está. Com a arrumação do jogador, uma assinatura sensível à ordem entraria em laço:
+  // reordena, muda a assinatura, reconstrói tudo, perde a seleção. E a largura entra
+  // porque o leque depende dela tanto quanto das peças.
+  const assinatura = vista.mao.map(chave).sort().join(',') + '#' + vista.cadeira +
+    '#' + LARGURA_MAO().toFixed(2);
+  // Mão nova apaga a arrumação: as peças são outras, e a de antes não quer dizer nada.
+  if (vista.maoNum !== maoDaOrdem) { esquecerArrumacao(); maoDaOrdem = vista.maoNum; }
   if (assinatura !== assinaturaMao) {
     assinaturaMao = assinatura;
-    // Girar o celular com uma peça levantada não pode perder a peça: sem guardar a
-    // chave aqui, `escolhida` (que é índice) morre no rebuild e a barra de confirmação
-    // fica na tela apontando para nada — o botão vira um return mudo.
-    const erguida = escolhida !== null && naMao[escolhida] ? chave(naMao[escolhida].peca) : null;
-    escolhida = null;
-    naMao.forEach(m => grupoMao.remove(m.obj));
-    naMao.length = 0;
-    // O ESPAÇO SAI DO COMPRIMENTO DA PEÇA, não de um número escolhido a olho. Com um
-    // valor fixo menor que a peça, cada uma cobre a metade DIREITA da anterior — e como
-    // a peça nasce com o valor [0] à esquerda e o [1] à direita, o que sumia era sempre
-    // o segundo número. Dava para ler meia mão.
-    //
-    // Primeiro garante que não sobrepõe; só encolhe depois, se a mão for grande. E
-    // quando nem encolhendo cabe, a mão quebra em duas fileiras em vez de virar tira.
-    const n = Math.max(vista.mao.length, 1);
-    const cabem = porFileira(n);
-    const escala = Math.max(ESCALA_MIN, Math.min(1.3, largura / (cabem * PECA_C * FOLGA_LEQUE)));
-    const espaco = Math.min(PECA_C * escala * FOLGA_LEQUE, largura / cabem);
-
-    vista.mao.forEach((peca, i) => {
-      const fila = Math.floor(i / cabem);
-      const nesta = Math.min(cabem, n - fila * cabem);      // a de cima pode ser menor
-      const obj = criarPeca(peca, true);
-      // A fileira de trás sobe, recua e tomba um pouco mais. Com a mesma altura e o
-      // mesmo tombo ela ficaria escondida atrás da da frente — a ideia é o leque de
-      // quem segura as peças em duas camadas, não duas linhas na mesma altura.
-      const x = ((i % cabem) - (nesta - 1) / 2) * espaco;
-      const y = MAO_Y + fila * 0.34 * escala;
-      const z = MAO_Z - fila * 0.66 * escala + Math.abs(x) * 0.05;
-      const tombo = MAO_TOMBO + fila * 0.13;
-      obj.position.set(x, y, z);
-      obj.rotation.set(tombo, 0, 0);
-      obj.scale.setScalar(escala);
-      // Peça na mão está NA SUA MÃO, não na mesa: se ela projetar sombra, vira um
-      // borrão preto do tamanho de um tijolo no tampo logo atrás.
-      obj.userData.corpo.castShadow = false;
-      grupoMao.add(obj);
-      naMao.push({ obj, peca, xBase: x, yBase: y, zBase: z, tombo, jogavel: false });
-    });
-
-    // A peça que estava levantada volta a estar, no índice novo dela.
-    const volta = erguida === null ? -1 : naMao.findIndex(m => chave(m.peca) === erguida);
-    escolhida = volta < 0 ? null : volta;
-
-    // A luz da mão acompanha o miolo do leque. Com o Duelo de 14 em três ou quatro
-    // fileiras, uma luz parada em cima da primeira deixava a de trás com um terço do
-    // brilho — e é justamente a que precisa ser lida com esforço.
-    const filas = Math.ceil(n / cabem);
-    luzDaMao.position.set(0,
-      MAO_Y + (filas - 1) / 2 * 0.34 * escala + 1.55,
-      MAO_Z - (filas - 1) / 2 * 0.66 * escala + 2.05);
+    reconciliarMao(vista);
+    posicionarMao();
   }
 
   // Quais dessas dá para jogar agora — vem da MESMA função que valida a jogada de
@@ -132,13 +240,17 @@ function sincronizarMao(vista) {
     mat.color.setHex(m.jogavel ? CORES.marfim : 0xcdc3ae);
     mat.emissive.setHex(m.jogavel ? 0x33240a : 0x000000);
   }
-  if (escolhida !== null && !naMao[escolhida]) escolhida = null;
+  // `escolhida` é a CHAVE da peça, não o índice: assim ela sobrevive a arrastar, a
+  // arrumar, à reconciliação e a uma vista chegando do anfitrião sem uma linha de
+  // remapeamento. Só some quando a peça deixa a mão.
+  if (escolhida !== null && !naMaoPorChave(escolhida)) escolhida = null;
 }
 
 // Some com a mão da tela ANTES de anunciar a troca de jogador no hotseat. Cobrir com
 // um overlay não bastaria: as peças continuariam existindo na cena, a um F12 de
 // distância. Aqui elas somem de verdade e só voltam depois do "peguei".
 function esconderMao() {
+  encerrarArrasto();                   // o hotseat pode trocar de jogador com o dedo no ar
   naMao.forEach(m => grupoMao.remove(m.obj));
   naMao.length = 0;
   assinaturaMao = '';
@@ -197,12 +309,27 @@ function sincronizarMonte(vista) {
 }
 
 function animarMao(dt, apontada) {
-  naMao.forEach((m, i) => {
-    const sobe = i === escolhida ? 0.42 : (i === apontada && m.jogavel ? 0.2 : 0);
-    // O repouso sai do que sincronizarMao calculou para ESTA peça (a fileira de trás
-    // mora mais alta e mais ao fundo), e não de MAO_Y/MAO_Z direto.
+  const sobEsse = apontada === null || apontada === undefined ? null : naMao[apontada];
+  naMao.forEach(m => {
+    // A peça no dedo tem a posição escrita pelo ponteiro: interpolar por cima é a receita
+    // do "a peça não acompanha o arrasto".
+    if (m.arrastando) {
+      m.obj.scale.setScalar(chegarPerto(m.obj.scale.x, m.escalaBase * 1.1, 14, dt));
+      return;
+    }
+    const sobe = chave(m.peca) === escolhida ? 0.42 : (m === sobEsse && m.jogavel ? 0.2 : 0);
+    // O repouso sai do que posicionarMao calculou para ESTA peça (a fileira de trás mora
+    // mais alta e mais ao fundo), e não de MAO_Y/MAO_Z direto.
+    //
+    // O X passou a ser animado junto: sem isso, trocar duas peças de lugar seria
+    // teletransporte, e é justamente o movimento que precisa ser legível. Um pouco mais
+    // devagar que o resto, de propósito.
+    m.obj.position.x = chegarPerto(m.obj.position.x, m.xBase, 10, dt);
     m.obj.position.y = chegarPerto(m.obj.position.y, m.yBase + sobe, 14, dt);
     m.obj.position.z = chegarPerto(m.obj.position.z, m.zBase - sobe * 0.35, 14, dt);
     m.obj.rotation.x = chegarPerto(m.obj.rotation.x, m.tombo + sobe * 0.22, 14, dt);
+    // A escala também: com os objetos sobrevivendo à reconciliação, jogar uma peça muda
+    // o tamanho de todas as outras, e um setScalar seco daria um pulo.
+    m.obj.scale.setScalar(chegarPerto(m.obj.scale.x, m.escalaBase, 14, dt));
   });
 }

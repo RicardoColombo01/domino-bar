@@ -204,6 +204,10 @@ function visaoDe(P, cadeira) {
     alvo: P.regras.alvo,
     modo: P.regras.modo,                         // o convidado não vê MESA nem P.regras
     desistiu: P.desistiu === undefined ? null : P.desistiu,
+    // Quem passou mostrou publicamente o que não tem — todo mundo na mesa viu. Só o bot
+    // usava isso, o que deixava o humano em desvantagem contra o bot da própria mesa.
+    // Set não sobrevive ao JSON da rede; array sobrevive.
+    faltaNo: P.faltaNo.map(s => Array.from(s)),
     cadeiras: P.cadeiras.map(c => ({ nome: c.nome, tipo: c.tipo })),
     acoes: acoesDe(P, cadeira),
   };

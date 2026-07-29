@@ -279,6 +279,37 @@ secao('partidas bot × bot');
   ok(compras > 0, 'ninguém comprou do monte em 900 partidas');
 }
 
+// ─── o bot joga melhor do que jogaria por acaso ─────────────────────────────
+// A única asserção do projeto que mede QUALIDADE, e não legalidade. O andaime dos
+// níveis não troca de algoritmo: muda quanta informação o bot recebe (`faltaNo`) e
+// quanto ele erra no impulso (`ruido`, 35% no fácil contra 0% no difícil). Se o
+// difícil não ganhar do fácil, ou a heurística não vale nada, ou o `ruido` não está
+// atrapalhando ninguém — os dois seriam defeito.
+secao('difícil × fácil');
+{
+  const dupla = () => [
+    { nome: 'craque', tipo: 'bot', nivel: 'dificil' },
+    { nome: 'perna', tipo: 'bot', nivel: 'facil' },
+  ];
+  let craque = 0, perna = 0;
+  seedRandom(777);
+  for (let partida = 0; partida < 300; partida++) {
+    const P = mod.novaPartida(dupla(), { alvo: 6 });
+    for (let passo = 0; P.fase !== 'fim' && passo < 4000; passo++) {
+      if (P.fase === 'fimDeMao') { mod.novaMao(P); continue; }
+      const vez = P.vez;
+      const j = mod.jogadaDoBot(P, vez);
+      if (j.acao === 'jogar') mod.jogar(P, vez, j.peca, j.ponta);
+      else if (j.acao === 'comprar') mod.comprar(P, vez);
+      else mod.passar(P, vez);
+    }
+    P.placar[0] > P.placar[1] ? craque++ : perna++;
+  }
+  const taxa = craque / (craque + perna);
+  console.log(`  difícil ${craque} × ${perna} fácil (${(taxa * 100).toFixed(1)}%)`);
+  ok(taxa > 0.55, `o bot difícil ganhou só ${(taxa * 100).toFixed(1)}% — a heurística não está valendo nada`);
+}
+
 // ─── os modos novos, do começo ao fim ───────────────────────────────────────
 // Duelo e Trio nunca tinham rodado: são 2 e 3 jogadores SEM monte, um caminho que só
 // a mesa de 4 exercitava. Se travar sem saída, trava aqui.
