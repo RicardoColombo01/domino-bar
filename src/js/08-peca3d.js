@@ -8,7 +8,10 @@
 //   atlas ▸ │ ·  │ ·· │ ⁚  │ ⁙  │ ⁘  │ ⁙· │ ⁚⁚ │      peça [3,5] = célula 3 + célula 5
 //            0    1    2    3    4    5    6
 
-const ATLAS_N = 7, CELULA = 128;
+// 256 e não 128: a peça na mesa chega a ocupar ~90px de tela no computador, e com a
+// célula pequena a borda da pinta ficava serrilhada justamente quando o tabuleiro
+// encolhe. É uma textura só, gerada uma vez — o custo é irrelevante.
+const ATLAS_N = 7, CELULA = 256;
 const G3 = [0.28, 0.5, 0.72];                     // as três colunas/linhas do desenho
 const PINTAS = [
   [],
@@ -26,12 +29,15 @@ const texPintas = pintar(CELULA * ATLAS_N, CELULA, (c) => {
     c.fillStyle = '#f4ecd9';
     c.fillRect(ox, 0, CELULA, CELULA);
     for (const [gx, gy] of PINTAS[n]) {
-      const x = ox + G3[gx] * CELULA, y = G3[gy] * CELULA, r = CELULA * 0.088;
-      c.fillStyle = 'rgba(255,255,255,.65)';      // lasquinha clara embaixo: dá relevo de furo
-      c.beginPath(); c.arc(x + 1.5, y + 1.5, r, 0, 7); c.fill();
-      c.fillStyle = '#191512';
+      // Pinta maior (0.088 → 0.102 da célula) e mais escura: sobre um tampo de madeira
+      // acesa pela lâmpada, o que custa leitura de longe é o TAMANHO do furo, não a
+      // cor do marfim.
+      const x = ox + G3[gx] * CELULA, y = G3[gy] * CELULA, r = CELULA * 0.102;
+      c.fillStyle = 'rgba(255,255,255,.7)';       // lasquinha clara embaixo: dá relevo de furo
+      c.beginPath(); c.arc(x + r * 0.12, y + r * 0.12, r, 0, 7); c.fill();
+      c.fillStyle = '#120f0c';
       c.beginPath(); c.arc(x, y, r, 0, 7); c.fill();
-      c.fillStyle = 'rgba(0,0,0,.35)';
+      c.fillStyle = 'rgba(0,0,0,.4)';
       c.beginPath(); c.arc(x - r * 0.25, y - r * 0.25, r * 0.75, 0, 7); c.fill();
     }
   }
@@ -58,7 +64,9 @@ function faceDaPinta(n) {
 // É a mesma convenção da linha do motor, e é o que faz o rotY do layout já vir certo.
 function criarPeca(peca, proprio) {
   const g = new THREE.Group();
-  // Peça na mão ganha material próprio para poder acender no hover sem acender as outras.
+  // Material próprio para poder acender ESTA peça sem acender as outras — a mão usa no
+  // hover, a mesa usa na última jogada. Sem o clone, `matMarfim` é uma instância só e
+  // acender uma acenderia as 28.
   const corpo = new THREE.Mesh(geomCorpo, proprio ? matMarfim.clone() : matMarfim);
   corpo.castShadow = true;
   corpo.receiveShadow = true;

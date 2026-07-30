@@ -52,6 +52,11 @@ function pintar(w, h, desenho) {
   desenho(cv.getContext('2d'), w, h);
   const t = new THREE.CanvasTexture(cv);
   t.anisotropy = 4;
+  // O canvas é pintado em sRGB, e o default do Three é tratar textura como dado LINEAR.
+  // Sem esta linha as três texturas do jogo saem lavadas — é por isso que o marfim da
+  // peça e a madeira iluminada tendiam para o mesmo âmbar, e a pinta escura chegava
+  // cinza. Uma linha, e é a maior alavanca de contraste que existe aqui.
+  t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
 

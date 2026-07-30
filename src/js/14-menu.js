@@ -15,15 +15,49 @@ const TIPOS = [
   ['online', 'Pessoa online'],
 ];
 
-const MESA = {
-  n: 3,
-  modo: MODO_PADRAO,
-  alvo: 6,
-  compraVoluntaria: false,
-  cadeiras: NOMES.slice(0, 4).map((nome, i) => (
-    i === 0 ? { nome, tipo: 'voce' } : { nome, tipo: 'bot', nivel: 'normal' }
-  )),
-};
+const TIPOS_VALIDOS = new Set(['local', 'bot', 'online']);   // a cadeira 0 é sempre 'voce'
+
+// A mesa da última vez. Tudo é conferido contra as regras DE HOJE, e não só contra "é um
+// número": preferência guardada é entrada de fora como qualquer outra — pode vir de uma
+// versão antiga do jogo, de um modo que não existe mais, ou de alguém mexendo no
+// armazenamento à mão. Um Trio de 4 jogadores guardado estouraria no `distribuir`.
+//
+// Valor que não fecha volta ao padrão em silêncio: aqui não há nada que valha assustar
+// quem só quer jogar, e o menu mostra na tela o que ficou valendo.
+function mesaLembrada() {
+  const g = lido('mesa', null) || {};
+  const modo = MODOS[g.modo] ? g.modo : MODO_PADRAO;
+  const cabem = MODOS[modo].cadeiras;
+  return {
+    modo,
+    n: cabem.includes(g.n) ? g.n : cabem[0],
+    alvo: g.alvo === 10 ? 10 : 6,
+    compraVoluntaria: g.compraVoluntaria === true,
+    cadeiras: NOMES.slice(0, 4).map((nome, i) => {
+      const c = (Array.isArray(g.cadeiras) && g.cadeiras[i]) || {};
+      const tipo = i === 0 ? 'voce' : (TIPOS_VALIDOS.has(c.tipo) ? c.tipo : 'bot');
+      const guardado = typeof c.nome === 'string' ? c.nome.trim() : '';
+      return {
+        nome: (guardado || nome).slice(0, 14),
+        tipo,
+        // Nível válido é o que o BOT reconhece, conferido na tabela dele — uma segunda
+        // lista aqui apodreceria no dia em que aparecesse um nível novo.
+        nivel: tipo === 'bot' ? (NIVEIS[c.nivel] ? c.nivel : 'normal') : undefined,
+      };
+    }),
+  };
+}
+
+const MESA = mesaLembrada();
+
+// Guarda as quatro cadeiras, e não só as `n` em uso: quem joga em três e volta para
+// quatro esperava o nome do quarto de volta, não "Careca" outra vez.
+function lembrarMesa() {
+  guardar('mesa', {
+    n: MESA.n, modo: MESA.modo, alvo: MESA.alvo, compraVoluntaria: MESA.compraVoluntaria,
+    cadeiras: MESA.cadeiras.map(c => ({ nome: c.nome, tipo: c.tipo, nivel: c.nivel })),
+  });
+}
 
 function montarCadeiras() {
   el('cadeiras').innerHTML = MESA.cadeiras.slice(0, MESA.n).map((c, i) => {
@@ -38,7 +72,10 @@ function montarCadeiras() {
   }).join('');
 
   el('cadeiras').querySelectorAll('input.nome').forEach(inp => {
-    inp.oninput = () => { MESA.cadeiras[+inp.dataset.i].nome = inp.value.trim() || 'Sem nome'; };
+    inp.oninput = () => {
+      MESA.cadeiras[+inp.dataset.i].nome = inp.value.trim() || 'Sem nome';
+      lembrarMesa();
+    };
   });
   el('cadeiras').querySelectorAll('select').forEach(sel => {
     sel.onchange = () => {
@@ -47,6 +84,7 @@ function montarCadeiras() {
       c.tipo = tipo;
       c.nivel = nivel || undefined;
       atualizarBotaoComecar();
+      lembrarMesa();
     };
   });
 
@@ -98,10 +136,26 @@ function grupo(id, attr, aplicar) {
     };
   });
 }
-grupo('modoMesa', 'modo', v => { MESA.modo = v; ajustarCadeirasAoModo(); montarCadeiras(); });
-grupo('qtdJogadores', 'n', v => { MESA.n = +v; montarCadeiras(); });
-grupo('alvoPontos', 'alvo', v => { MESA.alvo = +v; });
-grupo('compraLivre', 'livre', v => { MESA.compraVoluntaria = v === '1'; });
+grupo('modoMesa', 'modo', v => { MESA.modo = v; ajustarCadeirasAoModo(); montarCadeiras(); lembrarMesa(); });
+grupo('qtdJogadores', 'n', v => { MESA.n = +v; montarCadeiras(); lembrarMesa(); });
+grupo('alvoPontos', 'alvo', v => { MESA.alvo = +v; lembrarMesa(); });
+grupo('compraLivre', 'livre', v => { MESA.compraVoluntaria = v === '1'; lembrarMesa(); });
+
+// Os botões nascem marcados no HTML com o PADRÃO. Se a preferência lembrada for outra, a
+// marca tem de andar até ela — senão a tela diz "Clássico · 6 pontos" e a partida começa
+// num Trio até 10, que é a pior espécie de bug: o jogo está certo e a tela mente.
+// (`qtdJogadores` não entra aqui: quem o marca é `ajustarCadeirasAoModo`, que também
+// apaga o que não cabe no modo.)
+function marcarGrupo(id, attr, valor) {
+  el(id).querySelectorAll('button')
+    .forEach(b => b.classList.toggle('on', b.dataset[attr] === String(valor)));
+}
+
+function refletirMesaNosBotoes() {
+  marcarGrupo('modoMesa', 'modo', MESA.modo);
+  marcarGrupo('alvoPontos', 'alvo', MESA.alvo);
+  marcarGrupo('compraLivre', 'livre', MESA.compraVoluntaria ? 1 : 0);
+}
 
 el('btComecar').onclick = () => {
   ligarMurmuro();
@@ -112,5 +166,6 @@ el('btComecar').onclick = () => {
 el('btEntrar').onclick = () => entrarNumaMesa();
 el('btMenu').onclick = () => { encerrarRede(); mostrarTela('telaMenu'); };
 
+refletirMesaNosBotoes();
 ajustarCadeirasAoModo();
 montarCadeiras();

@@ -18,6 +18,32 @@ grupoMesa.add(grupoPrevia);
 const matBrilho = new THREE.MeshBasicMaterial({ color: 0xffc451, transparent: true, opacity: 0.5 });
 const geomBrilho = new THREE.CircleGeometry(PECA_C * 0.8, 28);
 
+// A MARCA DA ÚLTIMA JOGADA. Numa mesa de quatro com o tabuleiro já comprido, "o que
+// acabou de acontecer" era invisível: a peça caía do alto, dava o baque, e um segundo
+// depois era idêntica às outras vinte. Quem chegava atrasado à tela tinha de ler o log.
+//
+// São duas coisas: um CLARÃO de meio segundo no instante da queda, e uma marca discreta
+// que fica até a próxima jogada. O disco é filho do GRUPO DA PEÇA — não de grupoMesa —
+// porque assim ele acompanha a peça sem entrar na conta de quem está fora do quadro
+// (tests/test-telas.mjs olha os filhos diretos de grupoMesa).
+const matMarca = new THREE.MeshBasicMaterial({
+  color: 0xffc451, transparent: true, opacity: 0.25, depthWrite: false,
+});
+const geomMarca = new THREE.CircleGeometry(PECA_C * 0.72, 24);
+let ultima = null;                 // { obj, marca, desde }
+
+function marcarUltima(obj) {
+  if (ultima) {
+    ultima.obj.remove(ultima.marca);
+    ultima.obj.userData.corpo.material.emissive.setHex(0x000000);
+  }
+  const marca = new THREE.Mesh(geomMarca, matMarca);
+  marca.rotation.x = -Math.PI / 2;
+  marca.position.y = -PECA_E / 2 + 0.012;         // colada no tampo, por baixo da peça
+  obj.add(marca);
+  ultima = { obj, marca, desde: performance.now() };
+}
+
 function sincronizarTabuleiro(vista) {
   const { postas, caixa } = layoutDaMesa(vista.linha, vista.iAncora);
 
@@ -33,7 +59,8 @@ function sincronizarTabuleiro(vista) {
     vivas.add(k);
     let reg = naMesa.get(k);
     if (!reg) {
-      const obj = criarPeca(p.peca);
+      // `true` = material próprio, para dar de acender só ESTA peça na marca da última.
+      const obj = criarPeca(p.peca, true);
       // Nasce no alto e um pouco torta: é a queda que dá o "toc" na mesa.
       obj.position.set(p.x, 2.4, p.z);
       obj.rotation.set(0, p.rotY + 0.5, 0);
@@ -41,12 +68,18 @@ function sincronizarTabuleiro(vista) {
       reg = { obj, alvo: p };
       naMesa.set(k, reg);
       tocarBaque(0.55);
+      // É o único lugar do jogo que sabe "esta peça é nova": roda uma vez por peça.
+      marcarUltima(obj);
     }
     reg.alvo = p;
   });
 
-  for (const [k, reg] of naMesa)
-    if (!vivas.has(k)) { grupoMesa.remove(reg.obj); naMesa.delete(k); }
+  for (const [k, reg] of naMesa) {
+    if (vivas.has(k)) continue;
+    if (ultima && ultima.obj === reg.obj) ultima = null;      // mão nova: some a marca
+    grupoMesa.remove(reg.obj);
+    naMesa.delete(k);
+  }
 
   esconderPrevia();
 }
@@ -98,6 +131,14 @@ function animarTabuleiro(dt) {
   matPreviaCorpo.opacity = 0.56 + 0.16 * pulso;
   // só a peça paira; o brilho fica colado no tampo, marcando o lugar
   for (const g of grupoPrevia.children) g.children[1].position.y = 0.07 + 0.035 * pulso;
+
+  // A última jogada: clarão de meio segundo na queda, e depois só a marca respirando.
+  if (ultima) {
+    const clarao = Math.max(0, 1 - (performance.now() - ultima.desde) / 500);
+    matMarca.opacity = 0.14 + 0.08 * pulso + 0.55 * clarao;
+    const q = 0.5 * clarao * clarao;                // some rápido: é um estalo, não um farol
+    ultima.obj.userData.corpo.material.emissive.setRGB(q, q * 0.68, q * 0.22);
+  }
 
   for (const { obj, alvo } of naMesa.values()) {
     obj.position.x = chegarPerto(obj.position.x, alvo.x, 13, dt);

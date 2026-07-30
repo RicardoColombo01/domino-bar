@@ -67,6 +67,10 @@ function ligarMurmuro() {
   s.connect(f).connect(g).connect(ac.destination);
   s.start();
   murmuro = g;
+  // O silêncio lembrado só pode ser aplicado agora: o AudioContext nasce no primeiro som,
+  // e antes dele não existe o que suspender. `mudo` mora no 13-hud e já está de pé aqui,
+  // porque esta função só roda depois de um clique do jogador.
+  if (mudo) silenciar(true);
 }
 
 function silenciar(mudo) {

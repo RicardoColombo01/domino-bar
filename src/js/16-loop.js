@@ -40,7 +40,7 @@ function comecarLocal() {
   euNaTela = 0;
   travado = false;
   esquecerArrumacao();               // mesa nova, mão nova: a arrumação de antes não vale
-  linhasDoLog.length = 0;
+  limparConversa();
   tocarEmbaralho();
   anunciarAbertura();
   avancar();
@@ -70,6 +70,7 @@ function publicar() {
   atualizarVista(travado
     ? Object.assign({}, v, { mao: [], acoes: { jogadas: [], comprar: false, passar: false } })
     : v);
+  guardarPartida();
 }
 
 function atualizarVista(v) {
@@ -171,6 +172,9 @@ el('btPronto').onclick = () => {
   euNaTela = P.vez;
   travado = false;
   publicar();
+  // Depois do publicar: quem solta a fala usa `vistaAtual`, e é o publicar que a põe de
+  // pé para a cadeira nova. Antes dele, a fala sairia com o nome da cadeira anterior.
+  soltarFalasGuardadas(euNaTela);
 };
 
 el('btProxima').onclick = () => {
@@ -229,7 +233,131 @@ function sairDaPartida() {
   mostrarTela('telaMenu');
 }
 
+// ─── voltar para a mesma partida ─────────────────────────────────────────────
+// Fechar a aba sem querer, recarregar, o celular matar a página para poupar memória, um
+// erro de script: nenhum desses é motivo para perder uma partida de doze mãos. A partida
+// é dado PURO — arrays de números, nada de função nem de referência ao 3D —, então ela
+// cabe inteira no localStorage e volta de um JSON.parse. É a mesma propriedade que faz o
+// online funcionar; aqui ela paga pela segunda vez.
+//
+// Guarda em `publicar`, que é o funil por onde TODA mudança de estado passa — o mesmo
+// motivo por que a tela também é desenhada ali. Guardar em `aplicarIntencao` deixaria de
+// fora o fim de mão e a troca de jogador.
+const HORAS_GUARDADA = 12;
+
+// `P.faltaNo` é um array de Set, e Set NÃO sobrevive a JSON: `JSON.stringify(new Set())`
+// dá `{}` — um objeto sem `.has` e sem `.indexOf`. Sem estas duas conversões a partida
+// retomada perdia calada quem passou em qual número (a marca da Fila 4) e o bot estourava
+// na primeira consulta, em `05-bot.js`. É a MESMA conversão que `visaoDe` faz para o fio,
+// e pela mesma razão: o que não sobrevive à serialização não existe do outro lado.
+const partidaParaGuardar = () =>
+  Object.assign({}, P, { faltaNo: P.faltaNo.map(s => Array.from(s)) });
+
+const partidaDeVolta = guardada => Object.assign({}, guardada, {
+  faltaNo: guardada.cadeiras.map((_, i) => {
+    const g = (guardada.faltaNo || [])[i];
+    return new Set(Array.isArray(g) ? g : []);
+  }),
+});
+
+function guardarPartida() {
+  // O convidado não tem partida na memória: é a invariante do online, não um esquecimento.
+  if (!P || modo === 'convidado') return;
+  // Partida acabada não é partida para voltar — e deixá-la guardada faria o menu oferecer
+  // para sempre a revanche de uma final que você já viu.
+  if (P.fase === 'fim') { esquecer('partida'); return; }
+  guardar('partida', { quando: Date.now(), euNaTela, P: partidaParaGuardar() });
+}
+
+// Devolve o guardado só se ele ainda serve. Prazo porque uma partida de anteontem não é
+// mais "a partida de antes", é um estranho ocupando o botão.
+function partidaGuardada() {
+  const g = lido('partida', null);
+  if (!g || !g.P || !Array.isArray(g.P.cadeiras) || !Array.isArray(g.P.maos)) return null;
+  if (g.P.fase === 'fim') return null;
+  if (!g.quando || Date.now() - g.quando > HORAS_GUARDADA * 3600e3) return null;
+  return g;
+}
+
+function atualizarBotaoRetomar() {
+  const g = partidaGuardada();
+  el('btRetomar').classList.toggle('oculta', !g);
+  if (g) {
+    const m = MODOS[g.P.regras.modo];
+    el('btRetomar').textContent =
+      `Continuar a partida de antes · ${m ? m.rotulo : g.P.regras.modo}, mão ${g.P.maoNum}`;
+  }
+}
+
+function retomarPartida() {
+  const g = partidaGuardada();
+  if (!g) { avisar('A partida guardada expirou.'); atualizarBotaoRetomar(); return; }
+  encerrarRede();                      // pode ter sido mesa online; ela não existe mais
+  modo = 'local';
+  P = partidaDeVolta(g.P);
+
+  // A mesa de antes acabou junto com a página. Cadeira que era de gente online passa a
+  // ser bot, senão o motor espera para sempre por quem não vai responder — é a mesma
+  // conversão que `comecarLocal` faz, e pela mesma razão.
+  const viraramBot = P.cadeiras.filter(c => c.tipo === 'online');
+  viraramBot.forEach(c => { c.tipo = 'bot'; c.nivel = c.nivel || 'normal'; });
+
+  euNaTela = Number.isInteger(g.euNaTela) && g.euNaTela >= 0 && g.euNaTela < P.n ? g.euNaTela : 0;
+  travado = false;
+  viuOFimDaMao = false;
+  saindo = false;
+  esquecerArrumacao();                 // a arrumação era da sessão que morreu
+  limparConversa();
+  ligarMurmuro();
+  esconderTelas();
+  narrar(`Partida retomada — mão ${P.maoNum}, placar ${P.placar.join(' × ')}.`);
+  if (viraramBot.length) {
+    narrar(viraramBot.length === 1
+      ? 'A cadeira que era online virou bot: a mesa de antes não existe mais.'
+      : `As ${viraramBot.length} cadeiras que eram online viraram bot: a mesa de antes não existe mais.`);
+  }
+  avancar();
+}
+
+el('btRetomar').onclick = () => { tocarClique(); retomarPartida(); };
+
+// ─── a conversa ──────────────────────────────────────────────────────────────
+function falar() {
+  const txt = HUD.texto.value.trim();
+  if (!txt) return;
+  if (modo === 'convidado') {
+    HUD.texto.value = '';
+    // O anfitrião é quem valida e retransmite — a mensagem só volta para você depois de
+    // passar por ele, e essa volta é a confirmação de que saiu.
+    if (linkAnfitriao && linkAnfitriao.open) linkAnfitriao.send({ t: 'chat', canal: canalAtual, txt });
+    else avisar('Sem conexão com a mesa.');
+    return;
+  }
+  if (modo !== 'anfitriao') return;
+  // O anfitrião entra pela MESMA porta que os convidados, com as mesmas guardas. Antes ele
+  // chamava `espalharChat` direto e era o único que podia inundar a mesa.
+  //
+  // E o campo só é limpo se a fala passou: engolir o texto que a pessoa acabou de digitar
+  // porque ela foi rápida demais é castigo duplo.
+  if (receberChat(euNaTela, { canal: canalAtual, txt })) HUD.texto.value = '';
+  else avisar('Devagar — uma fala por vez.');
+}
+
+HUD.texto.onkeydown = ev => {
+  if (ev.key === 'Enter') { falar(); ev.preventDefault(); }
+  if (ev.key === 'Escape') HUD.texto.blur();
+};
+HUD.canal.onclick = () => trocarCanal(canalAtual === 'dupla' ? 'todos' : 'dupla');
+HUD.abrirConversa.onclick = () => alternarConversa();
+
+// O jogo inteiro escuta o teclado no window, e nenhum dos dois handlers olhava para o
+// alvo do evento: com um campo na tela, escrever "vamos" chamava arrumarMao() a cada
+// 'a' digitado e Esc largava a peça levantada. (Já valia para o código da mesa, que tem
+// letras — só não aparecia porque ali não há mão desenhada.)
+const digitando = ev => /^(INPUT|TEXTAREA)$/.test((ev.target || {}).tagName || '');
+
 addEventListener('keydown', ev => {
+  if (digitando(ev)) return;
   if (ev.key === 'Escape') cancelarEscolha();
 });
 
@@ -240,11 +368,49 @@ HUD.passar.onclick = () => pedirAcao({ acao: 'passar' });
 HUD.arrumar.onclick = () => { arrumarMao(); tocarSoltar(); };
 HUD.contar.onclick = () => {
   contando = !contando;
-  try { localStorage.setItem('dominobar.contagem', contando ? '1' : '0'); } catch (e) { void e; }
+  guardar('contagem', contando);
   if (vistaAtual) atualizarVista(vistaAtual);
 };
+
+// ─── a dica ──────────────────────────────────────────────────────────────────
+// A dica LEVANTA a peça em vez de só falar o nome dela: quem está aprendendo precisa ver
+// onde ela cai, e levantar já mostra os fantasmas nas duas pontas e abre a barra de
+// confirmar. Ou seja: a dica termina no mesmo lugar que um clique seu terminaria — você
+// ainda confirma ou cancela, e ninguém joga por você.
+function pedirDica() {
+  if (!podeAgirAgora()) { avisar('A dica é para a sua vez.'); return; }
+  const d = dicaDaVista(vistaAtual);
+  if (!d) { avisar('Nada a sugerir agora.'); return; }
+
+  // Só os porquês que pesaram de verdade, do mais forte para o mais fraco, e no máximo
+  // dois: uma lista de seis razões não ensina nada a quem está começando.
+  const razoes = (d.porques || []).slice()
+    .sort((a, b) => Math.abs(b.peso || 0) - Math.abs(a.peso || 0))
+    .slice(0, 2).map(p => p.texto);
+
+  if (d.acao !== 'jogar') {
+    anotar(`Dica: ${d.acao === 'comprar' ? 'comprar' : 'passar'} — ${razoes[0] || 'não há jogada'}`);
+    avisar(d.acao === 'comprar' ? 'Dica: compre do monte.' : 'Dica: passe a vez.');
+    return;
+  }
+
+  // Procura na ORDEM DA TELA, que desde a arrumação não é a de vista.mao — é o mesmo
+  // cuidado da ponte `selecionar` dos testes, e pela mesma razão.
+  const i = naMao.findIndex(m => mesmaPeca(m.peca, d.peca));
+  if (i < 0) { avisar('Nada a sugerir agora.'); return; }
+  selecionarPeca(i);
+  tocarSoltar();
+  const onde = d.ponta === 'esq' ? 'na esquerda' : 'na direita';
+  anotar(`Dica: ${d.peca[0]}|${d.peca[1]} ${onde}${razoes.length ? ' — ' + razoes.join('; ') : ''}`);
+  avisar(`Dica: ${d.peca[0]}|${d.peca[1]} ${onde}`, 2600);
+}
+
+HUD.dica.onclick = () => pedirDica();
+
 addEventListener('keydown', ev => {
+  if (digitando(ev)) return;
   if (ev.key === 'a' || ev.key === 'A') arrumarMao();
+  if (ev.key === 'd' || ev.key === 'D') pedirDica();
 });
 
 // ─── loop ────────────────────────────────────────────────────────────────────
@@ -252,6 +418,12 @@ addEventListener('keydown', ev => {
 // a profundidade da mão (10-mao.js) e manda refazer o leque — nada disso existe ainda
 // quando o arquivo da cena termina de rodar.
 enquadrar();
+
+// O menu já nasce visível pelo HTML, então `mostrarTela` nunca roda na carga — e sem esta
+// chamada o botão de retomar só apareceria depois da primeira volta ao menu, que é
+// justamente quando ele não é mais necessário. Fica aqui, no fim, pelo mesmo motivo do
+// `enquadrar()` acima: depende de tudo já estar declarado.
+atualizarBotaoRetomar();
 
 let ultimoQuadro = performance.now();
 
@@ -281,7 +453,11 @@ window.__jogo = {
   // coordenadas de tela e reprovar se alguma cair fora — que é o teste que prova "dá
   // para ver a mão" sem ninguém olhar screenshot.
   camera, naMao, enquadrar, grupoMesa, grupoOutros, grupoMonte,
-  arrumarMao, moverNaMao, publicar,
+  arrumarMao, moverNaMao, publicar, alternarConversa, falar, trocarCanal,
+  // Retomar precisa ser dirigível pelos testes: o caminho inteiro só existe entre duas
+  // cargas da página, e é justamente aí que ninguém olha.
+  retomarPartida, partidaGuardada, atualizarBotaoRetomar, lembrarMesa, mesaLembrada,
+  pedirDica, dicaDaVista,
   get P() { return P; },
   get vista() { return vistaAtual; },
   // A ORDEM DA TELA, que desde a arrumação não é mais a de vista.mao. Quem quiser

@@ -14,6 +14,7 @@ npm run build     junta src/ num index.html autossuficiente
 npm run check     avisa se o index.html está desatualizado
 npm test          build + as três suítes de lógica
 npm run telas     build + o jogo em cinco tamanhos de tela (retrato, paisagem, wide)
+npm run lembrar   build + o que sobrevive a RECARREGAR a página (preferências, retomar)
 npm run shots     build + screenshots no Chrome de verdade (tests/shots/)
 npm run online    testa o online abrindo duas abas e uma mesa real
 npm run servir    servidor local (o online não fecha conexão em file://)
@@ -62,7 +63,7 @@ As pontas são o primeiro e o último número; jogar na esquerda é um `unshift`
 ### Mapa
 
 ```
-01-constantes  peças, medidas, pontuação, folgas visuais, tabela MODOS
+01-constantes  peças, medidas, pontuação, folgas visuais, tabela MODOS, guardar/lido
 02-baralho     embaralhar, distribuir (com re-embaralho), quem abre
 03-regras      encaixes, pontas, jogadas válidas, tipo de batida     ← puro
 04-partida     turnos, compra, passe, placar, visaoDe()
@@ -122,13 +123,50 @@ As pontas são o primeiro e o último número; jogar na esquerda é um `unshift`
 - **O que cabe na mesa não é o que cabe na TELA.** O tabuleiro, os adversários e o monte
   cabiam nos 6.1 de raio do tampo e mesmo assim saíam do quadro em retrato. Quem tem a
   palavra final é `larguraVisivelEm()`, em `07-cena.js`.
+- **`Set` não sobrevive a JSON**, e `P.faltaNo` é um array de `Set`.
+  `JSON.stringify(new Set())` dá `{}` — objeto sem `.has` e sem `.indexOf`. Guardar a
+  partida no `localStorage` perdia calada a marca de "passou no número" e o bot estourava
+  em `05-bot.js`. `visaoDe` já convertia para o fio (`Array.from`); quem guarda tem de
+  fazer a mesma conversão nos dois sentidos. **Vale para qualquer coisa nova em `P`.**
+- **`performance.now()` no harness AVANÇA o relógio falso a cada chamada**
+  (`tests/harness.mjs`). Código novo que só consulte a hora desloca os temporizadores do
+  bot, e com eles o embaralho semeado: um teste que dependia de "quem abre" passa a
+  falhar sem que nada do que ele testa tenha mudado. Teste que precisa de mesa parada
+  monta a mesa, não confia no sorteio.
+- **Preferência guardada é ENTRADA DE FORA.** Pode vir de uma versão antiga, de um modo
+  que não existe mais, ou de alguém editando o armazenamento. Um `{modo:'trio', n:4}`
+  guardado estoura no `distribuir`. `mesaLembrada()` confere cada campo contra as regras
+  de hoje — e o nível de bot contra a tabela `NIVEIS` do próprio bot, não contra uma
+  segunda lista.
+- **Painel do HUD por baixo de tela é problema de EMPILHAMENTO, não de visibilidade.** A
+  conversa não existia no saguão por dois motivos somados: `desenharConversa` só era
+  chamada por `desenharHUD` (que exige partida) **e** `.tela` é `z-index: 30` contra os 6
+  do `#conversa`. Trocar classe de `oculta` não resolveria metade do problema. Hoje
+  `atualizarConversa(vista)` aceita vista nula e `body.saguao` sobe o painel.
+- **Todo texto que o convidado escreve é entrada de fora, e o nome dele é o mais antigo.**
+  `listarSala` punha `c.nome` direto em `innerHTML` desde antes de existir chat — e o corte
+  em 14 caracteres não protege nada, porque `<img src=x>` tem 11. O teste do online usa
+  exatamente esse nome e reprova se virar elemento.
+- **Estado novo no `localStorage` contamina as suítes de navegador.** Elas rodam em
+  `file://`, onde o armazenamento é do domínio inteiro: a partida guardada por uma cena
+  fazia a seguinte abrir com "Continuar a partida de antes" na foto do menu. É a mesma
+  lição do `contar()` — cada cena diz o que quer, e agora há `semGuardado()`.
 
 ---
 
 # FILA DE TRABALHO
 
-Sobrou a Fila 4. As filas 1, 2 e 3 estão feitas — ficam registradas abaixo porque o que
-elas ensinaram sobre este código continua valendo.
+**As quatro filas estão fechadas (v1.5.0).** Ficam registradas abaixo porque o que elas
+ensinaram sobre este código continua valendo — é o motivo de este arquivo existir.
+
+Da Fila 2 sobrou só uma coisa: o HUD de **celular deitado** ainda é o de tela baixa
+(`@media (max-height: 560px)`), não um layout próprio. O `#log` que faltava ali deixou de
+existir — a conversa o absorveu na v1.5.0.
+
+Fora de fila, o que a v1.5.0 acrescentou além dos itens: a **conversa da mesa** (chat geral
+e por dupla, com a narração no mesmo fio, e conversa também no saguão), **voltar para a
+mesma partida** depois de a página morrer, e a **legibilidade da mesa** (sRGB, pinta maior,
+marca da última jogada).
 
 ## Fila 1 — o bug dos pontos ✔ feito (v1.0.1)
 
@@ -206,8 +244,40 @@ chaves de peça, e **nunca no motor**. Arrastar é uma máquina de estados em
 **Painel de contagem (`13-hud.js`).** Sai inteiro de `vista.linha` + `vista.mao` + o
 `faltaNo` novo na visão — tudo público, nada a mudar no motor.
 
-Sobrou: **5. lembrar preferências** (nomes, número de jogadores, som) em `localStorage` —
-só a contagem é lembrada hoje; e **7. dica de jogada** para quem está aprendendo.
+**Lembrar preferências (5) ✔ feito (v1.5.0).** `guardar`/`lido`/`esquecer` em `01-constantes.js` —
+mora no primeiro arquivo porque o `13-hud.js` lê preferência na hora em que é concatenado.
+A mesa inteira é lembrada (modo, jogadores, alvo, compra livre, nome e tipo das **quatro**
+cadeiras) e o som também. `mesaLembrada()` valida tudo; `refletirMesaNosBotoes()` existe
+porque os botões nascem marcados no HTML com o padrão, e sem mover a marca o jogo começa
+num Trio até 10 enquanto a tela promete Clássico até 6.
+
+**Voltar para a mesma partida ✔ feito** (não estava na fila; pedido depois). A partida é
+dado puro, então cabe inteira no `localStorage` — é a mesma propriedade que faz o online
+funcionar, cobrada uma segunda vez. Guarda em `publicar()`, o funil por onde toda mudança
+passa; apaga quando a partida acaba; oferece por botão no menu, com prazo de 12 h. Cadeira
+que era `online` vira bot ao retomar, senão o motor espera para sempre por quem não vai
+responder. `tests/test-lembrar.mjs` (`npm run lembrar`) é a primeira suíte que **recarrega
+a página** — sem isso, "lembrar" não é testável, e foi ela que achou o defeito do `Set`.
+
+**Dica de jogada (7) ✔ feito (v1.5.0).** `dicaDaVista(vista)` em `05-bot.js`: é o bot pensando com
+a sua mão, sem ruído. Sai da **vista** e nunca da partida — e repare que isso não custou
+nada, porque **todo** campo que `informacao()` entrega ao bot já existe na visão. Não é
+coincidência: é consequência de o bot ter sido escrito para não trapacear. Se a dica
+precisasse de um campo a mais, seria prova de que o bot olhava a mão dos outros. De graça,
+ela funciona para o convidado, que não tem `P`.
+
+`escolherJogada` passou a devolver os **porquês** junto da nota — uma parcela nomeada por
+critério —, e a dica mostra os dois que mais pesaram. A aritmética é a mesma, nas mesmas
+parcelas e na mesma ordem: `test-regras.mjs` mede a força do bot em 300 partidas e o número
+tem de continuar igual (359 × 241, 59,8%, conferido antes e depois). Note que `n -= x`
+virou `n += somar(-x, …)` para o porquê guardar o sinal certo — é idêntico em ponto
+flutuante.
+
+A dica **levanta** a peça em vez de só dizer o nome: termina exatamente onde o seu clique
+terminaria, com os fantasmas nas pontas e a barra de confirmar aberta. Ninguém joga por
+você. Só na sua vez, porque fora dela seria prometer jogada que o motor recusa.
+
+A fila 4 está fechada.
 
 ## Regras da casa (implementadas)
 

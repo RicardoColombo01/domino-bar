@@ -8,22 +8,42 @@
 const el = id => document.getElementById(id);
 const HUD = {
   placar: el('placar'), pontas: el('pontasVal'), monte: el('monteVal'), maoN: el('maoVal'),
-  jogadores: el('jogadores'), vez: el('vez'), aviso: el('aviso'), log: el('log'),
+  jogadores: el('jogadores'), vez: el('vez'), aviso: el('aviso'),
+  conversa: el('conversa'), lista: el('conversaLista'),
+  escrever: el('conversaEscrever'), texto: el('conversaTexto'),
+  canal: el('btCanal'), abrirConversa: el('btConversa'),
   comprar: el('btComprar'), passar: el('btPassar'), acoes: el('acoes'),
   arrumar: el('btArrumar'), contar: el('btContagem'), contagem: el('contagem'),
+  dica: el('btDica'),
 };
 
 // "Contar o jogo" é a conta que jogador bom faz de cabeça e novato não faz. Fica
 // desligada por padrão e lembrada entre partidas — quem já conta sozinho não quer a
 // tabela ocupando a tela.
-let contando = false;
-try { contando = localStorage.getItem('dominobar.contagem') === '1'; } catch (e) { void e; }
+// `lido` aceita o valor antigo sem conversão: '1' e '0' são JSON válido e dão 1 e 0,
+// que já são o verdadeiro e o falso que interessam. Quem jogava antes não perde a escolha.
+let contando = !!lido('contagem', false);
 
 const ETIQUETA = { voce: 'você', local: 'nesta tela', bot: 'bot', online: 'online' };
+
+// Tudo que vem de fora passa por aqui antes de virar innerHTML. Até agora o único texto
+// alheio era o nome, cortado em 14 caracteres — o texto do chat é o primeiro campo
+// realmente livre chegando pela rede, e sem escape isso é script rodando na máquina dos
+// outros jogadores.
+const escapar = txt => String(txt)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 function mostrarTela(id) {
   for (const t of ['telaMenu', 'telaFimMao', 'telaFimPartida', 'telaPasse', 'telaOnline', 'telaSair'])
     el(t).classList.toggle('oculta', t !== id);
+  // O botão de retomar é recalculado a cada vez que o menu aparece, e não uma vez no
+  // início: entre um e outro você pode ter acabado a partida guardada, ou o prazo dela
+  // pode ter vencido com a aba aberta.
+  if (id === 'telaMenu') atualizarBotaoRetomar();
+  // A conversa do saguão vive por cima desta tela, então quem abre e fecha a tela é quem
+  // liga e desliga aquilo.
+  atualizarSaguao(id === 'telaOnline');
 }
 const esconderTelas = () => mostrarTela(null);
 
@@ -36,8 +56,8 @@ function avisar(txt, ms = 2200) {
 }
 
 function nomeDoTime(vista, time) {
-  if (!vista.duplas) return vista.cadeiras[time].nome;
-  return `${vista.cadeiras[time].nome} e ${vista.cadeiras[time + 2].nome}`;
+  if (!vista.duplas) return escapar(vista.cadeiras[time].nome);
+  return `${escapar(vista.cadeiras[time].nome)} e ${escapar(vista.cadeiras[time + 2].nome)}`;
 }
 
 function desenharHUD(vista) {
@@ -55,7 +75,7 @@ function desenharHUD(vista) {
   // Um cartão por cadeira, na ordem em que a vez anda. O da vez acende.
   HUD.jogadores.innerHTML = vista.cadeiras.map((c, i) => `
     <div class="jog ${i === vista.vez ? 'davez' : ''} ${i === vista.cadeira ? 'euu' : ''}">
-      <span class="nome">${c.nome}</span>
+      <span class="nome">${escapar(c.nome)}</span>
       <span class="tipo">${ETIQUETA[c.tipo] || c.tipo}</span>
       <span class="pecas">${'▮'.repeat(Math.min(vista.naMao[i], 9))}<i>${vista.naMao[i]}</i></span>
     </div>`).join('');
@@ -73,11 +93,16 @@ function desenharHUD(vista) {
   HUD.arrumar.classList.toggle('oculta', !temMao || vista.mao.length < 2);
   HUD.contar.classList.toggle('oculta', !temMao);
   HUD.contar.classList.toggle('on', contando);
+  // A dica, ao contrário de arrumar e contar, SÓ vale na sua vez: ela levanta uma peça e
+  // abre a barra de confirmar, e fora da vez isso seria prometer uma jogada que o motor
+  // vai recusar.
+  HUD.dica.classList.toggle('oculta', !temMao || !minhaVez || vista.fase !== 'mao');
   HUD.acoes.classList.toggle('oculta', !a.comprar && !a.passar && !temMao);
   // Quando a única saída é comprar, o botão precisa gritar: o jogador está travado.
   HUD.comprar.classList.toggle('principal', a.comprar && !a.jogadas.length);
 
   desenharContagem(vista);
+  desenharConversa(vista);
 }
 
 // Quantas peças de cada número já apareceram — as da mesa MAIS as da sua mão, como o
@@ -98,7 +123,7 @@ function desenharContagem(vista) {
     // Quem passou numa ponta provou não ter aquele número. É informação pública — a
     // mesa inteira viu o passe —, e até agora só o bot usava.
     const semEle = (vista.faltaNo || [])
-      .map((nums, i) => (i !== vista.cadeira && nums.indexOf(n) >= 0 ? vista.cadeiras[i].nome : null))
+      .map((nums, i) => (i !== vista.cadeira && nums.indexOf(n) >= 0 ? escapar(vista.cadeiras[i].nome) : null))
       .filter(Boolean);
     linhas.push(`<div${visto === total ? ' class="zerado"' : ''}>` +
       `<b>${n}</b>` +
@@ -130,11 +155,139 @@ function esconderConfirmacao() {
 }
 el('btCancelar').onclick = () => cancelarEscolha();
 
+// ─── a conversa da mesa ──────────────────────────────────────────────────────
+// A narração do jogo e as falas no MESMO fio, em ordem: jogada em cinza, fala em âmbar
+// com o nome de quem falou. Um lugar só para olhar — e resolve de quebra o log, que
+// sumia em toda tela de celular por falta de canto onde caber.
+//
+// O painel ACRESCENTA em vez de ser reconstruído, e o <input> nunca é reescrito: quem
+// desenha o HUD é atualizarVista, que roda a cada vista chegando pelo fio, e reconstruir
+// aqui faria o campo perder o foco e o texto a cada jogada de bot.
 const linhasDoLog = [];
-function anotar(txt) {
-  linhasDoLog.push(txt);
-  if (linhasDoLog.length > 5) linhasDoLog.shift();
-  HUD.log.innerHTML = linhasDoLog.map(t => `<div>${t}</div>`).join('');
+let conversaAberta = false, naoLidas = 0;
+let canalAtual = 'todos';
+
+function trocarCanal(qual) {
+  canalAtual = qual;
+  HUD.canal.textContent = qual === 'dupla' ? 'Dupla' : 'Todos';
+  HUD.canal.classList.toggle('on', qual === 'dupla');
+  HUD.texto.placeholder = qual === 'dupla'
+    // Dito na cara: quem retransmite é o anfitrião, então não há sigilo para ele.
+    ? 'só o seu parceiro (e o anfitrião) leem…'
+    : 'falar com a mesa…';
+}
+
+function porNaConversa(html, classe) {
+  const div = document.createElement('div');
+  div.className = classe;
+  div.innerHTML = html;
+  HUD.lista.appendChild(div);
+  linhasDoLog.push(div);
+  while (linhasDoLog.length > 40) HUD.lista.removeChild(linhasDoLog.shift());
+  HUD.lista.scrollTop = HUD.lista.scrollHeight;
+  if (!conversaAberta) { naoLidas++; atualizarBotaoConversa(); }
+}
+
+function anotar(txt) { porNaConversa(escapar(txt), 'doJogo'); }
+
+function limparConversa() {
+  linhasDoLog.length = 0;
+  HUD.lista.innerHTML = '';
+  falasGuardadas.length = 0;         // mesa nova: fala guardada da anterior não vale
+  naoLidas = 0;
+  atualizarBotaoConversa();
+}
+
+// Uma fala. `de` é a cadeira de quem falou, e o nome sai da VISTA — nunca do que o
+// convidado alega ser.
+//
+// `deSaguao` é a saída para o único momento em que não existe vista: a espera antes de a
+// partida começar. Ele vem do ANFITRIÃO, tirado do MESA dele, e não de quem escreveu — a
+// invariante continua de pé, porque quem fala não escolhe como aparece.
+function dizer(vista, de, canal, txt, deSaguao) {
+  const nome = (vista && vista.cadeiras[de] && vista.cadeiras[de].nome) || deSaguao || 'Alguém';
+  porNaConversa(
+    `<b>${escapar(nome)}</b>${canal === 'dupla' ? '<i>dupla</i>' : ''} ${escapar(txt)}`,
+    canal === 'dupla' ? 'fala daDupla' : 'fala');
+}
+
+// Fala da dupla que chegou enquanto a tela mostrava OUTRA cadeira. Numa mesa mista
+// (gente na mesma tela + gente online) o hotseat troca `euNaTela`, e mostrar a fala na
+// hora seria entregá-la ao adversário que está olhando a mesma tela. Guardar é o certo;
+// o que estava errado era DESCARTAR — a fala nunca voltava quando a vez voltava.
+const falasGuardadas = [];               // { de, canal, txt, para } — `para` é a cadeira dona
+
+function guardarFala(de, canal, txt, para) {
+  falasGuardadas.push({ de, canal, txt, para });
+}
+
+// Chamada quando o hotseat entrega a tela a `cadeira` (btPronto, em 16-loop.js).
+//
+// Solta as TRÊS últimas. O limite é sobre ATENÇÃO e não sobre memória — `porNaConversa`
+// já corta a lista em 40 —: quem volta de três rodadas de hotseat estaria lendo parede de
+// texto no meio da própria vez, e o que decide uma jogada é o que o parceiro disse por
+// último, não o que ele disse quatro jogadas atrás.
+const FALAS_DE_VOLTA = 3;
+
+function soltarFalasGuardadas(cadeira) {
+  const minhas = [];
+  // Consome tudo da cadeira, inclusive o que não vai aparecer: deixar o excedente na fila
+  // faria fala velha reaparecer DEPOIS de fala nova no próximo hotseat.
+  for (let i = falasGuardadas.length - 1; i >= 0; i--) {
+    if (falasGuardadas[i].para !== cadeira) continue;
+    minhas.unshift(falasGuardadas[i]);
+    falasGuardadas.splice(i, 1);
+  }
+  if (!minhas.length || !vistaAtual) return;
+  const mostrar = minhas.slice(-FALAS_DE_VOLTA);
+  const engoliu = minhas.length - mostrar.length;
+  if (engoliu) anotar(`(${engoliu} fala${engoliu > 1 ? 's' : ''} da dupla ficou para trás)`);
+  for (const f of mostrar) dizer(vistaAtual, f.de, f.canal, f.txt);
+}
+
+function atualizarBotaoConversa() {
+  HUD.abrirConversa.textContent = naoLidas ? String(Math.min(naoLidas, 9)) : '💬';
+  HUD.abrirConversa.classList.toggle('temNovidade', naoLidas > 0);
+}
+
+function alternarConversa(abrir) {
+  conversaAberta = abrir === undefined ? !conversaAberta : abrir;
+  HUD.conversa.classList.toggle('aberta', conversaAberta);
+  if (conversaAberta) { naoLidas = 0; HUD.lista.scrollTop = HUD.lista.scrollHeight; }
+  atualizarBotaoConversa();
+}
+
+// Só há com quem conversar se houver gente online. E o canal "dupla" só existe onde
+// existe dupla — o Clássico de 4 é o único modo em duplas.
+//
+// `vista` é OPCIONAL, e é essa a diferença que trouxe a conversa para o saguão: antes esta
+// função só era chamada por `desenharHUD`, que só roda em `atualizarVista`, que só existe
+// depois de haver partida. Resultado: quem esperava a mesa encher, olhando o código de
+// quatro letras, não conseguia falar nada — justo quando mais se quer falar.
+let salaDuplas = false;        // o saguão sabe se a mesa é em duplas antes de existir P
+let noSaguao = false;          // a tela de espera está no ar
+
+function atualizarConversa(vista) {
+  const online = modo === 'anfitriao' || modo === 'convidado';
+  HUD.escrever.classList.toggle('oculta', !online);
+  HUD.abrirConversa.classList.toggle('oculta', !online && !linhasDoLog.length);
+  // As duplas são por CADEIRA (em cruz), então dá para sabê-las antes de a partida
+  // existir: com vista, quem manda é ela; sem vista, a mesa que está sendo montada.
+  const duplas = vista ? !!vista.duplas : salaDuplas;
+  HUD.canal.classList.toggle('oculta', !duplas);
+  if (!duplas && canalAtual === 'dupla') trocarCanal('todos');
+}
+
+const desenharConversa = vista => atualizarConversa(vista);
+
+// A tela de espera é um overlay de `z-index: 30` e cobria a conversa inteira — mexer em
+// classe de visibilidade não resolveria nada, porque o problema era empilhamento. No
+// saguão, e só nele, a conversa e o botão que a abre sobem por cima da tela.
+function atualizarSaguao(naEspera) {
+  if (naEspera !== undefined) noSaguao = naEspera;
+  const online = modo === 'anfitriao' || modo === 'convidado';
+  document.body.classList.toggle('saguao', noSaguao && online);
+  atualizarConversa(vistaAtual);
 }
 
 // O que sobrou na mão de cada um. Tinha rótulo nenhum e o mesmo âmbar do placar do
@@ -144,7 +297,7 @@ function sobrouNaMao(vista) {
   const r = vista.resultado;
   if (!vista.duplas) {
     return r.somas
-      .map((s, i) => `<div><span>${vista.cadeiras[i].nome}</span><b>${s}</b></div>`).join('');
+      .map((s, i) => `<div><span>${escapar(vista.cadeiras[i].nome)}</span><b>${s}</b></div>`).join('');
   }
   return (r.somasPorTime || []).map((total, t) => {
     const parcelas = r.somas.filter((_, i) => timeDe(vista, i) === t).join(' + ');
@@ -203,10 +356,20 @@ function mostrarFimDePartida(vista) {
   mostrarTela('telaFimPartida');
 }
 
-let mudo = false;
+// Quem desligou o som desligou por um motivo — trabalho, gente dormindo, ou simplesmente
+// não gostar. Perguntar de novo a cada visita é o jogo não escutar.
+let mudo = !!lido('mudo', false);
+function pintarBotaoSom() {
+  el('btSom').textContent = mudo ? '✕' : '♪';
+  el('btSom').classList.toggle('desligado', mudo);
+}
 el('btSom').onclick = () => {
   mudo = !mudo;
   silenciar(mudo);
-  el('btSom').textContent = mudo ? '✕' : '♪';
-  el('btSom').classList.toggle('desligado', mudo);
+  pintarBotaoSom();
+  guardar('mudo', mudo);
 };
+pintarBotaoSom();
+// `silenciar` mexe no AudioContext, que só nasce no primeiro som. Chamar aqui não
+// adiantaria nada; quem aplica o silêncio guardado é `ligarMurmuro`, que roda quando o
+// áudio de fato começa.

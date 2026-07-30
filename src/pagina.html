@@ -26,6 +26,7 @@
 <div id="acoes">
   <button class="btn" id="btComprar">Comprar do monte</button>
   <button class="btn" id="btPassar">Passar a vez</button>
+  <button class="btn peq" id="btDica" title="Sugerir uma jogada e dizer por quê">? Dica</button>
   <button class="btn peq" id="btArrumar" title="Agrupar a mão pelo seu número mais forte">⇄ Arrumar</button>
   <button class="btn peq" id="btContagem" title="Mostrar quantas peças de cada número já apareceram">Contar</button>
 </div>
@@ -40,8 +41,19 @@
 
 <div id="vez" class="painel"></div>
 <div id="aviso"></div>
-<div id="log" class="painel"></div>
+
+<!-- A narração do jogo e a conversa no mesmo fio: um lugar só para olhar. O campo de
+     escrever só aparece quando há gente online — no solo isto é o log de sempre. -->
+<div id="conversa" class="painel">
+  <div id="conversaLista"></div>
+  <div id="conversaEscrever" class="oculta">
+    <button class="btn peq" id="btCanal" title="Para quem você está falando">Todos</button>
+    <input id="conversaTexto" class="entrada" maxlength="160" placeholder="falar com a mesa…" autocomplete="off" />
+  </div>
+</div>
+
 <button id="btSom" class="painel canto" title="Som">♪</button>
+<button id="btConversa" class="painel canto oculta" title="Conversa">💬</button>
 <button id="btSair" class="painel canto oculta" title="Sair da partida">✕</button>
 
 <!-- ─── montagem da mesa ─────────────────────────────────────────────────── -->
@@ -87,6 +99,12 @@
     <div class="linha acoesMenu">
       <button class="btn principal" id="btComecar">Sentar e jogar</button>
       <button class="btn" id="btEntrar">Entrar numa mesa pelo código</button>
+    </div>
+
+    <!-- Só aparece quando há partida guardada que ainda vale. O texto é escrito na hora,
+         com o modo e a mão, para você saber o que vai retomar antes de clicar. -->
+    <div class="linha acoesMenu">
+      <button class="btn retomar oculta" id="btRetomar">Continuar a partida de antes</button>
     </div>
 
     <details class="regras">

@@ -13,6 +13,8 @@ const mod = await import(buildModule([
   'grupoMao', 'grupoOutros', 'grupoMonte', 'grupoMesa', 'scene', 'renderer', 'camera',
   'selecionarPeca', 'cancelarEscolha', 'confirmarJogada', 'escolhida', 'grupoPrevia', 'chave',
   'arrumarMao', 'moverNaMao', 'carroca',
+  'guardarFala', 'soltarFalasGuardadas', 'falasGuardadas', 'donoLocalDaFala', 'limparConversa',
+  'dicaDaVista', 'pedirDica', 'receberChat', 'atualizarConversa',
 ], undefined, path.join(import.meta.dirname, 'built-jogo.mjs')));
 
 let falhas = 0;
@@ -416,6 +418,17 @@ console.log('\na arrumação sobrevive à troca de jogador');
 // exatamente o que ele prova. Depois dele não dá para jogar mais nesta partida.
 console.log('\na arrumação não encosta na mão do motor');
 {
+  // Só bots à mesa: com uma cadeira 'local' herdada do bloco anterior, a partida pode
+  // começar na tela de troca — e ali a vista é uma CÓPIA com a mão vazia, não a
+  // referência do motor que este teste quer conferir.
+  //
+  // E não dá para contar com a sorte de o sorteio abrir numa cadeira boa: `performance.now()`
+  // no harness AVANÇA o relógio falso a cada chamada, então qualquer código novo que o
+  // consulte desloca os temporizadores do bot e com eles o embaralho inteiro. Foi o que
+  // aconteceu quando a marca da última jogada entrou. Montar a mesa é o que segura.
+  mod.MESA.n = 3;
+  mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[1].nivel = 'normal';
+  mod.MESA.cadeiras[2].tipo = 'bot'; mod.MESA.cadeiras[2].nivel = 'normal';
   mod.comecarLocal();
   // `visaoDe` devolve a MESMA referência de P.maos[cadeira]. Se alguém um dia "resolver"
   // a arrumação com um vista.mao.sort(), terá ordenado a mão do anfitrião por causa da
@@ -455,6 +468,163 @@ console.log('\nsair da partida');
   els.get('btSairSim').onclick();
   ok(mod.P === null, 'sair de um jogo local deveria encerrar a partida');
   ok(!els.get('telaMenu')._cls.has('oculta'), 'sair deveria voltar para a montagem da mesa');
+}
+
+// A fala da dupla numa mesa MISTA: gente na mesma tela e gente online ao mesmo tempo.
+// `euNaTela` não é "a cadeira do anfitrião", é a cadeira que a tela mostra — e o hotseat a
+// troca. Mostrar a fala da dupla na hora errada seria entregá-la ao adversário que está
+// olhando a mesma tela; o defeito era ela ser DESCARTADA em vez de guardada.
+console.log('\na fala da dupla espera o hotseat voltar');
+{
+  // Duplas em cruz (0&2 × 1&3): você na 0, o adversário do lado na 1 (mesma tela), o seu
+  // parceiro online na 2. É o único arranjo em que a fala do parceiro pode chegar com a
+  // tela na mão de quem não pode ler.
+  mod.MESA.modo = 'classico'; mod.MESA.n = 4;
+  mod.MESA.cadeiras[1].tipo = 'local'; mod.MESA.cadeiras[1].nome = 'Vizinho';
+  mod.MESA.cadeiras[2].tipo = 'online'; mod.MESA.cadeiras[2].nome = 'Parceiro';
+  mod.MESA.cadeiras[3].tipo = 'bot'; mod.MESA.cadeiras[3].nivel = 'normal';
+  mod.comecarLocal();
+  for (let i = 0; i < 10 && mod.travado; i++) els.get('btPronto').onclick();
+
+  ok(mod.donoLocalDaFala(2) === 0,
+     `quem lê a fala do parceiro nesta tela é a cadeira 0, veio ${mod.donoLocalDaFala(2)}`);
+
+  // `limparConversa` zera a fila; a contagem de filhos vem depois dela porque o stub de
+  // DOM não apaga `children` num innerHTML = ''.
+  mod.limparConversa();
+  const base = els.get('conversaLista').children.length;
+  const ditas = () => els.get('conversaLista').children.slice(base)
+    .filter(d => /fala/.test(d.className)).map(d => d.innerHTML);
+
+  for (const t of ['um', 'dois', 'tres', 'quatro', 'cinco']) mod.guardarFala(2, 'dupla', t, 0);
+  ok(ditas().length === 0, 'fala guardada apareceu na tela antes de o hotseat voltar');
+
+  mod.soltarFalasGuardadas(0);
+  const soltas = ditas();
+  ok(soltas.length === 3, `deveria soltar as 3 últimas falas, soltou ${soltas.length}`);
+  ok(/tres/.test(soltas[0]) && /quatro/.test(soltas[1]) && /cinco/.test(soltas[2]),
+     'as falas soltas saíram fora de ordem ou não são as três últimas');
+  ok(mod.falasGuardadas.length === 0,
+     'a fila não foi esvaziada — a fala repetiria no hotseat seguinte');
+
+  const quantas = ditas().length;
+  mod.soltarFalasGuardadas(0);
+  ok(ditas().length === quantas, 'a fala reapareceu no hotseat seguinte');
+
+  // A fila é POR CADEIRA: soltar a vez da 0 não pode consumir o que era da 1.
+  mod.guardarFala(2, 'dupla', 'isto é do vizinho', 1);
+  mod.soltarFalasGuardadas(0);
+  ok(mod.falasGuardadas.length === 1, 'soltar a cadeira 0 consumiu fala que era da cadeira 1');
+
+  // Sem hotseat não há o que guardar: o parceiro de quem falou é um convidado, e ele já
+  // recebeu pelo fio — guardar aqui mostraria a fala a quem ela não pertence.
+  mod.MESA.cadeiras[1].tipo = 'online'; mod.MESA.cadeiras[2].tipo = 'bot';
+  mod.comecarLocal();
+  ok(mod.donoLocalDaFala(1) === -1,
+     'fala de convidado sem parceiro nesta tela não tem dono local, e não se guarda');
+}
+
+// A dica é o bot pensando com a SUA mão. O que este bloco prova não é que ela escolhe
+// bem — isso é o `test-regras.mjs` medindo o bot —, é que ela não sabe nada que você não
+// saiba: ela sai da VISTA, e a vista é a fronteira de segurança do projeto.
+console.log('\na dica de jogada');
+{
+  mod.MESA.modo = 'classico'; mod.MESA.n = 3;
+  mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[1].nivel = 'normal';
+  mod.MESA.cadeiras[2].tipo = 'bot'; mod.MESA.cadeiras[2].nivel = 'normal';
+  mod.comecarLocal();
+
+  // Um estado com jogada disponível na sua vez e a mesa já formada.
+  let pronto = false;
+  for (let i = 0; i < 400 && !pronto; i++) {
+    const v = mod.vistaAtual;
+    if (v && v.fase === 'mao' && v.vez === v.cadeira && v.linha.length && v.acoes.jogadas.length) { pronto = true; break; }
+    if (!mod.P || mod.P.fase !== 'mao') { mod.comecarLocal(); continue; }
+    mod.aplicarIntencao(mod.P.vez, mod.jogadaDoBot(mod.P, mod.P.vez));
+  }
+  ok(pronto, 'montagem: não achei uma vez sua com jogada possível');
+
+  const d = mod.dicaDaVista(mod.vistaAtual);
+  ok(d && d.acao === 'jogar', 'a dica não sugeriu jogada nenhuma');
+  // A sugestão tem de estar entre as que o motor aceita — inclusive a regra do
+  // fechamento armado, que já filtra `acoes.jogadas`. Uma dica ilegal seria pior que
+  // nenhuma: o jogador confirma e leva um erro na cara.
+  const legal = mod.vistaAtual.acoes.jogadas
+    .some(j => mod.chave(j.peca) === mod.chave(d.peca) && j.ponta === d.ponta);
+  ok(legal, `a dica sugeriu ${d.peca}/${d.ponta}, que não está entre as jogadas válidas`);
+  ok(d.porques.length > 0, 'a dica não explicou por quê — é o que ela existe para fazer');
+  ok(d.porques.every(p => typeof p.texto === 'string' && p.texto),
+    'algum porquê veio sem texto');
+
+  // O PONTO. A visão passada por JSON é literalmente o que o convidado recebe: sem mão
+  // alheia, sem monte, sem partida. Se a dica continua respondendo o MESMO, ela nunca
+  // olhou para nada além do que você vê — e de graça ela passa a funcionar no online.
+  const pacote = JSON.parse(JSON.stringify(mod.visaoDe(mod.P, mod.euNaTela)));
+  const pelaRede = mod.dicaDaVista(pacote);
+  ok(pelaRede && pelaRede.acao === 'jogar', 'a dica não funciona a partir da visão que trafega');
+  ok(mod.chave(pelaRede.peca) === mod.chave(d.peca) && pelaRede.ponta === d.ponta,
+    'a dica mudou de resposta quando a informação veio pelo fio — sinal de que lia a partida');
+
+  // Fora da sua vez não há dica: ela levanta uma peça e abre a barra de confirmar, e
+  // prometer uma jogada que o motor vai recusar é pior que não sugerir.
+  const deOutro = Object.assign({}, mod.vistaAtual, { vez: (mod.vistaAtual.cadeira + 1) % 3 });
+  ok(mod.dicaDaVista(deOutro) === null, 'deu dica na vez de outra pessoa');
+
+  // E termina onde um clique seu terminaria: peça levantada, fantasmas nas pontas.
+  mod.cancelarEscolha();
+  mod.pedirDica();
+  ok(mod.escolhida, 'a dica não levantou a peça');
+  ok(mod.grupoPrevia.children.length > 0, 'a dica levantou a peça mas não mostrou onde ela cai');
+  // `escolhida` é a CHAVE da peça e não um índice — é o que faz a seleção sobreviver à
+  // arrumação da mão, e aqui dá para comparar direto.
+  ok(mod.escolhida === mod.chave(d.peca),
+    `a peça levantada (${mod.escolhida}) não é a que a dica sugeriu (${mod.chave(d.peca)})`);
+  mod.cancelarEscolha();
+  console.log(`  sugeriu ${d.peca[0]}|${d.peca[1]} ${d.ponta} · ${d.porques.length} porquê(s) · ` +
+    'a mesma resposta pela vista que trafega');
+}
+
+// `receberChat` é a porta ÚNICA da conversa. O convidado sempre entrou por ela; o
+// anfitrião passou a entrar. Antes ele chamava espalharChat direto e era o único da mesa
+// que podia inundar os outros — a autoridade dele é sobre a PARTIDA, não sobre o ritmo.
+console.log('\na guarda da conversa vale para todo mundo');
+{
+  mod.limparConversa();
+  const antes = els.get('conversaLista').children.length;
+
+  ok(mod.receberChat(0, { canal: 'todos', txt: 'primeira' }) === true,
+     'a primeira fala de uma cadeira deveria passar');
+  ok(mod.receberChat(0, { canal: 'todos', txt: 'na sequência' }) === false,
+     'duas falas seguidas da mesma cadeira deveriam ser barradas pelo intervalo');
+  // A guarda é POR CADEIRA: um jogador apressado não pode calar a mesa.
+  ok(mod.receberChat(1, { canal: 'todos', txt: 'de outra cadeira' }) === true,
+     'a guarda barrou uma cadeira diferente — ela é por cadeira, não da mesa toda');
+  ok(mod.receberChat(2, { canal: 'todos', txt: '   ' }) === false, 'fala em branco não passa');
+  ok(mod.receberChat(2, { canal: 'todos', txt: '' }) === false, 'fala vazia não passa');
+
+  // O corte de tamanho é do anfitrião pelo mesmo motivo do intervalo.
+  ok(mod.receberChat(3, { canal: 'todos', txt: 'x'.repeat(400) }) === true, 'fala longa deveria passar, cortada');
+  const ultima = els.get('conversaLista').children.slice(-1)[0].innerHTML;
+  const xs = (ultima.match(/x/g) || []).length;
+  ok(xs === 160, `a fala deveria ser cortada em 160 caracteres, ficou com ${xs}`);
+
+  const entraram = els.get('conversaLista').children.length - antes;
+  ok(entraram === 3, `3 falas deveriam ter entrado na lista, entraram ${entraram}`);
+  console.log(`  intervalo e corte valem para qualquer cadeira · ${entraram} de 7 tentativas passaram`);
+}
+
+// A conversa do saguão: `atualizarConversa` tem de funcionar SEM vista, que é a diferença
+// que trouxe o chat para a espera. Antes ela só era chamada por `desenharHUD`, que só roda
+// quando já existe partida — e ninguém conseguia falar enquanto a mesa enchia.
+console.log('\na conversa existe antes da partida');
+{
+  // Sem vista e sem rede: não há com quem falar, o campo fica escondido.
+  mod.atualizarConversa(undefined);
+  ok(els.get('conversaEscrever')._cls.has('oculta'),
+     'sem rede não há com quem conversar, o campo devia estar escondido');
+  // E o importante: chamar sem vista não pode estourar. Era isso que faltava.
+  ok(true, 'atualizarConversa(undefined) não estourou');
+  console.log('  atualizarConversa roda sem vista, que é o que o saguão precisa');
 }
 
 console.log(falhas ? `\n${falhas} falha(s)` : '\ntudo certo');

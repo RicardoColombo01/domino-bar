@@ -89,7 +89,7 @@ html, body {
 /* Painéis que só informam não podem comer o toque: em retrato eles viram faixas da
    largura inteira, e o pointerdown do jogo só reage a evento cujo alvo é o canvas —
    um toque em cima deles não chegaria à mesa nem cancelaria a peça levantada. */
-#vez, #log, #jogadores { pointer-events: none; }
+#vez, #jogadores { pointer-events: none; }
 
 #vez {
   position: fixed; bottom: 16px; left: 16px; z-index: 5;
@@ -97,9 +97,30 @@ html, body {
 }
 #vez.minha { color: #101010; background: var(--ambar); font-weight: 700; opacity: 1; border-color: transparent; }
 
-#log {
-  position: fixed; bottom: 16px; right: 16px; z-index: 5;
-  font-size: 11.5px; opacity: .55; max-width: 250px; text-align: right; line-height: 1.7;
+/* A conversa: narração e falas no mesmo fio. Diferente dos outros painéis, este RECEBE
+   toque — tem campo dentro —, então nada de pointer-events: none aqui. */
+#conversa {
+  position: fixed; bottom: 16px; right: 16px; z-index: 6;
+  width: 268px; font-size: 11.5px; line-height: 1.55;
+  display: flex; flex-direction: column; gap: 6px; padding: 8px 10px;
+}
+#conversaLista { max-height: 132px; overflow-y: auto; scrollbar-width: thin; }
+#conversaLista::-webkit-scrollbar { width: 4px; }
+#conversaLista::-webkit-scrollbar-thumb { background: var(--borda); border-radius: 2px; }
+#conversaLista > div { margin-top: 2px; overflow-wrap: anywhere; }
+/* Jogada é fundo, fala é figura: a diferença tem de ser vista sem ler. */
+#conversaLista .doJogo { opacity: .45; }
+#conversaLista .fala b { color: var(--ambar); font-weight: 600; }
+#conversaLista .daDupla b { color: #9fd6a0; }
+#conversaLista .fala i {
+  font-style: normal; font-size: 9px; text-transform: uppercase; letter-spacing: .08em;
+  opacity: .5; margin-left: 4px;
+}
+#conversaEscrever { display: flex; gap: 5px; align-items: center; }
+#conversaEscrever .entrada { font-size: 12px; padding: 5px 8px; }
+#btCanal { white-space: nowrap; }
+#btConversa.temNovidade {
+  background: var(--ambar); color: #17100a; border-color: transparent; font-weight: 700;
 }
 
 #acoes { position: fixed; bottom: 60px; left: 16px; z-index: 6; display: flex; gap: 9px; align-items: center; }
@@ -108,7 +129,9 @@ html, body {
 /* Contagem do jogo: uma linha por número, barrinha do que já apareceu e quantas faltam.
    Fica do lado, ligada por botão — quem já conta de cabeça não quer a tabela na tela. */
 #contagem {
-  position: fixed; right: 14px; bottom: 150px; z-index: 5;   /* acima do #log */
+  /* Acima da conversa, que é o painel mais alto do canto — a lista dela tem teto de
+     altura justamente para esta conta não virar adivinhação. */
+  position: fixed; right: 14px; bottom: 220px; z-index: 5;
   display: grid; gap: 2px; font-size: 12px; min-width: 168px;
   pointer-events: none;
 }
@@ -154,6 +177,7 @@ html, body {
 /* O de sair fica ao lado do som no computador, e embaixo dele no celular em pé, onde a
    coluna da esquerda é dos dois e a faixa do topo começa depois dela. */
 #btSair { left: 58px; }
+#btConversa { left: 102px; display: none; }
 #btSair:hover { color: #ff9b86; border-color: rgba(255, 155, 134, .5); }
 
 /* ── botões ───────────────────────────────────────────────────────────────── */
@@ -175,6 +199,15 @@ html, body {
 .btn.peq i { font-style: normal; opacity: .55; font-size: 11.5px; margin-left: 5px; }
 .btn.peq.on i { opacity: .65; }
 
+/* Continuar a partida de antes. Verde e não âmbar de propósito: o âmbar é do "Sentar e
+   jogar", que é a ação normal — e retomar não pode competir com começar. Quem chegou
+   para jogar de novo acha, quem chegou para começar não tropeça. */
+.btn.retomar {
+  border-color: rgba(159, 214, 160, .45); color: #cfe9cf;
+  background: rgba(38, 62, 42, .92);
+}
+.btn.retomar:hover { background: rgba(48, 80, 54, .95); border-color: rgba(159, 214, 160, .7); }
+
 /* ── telas cheias ─────────────────────────────────────────────────────────── */
 .tela {
   position: fixed; inset: 0; z-index: 30;
@@ -182,6 +215,14 @@ html, body {
   background: radial-gradient(ellipse at 50% 40%, rgba(60, 38, 20, .74), rgba(8, 5, 4, .95));
   backdrop-filter: blur(4px); padding: 20px; overflow: auto;
 }
+/* A CONVERSA DO SAGUÃO. A tela de espera é um overlay de z-index 30 e cobria a conversa
+   por completo — nenhuma classe de visibilidade resolveria isso, porque o problema era
+   empilhamento. Enquanto a mesa enche, e só então, a conversa e o botão que a abre sobem
+   acima da tela: é o único momento do jogo em que um painel do HUD fica POR CIMA de uma
+   tela, e é justamente quando as pessoas mais querem falar ("cadê você?", "entra aí").
+   O canto de baixo à direita fica livre porque a carta é centrada e tem 620px de teto. */
+body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
+
 .carta {
   background: linear-gradient(180deg, rgba(38, 25, 16, .97), rgba(22, 14, 9, .97));
   border: 1px solid var(--borda); border-radius: 16px;
@@ -274,10 +315,14 @@ html, body {
   .btn.peq { padding: 9px 14px; }
 }
 
-/* O log é a primeira coisa a sair de qualquer tela apertada: é enfeite, e mora no mesmo
-   canto que a barra de confirmação ocupa quando você levanta uma peça. */
+/* Em tela apertada a conversa não some: ela FECHA. Antes o log era simplesmente
+   escondido em todo celular — e com o chat dentro dele isso deixaria de ser aceitável.
+   Agora abre por botão, com contador de não lidas. */
 @media (pointer: coarse), (max-width: 900px), (max-height: 560px) {
-  #log { display: none; }
+  #conversa { display: none; }
+  #conversa.aberta { display: flex; }
+  #btConversa { display: block; }
+  #btConversa.oculta { display: none !important; }
 }
 
 /* Celular DEITADO: 390px de altura para caber tudo, e o topo e a lista de jogadores
@@ -346,6 +391,8 @@ html, body {
 
   .canto { top: calc(var(--seg-t) + 8px); left: calc(var(--seg-l) + 6px); }
   #btSair { top: calc(var(--seg-t) + 58px); left: calc(var(--seg-l) + 6px); }
+  /* A coluna da esquerda é dos três botões; tudo que é faixa começa depois dela. */
+  #btConversa { top: calc(var(--seg-t) + 108px); left: calc(var(--seg-l) + 6px); }
 
   /* "Sua vez" é informação, não ação: sobe para junto do resto da informação. Deixado
      no rodapé ele brigava com a barra de confirmação, que é quem manda ali embaixo. */
@@ -369,10 +416,16 @@ html, body {
     flex-wrap: wrap; justify-content: center; gap: 7px;
   }
   #acoes .btn { flex: 1 1 auto; }
+  /* Em pé a conversa vira folha do rodapé, ACIMA das ações — o rodapé é delas. */
+  #conversa.aberta {
+    left: calc(var(--seg-l) + 8px); right: calc(var(--seg-r) + 8px); width: auto;
+    bottom: calc(var(--seg-b) + 130px);
+  }
+  #conversa.aberta #conversaLista { max-height: 92px; }
   /* A contagem vira faixa embaixo dos jogadores: em pé não há canto direito sobrando. */
   #contagem {
     top: calc(var(--seg-t) + 128px); bottom: auto;
-    left: calc(var(--seg-l) + 6px); right: calc(var(--seg-r) + 6px);
+    left: calc(var(--seg-l) + 56px); right: calc(var(--seg-r) + 6px);
     grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; min-width: 0;
   }
   #contagem > span.rot { display: none; }
