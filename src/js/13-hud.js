@@ -19,8 +19,9 @@ const HUD = {
 // "Contar o jogo" é a conta que jogador bom faz de cabeça e novato não faz. Fica
 // desligada por padrão e lembrada entre partidas — quem já conta sozinho não quer a
 // tabela ocupando a tela.
-let contando = false;
-try { contando = localStorage.getItem('dominobar.contagem') === '1'; } catch (e) { void e; }
+// `lido` aceita o valor antigo sem conversão: '1' e '0' são JSON válido e dão 1 e 0,
+// que já são o verdadeiro e o falso que interessam. Quem jogava antes não perde a escolha.
+let contando = !!lido('contagem', false);
 
 const ETIQUETA = { voce: 'você', local: 'nesta tela', bot: 'bot', online: 'online' };
 
@@ -35,6 +36,10 @@ const escapar = txt => String(txt)
 function mostrarTela(id) {
   for (const t of ['telaMenu', 'telaFimMao', 'telaFimPartida', 'telaPasse', 'telaOnline', 'telaSair'])
     el(t).classList.toggle('oculta', t !== id);
+  // O botão de retomar é recalculado a cada vez que o menu aparece, e não uma vez no
+  // início: entre um e outro você pode ter acabado a partida guardada, ou o prazo dela
+  // pode ter vencido com a aba aberta.
+  if (id === 'telaMenu') atualizarBotaoRetomar();
 }
 const esconderTelas = () => mostrarTela(null);
 
@@ -315,10 +320,20 @@ function mostrarFimDePartida(vista) {
   mostrarTela('telaFimPartida');
 }
 
-let mudo = false;
+// Quem desligou o som desligou por um motivo — trabalho, gente dormindo, ou simplesmente
+// não gostar. Perguntar de novo a cada visita é o jogo não escutar.
+let mudo = !!lido('mudo', false);
+function pintarBotaoSom() {
+  el('btSom').textContent = mudo ? '✕' : '♪';
+  el('btSom').classList.toggle('desligado', mudo);
+}
 el('btSom').onclick = () => {
   mudo = !mudo;
   silenciar(mudo);
-  el('btSom').textContent = mudo ? '✕' : '♪';
-  el('btSom').classList.toggle('desligado', mudo);
+  pintarBotaoSom();
+  guardar('mudo', mudo);
 };
+pintarBotaoSom();
+// `silenciar` mexe no AudioContext, que só nasce no primeiro som. Chamar aqui não
+// adiantaria nada; quem aplica o silêncio guardado é `ligarMurmuro`, que roda quando o
+// áudio de fato começa.

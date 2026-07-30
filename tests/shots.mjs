@@ -32,6 +32,12 @@ const AUTO = `
     const b = document.getElementById('btContagem');
     if (b.classList.contains('on') !== ligado) b.click();
   };
+  // A partida agora fica guardada, e pelo mesmo motivo do contar(): uma cena que jogou
+  // deixa "Continuar a partida de antes" aparecendo na foto do menu da cena seguinte.
+  const semGuardado = () => {
+    try { localStorage.removeItem('dominobar.partida'); } catch (e) { void e; }
+    window.__jogo.atualizarBotaoRetomar();
+  };
   const soBots = (n) => {
     const j = window.__jogo;
     j.MESA.n = n;
@@ -53,7 +59,13 @@ const AUTO = `
 `;
 
 const CENAS = [
-  { nome: 'menu', telas: ['wide', 'retrato'], montar: `window.__jogo.mostrarTela('telaMenu');` },
+  { nome: 'menu', telas: ['wide', 'retrato'], montar: `semGuardado(); window.__jogo.mostrarTela('telaMenu');` },
+  // O menu de quem tem partida por terminar: é o botão a mais, e ele é verde para não
+  // competir com o âmbar do "Sentar e jogar".
+  {
+    nome: 'menu-com-partida-guardada', telas: ['wide'],
+    montar: `soBots(3); auto(9); window.__jogo.mostrarTela('telaMenu');`,
+  },
   { nome: 'inicio-3', telas: ['wide'], montar: `soBots(3); contar(false); auto(2);` },
   { nome: 'meio-de-mao', telas: ['wide', 'retrato'], montar: `soBots(3); contar(false); auto(9);` },
   { nome: 'duplas-4', telas: ['wide'], montar: `soBots(4); contar(false); auto(13);` },

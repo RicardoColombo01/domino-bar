@@ -199,6 +199,15 @@ html, body {
 .btn.peq i { font-style: normal; opacity: .55; font-size: 11.5px; margin-left: 5px; }
 .btn.peq.on i { opacity: .65; }
 
+/* Continuar a partida de antes. Verde e não âmbar de propósito: o âmbar é do "Sentar e
+   jogar", que é a ação normal — e retomar não pode competir com começar. Quem chegou
+   para jogar de novo acha, quem chegou para começar não tropeça. */
+.btn.retomar {
+  border-color: rgba(159, 214, 160, .45); color: #cfe9cf;
+  background: rgba(38, 62, 42, .92);
+}
+.btn.retomar:hover { background: rgba(48, 80, 54, .95); border-color: rgba(159, 214, 160, .7); }
+
 /* ── telas cheias ─────────────────────────────────────────────────────────── */
 .tela {
   position: fixed; inset: 0; z-index: 30;
