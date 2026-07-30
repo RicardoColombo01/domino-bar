@@ -25,10 +25,13 @@ const TELAS = [
 // As situações que mais apertam o HUD: a mão cheia, a mão de 14 do Duelo, e a barra de
 // confirmação aberta — que é quando o rodapé tem três coisas disputando a mesma faixa.
 const CASOS = [
-  { nome: 'mão de 7', montar: `mesa('classico', 3); auto(6); contar(false);` },
-  { nome: 'mão de 14', montar: `mesa('duelo', 2); auto(1); contar(false);` },
+  { nome: 'mão de 7', montar: `mesa('classico', 3); contar(false); auto(6);` },
+  { nome: 'mão de 14', montar: `mesa('duelo', 2); contar(false); auto(1);` },
   { nome: 'confirmando', montar: `mesa('classico', 3); contar(false); escolherUma();` },
   { nome: 'contando', montar: `mesa('classico', 4); auto(11); contar(true);` },
+  // A conversa aberta é o painel que mais briga por espaço: tem campo dentro e fica no
+  // mesmo canto que a barra de confirmação ocupa.
+  { nome: 'conversando', montar: `mesa('classico', 3); contar(false); auto(6); window.__jogo.alternarConversa(true);` },
   // Tabuleiro comprido: é quando a linha se espalha até a borda da mesa e o círculo dos
   // adversários fica mais apertado. Se algo vai sair do quadro, sai aqui.
   { nome: 'mesa cheia', montar: `mesa('classico', 4); contar(true); ateALinha(13);` },
@@ -89,7 +92,7 @@ const MEDIR = `(() => {
       : { x: r.left, y: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height };
   };
   const paineis = {};
-  for (const id of ['topo', 'jogadores', 'vez', 'acoes', 'confirmar', 'contagem', 'btSom', 'btSair', 'log']) {
+  for (const id of ['topo', 'jogadores', 'vez', 'acoes', 'confirmar', 'contagem', 'conversa', 'btSom', 'btSair', 'btConversa']) {
     const r = vis(document.getElementById(id));
     if (r) paineis[id] = r;
   }

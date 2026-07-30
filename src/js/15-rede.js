@@ -89,6 +89,7 @@ function tentarAbrir(tentativa) {
     conn.on('data', m => {
       if (m.t === 'nome') { MESA.cadeiras[cadeira].nome = String(m.nome).slice(0, 14) || 'Visita'; listarSala(); if (P) publicar(); }
       if (m.t === 'acao' && P) aplicarIntencao(cadeira, m);
+      if (m.t === 'chat') receberChat(cadeira, m);
       // Saiu de propósito: não há prazo de volta, a partida acaba perdida para ele.
       if (m.t === 'desisto' && P && P.fase !== 'fim') {
         clearTimeout(esperando.get(cadeira)); esperando.delete(cadeira);
@@ -182,6 +183,7 @@ el('btConectar').onclick = () => {
       if (m.t === 'sentou') { euNaTela = m.cadeira; erroOnline(`Você é a cadeira ${m.cadeira + 1}.`); }
       if (m.t === 'vista') { esconderTelas(); ligarMurmuro(); atualizarVista(m.v); }
       if (m.t === 'log') anotar(m.txt);
+      if (m.t === 'chat') dizer(vistaAtual, m.de, m.canal, m.txt);
     });
     linkAnfitriao.on('close', () => { avisar('A mesa fechou.'); mostrarTela('telaMenu'); modo = 'local'; });
   });
@@ -208,4 +210,59 @@ function espalharVistas() {
 }
 function espalharLog(txt) {
   for (const conn of conexoes.values()) if (conn.open) conn.send({ t: 'log', txt });
+}
+
+// ─── a conversa ──────────────────────────────────────────────────────────────
+// Os convidados NÃO se enxergam: toda mensagem passa pelo anfitrião. Ele é quem escolhe
+// quem recebe, exatamente como já faz com as visões — e é por isso que a conversa da
+// dupla não é secreta PARA ELE. Quem escreve vê isso dito no campo.
+const ULTIMA_FALA = new Map();          // cadeira → quando falou pela última vez
+const INTERVALO_FALA = 600;             // ms
+const TAMANHO_FALA = 160;
+
+// Qual cadeira DESTA tela era a destinatária de uma fala de dupla vinda de `de`, ou -1.
+// "Desta tela" é `voce` e `local`: as que o hotseat mostra. Bot não lê e online já
+// recebeu pelo fio.
+function donoLocalDaFala(de) {
+  if (!P || !P.duplas) return -1;
+  for (let c = 0; c < P.cadeiras.length; c++) {
+    const t = MESA.cadeiras[c].tipo;
+    if (t !== 'voce' && t !== 'local') continue;
+    if (timeDe(P, c) === timeDe(P, de)) return c;
+  }
+  return -1;
+}
+
+function espalharChat(de, canal, txt) {
+  const fala = String(txt).slice(0, TAMANHO_FALA);
+  const mesmoTime = c => !P || !P.duplas || timeDe(P, c) === timeDe(P, de);
+  // Quem está no anfitrião também lê, se a mensagem for para ele. `euNaTela` NÃO é "a
+  // cadeira do anfitrião": é a cadeira que a tela mostra agora, e o hotseat a troca. Numa
+  // mesa mista a fala da dupla pode chegar com a tela na mão de um adversário local — aí
+  // ela fica guardada para quando a vez voltar, em vez de sumir.
+  if (vistaAtual) {
+    if (canal === 'todos' || mesmoTime(euNaTela)) dizer(vistaAtual, de, canal, fala);
+    else {
+      // A fala é da dupla e a tela não está com quem podia ler. Só vale guardar se o
+      // dono for uma cadeira DESTA tela — se for um convidado, ele já recebeu pelo fio.
+      const dono = donoLocalDaFala(de);
+      if (dono >= 0) guardarFala(de, canal, fala, dono);
+    }
+  }
+  for (const [cadeira, conn] of conexoes) {
+    if (!conn.open) continue;
+    if (canal === 'dupla' && !mesmoTime(cadeira)) continue;
+    conn.send({ t: 'chat', de, canal, txt: fala });
+  }
+}
+
+// As duas guardas são do ANFITRIÃO porque é ele a autoridade: sem elas um convidado
+// trava a mesa dos outros com um laço de mensagens.
+function receberChat(cadeira, m) {
+  const agora = Date.now();
+  if (agora - (ULTIMA_FALA.get(cadeira) || 0) < INTERVALO_FALA) return;
+  const txt = String(m.txt || '').slice(0, TAMANHO_FALA).trim();
+  if (!txt) return;
+  ULTIMA_FALA.set(cadeira, agora);
+  espalharChat(cadeira, m.canal === 'dupla' ? 'dupla' : 'todos', txt);
 }

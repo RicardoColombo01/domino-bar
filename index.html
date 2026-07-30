@@ -40,8 +40,19 @@
 
 <div id="vez" class="painel"></div>
 <div id="aviso"></div>
-<div id="log" class="painel"></div>
+
+<!-- A narração do jogo e a conversa no mesmo fio: um lugar só para olhar. O campo de
+     escrever só aparece quando há gente online — no solo isto é o log de sempre. -->
+<div id="conversa" class="painel">
+  <div id="conversaLista"></div>
+  <div id="conversaEscrever" class="oculta">
+    <button class="btn peq" id="btCanal" title="Para quem você está falando">Todos</button>
+    <input id="conversaTexto" class="entrada" maxlength="160" placeholder="falar com a mesa…" autocomplete="off" />
+  </div>
+</div>
+
 <button id="btSom" class="painel canto" title="Som">♪</button>
+<button id="btConversa" class="painel canto oculta" title="Conversa">💬</button>
 <button id="btSair" class="painel canto oculta" title="Sair da partida">✕</button>
 
 <!-- ─── montagem da mesa ─────────────────────────────────────────────────── -->
@@ -948,6 +959,11 @@ function pintar(w, h, desenho) {
   desenho(cv.getContext('2d'), w, h);
   const t = new THREE.CanvasTexture(cv);
   t.anisotropy = 4;
+  // O canvas é pintado em sRGB, e o default do Three é tratar textura como dado LINEAR.
+  // Sem esta linha as três texturas do jogo saem lavadas — é por isso que o marfim da
+  // peça e a madeira iluminada tendiam para o mesmo âmbar, e a pinta escura chegava
+  // cinza. Uma linha, e é a maior alavanca de contraste que existe aqui.
+  t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
 
@@ -1171,7 +1187,10 @@ if (typeof visualViewport !== 'undefined' && visualViewport) {
 //   atlas ▸ │ ·  │ ·· │ ⁚  │ ⁙  │ ⁘  │ ⁙· │ ⁚⁚ │      peça [3,5] = célula 3 + célula 5
 //            0    1    2    3    4    5    6
 
-const ATLAS_N = 7, CELULA = 128;
+// 256 e não 128: a peça na mesa chega a ocupar ~90px de tela no computador, e com a
+// célula pequena a borda da pinta ficava serrilhada justamente quando o tabuleiro
+// encolhe. É uma textura só, gerada uma vez — o custo é irrelevante.
+const ATLAS_N = 7, CELULA = 256;
 const G3 = [0.28, 0.5, 0.72];                     // as três colunas/linhas do desenho
 const PINTAS = [
   [],
@@ -1189,12 +1208,15 @@ const texPintas = pintar(CELULA * ATLAS_N, CELULA, (c) => {
     c.fillStyle = '#f4ecd9';
     c.fillRect(ox, 0, CELULA, CELULA);
     for (const [gx, gy] of PINTAS[n]) {
-      const x = ox + G3[gx] * CELULA, y = G3[gy] * CELULA, r = CELULA * 0.088;
-      c.fillStyle = 'rgba(255,255,255,.65)';      // lasquinha clara embaixo: dá relevo de furo
-      c.beginPath(); c.arc(x + 1.5, y + 1.5, r, 0, 7); c.fill();
-      c.fillStyle = '#191512';
+      // Pinta maior (0.088 → 0.102 da célula) e mais escura: sobre um tampo de madeira
+      // acesa pela lâmpada, o que custa leitura de longe é o TAMANHO do furo, não a
+      // cor do marfim.
+      const x = ox + G3[gx] * CELULA, y = G3[gy] * CELULA, r = CELULA * 0.102;
+      c.fillStyle = 'rgba(255,255,255,.7)';       // lasquinha clara embaixo: dá relevo de furo
+      c.beginPath(); c.arc(x + r * 0.12, y + r * 0.12, r, 0, 7); c.fill();
+      c.fillStyle = '#120f0c';
       c.beginPath(); c.arc(x, y, r, 0, 7); c.fill();
-      c.fillStyle = 'rgba(0,0,0,.35)';
+      c.fillStyle = 'rgba(0,0,0,.4)';
       c.beginPath(); c.arc(x - r * 0.25, y - r * 0.25, r * 0.75, 0, 7); c.fill();
     }
   }
@@ -1221,7 +1243,9 @@ function faceDaPinta(n) {
 // É a mesma convenção da linha do motor, e é o que faz o rotY do layout já vir certo.
 function criarPeca(peca, proprio) {
   const g = new THREE.Group();
-  // Peça na mão ganha material próprio para poder acender no hover sem acender as outras.
+  // Material próprio para poder acender ESTA peça sem acender as outras — a mão usa no
+  // hover, a mesa usa na última jogada. Sem o clone, `matMarfim` é uma instância só e
+  // acender uma acenderia as 28.
   const corpo = new THREE.Mesh(geomCorpo, proprio ? matMarfim.clone() : matMarfim);
   corpo.castShadow = true;
   corpo.receiveShadow = true;
@@ -1297,6 +1321,32 @@ grupoMesa.add(grupoPrevia);
 const matBrilho = new THREE.MeshBasicMaterial({ color: 0xffc451, transparent: true, opacity: 0.5 });
 const geomBrilho = new THREE.CircleGeometry(PECA_C * 0.8, 28);
 
+// A MARCA DA ÚLTIMA JOGADA. Numa mesa de quatro com o tabuleiro já comprido, "o que
+// acabou de acontecer" era invisível: a peça caía do alto, dava o baque, e um segundo
+// depois era idêntica às outras vinte. Quem chegava atrasado à tela tinha de ler o log.
+//
+// São duas coisas: um CLARÃO de meio segundo no instante da queda, e uma marca discreta
+// que fica até a próxima jogada. O disco é filho do GRUPO DA PEÇA — não de grupoMesa —
+// porque assim ele acompanha a peça sem entrar na conta de quem está fora do quadro
+// (tests/test-telas.mjs olha os filhos diretos de grupoMesa).
+const matMarca = new THREE.MeshBasicMaterial({
+  color: 0xffc451, transparent: true, opacity: 0.25, depthWrite: false,
+});
+const geomMarca = new THREE.CircleGeometry(PECA_C * 0.72, 24);
+let ultima = null;                 // { obj, marca, desde }
+
+function marcarUltima(obj) {
+  if (ultima) {
+    ultima.obj.remove(ultima.marca);
+    ultima.obj.userData.corpo.material.emissive.setHex(0x000000);
+  }
+  const marca = new THREE.Mesh(geomMarca, matMarca);
+  marca.rotation.x = -Math.PI / 2;
+  marca.position.y = -PECA_E / 2 + 0.012;         // colada no tampo, por baixo da peça
+  obj.add(marca);
+  ultima = { obj, marca, desde: performance.now() };
+}
+
 function sincronizarTabuleiro(vista) {
   const { postas, caixa } = layoutDaMesa(vista.linha, vista.iAncora);
 
@@ -1312,7 +1362,8 @@ function sincronizarTabuleiro(vista) {
     vivas.add(k);
     let reg = naMesa.get(k);
     if (!reg) {
-      const obj = criarPeca(p.peca);
+      // `true` = material próprio, para dar de acender só ESTA peça na marca da última.
+      const obj = criarPeca(p.peca, true);
       // Nasce no alto e um pouco torta: é a queda que dá o "toc" na mesa.
       obj.position.set(p.x, 2.4, p.z);
       obj.rotation.set(0, p.rotY + 0.5, 0);
@@ -1320,12 +1371,18 @@ function sincronizarTabuleiro(vista) {
       reg = { obj, alvo: p };
       naMesa.set(k, reg);
       tocarBaque(0.55);
+      // É o único lugar do jogo que sabe "esta peça é nova": roda uma vez por peça.
+      marcarUltima(obj);
     }
     reg.alvo = p;
   });
 
-  for (const [k, reg] of naMesa)
-    if (!vivas.has(k)) { grupoMesa.remove(reg.obj); naMesa.delete(k); }
+  for (const [k, reg] of naMesa) {
+    if (vivas.has(k)) continue;
+    if (ultima && ultima.obj === reg.obj) ultima = null;      // mão nova: some a marca
+    grupoMesa.remove(reg.obj);
+    naMesa.delete(k);
+  }
 
   esconderPrevia();
 }
@@ -1377,6 +1434,14 @@ function animarTabuleiro(dt) {
   matPreviaCorpo.opacity = 0.56 + 0.16 * pulso;
   // só a peça paira; o brilho fica colado no tampo, marcando o lugar
   for (const g of grupoPrevia.children) g.children[1].position.y = 0.07 + 0.035 * pulso;
+
+  // A última jogada: clarão de meio segundo na queda, e depois só a marca respirando.
+  if (ultima) {
+    const clarao = Math.max(0, 1 - (performance.now() - ultima.desde) / 500);
+    matMarca.opacity = 0.14 + 0.08 * pulso + 0.55 * clarao;
+    const q = 0.5 * clarao * clarao;                // some rápido: é um estalo, não um farol
+    ultima.obj.userData.corpo.material.emissive.setRGB(q, q * 0.68, q * 0.22);
+  }
 
   for (const { obj, alvo } of naMesa.values()) {
     obj.position.x = chegarPerto(obj.position.x, alvo.x, 13, dt);
@@ -2036,7 +2101,10 @@ function silenciar(mudo) {
 const el = id => document.getElementById(id);
 const HUD = {
   placar: el('placar'), pontas: el('pontasVal'), monte: el('monteVal'), maoN: el('maoVal'),
-  jogadores: el('jogadores'), vez: el('vez'), aviso: el('aviso'), log: el('log'),
+  jogadores: el('jogadores'), vez: el('vez'), aviso: el('aviso'),
+  conversa: el('conversa'), lista: el('conversaLista'),
+  escrever: el('conversaEscrever'), texto: el('conversaTexto'),
+  canal: el('btCanal'), abrirConversa: el('btConversa'),
   comprar: el('btComprar'), passar: el('btPassar'), acoes: el('acoes'),
   arrumar: el('btArrumar'), contar: el('btContagem'), contagem: el('contagem'),
 };
@@ -2048,6 +2116,14 @@ let contando = false;
 try { contando = localStorage.getItem('dominobar.contagem') === '1'; } catch (e) { void e; }
 
 const ETIQUETA = { voce: 'você', local: 'nesta tela', bot: 'bot', online: 'online' };
+
+// Tudo que vem de fora passa por aqui antes de virar innerHTML. Até agora o único texto
+// alheio era o nome, cortado em 14 caracteres — o texto do chat é o primeiro campo
+// realmente livre chegando pela rede, e sem escape isso é script rodando na máquina dos
+// outros jogadores.
+const escapar = txt => String(txt)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 function mostrarTela(id) {
   for (const t of ['telaMenu', 'telaFimMao', 'telaFimPartida', 'telaPasse', 'telaOnline', 'telaSair'])
@@ -2064,8 +2140,8 @@ function avisar(txt, ms = 2200) {
 }
 
 function nomeDoTime(vista, time) {
-  if (!vista.duplas) return vista.cadeiras[time].nome;
-  return `${vista.cadeiras[time].nome} e ${vista.cadeiras[time + 2].nome}`;
+  if (!vista.duplas) return escapar(vista.cadeiras[time].nome);
+  return `${escapar(vista.cadeiras[time].nome)} e ${escapar(vista.cadeiras[time + 2].nome)}`;
 }
 
 function desenharHUD(vista) {
@@ -2083,7 +2159,7 @@ function desenharHUD(vista) {
   // Um cartão por cadeira, na ordem em que a vez anda. O da vez acende.
   HUD.jogadores.innerHTML = vista.cadeiras.map((c, i) => `
     <div class="jog ${i === vista.vez ? 'davez' : ''} ${i === vista.cadeira ? 'euu' : ''}">
-      <span class="nome">${c.nome}</span>
+      <span class="nome">${escapar(c.nome)}</span>
       <span class="tipo">${ETIQUETA[c.tipo] || c.tipo}</span>
       <span class="pecas">${'▮'.repeat(Math.min(vista.naMao[i], 9))}<i>${vista.naMao[i]}</i></span>
     </div>`).join('');
@@ -2106,6 +2182,7 @@ function desenharHUD(vista) {
   HUD.comprar.classList.toggle('principal', a.comprar && !a.jogadas.length);
 
   desenharContagem(vista);
+  desenharConversa(vista);
 }
 
 // Quantas peças de cada número já apareceram — as da mesa MAIS as da sua mão, como o
@@ -2126,7 +2203,7 @@ function desenharContagem(vista) {
     // Quem passou numa ponta provou não ter aquele número. É informação pública — a
     // mesa inteira viu o passe —, e até agora só o bot usava.
     const semEle = (vista.faltaNo || [])
-      .map((nums, i) => (i !== vista.cadeira && nums.indexOf(n) >= 0 ? vista.cadeiras[i].nome : null))
+      .map((nums, i) => (i !== vista.cadeira && nums.indexOf(n) >= 0 ? escapar(vista.cadeiras[i].nome) : null))
       .filter(Boolean);
     linhas.push(`<div${visto === total ? ' class="zerado"' : ''}>` +
       `<b>${n}</b>` +
@@ -2158,11 +2235,111 @@ function esconderConfirmacao() {
 }
 el('btCancelar').onclick = () => cancelarEscolha();
 
+// ─── a conversa da mesa ──────────────────────────────────────────────────────
+// A narração do jogo e as falas no MESMO fio, em ordem: jogada em cinza, fala em âmbar
+// com o nome de quem falou. Um lugar só para olhar — e resolve de quebra o log, que
+// sumia em toda tela de celular por falta de canto onde caber.
+//
+// O painel ACRESCENTA em vez de ser reconstruído, e o <input> nunca é reescrito: quem
+// desenha o HUD é atualizarVista, que roda a cada vista chegando pelo fio, e reconstruir
+// aqui faria o campo perder o foco e o texto a cada jogada de bot.
 const linhasDoLog = [];
-function anotar(txt) {
-  linhasDoLog.push(txt);
-  if (linhasDoLog.length > 5) linhasDoLog.shift();
-  HUD.log.innerHTML = linhasDoLog.map(t => `<div>${t}</div>`).join('');
+let conversaAberta = false, naoLidas = 0;
+let canalAtual = 'todos';
+
+function trocarCanal(qual) {
+  canalAtual = qual;
+  HUD.canal.textContent = qual === 'dupla' ? 'Dupla' : 'Todos';
+  HUD.canal.classList.toggle('on', qual === 'dupla');
+  HUD.texto.placeholder = qual === 'dupla'
+    // Dito na cara: quem retransmite é o anfitrião, então não há sigilo para ele.
+    ? 'só o seu parceiro (e o anfitrião) leem…'
+    : 'falar com a mesa…';
+}
+
+function porNaConversa(html, classe) {
+  const div = document.createElement('div');
+  div.className = classe;
+  div.innerHTML = html;
+  HUD.lista.appendChild(div);
+  linhasDoLog.push(div);
+  while (linhasDoLog.length > 40) HUD.lista.removeChild(linhasDoLog.shift());
+  HUD.lista.scrollTop = HUD.lista.scrollHeight;
+  if (!conversaAberta) { naoLidas++; atualizarBotaoConversa(); }
+}
+
+function anotar(txt) { porNaConversa(escapar(txt), 'doJogo'); }
+
+function limparConversa() {
+  linhasDoLog.length = 0;
+  HUD.lista.innerHTML = '';
+  falasGuardadas.length = 0;         // mesa nova: fala guardada da anterior não vale
+  naoLidas = 0;
+  atualizarBotaoConversa();
+}
+
+// Uma fala. `de` é a cadeira de quem falou, para o nome sair da vista e não do fio.
+function dizer(vista, de, canal, txt) {
+  const nome = (vista && vista.cadeiras[de] && vista.cadeiras[de].nome) || 'Alguém';
+  porNaConversa(
+    `<b>${escapar(nome)}</b>${canal === 'dupla' ? '<i>dupla</i>' : ''} ${escapar(txt)}`,
+    canal === 'dupla' ? 'fala daDupla' : 'fala');
+}
+
+// Fala da dupla que chegou enquanto a tela mostrava OUTRA cadeira. Numa mesa mista
+// (gente na mesma tela + gente online) o hotseat troca `euNaTela`, e mostrar a fala na
+// hora seria entregá-la ao adversário que está olhando a mesma tela. Guardar é o certo;
+// o que estava errado era DESCARTAR — a fala nunca voltava quando a vez voltava.
+const falasGuardadas = [];               // { de, canal, txt, para } — `para` é a cadeira dona
+
+function guardarFala(de, canal, txt, para) {
+  falasGuardadas.push({ de, canal, txt, para });
+}
+
+// Chamada quando o hotseat entrega a tela a `cadeira` (btPronto, em 16-loop.js).
+//
+// Solta as TRÊS últimas. O limite é sobre ATENÇÃO e não sobre memória — `porNaConversa`
+// já corta a lista em 40 —: quem volta de três rodadas de hotseat estaria lendo parede de
+// texto no meio da própria vez, e o que decide uma jogada é o que o parceiro disse por
+// último, não o que ele disse quatro jogadas atrás.
+const FALAS_DE_VOLTA = 3;
+
+function soltarFalasGuardadas(cadeira) {
+  const minhas = [];
+  // Consome tudo da cadeira, inclusive o que não vai aparecer: deixar o excedente na fila
+  // faria fala velha reaparecer DEPOIS de fala nova no próximo hotseat.
+  for (let i = falasGuardadas.length - 1; i >= 0; i--) {
+    if (falasGuardadas[i].para !== cadeira) continue;
+    minhas.unshift(falasGuardadas[i]);
+    falasGuardadas.splice(i, 1);
+  }
+  if (!minhas.length || !vistaAtual) return;
+  const mostrar = minhas.slice(-FALAS_DE_VOLTA);
+  const engoliu = minhas.length - mostrar.length;
+  if (engoliu) anotar(`(${engoliu} fala${engoliu > 1 ? 's' : ''} da dupla ficou para trás)`);
+  for (const f of mostrar) dizer(vistaAtual, f.de, f.canal, f.txt);
+}
+
+function atualizarBotaoConversa() {
+  HUD.abrirConversa.textContent = naoLidas ? String(Math.min(naoLidas, 9)) : '💬';
+  HUD.abrirConversa.classList.toggle('temNovidade', naoLidas > 0);
+}
+
+function alternarConversa(abrir) {
+  conversaAberta = abrir === undefined ? !conversaAberta : abrir;
+  HUD.conversa.classList.toggle('aberta', conversaAberta);
+  if (conversaAberta) { naoLidas = 0; HUD.lista.scrollTop = HUD.lista.scrollHeight; }
+  atualizarBotaoConversa();
+}
+
+// Só há com quem conversar se houver gente online. E o canal "dupla" só existe onde
+// existe dupla — o Clássico de 4 é o único modo em duplas.
+function desenharConversa(vista) {
+  const online = modo === 'anfitriao' || modo === 'convidado';
+  HUD.escrever.classList.toggle('oculta', !online);
+  HUD.abrirConversa.classList.toggle('oculta', !online && !linhasDoLog.length);
+  HUD.canal.classList.toggle('oculta', !vista.duplas);
+  if (!vista.duplas && canalAtual === 'dupla') trocarCanal('todos');
 }
 
 // O que sobrou na mão de cada um. Tinha rótulo nenhum e o mesmo âmbar do placar do
@@ -2172,7 +2349,7 @@ function sobrouNaMao(vista) {
   const r = vista.resultado;
   if (!vista.duplas) {
     return r.somas
-      .map((s, i) => `<div><span>${vista.cadeiras[i].nome}</span><b>${s}</b></div>`).join('');
+      .map((s, i) => `<div><span>${escapar(vista.cadeiras[i].nome)}</span><b>${s}</b></div>`).join('');
   }
   return (r.somasPorTime || []).map((total, t) => {
     const parcelas = r.somas.filter((_, i) => timeDe(vista, i) === t).join(' + ');
@@ -2445,6 +2622,7 @@ function tentarAbrir(tentativa) {
     conn.on('data', m => {
       if (m.t === 'nome') { MESA.cadeiras[cadeira].nome = String(m.nome).slice(0, 14) || 'Visita'; listarSala(); if (P) publicar(); }
       if (m.t === 'acao' && P) aplicarIntencao(cadeira, m);
+      if (m.t === 'chat') receberChat(cadeira, m);
       // Saiu de propósito: não há prazo de volta, a partida acaba perdida para ele.
       if (m.t === 'desisto' && P && P.fase !== 'fim') {
         clearTimeout(esperando.get(cadeira)); esperando.delete(cadeira);
@@ -2538,6 +2716,7 @@ el('btConectar').onclick = () => {
       if (m.t === 'sentou') { euNaTela = m.cadeira; erroOnline(`Você é a cadeira ${m.cadeira + 1}.`); }
       if (m.t === 'vista') { esconderTelas(); ligarMurmuro(); atualizarVista(m.v); }
       if (m.t === 'log') anotar(m.txt);
+      if (m.t === 'chat') dizer(vistaAtual, m.de, m.canal, m.txt);
     });
     linkAnfitriao.on('close', () => { avisar('A mesa fechou.'); mostrarTela('telaMenu'); modo = 'local'; });
   });
@@ -2564,6 +2743,61 @@ function espalharVistas() {
 }
 function espalharLog(txt) {
   for (const conn of conexoes.values()) if (conn.open) conn.send({ t: 'log', txt });
+}
+
+// ─── a conversa ──────────────────────────────────────────────────────────────
+// Os convidados NÃO se enxergam: toda mensagem passa pelo anfitrião. Ele é quem escolhe
+// quem recebe, exatamente como já faz com as visões — e é por isso que a conversa da
+// dupla não é secreta PARA ELE. Quem escreve vê isso dito no campo.
+const ULTIMA_FALA = new Map();          // cadeira → quando falou pela última vez
+const INTERVALO_FALA = 600;             // ms
+const TAMANHO_FALA = 160;
+
+// Qual cadeira DESTA tela era a destinatária de uma fala de dupla vinda de `de`, ou -1.
+// "Desta tela" é `voce` e `local`: as que o hotseat mostra. Bot não lê e online já
+// recebeu pelo fio.
+function donoLocalDaFala(de) {
+  if (!P || !P.duplas) return -1;
+  for (let c = 0; c < P.cadeiras.length; c++) {
+    const t = MESA.cadeiras[c].tipo;
+    if (t !== 'voce' && t !== 'local') continue;
+    if (timeDe(P, c) === timeDe(P, de)) return c;
+  }
+  return -1;
+}
+
+function espalharChat(de, canal, txt) {
+  const fala = String(txt).slice(0, TAMANHO_FALA);
+  const mesmoTime = c => !P || !P.duplas || timeDe(P, c) === timeDe(P, de);
+  // Quem está no anfitrião também lê, se a mensagem for para ele. `euNaTela` NÃO é "a
+  // cadeira do anfitrião": é a cadeira que a tela mostra agora, e o hotseat a troca. Numa
+  // mesa mista a fala da dupla pode chegar com a tela na mão de um adversário local — aí
+  // ela fica guardada para quando a vez voltar, em vez de sumir.
+  if (vistaAtual) {
+    if (canal === 'todos' || mesmoTime(euNaTela)) dizer(vistaAtual, de, canal, fala);
+    else {
+      // A fala é da dupla e a tela não está com quem podia ler. Só vale guardar se o
+      // dono for uma cadeira DESTA tela — se for um convidado, ele já recebeu pelo fio.
+      const dono = donoLocalDaFala(de);
+      if (dono >= 0) guardarFala(de, canal, fala, dono);
+    }
+  }
+  for (const [cadeira, conn] of conexoes) {
+    if (!conn.open) continue;
+    if (canal === 'dupla' && !mesmoTime(cadeira)) continue;
+    conn.send({ t: 'chat', de, canal, txt: fala });
+  }
+}
+
+// As duas guardas são do ANFITRIÃO porque é ele a autoridade: sem elas um convidado
+// trava a mesa dos outros com um laço de mensagens.
+function receberChat(cadeira, m) {
+  const agora = Date.now();
+  if (agora - (ULTIMA_FALA.get(cadeira) || 0) < INTERVALO_FALA) return;
+  const txt = String(m.txt || '').slice(0, TAMANHO_FALA).trim();
+  if (!txt) return;
+  ULTIMA_FALA.set(cadeira, agora);
+  espalharChat(cadeira, m.canal === 'dupla' ? 'dupla' : 'todos', txt);
 }
 
 /* ····· 16-loop.js ····· */
@@ -2607,7 +2841,7 @@ function comecarLocal() {
   euNaTela = 0;
   travado = false;
   esquecerArrumacao();               // mesa nova, mão nova: a arrumação de antes não vale
-  linhasDoLog.length = 0;
+  limparConversa();
   tocarEmbaralho();
   anunciarAbertura();
   avancar();
@@ -2738,6 +2972,9 @@ el('btPronto').onclick = () => {
   euNaTela = P.vez;
   travado = false;
   publicar();
+  // Depois do publicar: quem solta a fala usa `vistaAtual`, e é o publicar que a põe de
+  // pé para a cadeira nova. Antes dele, a fala sairia com o nome da cadeira anterior.
+  soltarFalasGuardadas(euNaTela);
 };
 
 el('btProxima').onclick = () => {
@@ -2796,7 +3033,36 @@ function sairDaPartida() {
   mostrarTela('telaMenu');
 }
 
+// ─── a conversa ──────────────────────────────────────────────────────────────
+function falar() {
+  const txt = HUD.texto.value.trim();
+  if (!txt) return;
+  HUD.texto.value = '';
+  if (modo === 'convidado') {
+    // O anfitrião é quem valida e retransmite — a mensagem só volta para você depois de
+    // passar por ele, e essa volta é a confirmação de que saiu.
+    if (linkAnfitriao && linkAnfitriao.open) linkAnfitriao.send({ t: 'chat', canal: canalAtual, txt });
+    else avisar('Sem conexão com a mesa.');
+    return;
+  }
+  if (modo === 'anfitriao') espalharChat(euNaTela, canalAtual, txt);
+}
+
+HUD.texto.onkeydown = ev => {
+  if (ev.key === 'Enter') { falar(); ev.preventDefault(); }
+  if (ev.key === 'Escape') HUD.texto.blur();
+};
+HUD.canal.onclick = () => trocarCanal(canalAtual === 'dupla' ? 'todos' : 'dupla');
+HUD.abrirConversa.onclick = () => alternarConversa();
+
+// O jogo inteiro escuta o teclado no window, e nenhum dos dois handlers olhava para o
+// alvo do evento: com um campo na tela, escrever "vamos" chamava arrumarMao() a cada
+// 'a' digitado e Esc largava a peça levantada. (Já valia para o código da mesa, que tem
+// letras — só não aparecia porque ali não há mão desenhada.)
+const digitando = ev => /^(INPUT|TEXTAREA)$/.test((ev.target || {}).tagName || '');
+
 addEventListener('keydown', ev => {
+  if (digitando(ev)) return;
   if (ev.key === 'Escape') cancelarEscolha();
 });
 
@@ -2811,6 +3077,7 @@ HUD.contar.onclick = () => {
   if (vistaAtual) atualizarVista(vistaAtual);
 };
 addEventListener('keydown', ev => {
+  if (digitando(ev)) return;
   if (ev.key === 'a' || ev.key === 'A') arrumarMao();
 });
 
@@ -2848,7 +3115,7 @@ window.__jogo = {
   // coordenadas de tela e reprovar se alguma cair fora — que é o teste que prova "dá
   // para ver a mão" sem ninguém olhar screenshot.
   camera, naMao, enquadrar, grupoMesa, grupoOutros, grupoMonte,
-  arrumarMao, moverNaMao, publicar,
+  arrumarMao, moverNaMao, publicar, alternarConversa, falar, trocarCanal,
   get P() { return P; },
   get vista() { return vistaAtual; },
   // A ORDEM DA TELA, que desde a arrumação não é mais a de vista.mao. Quem quiser

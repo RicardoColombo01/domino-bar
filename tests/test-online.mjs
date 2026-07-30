@@ -130,6 +130,89 @@ try {
 
   await anfitriao.close();
   await convidado.close();
+
+  // ─── a conversa ────────────────────────────────────────────────────────────
+  // Mesa de 4 em duplas (0&2 × 1&3), com o anfitrião na 0 e duas visitas nas cadeiras
+  // 1 e 2. O parceiro do anfitrião é a cadeira 2; a cadeira 1 é adversária. É o único
+  // arranjo que responde à pergunta que interessa: a fala da dupla vaza?
+  console.log('\na conversa da mesa');
+  const dono = await abrir('dono');
+  const parceiro = await abrir('parceiro');
+  const rival = await abrir('rival');
+
+  await dono.evaluate(() => {
+    const j = window.__jogo;
+    j.MESA.modo = 'classico'; j.MESA.n = 4;
+    j.MESA.cadeiras[0].nome = 'Dono';
+    j.MESA.cadeiras[1].tipo = 'online'; j.MESA.cadeiras[1].nome = 'Rival';
+    j.MESA.cadeiras[2].tipo = 'online'; j.MESA.cadeiras[2].nome = 'Parceiro';
+    j.MESA.cadeiras[3].tipo = 'bot'; j.MESA.cadeiras[3].nivel = 'normal';
+    document.getElementById('btComecar').click();
+  });
+  await dono.waitForFunction(
+    () => (document.getElementById('onlineCodigo').textContent || '').match(/^[A-Z0-9]{4}$/),
+    { timeout: 25000, polling: 400 });
+  const cod2 = await dono.evaluate(() => document.getElementById('onlineCodigo').textContent);
+
+  // A ordem importa: a primeira conexão pega a cadeira 1 (a adversária), a segunda a 2.
+  const entrar = async (pagina, codigo) => {
+    await pagina.evaluate(c => {
+      document.getElementById('btEntrar').click();
+      document.getElementById('onlineEntrada').value = c;
+      document.getElementById('btConectar').click();
+    }, codigo);
+  };
+  await entrar(rival, cod2);
+  await dono.waitForFunction(() => (document.getElementById('onlineLista').textContent.match(/chegou/g) || []).length === 1,
+    { timeout: 30000, polling: 400 });
+  await entrar(parceiro, cod2);
+  await dono.waitForFunction(() => (document.getElementById('onlineLista').textContent.match(/chegou/g) || []).length === 2,
+    { timeout: 30000, polling: 400 });
+
+  await dono.evaluate(() => document.getElementById('btIniciarOnline').click());
+  await parceiro.waitForFunction('window.__jogo.vista && window.__jogo.vista.cadeira === 2',
+    { timeout: 25000, polling: 400 });
+  await rival.waitForFunction('window.__jogo.vista && window.__jogo.vista.cadeira === 1',
+    { timeout: 25000, polling: 400 });
+  console.log('  mesa de 4 montada: dono na 0, rival na 1, parceiro na 2');
+
+  const conversa = p => p.evaluate(() => document.getElementById('conversaLista').textContent);
+  const falarComo = (p, canal, txt) => p.evaluate(([c, t]) => {
+    window.__jogo.trocarCanal(c);
+    document.getElementById('conversaTexto').value = t;
+    window.__jogo.falar();
+  }, [canal, txt]);
+
+  await falarComo(parceiro, 'todos', 'boa noite a todos');
+  await rival.waitForFunction(() => document.getElementById('conversaLista').textContent.includes('boa noite'),
+    { timeout: 15000, polling: 300 }).catch(() => { ok(false, 'a fala para TODOS não chegou no adversário'); });
+
+  // O anfitrião derruba mensagem que chega rápido demais da mesma cadeira — é a guarda
+  // contra um convidado que trava a mesa dos outros com um laço. Um humano digitando
+  // nunca encosta nela; um teste automatizado encosta sempre.
+  await parceiro.evaluate(() => new Promise(r => setTimeout(r, 800)));
+
+  // O PONTO: só o parceiro e o anfitrião (que retransmite) podem ler.
+  await falarComo(parceiro, 'dupla', 'segura o quatro');
+  await dono.waitForFunction(() => document.getElementById('conversaLista').textContent.includes('segura o quatro'),
+    { timeout: 15000, polling: 300 }).catch(() => { ok(false, 'a fala da dupla não chegou ao parceiro dela'); });
+  // Dá tempo de a mensagem errada chegar, se for chegar.
+  await rival.evaluate(() => new Promise(r => setTimeout(r, 1200)));
+  const noRival = await conversa(rival);
+  const vazou = noRival.includes('segura o quatro');
+  ok(!vazou, 'A FALA DA DUPLA VAZOU para o adversário — é o equivalente exato da mão vazando.');
+
+  // Texto de chat é o primeiro campo livre vindo da rede: tem de chegar como TEXTO.
+  await rival.evaluate(() => new Promise(r => setTimeout(r, 800)));
+  await falarComo(rival, 'todos', '<img src=x onerror=alert(1)>');
+  await dono.waitForFunction(() => document.getElementById('conversaLista').textContent.includes('onerror'),
+    { timeout: 15000, polling: 300 }).catch(() => { ok(false, 'a mensagem com HTML não chegou'); });
+  const virouTag = await dono.evaluate(() => !!document.querySelector('#conversaLista img'));
+  ok(!virouTag, 'o HTML do chat virou elemento na página em vez de texto');
+  console.log(`  fala geral chegou · fala da dupla ${vazou ? 'VAZOU' : 'não vazou'} · ` +
+    `HTML chegou como ${virouTag ? 'ELEMENTO' : 'texto'}`);
+
+  await dono.close(); await parceiro.close(); await rival.close();
 } catch (e) {
   avisos.push(e.message);
 }

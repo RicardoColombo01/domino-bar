@@ -13,6 +13,7 @@ const mod = await import(buildModule([
   'grupoMao', 'grupoOutros', 'grupoMonte', 'grupoMesa', 'scene', 'renderer', 'camera',
   'selecionarPeca', 'cancelarEscolha', 'confirmarJogada', 'escolhida', 'grupoPrevia', 'chave',
   'arrumarMao', 'moverNaMao', 'carroca',
+  'guardarFala', 'soltarFalasGuardadas', 'falasGuardadas', 'donoLocalDaFala', 'limparConversa',
 ], undefined, path.join(import.meta.dirname, 'built-jogo.mjs')));
 
 let falhas = 0;
@@ -416,6 +417,17 @@ console.log('\na arrumação sobrevive à troca de jogador');
 // exatamente o que ele prova. Depois dele não dá para jogar mais nesta partida.
 console.log('\na arrumação não encosta na mão do motor');
 {
+  // Só bots à mesa: com uma cadeira 'local' herdada do bloco anterior, a partida pode
+  // começar na tela de troca — e ali a vista é uma CÓPIA com a mão vazia, não a
+  // referência do motor que este teste quer conferir.
+  //
+  // E não dá para contar com a sorte de o sorteio abrir numa cadeira boa: `performance.now()`
+  // no harness AVANÇA o relógio falso a cada chamada, então qualquer código novo que o
+  // consulte desloca os temporizadores do bot e com eles o embaralho inteiro. Foi o que
+  // aconteceu quando a marca da última jogada entrou. Montar a mesa é o que segura.
+  mod.MESA.n = 3;
+  mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[1].nivel = 'normal';
+  mod.MESA.cadeiras[2].tipo = 'bot'; mod.MESA.cadeiras[2].nivel = 'normal';
   mod.comecarLocal();
   // `visaoDe` devolve a MESMA referência de P.maos[cadeira]. Se alguém um dia "resolver"
   // a arrumação com um vista.mao.sort(), terá ordenado a mão do anfitrião por causa da
@@ -455,6 +467,60 @@ console.log('\nsair da partida');
   els.get('btSairSim').onclick();
   ok(mod.P === null, 'sair de um jogo local deveria encerrar a partida');
   ok(!els.get('telaMenu')._cls.has('oculta'), 'sair deveria voltar para a montagem da mesa');
+}
+
+// A fala da dupla numa mesa MISTA: gente na mesma tela e gente online ao mesmo tempo.
+// `euNaTela` não é "a cadeira do anfitrião", é a cadeira que a tela mostra — e o hotseat a
+// troca. Mostrar a fala da dupla na hora errada seria entregá-la ao adversário que está
+// olhando a mesma tela; o defeito era ela ser DESCARTADA em vez de guardada.
+console.log('\na fala da dupla espera o hotseat voltar');
+{
+  // Duplas em cruz (0&2 × 1&3): você na 0, o adversário do lado na 1 (mesma tela), o seu
+  // parceiro online na 2. É o único arranjo em que a fala do parceiro pode chegar com a
+  // tela na mão de quem não pode ler.
+  mod.MESA.modo = 'classico'; mod.MESA.n = 4;
+  mod.MESA.cadeiras[1].tipo = 'local'; mod.MESA.cadeiras[1].nome = 'Vizinho';
+  mod.MESA.cadeiras[2].tipo = 'online'; mod.MESA.cadeiras[2].nome = 'Parceiro';
+  mod.MESA.cadeiras[3].tipo = 'bot'; mod.MESA.cadeiras[3].nivel = 'normal';
+  mod.comecarLocal();
+  for (let i = 0; i < 10 && mod.travado; i++) els.get('btPronto').onclick();
+
+  ok(mod.donoLocalDaFala(2) === 0,
+     `quem lê a fala do parceiro nesta tela é a cadeira 0, veio ${mod.donoLocalDaFala(2)}`);
+
+  // `limparConversa` zera a fila; a contagem de filhos vem depois dela porque o stub de
+  // DOM não apaga `children` num innerHTML = ''.
+  mod.limparConversa();
+  const base = els.get('conversaLista').children.length;
+  const ditas = () => els.get('conversaLista').children.slice(base)
+    .filter(d => /fala/.test(d.className)).map(d => d.innerHTML);
+
+  for (const t of ['um', 'dois', 'tres', 'quatro', 'cinco']) mod.guardarFala(2, 'dupla', t, 0);
+  ok(ditas().length === 0, 'fala guardada apareceu na tela antes de o hotseat voltar');
+
+  mod.soltarFalasGuardadas(0);
+  const soltas = ditas();
+  ok(soltas.length === 3, `deveria soltar as 3 últimas falas, soltou ${soltas.length}`);
+  ok(/tres/.test(soltas[0]) && /quatro/.test(soltas[1]) && /cinco/.test(soltas[2]),
+     'as falas soltas saíram fora de ordem ou não são as três últimas');
+  ok(mod.falasGuardadas.length === 0,
+     'a fila não foi esvaziada — a fala repetiria no hotseat seguinte');
+
+  const quantas = ditas().length;
+  mod.soltarFalasGuardadas(0);
+  ok(ditas().length === quantas, 'a fala reapareceu no hotseat seguinte');
+
+  // A fila é POR CADEIRA: soltar a vez da 0 não pode consumir o que era da 1.
+  mod.guardarFala(2, 'dupla', 'isto é do vizinho', 1);
+  mod.soltarFalasGuardadas(0);
+  ok(mod.falasGuardadas.length === 1, 'soltar a cadeira 0 consumiu fala que era da cadeira 1');
+
+  // Sem hotseat não há o que guardar: o parceiro de quem falou é um convidado, e ele já
+  // recebeu pelo fio — guardar aqui mostraria a fala a quem ela não pertence.
+  mod.MESA.cadeiras[1].tipo = 'online'; mod.MESA.cadeiras[2].tipo = 'bot';
+  mod.comecarLocal();
+  ok(mod.donoLocalDaFala(1) === -1,
+     'fala de convidado sem parceiro nesta tela não tem dono local, e não se guarda');
 }
 
 console.log(falhas ? `\n${falhas} falha(s)` : '\ntudo certo');

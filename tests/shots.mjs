@@ -53,13 +53,13 @@ const AUTO = `
 `;
 
 const CENAS = [
-  { nome: 'menu', telas: ['wide', 'retrato'], montar: `contar(false); window.__jogo.mostrarTela('telaMenu');` },
-  { nome: 'inicio-3', telas: ['wide'], montar: `contar(false); soBots(3); auto(2);` },
-  { nome: 'meio-de-mao', telas: ['wide', 'retrato'], montar: `contar(false); soBots(3); auto(9);` },
-  { nome: 'duplas-4', telas: ['wide'], montar: `contar(false); soBots(4); auto(13);` },
+  { nome: 'menu', telas: ['wide', 'retrato'], montar: `window.__jogo.mostrarTela('telaMenu');` },
+  { nome: 'inicio-3', telas: ['wide'], montar: `soBots(3); contar(false); auto(2);` },
+  { nome: 'meio-de-mao', telas: ['wide', 'retrato'], montar: `soBots(3); contar(false); auto(9);` },
+  { nome: 'duplas-4', telas: ['wide'], montar: `soBots(4); contar(false); auto(13);` },
   {
     nome: 'tabuleiro-dobrado', telas: ['wide'],
-    montar: `contar(false); soBots(2);
+    montar: `soBots(2); contar(false);
       // Joga até a linha ficar longa o bastante para dobrar na borda da mesa — e
       // RECOMEÇA se a mão acabar antes. Sem isto a foto virava a tela de fim de mão:
       // desde que o bot ficou bom (v1.4.0), ele fecha antes de a linha chegar a 14.
@@ -96,8 +96,11 @@ const CENAS = [
   },
   {
     nome: 'mao-arrumada', telas: ['wide'],
-    montar: `contar(false); soBots(3); auto(6); window.__jogo.arrumarMao();`,
+    montar: `soBots(3); contar(false); auto(6); window.__jogo.arrumarMao();`,
   },
+  // A peça que ACABOU de cair: acesa, com a marca no tampo. A foto é tirada 700ms
+  // depois de montar, e o clarão dura 500 — então aqui se vê a marca, não o clarão.
+  { nome: 'ultima-jogada', telas: ['wide', 'retrato'], montar: `soBots(4); contar(false); auto(9);` },
   { nome: 'fim-de-mao', telas: ['wide'], montar: `soBots(3); auto(400);` },
   // Em duplas, porque é onde o "sobrou na mão" precisa mostrar o subtotal do time.
   { nome: 'fim-de-mao-decisivo', telas: ['wide'], montar: `ateODecisivo(4);` },
