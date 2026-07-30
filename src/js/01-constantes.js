@@ -63,3 +63,33 @@ const CORES = {
   luz: 0xffd7a0,
   parede: 0x241a16,
 };
+
+// ─── o que o navegador lembra ────────────────────────────────────────────────
+// Mora aqui, no primeiro arquivo, porque o 13-hud lê preferência na hora em que é
+// concatenado — quem chama tem de já existir.
+//
+// Um lugar só para falar com o localStorage. Ele falha de quatro jeitos e todos
+// silenciosos: desligado pelo usuário, modo privado que recusa gravar, cota cheia, e
+// JSON estragado por uma versão anterior do jogo. Quem chama nunca quer saber de nada
+// disso — quer o valor, ou o padrão.
+//
+// O harness de teste não tem localStorage nenhum, e é de propósito que isto não
+// reclame: em Node cada chamada cai no catch e o jogo roda com os padrões.
+const GUARDA = 'dominobar.';
+
+function guardar(chave, valor) {
+  try { localStorage.setItem(GUARDA + chave, JSON.stringify(valor)); } catch (e) { void e; }
+}
+
+function lido(chave, padrao) {
+  try {
+    const txt = localStorage.getItem(GUARDA + chave);
+    if (txt === null) return padrao;
+    const v = JSON.parse(txt);
+    return v === null || v === undefined ? padrao : v;
+  } catch (e) { void e; return padrao; }
+}
+
+function esquecer(chave) {
+  try { localStorage.removeItem(GUARDA + chave); } catch (e) { void e; }
+}

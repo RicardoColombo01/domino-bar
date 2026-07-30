@@ -14,6 +14,7 @@ npm run build     junta src/ num index.html autossuficiente
 npm run check     avisa se o index.html está desatualizado
 npm test          build + as três suítes de lógica
 npm run telas     build + o jogo em cinco tamanhos de tela (retrato, paisagem, wide)
+npm run lembrar   build + o que sobrevive a RECARREGAR a página (preferências, retomar)
 npm run shots     build + screenshots no Chrome de verdade (tests/shots/)
 npm run online    testa o online abrindo duas abas e uma mesa real
 npm run servir    servidor local (o online não fecha conexão em file://)
@@ -62,7 +63,7 @@ As pontas são o primeiro e o último número; jogar na esquerda é um `unshift`
 ### Mapa
 
 ```
-01-constantes  peças, medidas, pontuação, folgas visuais, tabela MODOS
+01-constantes  peças, medidas, pontuação, folgas visuais, tabela MODOS, guardar/lido
 02-baralho     embaralhar, distribuir (com re-embaralho), quem abre
 03-regras      encaixes, pontas, jogadas válidas, tipo de batida     ← puro
 04-partida     turnos, compra, passe, placar, visaoDe()
@@ -122,6 +123,25 @@ As pontas são o primeiro e o último número; jogar na esquerda é um `unshift`
 - **O que cabe na mesa não é o que cabe na TELA.** O tabuleiro, os adversários e o monte
   cabiam nos 6.1 de raio do tampo e mesmo assim saíam do quadro em retrato. Quem tem a
   palavra final é `larguraVisivelEm()`, em `07-cena.js`.
+- **`Set` não sobrevive a JSON**, e `P.faltaNo` é um array de `Set`.
+  `JSON.stringify(new Set())` dá `{}` — objeto sem `.has` e sem `.indexOf`. Guardar a
+  partida no `localStorage` perdia calada a marca de "passou no número" e o bot estourava
+  em `05-bot.js`. `visaoDe` já convertia para o fio (`Array.from`); quem guarda tem de
+  fazer a mesma conversão nos dois sentidos. **Vale para qualquer coisa nova em `P`.**
+- **`performance.now()` no harness AVANÇA o relógio falso a cada chamada**
+  (`tests/harness.mjs`). Código novo que só consulte a hora desloca os temporizadores do
+  bot, e com eles o embaralho semeado: um teste que dependia de "quem abre" passa a
+  falhar sem que nada do que ele testa tenha mudado. Teste que precisa de mesa parada
+  monta a mesa, não confia no sorteio.
+- **Preferência guardada é ENTRADA DE FORA.** Pode vir de uma versão antiga, de um modo
+  que não existe mais, ou de alguém editando o armazenamento. Um `{modo:'trio', n:4}`
+  guardado estoura no `distribuir`. `mesaLembrada()` confere cada campo contra as regras
+  de hoje — e o nível de bot contra a tabela `NIVEIS` do próprio bot, não contra uma
+  segunda lista.
+- **Estado novo no `localStorage` contamina as suítes de navegador.** Elas rodam em
+  `file://`, onde o armazenamento é do domínio inteiro: a partida guardada por uma cena
+  fazia a seguinte abrir com "Continuar a partida de antes" na foto do menu. É a mesma
+  lição do `contar()` — cada cena diz o que quer, e agora há `semGuardado()`.
 
 ---
 
@@ -206,8 +226,22 @@ chaves de peça, e **nunca no motor**. Arrastar é uma máquina de estados em
 **Painel de contagem (`13-hud.js`).** Sai inteiro de `vista.linha` + `vista.mao` + o
 `faltaNo` novo na visão — tudo público, nada a mudar no motor.
 
-Sobrou: **5. lembrar preferências** (nomes, número de jogadores, som) em `localStorage` —
-só a contagem é lembrada hoje; e **7. dica de jogada** para quem está aprendendo.
+**Lembrar preferências (5) ✔ feito.** `guardar`/`lido`/`esquecer` em `01-constantes.js` —
+mora no primeiro arquivo porque o `13-hud.js` lê preferência na hora em que é concatenado.
+A mesa inteira é lembrada (modo, jogadores, alvo, compra livre, nome e tipo das **quatro**
+cadeiras) e o som também. `mesaLembrada()` valida tudo; `refletirMesaNosBotoes()` existe
+porque os botões nascem marcados no HTML com o padrão, e sem mover a marca o jogo começa
+num Trio até 10 enquanto a tela promete Clássico até 6.
+
+**Voltar para a mesma partida ✔ feito** (não estava na fila; pedido depois). A partida é
+dado puro, então cabe inteira no `localStorage` — é a mesma propriedade que faz o online
+funcionar, cobrada uma segunda vez. Guarda em `publicar()`, o funil por onde toda mudança
+passa; apaga quando a partida acaba; oferece por botão no menu, com prazo de 12 h. Cadeira
+que era `online` vira bot ao retomar, senão o motor espera para sempre por quem não vai
+responder. `tests/test-lembrar.mjs` (`npm run lembrar`) é a primeira suíte que **recarrega
+a página** — sem isso, "lembrar" não é testável, e foi ela que achou o defeito do `Set`.
+
+Sobrou: **7. dica de jogada** para quem está aprendendo.
 
 ## Regras da casa (implementadas)
 

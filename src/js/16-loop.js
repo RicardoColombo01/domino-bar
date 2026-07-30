@@ -70,6 +70,7 @@ function publicar() {
   atualizarVista(travado
     ? Object.assign({}, v, { mao: [], acoes: { jogadas: [], comprar: false, passar: false } })
     : v);
+  guardarPartida();
 }
 
 function atualizarVista(v) {
@@ -232,6 +233,94 @@ function sairDaPartida() {
   mostrarTela('telaMenu');
 }
 
+// ─── voltar para a mesma partida ─────────────────────────────────────────────
+// Fechar a aba sem querer, recarregar, o celular matar a página para poupar memória, um
+// erro de script: nenhum desses é motivo para perder uma partida de doze mãos. A partida
+// é dado PURO — arrays de números, nada de função nem de referência ao 3D —, então ela
+// cabe inteira no localStorage e volta de um JSON.parse. É a mesma propriedade que faz o
+// online funcionar; aqui ela paga pela segunda vez.
+//
+// Guarda em `publicar`, que é o funil por onde TODA mudança de estado passa — o mesmo
+// motivo por que a tela também é desenhada ali. Guardar em `aplicarIntencao` deixaria de
+// fora o fim de mão e a troca de jogador.
+const HORAS_GUARDADA = 12;
+
+// `P.faltaNo` é um array de Set, e Set NÃO sobrevive a JSON: `JSON.stringify(new Set())`
+// dá `{}` — um objeto sem `.has` e sem `.indexOf`. Sem estas duas conversões a partida
+// retomada perdia calada quem passou em qual número (a marca da Fila 4) e o bot estourava
+// na primeira consulta, em `05-bot.js`. É a MESMA conversão que `visaoDe` faz para o fio,
+// e pela mesma razão: o que não sobrevive à serialização não existe do outro lado.
+const partidaParaGuardar = () =>
+  Object.assign({}, P, { faltaNo: P.faltaNo.map(s => Array.from(s)) });
+
+const partidaDeVolta = guardada => Object.assign({}, guardada, {
+  faltaNo: guardada.cadeiras.map((_, i) => {
+    const g = (guardada.faltaNo || [])[i];
+    return new Set(Array.isArray(g) ? g : []);
+  }),
+});
+
+function guardarPartida() {
+  // O convidado não tem partida na memória: é a invariante do online, não um esquecimento.
+  if (!P || modo === 'convidado') return;
+  // Partida acabada não é partida para voltar — e deixá-la guardada faria o menu oferecer
+  // para sempre a revanche de uma final que você já viu.
+  if (P.fase === 'fim') { esquecer('partida'); return; }
+  guardar('partida', { quando: Date.now(), euNaTela, P: partidaParaGuardar() });
+}
+
+// Devolve o guardado só se ele ainda serve. Prazo porque uma partida de anteontem não é
+// mais "a partida de antes", é um estranho ocupando o botão.
+function partidaGuardada() {
+  const g = lido('partida', null);
+  if (!g || !g.P || !Array.isArray(g.P.cadeiras) || !Array.isArray(g.P.maos)) return null;
+  if (g.P.fase === 'fim') return null;
+  if (!g.quando || Date.now() - g.quando > HORAS_GUARDADA * 3600e3) return null;
+  return g;
+}
+
+function atualizarBotaoRetomar() {
+  const g = partidaGuardada();
+  el('btRetomar').classList.toggle('oculta', !g);
+  if (g) {
+    const m = MODOS[g.P.regras.modo];
+    el('btRetomar').textContent =
+      `Continuar a partida de antes · ${m ? m.rotulo : g.P.regras.modo}, mão ${g.P.maoNum}`;
+  }
+}
+
+function retomarPartida() {
+  const g = partidaGuardada();
+  if (!g) { avisar('A partida guardada expirou.'); atualizarBotaoRetomar(); return; }
+  encerrarRede();                      // pode ter sido mesa online; ela não existe mais
+  modo = 'local';
+  P = partidaDeVolta(g.P);
+
+  // A mesa de antes acabou junto com a página. Cadeira que era de gente online passa a
+  // ser bot, senão o motor espera para sempre por quem não vai responder — é a mesma
+  // conversão que `comecarLocal` faz, e pela mesma razão.
+  const viraramBot = P.cadeiras.filter(c => c.tipo === 'online');
+  viraramBot.forEach(c => { c.tipo = 'bot'; c.nivel = c.nivel || 'normal'; });
+
+  euNaTela = Number.isInteger(g.euNaTela) && g.euNaTela >= 0 && g.euNaTela < P.n ? g.euNaTela : 0;
+  travado = false;
+  viuOFimDaMao = false;
+  saindo = false;
+  esquecerArrumacao();                 // a arrumação era da sessão que morreu
+  limparConversa();
+  ligarMurmuro();
+  esconderTelas();
+  narrar(`Partida retomada — mão ${P.maoNum}, placar ${P.placar.join(' × ')}.`);
+  if (viraramBot.length) {
+    narrar(viraramBot.length === 1
+      ? 'A cadeira que era online virou bot: a mesa de antes não existe mais.'
+      : `As ${viraramBot.length} cadeiras que eram online viraram bot: a mesa de antes não existe mais.`);
+  }
+  avancar();
+}
+
+el('btRetomar').onclick = () => { tocarClique(); retomarPartida(); };
+
 // ─── a conversa ──────────────────────────────────────────────────────────────
 function falar() {
   const txt = HUD.texto.value.trim();
@@ -286,6 +375,12 @@ addEventListener('keydown', ev => {
 // quando o arquivo da cena termina de rodar.
 enquadrar();
 
+// O menu já nasce visível pelo HTML, então `mostrarTela` nunca roda na carga — e sem esta
+// chamada o botão de retomar só apareceria depois da primeira volta ao menu, que é
+// justamente quando ele não é mais necessário. Fica aqui, no fim, pelo mesmo motivo do
+// `enquadrar()` acima: depende de tudo já estar declarado.
+atualizarBotaoRetomar();
+
 let ultimoQuadro = performance.now();
 
 function quadro(agora) {
@@ -315,6 +410,9 @@ window.__jogo = {
   // para ver a mão" sem ninguém olhar screenshot.
   camera, naMao, enquadrar, grupoMesa, grupoOutros, grupoMonte,
   arrumarMao, moverNaMao, publicar, alternarConversa, falar, trocarCanal,
+  // Retomar precisa ser dirigível pelos testes: o caminho inteiro só existe entre duas
+  // cargas da página, e é justamente aí que ninguém olha.
+  retomarPartida, partidaGuardada, atualizarBotaoRetomar, lembrarMesa, mesaLembrada,
   get P() { return P; },
   get vista() { return vistaAtual; },
   // A ORDEM DA TELA, que desde a arrumação não é mais a de vista.mao. Quem quiser

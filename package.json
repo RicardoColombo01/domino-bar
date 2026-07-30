@@ -8,6 +8,7 @@
     "check": "node build.mjs --check",
     "test": "node build.mjs && cd tests && npm test",
     "telas": "node build.mjs && cd tests && npm run telas",
+    "lembrar": "node build.mjs && cd tests && npm run lembrar",
     "shots": "node build.mjs && cd tests && npm run shots",
     "online": "node build.mjs && cd tests && npm run online",
     "servir": "npx --yes serve ."
