@@ -14,6 +14,7 @@ const HUD = {
   canal: el('btCanal'), abrirConversa: el('btConversa'),
   comprar: el('btComprar'), passar: el('btPassar'), acoes: el('acoes'),
   arrumar: el('btArrumar'), contar: el('btContagem'), contagem: el('contagem'),
+  dica: el('btDica'),
 };
 
 // "Contar o jogo" é a conta que jogador bom faz de cabeça e novato não faz. Fica
@@ -89,6 +90,10 @@ function desenharHUD(vista) {
   HUD.arrumar.classList.toggle('oculta', !temMao || vista.mao.length < 2);
   HUD.contar.classList.toggle('oculta', !temMao);
   HUD.contar.classList.toggle('on', contando);
+  // A dica, ao contrário de arrumar e contar, SÓ vale na sua vez: ela levanta uma peça e
+  // abre a barra de confirmar, e fora da vez isso seria prometer uma jogada que o motor
+  // vai recusar.
+  HUD.dica.classList.toggle('oculta', !temMao || !minhaVez || vista.fase !== 'mao');
   HUD.acoes.classList.toggle('oculta', !a.comprar && !a.passar && !temMao);
   // Quando a única saída é comprar, o botão precisa gritar: o jogador está travado.
   HUD.comprar.classList.toggle('principal', a.comprar && !a.jogadas.length);

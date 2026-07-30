@@ -241,7 +241,25 @@ que era `online` vira bot ao retomar, senão o motor espera para sempre por quem
 responder. `tests/test-lembrar.mjs` (`npm run lembrar`) é a primeira suíte que **recarrega
 a página** — sem isso, "lembrar" não é testável, e foi ela que achou o defeito do `Set`.
 
-Sobrou: **7. dica de jogada** para quem está aprendendo.
+**Dica de jogada (7) ✔ feito.** `dicaDaVista(vista)` em `05-bot.js`: é o bot pensando com
+a sua mão, sem ruído. Sai da **vista** e nunca da partida — e repare que isso não custou
+nada, porque **todo** campo que `informacao()` entrega ao bot já existe na visão. Não é
+coincidência: é consequência de o bot ter sido escrito para não trapacear. Se a dica
+precisasse de um campo a mais, seria prova de que o bot olhava a mão dos outros. De graça,
+ela funciona para o convidado, que não tem `P`.
+
+`escolherJogada` passou a devolver os **porquês** junto da nota — uma parcela nomeada por
+critério —, e a dica mostra os dois que mais pesaram. A aritmética é a mesma, nas mesmas
+parcelas e na mesma ordem: `test-regras.mjs` mede a força do bot em 300 partidas e o número
+tem de continuar igual (359 × 241, 59,8%, conferido antes e depois). Note que `n -= x`
+virou `n += somar(-x, …)` para o porquê guardar o sinal certo — é idêntico em ponto
+flutuante.
+
+A dica **levanta** a peça em vez de só dizer o nome: termina exatamente onde o seu clique
+terminaria, com os fantasmas nas pontas e a barra de confirmar aberta. Ninguém joga por
+você. Só na sua vez, porque fora dela seria prometer jogada que o motor recusa.
+
+A fila 4 está fechada.
 
 ## Regras da casa (implementadas)
 
