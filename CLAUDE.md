@@ -156,8 +156,17 @@ As pontas são o primeiro e o último número; jogar na esquerda é um `unshift`
 
 # FILA DE TRABALHO
 
-Sobrou a Fila 4. As filas 1, 2 e 3 estão feitas — ficam registradas abaixo porque o que
-elas ensinaram sobre este código continua valendo.
+**As quatro filas estão fechadas (v1.5.0).** Ficam registradas abaixo porque o que elas
+ensinaram sobre este código continua valendo — é o motivo de este arquivo existir.
+
+Da Fila 2 sobrou só uma coisa: o HUD de **celular deitado** ainda é o de tela baixa
+(`@media (max-height: 560px)`), não um layout próprio. O `#log` que faltava ali deixou de
+existir — a conversa o absorveu na v1.5.0.
+
+Fora de fila, o que a v1.5.0 acrescentou além dos itens: a **conversa da mesa** (chat geral
+e por dupla, com a narração no mesmo fio, e conversa também no saguão), **voltar para a
+mesma partida** depois de a página morrer, e a **legibilidade da mesa** (sRGB, pinta maior,
+marca da última jogada).
 
 ## Fila 1 — o bug dos pontos ✔ feito (v1.0.1)
 
@@ -235,7 +244,7 @@ chaves de peça, e **nunca no motor**. Arrastar é uma máquina de estados em
 **Painel de contagem (`13-hud.js`).** Sai inteiro de `vista.linha` + `vista.mao` + o
 `faltaNo` novo na visão — tudo público, nada a mudar no motor.
 
-**Lembrar preferências (5) ✔ feito.** `guardar`/`lido`/`esquecer` em `01-constantes.js` —
+**Lembrar preferências (5) ✔ feito (v1.5.0).** `guardar`/`lido`/`esquecer` em `01-constantes.js` —
 mora no primeiro arquivo porque o `13-hud.js` lê preferência na hora em que é concatenado.
 A mesa inteira é lembrada (modo, jogadores, alvo, compra livre, nome e tipo das **quatro**
 cadeiras) e o som também. `mesaLembrada()` valida tudo; `refletirMesaNosBotoes()` existe
@@ -250,7 +259,7 @@ que era `online` vira bot ao retomar, senão o motor espera para sempre por quem
 responder. `tests/test-lembrar.mjs` (`npm run lembrar`) é a primeira suíte que **recarrega
 a página** — sem isso, "lembrar" não é testável, e foi ela que achou o defeito do `Set`.
 
-**Dica de jogada (7) ✔ feito.** `dicaDaVista(vista)` em `05-bot.js`: é o bot pensando com
+**Dica de jogada (7) ✔ feito (v1.5.0).** `dicaDaVista(vista)` em `05-bot.js`: é o bot pensando com
 a sua mão, sem ruído. Sai da **vista** e nunca da partida — e repare que isso não custou
 nada, porque **todo** campo que `informacao()` entrega ao bot já existe na visão. Não é
 coincidência: é consequência de o bot ter sido escrito para não trapacear. Se a dica
