@@ -156,8 +156,13 @@ As pontas são o primeiro e o último número; jogar na esquerda é um `unshift`
 
 # FILA DE TRABALHO
 
-**As quatro filas estão fechadas (v1.5.0).** Ficam registradas abaixo porque o que elas
-ensinaram sobre este código continua valendo — é o motivo de este arquivo existir.
+**As filas 1 a 4 estão fechadas (v1.5.0); a Fila 5 está aberta.** As fechadas ficam
+registradas abaixo porque o que elas ensinaram sobre este código continua valendo — é o
+motivo de este arquivo existir.
+
+**Toda ideia e toda implementação combinada entram na Fila 5.** É aqui que o trabalho por
+fazer mora, e não em memória de sessão: memória não viaja com o repositório nem é lida por
+quem abrir o projeto amanhã.
 
 Da Fila 2 sobrou só uma coisa: o HUD de **celular deitado** ainda é o de tela baixa
 (`@media (max-height: 560px)`), não um layout próprio. O `#log` que faltava ali deixou de
@@ -278,6 +283,74 @@ terminaria, com os fantasmas nas pontas e a barra de confirmar aberta. Ninguém 
 você. Só na sua vez, porque fora dela seria prometer jogada que o motor recusa.
 
 A fila 4 está fechada.
+
+## Fila 5 — as regras que ainda estão erradas
+
+**Esta fila é o lugar de toda ideia e de toda implementação combinada.** Ideia nova, minha
+ou do Ricardo, entra aqui — não em memória de sessão, que não viaja com o repositório e não
+é lida por quem abrir o projeto amanhã.
+
+Os dois itens abaixo vieram do Ricardo em **29/07/2026**, e os dois são regra de casa: não
+se deduzem do código nem se resolvem por bom senso de programador. Nenhum dos dois está
+começado.
+
+### 1. Lá-e-lô só existe com as pontas DIFERENTES
+
+A batida de lá-e-lô (2 pontos) só vale quando as duas pontas da mesa são de números
+**diferentes** e a peça da batida carrega os dois — ou seja, quando ela realmente podia ter
+entrado de qualquer um dos lados.
+
+Pontas iguais não são "dois lados". Nas palavras do Ricardo: pontas `3` e `3`, jogador bate
+com a `3|1` — **não** conta como bater dos dois lados, é batida simples. Para valer, teria de
+ser uma ponta `3` e a outra `1`.
+
+O defeito está em `tipoDaBatida` (`03-regras.js`), nesta linha:
+
+```js
+const nasDuas = (peca[0] === e || peca[1] === e) && (peca[0] === d || peca[1] === d);
+```
+
+Com `e === d === 3` e a peça `[3,1]`, os dois lados do `&&` dão verdadeiro **pelo mesmo 3**.
+Falta exigir `e !== d`.
+
+**Por que sobreviveu tanto tempo:** `PONTOS` dá 2 para `laelo` e 2 para `carroca`, então uma
+carroça classificada como lá-e-lô continua marcando o valor certo por acidente. O placar só
+mente quando a batida devia ser **simples (1)** e sai como lá-e-lô (2). Defeito que erra de
+graça na maioria dos casos é o que menos aparece e o que mais tempo dura.
+
+**Pergunta aberta, para o Ricardo decidir:** o mesmo `nasDuas` alimenta a **cruzada** (4
+pontos), na linha de cima. Uma carroça `6|6` com as duas pontas em `6` cai no mesmo
+raciocínio — só encosta de um lado, o outro `6` continua vivo —, então pela regra do lá-e-lô
+ela deveria valer `carroca` (2) e não `cruzada` (4). **Não mexer sem confirmar**: é regra de
+casa, não dedução.
+
+### 2. Ainda dá para FORÇAR o fechamento
+
+O Ricardo consegue forçar o jogo a trancar. A regra do fechamento armado existe (ver "Regras
+da casa" abaixo) e não está fechando o buraco todo.
+
+A regra, nas palavras dele:
+
+- **Fechamento natural** = você não consegue evitar que feche. **Permitido.**
+- **Fechamento forçado** = você escolhe o lance que faz não haver mais lance nenhum.
+  **Proibido.**
+- Se o lance fecha uma ponta mas **ainda sobram lances possíveis**, está tudo bem.
+- **Exceção:** bucha jogada por último é natural. Exemplo dele — as duas pontas em `6` e a
+  única peça na mão é a `6|6`: pode jogar, e mesmo fechando o jogo isso é natural.
+
+**Antes de mexer, pedir um caso concreto** (a mesa, as mãos, o lance usado). É o insumo que
+falta e vale mais que qualquer leitura de código: `fechamentosArmados` tem cinco condições,
+cada uma paga com um bug, e corrigir a errada reabre um dos antigos.
+
+**Candidato mais forte, NÃO confirmado:** a regra tem **um lance de profundidade**. Ela barra
+o lance que fecha agora, mas não impede armar em dois — jogar algo que não fecha e deixar a
+posição em que, na vez seguinte, o único lance possível fecha. Aí ele passa como natural
+justamente porque `jogadas.length > 1` é falso. Hipótese de leitura, não diagnóstico.
+
+**O que não pode ser tocado ao corrigir:** a conta usa só a mesa e a sua PRÓPRIA mão. Se
+olhasse a mão dos outros, a jogada desaparecendo da tela contaria ao jogador que ninguém tem
+aquele número — e isso é vazamento de informação, irmão do que a `visaoDe` existe para
+impedir.
 
 ## Regras da casa (implementadas)
 
