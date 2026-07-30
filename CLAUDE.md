@@ -290,9 +290,9 @@ A fila 4 está fechada.
 ou do Ricardo, entra aqui — não em memória de sessão, que não viaja com o repositório e não
 é lida por quem abrir o projeto amanhã.
 
-Os dois itens abaixo vieram do Ricardo em **29/07/2026**, e os dois são regra de casa: não
-se deduzem do código nem se resolvem por bom senso de programador. Nenhum dos dois está
-começado.
+Os itens 1 e 2 vieram do Ricardo em **29/07/2026** e são regra de casa: não se deduzem do
+código nem se resolvem por bom senso de programador. O item 3 é de **30/07/2026** e é o
+pedaço que falta para a reconexão do online valer. **Nenhum dos três está começado.**
 
 ### 1. Lá-e-lô só existe com as pontas DIFERENTES
 
@@ -351,6 +351,42 @@ justamente porque `jogadas.length > 1` é falso. Hipótese de leitura, não diag
 olhasse a mão dos outros, a jogada desaparecendo da tela contaria ao jogador que ninguém tem
 aquele número — e isso é vazamento de informação, irmão do que a `visaoDe` existe para
 impedir.
+
+### 3. O código da sala tem de ficar visível, para dar de voltar
+
+Pedido do Ricardo em **30/07/2026**: deixar o código da mesa visível, para que quem sair tenha
+como voltar.
+
+Hoje o código **não existe em lugar nenhum** depois do saguão. Ele é variável local dentro de
+`tentarAbrir` (anfitrião) e do `btConectar` (convidado), nunca sai para o escopo do módulo e
+nunca é guardado. O `#onlineCodigo` vive dentro da `telaOnline`, que o `esconderTelas()`
+esconde no primeiro `t:'vista'` que chega. Ou seja: no instante em que a partida começa, o
+código desaparece da vida de todo mundo.
+
+Isso é o que estraga a reconexão que **já existe**: `ESPERA_VOLTA` guarda a cadeira por 30 s
+justamente para dar tempo de voltar, mas quem fechou a aba não tem mais o código para digitar.
+Uma metade do mecanismo sem a outra.
+
+São **três pedaços**, e vale tratá-los separados porque a dificuldade é muito diferente:
+
+- **(a) Ver.** Mostrar o código no HUD enquanto a mesa é online. Barato. O alfabeto já exclui
+  `I`, `O`, `0` e `1` de propósito, "porque código é para ditar em voz alta" — ele sempre foi
+  feito para ser compartilhado, então mantê-lo na tela é o que o desenho original pedia.
+- **(b) Voltar como convidado.** Guardar o código (`guardar('sala', …)`, ao lado de `mesa` e
+  `partida`) e o menu oferecer "voltar para a mesa XJCR", irmão do botão de retomar partida.
+  Precisa de prazo, como o das 12 h da partida guardada.
+- **(c) Voltar como ANFITRIÃO.** O difícil, e é o que falta para o "voltar para a mesma
+  partida" valer no online. `codigoNovo()` sorteia um código a cada `tentarAbrir`, então o
+  anfitrião que recarrega abre uma mesa **outra** e os convidados tentando voltar batem numa
+  porta que não existe. Precisaria reabrir com o MESMO código — o id do PeerJS é
+  `dominobar-XXXX` e dá para reivindicá-lo se o peer antigo morreu — e casar isso com a
+  partida já guardada no `localStorage`. Hoje `retomarPartida` converte cadeira online em bot
+  exatamente porque este pedaço não existe.
+
+**Tensão de desenho, para o Ricardo decidir:** código na tela é código em qualquer print,
+qualquer transmissão e qualquer tela compartilhada — inclusive na mesa mista, onde a tela passa
+de mão em mão no hotseat. Pode ser que ele deva ficar atrás de um clique, ou abreviado, em vez
+de sempre à mostra. **Perguntar antes**, é decisão de produto e não de código.
 
 ## Regras da casa (implementadas)
 
