@@ -40,7 +40,7 @@ function comecarLocal() {
   euNaTela = 0;
   travado = false;
   esquecerArrumacao();               // mesa nova, mão nova: a arrumação de antes não vale
-  linhasDoLog.length = 0;
+  limparConversa();
   tocarEmbaralho();
   anunciarAbertura();
   avancar();
@@ -171,6 +171,9 @@ el('btPronto').onclick = () => {
   euNaTela = P.vez;
   travado = false;
   publicar();
+  // Depois do publicar: quem solta a fala usa `vistaAtual`, e é o publicar que a põe de
+  // pé para a cadeira nova. Antes dele, a fala sairia com o nome da cadeira anterior.
+  soltarFalasGuardadas(euNaTela);
 };
 
 el('btProxima').onclick = () => {
@@ -229,7 +232,36 @@ function sairDaPartida() {
   mostrarTela('telaMenu');
 }
 
+// ─── a conversa ──────────────────────────────────────────────────────────────
+function falar() {
+  const txt = HUD.texto.value.trim();
+  if (!txt) return;
+  HUD.texto.value = '';
+  if (modo === 'convidado') {
+    // O anfitrião é quem valida e retransmite — a mensagem só volta para você depois de
+    // passar por ele, e essa volta é a confirmação de que saiu.
+    if (linkAnfitriao && linkAnfitriao.open) linkAnfitriao.send({ t: 'chat', canal: canalAtual, txt });
+    else avisar('Sem conexão com a mesa.');
+    return;
+  }
+  if (modo === 'anfitriao') espalharChat(euNaTela, canalAtual, txt);
+}
+
+HUD.texto.onkeydown = ev => {
+  if (ev.key === 'Enter') { falar(); ev.preventDefault(); }
+  if (ev.key === 'Escape') HUD.texto.blur();
+};
+HUD.canal.onclick = () => trocarCanal(canalAtual === 'dupla' ? 'todos' : 'dupla');
+HUD.abrirConversa.onclick = () => alternarConversa();
+
+// O jogo inteiro escuta o teclado no window, e nenhum dos dois handlers olhava para o
+// alvo do evento: com um campo na tela, escrever "vamos" chamava arrumarMao() a cada
+// 'a' digitado e Esc largava a peça levantada. (Já valia para o código da mesa, que tem
+// letras — só não aparecia porque ali não há mão desenhada.)
+const digitando = ev => /^(INPUT|TEXTAREA)$/.test((ev.target || {}).tagName || '');
+
 addEventListener('keydown', ev => {
+  if (digitando(ev)) return;
   if (ev.key === 'Escape') cancelarEscolha();
 });
 
@@ -244,6 +276,7 @@ HUD.contar.onclick = () => {
   if (vistaAtual) atualizarVista(vistaAtual);
 };
 addEventListener('keydown', ev => {
+  if (digitando(ev)) return;
   if (ev.key === 'a' || ev.key === 'A') arrumarMao();
 });
 
@@ -281,7 +314,7 @@ window.__jogo = {
   // coordenadas de tela e reprovar se alguma cair fora — que é o teste que prova "dá
   // para ver a mão" sem ninguém olhar screenshot.
   camera, naMao, enquadrar, grupoMesa, grupoOutros, grupoMonte,
-  arrumarMao, moverNaMao, publicar,
+  arrumarMao, moverNaMao, publicar, alternarConversa, falar, trocarCanal,
   get P() { return P; },
   get vista() { return vistaAtual; },
   // A ORDEM DA TELA, que desde a arrumação não é mais a de vista.mao. Quem quiser

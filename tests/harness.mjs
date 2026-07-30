@@ -30,7 +30,9 @@ function makeEl(id) {
       contains: c => e._cls.has(c),
       toggle: (c, on) => { const v = on === undefined ? !e._cls.has(c) : on; v ? e._cls.add(c) : e._cls.delete(c); return v; },
     },
+    scrollTop: 0, scrollHeight: 0,
     appendChild(ch) { e.children.push(ch); return ch; },
+    removeChild(ch) { const i = e.children.indexOf(ch); if (i >= 0) e.children.splice(i, 1); return ch; },
     addEventListener() {}, removeEventListener() {}, remove() {}, focus() {}, select() {},
     querySelectorAll: () => [], querySelector: () => null,
   };
