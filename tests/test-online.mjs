@@ -38,8 +38,24 @@ const navegador = await puppeteer.launch({
   args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--mute-audio', '--hide-scrollbars'],
 });
 
-const abrir = async nome => {
+// CADA ABA COM A SUA IDENTIDADE, e isto deixou de ser detalhe quando o convidado passou a
+// ter clienteId. As abas do Puppeteer dividem a mesma origem, e o clienteId mora no
+// `localStorage`, que é da origem INTEIRA: sem isto os convidados nasceriam com o mesmo
+// id e cada um faria take-over do anterior — o teste reprovaria por causa do próprio
+// teste. (É a mesma lição do localStorage em file:// que já contaminou as suítes de tela:
+// cada cena diz o que quer, explicitamente.)
+//
+// Isolar em `createBrowserContext` seria mais fiel e foi tentado: cada contexto tem o
+// próprio cache HTTP, então cada aba rebaixa three.js e PeerJS do CDN — a primeira levou
+// 8s e a segunda estourou 45s. Injetar o id é o mesmo efeito por um custo que não existe.
+//
+// Passar `id` de outra aba é dizer "é a MESMA pessoa, noutra aba".
+let abas = 0;
+const abrir = async (nome, id) => {
   const p = await navegador.newPage();
+  const meu = id || `CLIENTEDETESTE${++abas}`;
+  await p.evaluateOnNewDocument(v => localStorage.setItem('dominobar.cliente', JSON.stringify(v)), meu);
+  p.idDeTeste = meu;
   await p.setViewport({ width: 1200, height: 760 });
   p.on('pageerror', e => { console.error(`  ✗ exceção em ${nome}: ${e.message}`); falhas++; });
   await p.goto(URL_JOGO, { waitUntil: 'networkidle2', timeout: 45000 });
@@ -127,6 +143,50 @@ try {
     an => window.__jogo.P.linha.length > an.linha || window.__jogo.P.monte.length < an.monte,
     { timeout: 15000, polling: 400 }, antes).catch(() => { ok(false, 'a jogada do convidado não chegou no anfitrião'); });
   console.log('  a jogada do convidado foi aplicada pelo anfitrião');
+
+  // ─── caiu e voltou: a MESMA cadeira ────────────────────────────────────────
+  // A prova do clienteId, e o motivo de ele existir. Antes a cadeira saía da primeira
+  // vaga livre, decidida no instante da conexão: "voltar" era sentar onde sobrou. E o
+  // número da cadeira é a CHAVE da visaoDe — sentar na cadeira errada é receber a mão de
+  // outra pessoa. Por isso a asserção confere a MÃO e não só o número: o número certo com
+  // a mão errada seria um jeito de o bug passar despercebido.
+  console.log('\no convidado cai e volta');
+  const maoDaVisita = (await convidado.evaluate(() => window.__jogo.vista.mao.map(p => p.slice())))
+    .map(norma).sort().join(' ');
+  await convidado.reload({ waitUntil: 'networkidle2', timeout: 45000 });
+  await convidado.waitForFunction('window.__jogo && window.__jogo.pronto', { timeout: 30000, polling: 400 });
+  await convidado.evaluate(cod => {
+    document.getElementById('btEntrar').click();
+    document.getElementById('onlineEntrada').value = cod;
+    document.getElementById('btConectar').click();
+  }, codigo);
+  await convidado.waitForFunction('window.__jogo.vista && window.__jogo.vista.mao.length', { timeout: 30000, polling: 400 })
+    .catch(() => ok(false, 'o convidado não conseguiu voltar para a mesa'));
+  const volta = await convidado.evaluate(() => JSON.parse(JSON.stringify(window.__jogo.vista)));
+  ok(volta.cadeira === 1, `voltou na cadeira ${volta.cadeira} em vez da 1 — a cadeira não é de quem é dono dela`);
+  ok(volta.mao.map(norma).sort().join(' ') === maoDaVisita,
+    'voltou com outra mão: sentou na cadeira de outra pessoa');
+  console.log(`  voltou na cadeira ${volta.cadeira}, com as mesmas ${volta.mao.length} peças`);
+
+  // ─── a mesma pessoa, noutra aba ────────────────────────────────────────────
+  // Mesmo contexto = mesmo localStorage = mesmo clienteId. É fechar o notebook e abrir
+  // no celular. A aba nova assume a cadeira e a velha é avisada — antes as duas brigavam
+  // pela mesa, cada uma consumindo uma vaga.
+  console.log('\na mesma pessoa entra noutra aba');
+  const outraAba = await abrir('outra aba', convidado.idDeTeste);
+  await outraAba.evaluate(cod => {
+    document.getElementById('btEntrar').click();
+    document.getElementById('onlineEntrada').value = cod;
+    document.getElementById('btConectar').click();
+  }, codigo);
+  await outraAba.waitForFunction('window.__jogo.vista && window.__jogo.vista.mao.length', { timeout: 30000, polling: 400 })
+    .catch(() => ok(false, 'a segunda aba não conseguiu assumir a cadeira'));
+  const naNova = await outraAba.evaluate(() => window.__jogo.vista.cadeira);
+  ok(naNova === 1, `a segunda aba sentou na cadeira ${naNova} em vez de assumir a 1`);
+  const ocupadas = await anfitriao.evaluate(() => window.__jogo.conexoesAbertas());
+  ok(ocupadas === 1, `a mesa ficou com ${ocupadas} conexões para a MESMA pessoa — era para ser 1`);
+  console.log(`  a aba nova assumiu a cadeira ${naNova}, e a mesa tem ${ocupadas} conexão`);
+  await outraAba.close();
 
   await anfitriao.close();
   await convidado.close();
@@ -251,6 +311,7 @@ try {
 
   await dono.close(); await parceiro.close(); await rival.close();
 } catch (e) {
+  if (process.env.DOMINO_DEBUG) console.error(e.stack);
   avisos.push(e.message);
 }
 

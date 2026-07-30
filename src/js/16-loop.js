@@ -458,6 +458,10 @@ window.__jogo = {
   // cargas da página, e é justamente aí que ninguém olha.
   retomarPartida, partidaGuardada, atualizarBotaoRetomar, lembrarMesa, mesaLembrada,
   pedirDica, dicaDaVista,
+  // Quantas conexões o anfitrião tem de pé. É como o teste do online prova que a mesma
+  // pessoa em duas abas ocupa UMA cadeira, e não duas: sem isto, o take-over só daria
+  // para conferir de fora pelo sintoma, que é a mesa lotar de fantasmas.
+  conexoesAbertas: () => conexoes.size,
   get P() { return P; },
   get vista() { return vistaAtual; },
   // A ORDEM DA TELA, que desde a arrumação não é mais a de vista.mao. Quem quiser
