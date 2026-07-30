@@ -417,14 +417,18 @@ console.log('\na arrumação sobrevive à troca de jogador');
 // exatamente o que ele prova. Depois dele não dá para jogar mais nesta partida.
 console.log('\na arrumação não encosta na mão do motor');
 {
+  // Só bots à mesa: com uma cadeira 'local' herdada do bloco anterior, a partida pode
+  // começar na tela de troca — e ali a vista é uma CÓPIA com a mão vazia, não a
+  // referência do motor que este teste quer conferir.
+  //
+  // E não dá para contar com a sorte de o sorteio abrir numa cadeira boa: `performance.now()`
+  // no harness AVANÇA o relógio falso a cada chamada, então qualquer código novo que o
+  // consulte desloca os temporizadores do bot e com eles o embaralho inteiro. Foi o que
+  // aconteceu quando a marca da última jogada entrou. Montar a mesa é o que segura.
+  mod.MESA.n = 3;
+  mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[1].nivel = 'normal';
+  mod.MESA.cadeiras[2].tipo = 'bot'; mod.MESA.cadeiras[2].nivel = 'normal';
   mod.comecarLocal();
-  // A mesa anterior deixou uma cadeira 'local', então a partida nova pode abrir na tela
-  // de troca — e ali `publicar` manda `mao: []` DE PROPÓSITO, para a mão do jogador
-  // anterior não piscar. Sem entregar a tela a alguém, a asserção abaixo mediria isso e
-  // não a referência. Quem abre depende do sorteio, e o sorteio anda quando qualquer
-  // coisa chama `performance.now()` a mais: o harness avança o relógio falso a cada
-  // chamada, e isso desloca os temporizadores do bot.
-  for (let i = 0; i < 10 && mod.travado; i++) els.get('btPronto').onclick();
   // `visaoDe` devolve a MESMA referência de P.maos[cadeira]. Se alguém um dia "resolver"
   // a arrumação com um vista.mao.sort(), terá ordenado a mão do anfitrião por causa da
   // preferência visual de um jogador — e no online nem funcionaria, porque a vista do
