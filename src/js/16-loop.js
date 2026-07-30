@@ -325,15 +325,22 @@ el('btRetomar').onclick = () => { tocarClique(); retomarPartida(); };
 function falar() {
   const txt = HUD.texto.value.trim();
   if (!txt) return;
-  HUD.texto.value = '';
   if (modo === 'convidado') {
+    HUD.texto.value = '';
     // O anfitrião é quem valida e retransmite — a mensagem só volta para você depois de
     // passar por ele, e essa volta é a confirmação de que saiu.
     if (linkAnfitriao && linkAnfitriao.open) linkAnfitriao.send({ t: 'chat', canal: canalAtual, txt });
     else avisar('Sem conexão com a mesa.');
     return;
   }
-  if (modo === 'anfitriao') espalharChat(euNaTela, canalAtual, txt);
+  if (modo !== 'anfitriao') return;
+  // O anfitrião entra pela MESMA porta que os convidados, com as mesmas guardas. Antes ele
+  // chamava `espalharChat` direto e era o único que podia inundar a mesa.
+  //
+  // E o campo só é limpo se a fala passou: engolir o texto que a pessoa acabou de digitar
+  // porque ela foi rápida demais é castigo duplo.
+  if (receberChat(euNaTela, { canal: canalAtual, txt })) HUD.texto.value = '';
+  else avisar('Devagar — uma fala por vez.');
 }
 
 HUD.texto.onkeydown = ev => {

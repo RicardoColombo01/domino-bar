@@ -215,6 +215,14 @@ html, body {
   background: radial-gradient(ellipse at 50% 40%, rgba(60, 38, 20, .74), rgba(8, 5, 4, .95));
   backdrop-filter: blur(4px); padding: 20px; overflow: auto;
 }
+/* A CONVERSA DO SAGUÃO. A tela de espera é um overlay de z-index 30 e cobria a conversa
+   por completo — nenhuma classe de visibilidade resolveria isso, porque o problema era
+   empilhamento. Enquanto a mesa enche, e só então, a conversa e o botão que a abre sobem
+   acima da tela: é o único momento do jogo em que um painel do HUD fica POR CIMA de uma
+   tela, e é justamente quando as pessoas mais querem falar ("cadê você?", "entra aí").
+   O canto de baixo à direita fica livre porque a carta é centrada e tem 620px de teto. */
+body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
+
 .carta {
   background: linear-gradient(180deg, rgba(38, 25, 16, .97), rgba(22, 14, 9, .97));
   border: 1px solid var(--borda); border-radius: 16px;

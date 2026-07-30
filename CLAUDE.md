@@ -138,6 +138,15 @@ As pontas são o primeiro e o último número; jogar na esquerda é um `unshift`
   guardado estoura no `distribuir`. `mesaLembrada()` confere cada campo contra as regras
   de hoje — e o nível de bot contra a tabela `NIVEIS` do próprio bot, não contra uma
   segunda lista.
+- **Painel do HUD por baixo de tela é problema de EMPILHAMENTO, não de visibilidade.** A
+  conversa não existia no saguão por dois motivos somados: `desenharConversa` só era
+  chamada por `desenharHUD` (que exige partida) **e** `.tela` é `z-index: 30` contra os 6
+  do `#conversa`. Trocar classe de `oculta` não resolveria metade do problema. Hoje
+  `atualizarConversa(vista)` aceita vista nula e `body.saguao` sobe o painel.
+- **Todo texto que o convidado escreve é entrada de fora, e o nome dele é o mais antigo.**
+  `listarSala` punha `c.nome` direto em `innerHTML` desde antes de existir chat — e o corte
+  em 14 caracteres não protege nada, porque `<img src=x>` tem 11. O teste do online usa
+  exatamente esse nome e reprova se virar elemento.
 - **Estado novo no `localStorage` contamina as suítes de navegador.** Elas rodam em
   `file://`, onde o armazenamento é do domínio inteiro: a partida guardada por uma cena
   fazia a seguinte abrir com "Continuar a partida de antes" na foto do menu. É a mesma

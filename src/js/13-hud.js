@@ -41,6 +41,9 @@ function mostrarTela(id) {
   // início: entre um e outro você pode ter acabado a partida guardada, ou o prazo dela
   // pode ter vencido com a aba aberta.
   if (id === 'telaMenu') atualizarBotaoRetomar();
+  // A conversa do saguão vive por cima desta tela, então quem abre e fecha a tela é quem
+  // liga e desliga aquilo.
+  atualizarSaguao(id === 'telaOnline');
 }
 const esconderTelas = () => mostrarTela(null);
 
@@ -195,9 +198,14 @@ function limparConversa() {
   atualizarBotaoConversa();
 }
 
-// Uma fala. `de` é a cadeira de quem falou, para o nome sair da vista e não do fio.
-function dizer(vista, de, canal, txt) {
-  const nome = (vista && vista.cadeiras[de] && vista.cadeiras[de].nome) || 'Alguém';
+// Uma fala. `de` é a cadeira de quem falou, e o nome sai da VISTA — nunca do que o
+// convidado alega ser.
+//
+// `deSaguao` é a saída para o único momento em que não existe vista: a espera antes de a
+// partida começar. Ele vem do ANFITRIÃO, tirado do MESA dele, e não de quem escreveu — a
+// invariante continua de pé, porque quem fala não escolhe como aparece.
+function dizer(vista, de, canal, txt, deSaguao) {
+  const nome = (vista && vista.cadeiras[de] && vista.cadeiras[de].nome) || deSaguao || 'Alguém';
   porNaConversa(
     `<b>${escapar(nome)}</b>${canal === 'dupla' ? '<i>dupla</i>' : ''} ${escapar(txt)}`,
     canal === 'dupla' ? 'fala daDupla' : 'fala');
@@ -251,12 +259,35 @@ function alternarConversa(abrir) {
 
 // Só há com quem conversar se houver gente online. E o canal "dupla" só existe onde
 // existe dupla — o Clássico de 4 é o único modo em duplas.
-function desenharConversa(vista) {
+//
+// `vista` é OPCIONAL, e é essa a diferença que trouxe a conversa para o saguão: antes esta
+// função só era chamada por `desenharHUD`, que só roda em `atualizarVista`, que só existe
+// depois de haver partida. Resultado: quem esperava a mesa encher, olhando o código de
+// quatro letras, não conseguia falar nada — justo quando mais se quer falar.
+let salaDuplas = false;        // o saguão sabe se a mesa é em duplas antes de existir P
+let noSaguao = false;          // a tela de espera está no ar
+
+function atualizarConversa(vista) {
   const online = modo === 'anfitriao' || modo === 'convidado';
   HUD.escrever.classList.toggle('oculta', !online);
   HUD.abrirConversa.classList.toggle('oculta', !online && !linhasDoLog.length);
-  HUD.canal.classList.toggle('oculta', !vista.duplas);
-  if (!vista.duplas && canalAtual === 'dupla') trocarCanal('todos');
+  // As duplas são por CADEIRA (em cruz), então dá para sabê-las antes de a partida
+  // existir: com vista, quem manda é ela; sem vista, a mesa que está sendo montada.
+  const duplas = vista ? !!vista.duplas : salaDuplas;
+  HUD.canal.classList.toggle('oculta', !duplas);
+  if (!duplas && canalAtual === 'dupla') trocarCanal('todos');
+}
+
+const desenharConversa = vista => atualizarConversa(vista);
+
+// A tela de espera é um overlay de `z-index: 30` e cobria a conversa inteira — mexer em
+// classe de visibilidade não resolveria nada, porque o problema era empilhamento. No
+// saguão, e só nele, a conversa e o botão que a abre sobem por cima da tela.
+function atualizarSaguao(naEspera) {
+  if (naEspera !== undefined) noSaguao = naEspera;
+  const online = modo === 'anfitriao' || modo === 'convidado';
+  document.body.classList.toggle('saguao', noSaguao && online);
+  atualizarConversa(vistaAtual);
 }
 
 // O que sobrou na mão de cada um. Tinha rótulo nenhum e o mesmo âmbar do placar do

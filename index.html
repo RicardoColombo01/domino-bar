@@ -2233,6 +2233,9 @@ function mostrarTela(id) {
   // início: entre um e outro você pode ter acabado a partida guardada, ou o prazo dela
   // pode ter vencido com a aba aberta.
   if (id === 'telaMenu') atualizarBotaoRetomar();
+  // A conversa do saguão vive por cima desta tela, então quem abre e fecha a tela é quem
+  // liga e desliga aquilo.
+  atualizarSaguao(id === 'telaOnline');
 }
 const esconderTelas = () => mostrarTela(null);
 
@@ -2387,9 +2390,14 @@ function limparConversa() {
   atualizarBotaoConversa();
 }
 
-// Uma fala. `de` é a cadeira de quem falou, para o nome sair da vista e não do fio.
-function dizer(vista, de, canal, txt) {
-  const nome = (vista && vista.cadeiras[de] && vista.cadeiras[de].nome) || 'Alguém';
+// Uma fala. `de` é a cadeira de quem falou, e o nome sai da VISTA — nunca do que o
+// convidado alega ser.
+//
+// `deSaguao` é a saída para o único momento em que não existe vista: a espera antes de a
+// partida começar. Ele vem do ANFITRIÃO, tirado do MESA dele, e não de quem escreveu — a
+// invariante continua de pé, porque quem fala não escolhe como aparece.
+function dizer(vista, de, canal, txt, deSaguao) {
+  const nome = (vista && vista.cadeiras[de] && vista.cadeiras[de].nome) || deSaguao || 'Alguém';
   porNaConversa(
     `<b>${escapar(nome)}</b>${canal === 'dupla' ? '<i>dupla</i>' : ''} ${escapar(txt)}`,
     canal === 'dupla' ? 'fala daDupla' : 'fala');
@@ -2443,12 +2451,35 @@ function alternarConversa(abrir) {
 
 // Só há com quem conversar se houver gente online. E o canal "dupla" só existe onde
 // existe dupla — o Clássico de 4 é o único modo em duplas.
-function desenharConversa(vista) {
+//
+// `vista` é OPCIONAL, e é essa a diferença que trouxe a conversa para o saguão: antes esta
+// função só era chamada por `desenharHUD`, que só roda em `atualizarVista`, que só existe
+// depois de haver partida. Resultado: quem esperava a mesa encher, olhando o código de
+// quatro letras, não conseguia falar nada — justo quando mais se quer falar.
+let salaDuplas = false;        // o saguão sabe se a mesa é em duplas antes de existir P
+let noSaguao = false;          // a tela de espera está no ar
+
+function atualizarConversa(vista) {
   const online = modo === 'anfitriao' || modo === 'convidado';
   HUD.escrever.classList.toggle('oculta', !online);
   HUD.abrirConversa.classList.toggle('oculta', !online && !linhasDoLog.length);
-  HUD.canal.classList.toggle('oculta', !vista.duplas);
-  if (!vista.duplas && canalAtual === 'dupla') trocarCanal('todos');
+  // As duplas são por CADEIRA (em cruz), então dá para sabê-las antes de a partida
+  // existir: com vista, quem manda é ela; sem vista, a mesa que está sendo montada.
+  const duplas = vista ? !!vista.duplas : salaDuplas;
+  HUD.canal.classList.toggle('oculta', !duplas);
+  if (!duplas && canalAtual === 'dupla') trocarCanal('todos');
+}
+
+const desenharConversa = vista => atualizarConversa(vista);
+
+// A tela de espera é um overlay de `z-index: 30` e cobria a conversa inteira — mexer em
+// classe de visibilidade não resolveria nada, porque o problema era empilhamento. No
+// saguão, e só nele, a conversa e o botão que a abre sobem por cima da tela.
+function atualizarSaguao(naEspera) {
+  if (naEspera !== undefined) noSaguao = naEspera;
+  const online = modo === 'anfitriao' || modo === 'convidado';
+  document.body.classList.toggle('saguao', noSaguao && online);
+  atualizarConversa(vistaAtual);
 }
 
 // O que sobrou na mão de cada um. Tinha rótulo nenhum e o mesmo âmbar do placar do
@@ -2841,9 +2872,14 @@ function listarSala() {
   const faltam = MESA.cadeiras.slice(0, MESA.n).filter((c, i) => c.tipo === 'online' && !conexoes.has(i)).length;
   el('onlineLista').innerHTML = MESA.cadeiras.slice(0, MESA.n).map((c, i) => {
     const estado = c.tipo === 'online' ? (conexoes.has(i) ? 'chegou' : 'esperando…') : (ETIQUETA[c.tipo] || c.tipo);
-    return `<div><span>${c.nome}</span><b>${estado}</b></div>`;
+    // ESCAPADO: este nome foi escrito pelo convidado (`m.nome`, ali em cima) e ia direto
+    // para innerHTML. É o mesmo buraco do texto do chat, na tela ao lado — e mais antigo
+    // que ele. Um nome com <img onerror> rodava script na máquina do anfitrião.
+    return `<div><span>${escapar(c.nome)}</span><b>${estado}</b></div>`;
   }).join('');
   el('btIniciarOnline').textContent = faltam ? `Faltam ${faltam} · começar assim mesmo` : 'Começar a partida';
+  salaDuplas = MESA.n === 4;
+  atualizarSaguao();
 }
 
 el('btIniciarOnline').onclick = () => {
@@ -2887,10 +2923,18 @@ el('btConectar').onclick = () => {
     });
     linkAnfitriao.on('data', m => {
       if (m.t === 'cheio') { erroOnline('Essa mesa já está cheia.'); return; }
-      if (m.t === 'sentou') { euNaTela = m.cadeira; erroOnline(`Você é a cadeira ${m.cadeira + 1}.`); }
+      if (m.t === 'sentou') {
+        euNaTela = m.cadeira;
+        erroOnline(`Você é a cadeira ${m.cadeira + 1}.`);
+        // A partir daqui há com quem conversar, e `modo` já é 'convidado': a conversa do
+        // saguão liga. O tamanho da lista de nomes é o número de cadeiras, e é dele que
+        // sai se a mesa é em duplas — o convidado não tem MESA.n do anfitrião.
+        salaDuplas = Array.isArray(m.cadeiras) && m.cadeiras.length === 4;
+        atualizarSaguao();
+      }
       if (m.t === 'vista') { esconderTelas(); ligarMurmuro(); atualizarVista(m.v); }
       if (m.t === 'log') anotar(m.txt);
-      if (m.t === 'chat') dizer(vistaAtual, m.de, m.canal, m.txt);
+      if (m.t === 'chat') dizer(vistaAtual, m.de, m.canal, m.txt, m.nome);
     });
     linkAnfitriao.on('close', () => { avisar('A mesa fechou.'); mostrarTela('telaMenu'); modo = 'local'; });
   });
@@ -2940,38 +2984,55 @@ function donoLocalDaFala(de) {
   return -1;
 }
 
+// Quem é do time de quem, mesmo antes de existir partida: as duplas são em cruz, por
+// CADEIRA, então a conta sai da mesa que está sendo montada. É o que faz o canal da dupla
+// valer no saguão em vez de virar um "todos" disfarçado — que seria pior que não existir.
+const mesaEmDuplas = () => (P ? { duplas: P.duplas } : { duplas: MESA.n === 4 });
+
 function espalharChat(de, canal, txt) {
   const fala = String(txt).slice(0, TAMANHO_FALA);
-  const mesmoTime = c => !P || !P.duplas || timeDe(P, c) === timeDe(P, de);
+  const quem = mesaEmDuplas();
+  const mesmoTime = c => !quem.duplas || timeDe(quem, c) === timeDe(quem, de);
+  // O nome vai no fio SÓ para o saguão, onde não existe vista de onde tirá-lo. Sai do
+  // MESA do anfitrião, nunca do que o convidado mandou: com a partida de pé, `dizer`
+  // ignora isto e usa a vista, como sempre.
+  const nome = (MESA.cadeiras[de] && MESA.cadeiras[de].nome) || 'Alguém';
   // Quem está no anfitrião também lê, se a mensagem for para ele. `euNaTela` NÃO é "a
   // cadeira do anfitrião": é a cadeira que a tela mostra agora, e o hotseat a troca. Numa
   // mesa mista a fala da dupla pode chegar com a tela na mão de um adversário local — aí
   // ela fica guardada para quando a vez voltar, em vez de sumir.
-  if (vistaAtual) {
-    if (canal === 'todos' || mesmoTime(euNaTela)) dizer(vistaAtual, de, canal, fala);
-    else {
-      // A fala é da dupla e a tela não está com quem podia ler. Só vale guardar se o
-      // dono for uma cadeira DESTA tela — se for um convidado, ele já recebeu pelo fio.
-      const dono = donoLocalDaFala(de);
-      if (dono >= 0) guardarFala(de, canal, fala, dono);
-    }
+  // Sem o `if (vistaAtual)` que havia aqui: no saguão não existe vista, e era por isso que
+  // o anfitrião não lia nem a própria fala enquanto esperava. `dizer` aceita vista nula e
+  // cai no nome do fio.
+  if (canal === 'todos' || mesmoTime(euNaTela)) dizer(vistaAtual, de, canal, fala, nome);
+  else {
+    // A fala é da dupla e a tela não está com quem podia ler. Só vale guardar se o
+    // dono for uma cadeira DESTA tela — se for um convidado, ele já recebeu pelo fio.
+    const dono = donoLocalDaFala(de);
+    if (dono >= 0) guardarFala(de, canal, fala, dono);
   }
   for (const [cadeira, conn] of conexoes) {
     if (!conn.open) continue;
     if (canal === 'dupla' && !mesmoTime(cadeira)) continue;
-    conn.send({ t: 'chat', de, canal, txt: fala });
+    conn.send({ t: 'chat', de, canal, txt: fala, nome });
   }
 }
 
 // As duas guardas são do ANFITRIÃO porque é ele a autoridade: sem elas um convidado
 // trava a mesa dos outros com um laço de mensagens.
+//
+// E o anfitrião passa por aqui também. Antes ele falava direto no `espalharChat` e era o
+// único da mesa que podia inundar os outros — assimetria sem razão de ser, porque a
+// autoridade dele é sobre a PARTIDA, não sobre o ritmo da conversa. Devolve se a fala
+// passou, para quem chamou poder avisar em vez de engolir o texto em silêncio.
 function receberChat(cadeira, m) {
   const agora = Date.now();
-  if (agora - (ULTIMA_FALA.get(cadeira) || 0) < INTERVALO_FALA) return;
+  if (agora - (ULTIMA_FALA.get(cadeira) || 0) < INTERVALO_FALA) return false;
   const txt = String(m.txt || '').slice(0, TAMANHO_FALA).trim();
-  if (!txt) return;
+  if (!txt) return false;
   ULTIMA_FALA.set(cadeira, agora);
   espalharChat(cadeira, m.canal === 'dupla' ? 'dupla' : 'todos', txt);
+  return true;
 }
 
 /* ····· 16-loop.js ····· */
@@ -3300,15 +3361,22 @@ el('btRetomar').onclick = () => { tocarClique(); retomarPartida(); };
 function falar() {
   const txt = HUD.texto.value.trim();
   if (!txt) return;
-  HUD.texto.value = '';
   if (modo === 'convidado') {
+    HUD.texto.value = '';
     // O anfitrião é quem valida e retransmite — a mensagem só volta para você depois de
     // passar por ele, e essa volta é a confirmação de que saiu.
     if (linkAnfitriao && linkAnfitriao.open) linkAnfitriao.send({ t: 'chat', canal: canalAtual, txt });
     else avisar('Sem conexão com a mesa.');
     return;
   }
-  if (modo === 'anfitriao') espalharChat(euNaTela, canalAtual, txt);
+  if (modo !== 'anfitriao') return;
+  // O anfitrião entra pela MESMA porta que os convidados, com as mesmas guardas. Antes ele
+  // chamava `espalharChat` direto e era o único que podia inundar a mesa.
+  //
+  // E o campo só é limpo se a fala passou: engolir o texto que a pessoa acabou de digitar
+  // porque ela foi rápida demais é castigo duplo.
+  if (receberChat(euNaTela, { canal: canalAtual, txt })) HUD.texto.value = '';
+  else avisar('Devagar — uma fala por vez.');
 }
 
 HUD.texto.onkeydown = ev => {
