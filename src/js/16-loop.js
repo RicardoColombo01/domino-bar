@@ -361,12 +361,49 @@ HUD.passar.onclick = () => pedirAcao({ acao: 'passar' });
 HUD.arrumar.onclick = () => { arrumarMao(); tocarSoltar(); };
 HUD.contar.onclick = () => {
   contando = !contando;
-  try { localStorage.setItem('dominobar.contagem', contando ? '1' : '0'); } catch (e) { void e; }
+  guardar('contagem', contando);
   if (vistaAtual) atualizarVista(vistaAtual);
 };
+
+// ─── a dica ──────────────────────────────────────────────────────────────────
+// A dica LEVANTA a peça em vez de só falar o nome dela: quem está aprendendo precisa ver
+// onde ela cai, e levantar já mostra os fantasmas nas duas pontas e abre a barra de
+// confirmar. Ou seja: a dica termina no mesmo lugar que um clique seu terminaria — você
+// ainda confirma ou cancela, e ninguém joga por você.
+function pedirDica() {
+  if (!podeAgirAgora()) { avisar('A dica é para a sua vez.'); return; }
+  const d = dicaDaVista(vistaAtual);
+  if (!d) { avisar('Nada a sugerir agora.'); return; }
+
+  // Só os porquês que pesaram de verdade, do mais forte para o mais fraco, e no máximo
+  // dois: uma lista de seis razões não ensina nada a quem está começando.
+  const razoes = (d.porques || []).slice()
+    .sort((a, b) => Math.abs(b.peso || 0) - Math.abs(a.peso || 0))
+    .slice(0, 2).map(p => p.texto);
+
+  if (d.acao !== 'jogar') {
+    anotar(`Dica: ${d.acao === 'comprar' ? 'comprar' : 'passar'} — ${razoes[0] || 'não há jogada'}`);
+    avisar(d.acao === 'comprar' ? 'Dica: compre do monte.' : 'Dica: passe a vez.');
+    return;
+  }
+
+  // Procura na ORDEM DA TELA, que desde a arrumação não é a de vista.mao — é o mesmo
+  // cuidado da ponte `selecionar` dos testes, e pela mesma razão.
+  const i = naMao.findIndex(m => mesmaPeca(m.peca, d.peca));
+  if (i < 0) { avisar('Nada a sugerir agora.'); return; }
+  selecionarPeca(i);
+  tocarSoltar();
+  const onde = d.ponta === 'esq' ? 'na esquerda' : 'na direita';
+  anotar(`Dica: ${d.peca[0]}|${d.peca[1]} ${onde}${razoes.length ? ' — ' + razoes.join('; ') : ''}`);
+  avisar(`Dica: ${d.peca[0]}|${d.peca[1]} ${onde}`, 2600);
+}
+
+HUD.dica.onclick = () => pedirDica();
+
 addEventListener('keydown', ev => {
   if (digitando(ev)) return;
   if (ev.key === 'a' || ev.key === 'A') arrumarMao();
+  if (ev.key === 'd' || ev.key === 'D') pedirDica();
 });
 
 // ─── loop ────────────────────────────────────────────────────────────────────
@@ -413,6 +450,7 @@ window.__jogo = {
   // Retomar precisa ser dirigível pelos testes: o caminho inteiro só existe entre duas
   // cargas da página, e é justamente aí que ninguém olha.
   retomarPartida, partidaGuardada, atualizarBotaoRetomar, lembrarMesa, mesaLembrada,
+  pedirDica, dicaDaVista,
   get P() { return P; },
   get vista() { return vistaAtual; },
   // A ORDEM DA TELA, que desde a arrumação não é mais a de vista.mao. Quem quiser
