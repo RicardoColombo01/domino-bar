@@ -493,18 +493,30 @@ function fechamentosArmados(linha, jogadas, mao, baralho) {
 // Que tipo de batida foi. Tem de ser consultado ANTES de jogar a última peça,
 // porque o nome depende das pontas que ainda existiam na mesa:
 //
-//   serve nas duas pontas?   não          sim
-//        peça comum      →  simples (1)   lá-e-lô (2)
-//        carroça         →  carroça (2)   cruzada (4)
+//                        pontas 6 e 1        pontas 6 e 6
+//        peça comum  →   6|1 é lá-e-lô (2)   6|1 é simples (1)
+//        carroça     →   6|6 é carroça (2)   6|6 é cruzada  (4)
 //
-// Repare que uma carroça [x,x] só "serve nas duas" quando as DUAS pontas são x —
-// que é exatamente o que a mesa chama de cruzada. A tabela cai sozinha.
+// A coluna da direita é a regra da casa, e ela NÃO é simétrica — por isso os dois
+// ramos abaixo fazem perguntas diferentes em vez de dividirem uma só:
+//
+//   Lá-e-lô é bater podendo ter entrado dos DOIS LADOS, e duas pontas no mesmo número
+//   não são dois lados. Com 6 e 6, a 6|1 encosta num 6 só; o outro continua vivo, e a
+//   batida é simples. Daí o `e !== d`.
+//
+//   A cruzada é o oposto: ela EXIGE as pontas iguais, porque é a carroça daquele
+//   número casando com as duas. Um `e !== d` compartilhado a mataria junto.
+//
+// (Escrever isso como um `nasDuas` único foi o defeito que viveu até a v1.5.0: com as
+// pontas em 3 e a peça 3|1, os dois lados do `&&` davam verdadeiro PELO MESMO 3. Errava
+// de graça quase sempre, porque lá-e-lô e carroça valem 2 os dois — só aparecia no
+// placar quando a batida devia ser simples.)
 function tipoDaBatida(peca, linha) {
   if (!linha.length) return 'simples';
   const [e, d] = pontas(linha);
-  const nasDuas = (peca[0] === e || peca[1] === e) && (peca[0] === d || peca[1] === d);
-  if (carroca(peca)) return nasDuas ? 'cruzada' : 'carroca';
-  return nasDuas ? 'laelo' : 'simples';
+  const serve = n => peca[0] === n || peca[1] === n;
+  if (carroca(peca)) return serve(e) && serve(d) ? 'cruzada' : 'carroca';
+  return e !== d && serve(e) && serve(d) ? 'laelo' : 'simples';
 }
 
 /* ····· 04-partida.js ····· */
