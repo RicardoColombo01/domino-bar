@@ -14,7 +14,7 @@ const mod = await import(buildModule([
   'selecionarPeca', 'cancelarEscolha', 'confirmarJogada', 'escolhida', 'grupoPrevia', 'chave',
   'arrumarMao', 'moverNaMao', 'carroca',
   'guardarFala', 'soltarFalasGuardadas', 'falasGuardadas', 'donoLocalDaFala', 'limparConversa',
-  'dicaDaVista', 'pedirDica',
+  'dicaDaVista', 'pedirDica', 'receberChat', 'atualizarConversa',
 ], undefined, path.join(import.meta.dirname, 'built-jogo.mjs')));
 
 let falhas = 0;
@@ -582,6 +582,49 @@ console.log('\na dica de jogada');
   mod.cancelarEscolha();
   console.log(`  sugeriu ${d.peca[0]}|${d.peca[1]} ${d.ponta} · ${d.porques.length} porquê(s) · ` +
     'a mesma resposta pela vista que trafega');
+}
+
+// `receberChat` é a porta ÚNICA da conversa. O convidado sempre entrou por ela; o
+// anfitrião passou a entrar. Antes ele chamava espalharChat direto e era o único da mesa
+// que podia inundar os outros — a autoridade dele é sobre a PARTIDA, não sobre o ritmo.
+console.log('\na guarda da conversa vale para todo mundo');
+{
+  mod.limparConversa();
+  const antes = els.get('conversaLista').children.length;
+
+  ok(mod.receberChat(0, { canal: 'todos', txt: 'primeira' }) === true,
+     'a primeira fala de uma cadeira deveria passar');
+  ok(mod.receberChat(0, { canal: 'todos', txt: 'na sequência' }) === false,
+     'duas falas seguidas da mesma cadeira deveriam ser barradas pelo intervalo');
+  // A guarda é POR CADEIRA: um jogador apressado não pode calar a mesa.
+  ok(mod.receberChat(1, { canal: 'todos', txt: 'de outra cadeira' }) === true,
+     'a guarda barrou uma cadeira diferente — ela é por cadeira, não da mesa toda');
+  ok(mod.receberChat(2, { canal: 'todos', txt: '   ' }) === false, 'fala em branco não passa');
+  ok(mod.receberChat(2, { canal: 'todos', txt: '' }) === false, 'fala vazia não passa');
+
+  // O corte de tamanho é do anfitrião pelo mesmo motivo do intervalo.
+  ok(mod.receberChat(3, { canal: 'todos', txt: 'x'.repeat(400) }) === true, 'fala longa deveria passar, cortada');
+  const ultima = els.get('conversaLista').children.slice(-1)[0].innerHTML;
+  const xs = (ultima.match(/x/g) || []).length;
+  ok(xs === 160, `a fala deveria ser cortada em 160 caracteres, ficou com ${xs}`);
+
+  const entraram = els.get('conversaLista').children.length - antes;
+  ok(entraram === 3, `3 falas deveriam ter entrado na lista, entraram ${entraram}`);
+  console.log(`  intervalo e corte valem para qualquer cadeira · ${entraram} de 7 tentativas passaram`);
+}
+
+// A conversa do saguão: `atualizarConversa` tem de funcionar SEM vista, que é a diferença
+// que trouxe o chat para a espera. Antes ela só era chamada por `desenharHUD`, que só roda
+// quando já existe partida — e ninguém conseguia falar enquanto a mesa enchia.
+console.log('\na conversa existe antes da partida');
+{
+  // Sem vista e sem rede: não há com quem falar, o campo fica escondido.
+  mod.atualizarConversa(undefined);
+  ok(els.get('conversaEscrever')._cls.has('oculta'),
+     'sem rede não há com quem conversar, o campo devia estar escondido');
+  // E o importante: chamar sem vista não pode estourar. Era isso que faltava.
+  ok(true, 'atualizarConversa(undefined) não estourou');
+  console.log('  atualizarConversa roda sem vista, que é o que o saguão precisa');
 }
 
 console.log(falhas ? `\n${falhas} falha(s)` : '\ntudo certo');

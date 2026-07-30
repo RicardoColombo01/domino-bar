@@ -154,20 +154,64 @@ try {
     { timeout: 25000, polling: 400 });
   const cod2 = await dono.evaluate(() => document.getElementById('onlineCodigo').textContent);
 
+  const conversa = p => p.evaluate(() => document.getElementById('conversaLista').textContent);
+  const falarComo = (p, canal, txt) => p.evaluate(([c, t]) => {
+    window.__jogo.trocarCanal(c);
+    document.getElementById('conversaTexto').value = t;
+    window.__jogo.falar();
+  }, [canal, txt]);
+
   // A ordem importa: a primeira conexão pega a cadeira 1 (a adversária), a segunda a 2.
-  const entrar = async (pagina, codigo) => {
-    await pagina.evaluate(c => {
+  //
+  // O nome vai junto: quem senta manda o PRÓPRIO nome, e ele sobrescreve o que o anfitrião
+  // tinha posto na cadeira. Atribuir direto no MESA não passa por `lembrarMesa` — só o
+  // campo do menu grava —, então isto não contamina o localStorage das outras cenas.
+  const entrar = async (pagina, codigo, nome) => {
+    await pagina.evaluate(([c, n]) => {
+      window.__jogo.MESA.cadeiras[0].nome = n;
       document.getElementById('btEntrar').click();
       document.getElementById('onlineEntrada').value = c;
       document.getElementById('btConectar').click();
-    }, codigo);
+    }, [codigo, nome]);
   };
-  await entrar(rival, cod2);
+  // O nome do rival é uma tag: `listarSala` desenhava o nome do convidado direto em
+  // innerHTML, e era um buraco mais antigo que o do chat — mais curto que os 14 caracteres
+  // do corte, então ele chegava inteiro.
+  await entrar(rival, cod2, '<img src=x>');
   await dono.waitForFunction(() => (document.getElementById('onlineLista').textContent.match(/chegou/g) || []).length === 1,
     { timeout: 30000, polling: 400 });
-  await entrar(parceiro, cod2);
+  await entrar(parceiro, cod2, 'Parceirão');
   await dono.waitForFunction(() => (document.getElementById('onlineLista').textContent.match(/chegou/g) || []).length === 2,
     { timeout: 30000, polling: 400 });
+
+  const nomeVirouTag = await dono.evaluate(() => !!document.querySelector('#onlineLista img'));
+  ok(!nomeVirouTag, 'o nome do convidado virou elemento na lista da sala em vez de texto');
+
+  // ─── o saguão ──────────────────────────────────────────────────────────────
+  // Falar ANTES de a partida começar. É quando as pessoas mais querem falar ("cadê você?",
+  // "entra aí") e era o único momento em que não havia conversa: a visibilidade dela saía
+  // de `desenharHUD`, que só roda quando já existe partida, e o painel ficava por baixo do
+  // overlay da tela de espera.
+  const saguao = await parceiro.evaluate(() => ({
+    campo: !document.getElementById('conversaEscrever').classList.contains('oculta'),
+    porCima: document.body.classList.contains('saguao'),
+  }));
+  ok(saguao.campo, 'no saguão o campo de escrever não apareceu');
+  ok(saguao.porCima, 'a conversa não subiu acima da tela de espera — ficaria coberta por ela');
+
+  await falarComo(parceiro, 'todos', 'cheguei, e vocês?');
+  await dono.waitForFunction(() => document.getElementById('conversaLista').textContent.includes('cheguei'),
+    { timeout: 15000, polling: 300 }).catch(() => { ok(false, 'a fala do saguão não chegou ao anfitrião'); });
+  await rival.waitForFunction(() => document.getElementById('conversaLista').textContent.includes('cheguei'),
+    { timeout: 15000, polling: 300 }).catch(() => { ok(false, 'a fala do saguão não chegou ao outro convidado'); });
+  // No saguão não há vista de onde tirar o nome, então ele vem pelo fio — escrito pelo
+  // ANFITRIÃO, a partir do MESA dele.
+  const doSaguao = await conversa(dono);
+  ok(/Parceirão/.test(doSaguao), `a fala do saguão saiu sem nome: "${doSaguao.slice(-90)}"`);
+  console.log('  saguão: campo aberto por cima da tela, fala chegou aos dois, com nome');
+
+  // O intervalo do anfitrião vale para o convidado também: dá o tempo antes de seguir.
+  await parceiro.evaluate(() => new Promise(r => setTimeout(r, 800)));
 
   await dono.evaluate(() => document.getElementById('btIniciarOnline').click());
   await parceiro.waitForFunction('window.__jogo.vista && window.__jogo.vista.cadeira === 2',
@@ -175,13 +219,6 @@ try {
   await rival.waitForFunction('window.__jogo.vista && window.__jogo.vista.cadeira === 1',
     { timeout: 25000, polling: 400 });
   console.log('  mesa de 4 montada: dono na 0, rival na 1, parceiro na 2');
-
-  const conversa = p => p.evaluate(() => document.getElementById('conversaLista').textContent);
-  const falarComo = (p, canal, txt) => p.evaluate(([c, t]) => {
-    window.__jogo.trocarCanal(c);
-    document.getElementById('conversaTexto').value = t;
-    window.__jogo.falar();
-  }, [canal, txt]);
 
   await falarComo(parceiro, 'todos', 'boa noite a todos');
   await rival.waitForFunction(() => document.getElementById('conversaLista').textContent.includes('boa noite'),
