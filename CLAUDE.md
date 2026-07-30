@@ -292,9 +292,15 @@ ou do Ricardo, entra aqui — não em memória de sessão, que não viaja com o 
 
 Os itens 1 e 2 vieram do Ricardo em **29/07/2026** e são regra de casa: não se deduzem do
 código nem se resolvem por bom senso de programador. O item 3 é de **30/07/2026** e é o
-pedaço que falta para a reconexão do online valer. **Nenhum dos três está começado.**
+pedaço que falta para a reconexão do online valer. Os itens **4 a 10** são de **30/07/2026** e
+saíram de jogo de verdade, no celular — são a primeira leva de defeitos relatados **em campo**,
+e não de leitura de código. Vale a distinção: a leitura acha o que está escrito errado, o
+campo acha o que está escrito certo e mesmo assim não funciona.
 
-### 1. Lá-e-lô só existe com as pontas DIFERENTES
+**Estado:** o item 1 está **feito**. O item 4 é **pré-requisito do 3(b)** e vem antes dele.
+O item 2 espera um caso concreto do Ricardo. O resto não está começado.
+
+### 1. Lá-e-lô só existe com as pontas DIFERENTES ✔ feito
 
 A batida de lá-e-lô (2 pontos) só vale quando as duas pontas da mesa são de números
 **diferentes** e a peça da batida carrega os dois — ou seja, quando ela realmente podia ter
@@ -304,25 +310,43 @@ Pontas iguais não são "dois lados". Nas palavras do Ricardo: pontas `3` e `3`,
 com a `3|1` — **não** conta como bater dos dois lados, é batida simples. Para valer, teria de
 ser uma ponta `3` e a outra `1`.
 
-O defeito está em `tipoDaBatida` (`03-regras.js`), nesta linha:
+O defeito estava em `tipoDaBatida` (`03-regras.js`), nesta linha:
 
 ```js
 const nasDuas = (peca[0] === e || peca[1] === e) && (peca[0] === d || peca[1] === d);
 ```
 
-Com `e === d === 3` e a peça `[3,1]`, os dois lados do `&&` dão verdadeiro **pelo mesmo 3**.
-Falta exigir `e !== d`.
+Com `e === d === 3` e a peça `[3,1]`, os dois lados do `&&` davam verdadeiro **pelo mesmo 3**.
+
+**A cruzada continua valendo 4** — decisão do Ricardo em 30/07/2026. E é por causa dela que
+não deu para só acrescentar `e !== d` ao `nasDuas` compartilhado: a cruzada é o caso
+**oposto**, ela EXIGE as pontas iguais, porque é a carroça daquele número casando com as
+duas. Um `e !== d` comum teria matado a cruzada junto. Hoje os dois ramos fazem perguntas
+diferentes, e o comentário acima da função deixou de dizer que "a tabela cai sozinha".
 
 **Por que sobreviveu tanto tempo:** `PONTOS` dá 2 para `laelo` e 2 para `carroca`, então uma
 carroça classificada como lá-e-lô continua marcando o valor certo por acidente. O placar só
 mente quando a batida devia ser **simples (1)** e sai como lá-e-lô (2). Defeito que erra de
 graça na maioria dos casos é o que menos aparece e o que mais tempo dura.
 
-**Pergunta aberta, para o Ricardo decidir:** o mesmo `nasDuas` alimenta a **cruzada** (4
+**O teste gravava a regra errada** (`test-regras.mjs`, "peça comum com as duas pontas iguais
+= lá-e-lô"), então a correção começou invertendo uma asserção. Ficou junto o caso que
+documenta a confusão de origem: a `3|6` **encaixa nos dois lados de verdade** em pontas `3` e
+`3` — `jogadasValidas` devolve duas. A regra é sobre os NÚMEROS das pontas, não sobre a
+contagem de encaixes, e trocar uma coisa pela outra é o que criou o defeito.
+
+`05-bot.js` pontua batida com `PONTOS[tipoDaBatida]`, então as partidas semeadas se mexeram:
+a força do bot foi de 359 × 241 (59,8%) para **347 × 253 (57,8%, 3,8σ)**. A asserção é
+**limiar** (`> 2σ`), não número fixo — foi de propósito que ela foi escrita assim, e é por
+isso que uma mudança semântica de regra não a derruba.
+
+**Pergunta que estava aberta e foi respondida:** o mesmo `nasDuas` alimentava a **cruzada** (4
 pontos), na linha de cima. Uma carroça `6|6` com as duas pontas em `6` cai no mesmo
 raciocínio — só encosta de um lado, o outro `6` continua vivo —, então pela regra do lá-e-lô
-ela deveria valer `carroca` (2) e não `cruzada` (4). **Não mexer sem confirmar**: é regra de
-casa, não dedução.
+ela *poderia* valer `carroca` (2). **O Ricardo decidiu que continua cruzada (4).** A regra da
+casa não é simétrica, e está tudo bem que não seja: a cruzada é a batida das pontas iguais, e
+o lá-e-lô é a das pontas diferentes. Registrado aqui porque nenhuma leitura de código chega
+a essa resposta — as duas saídas eram defensáveis.
 
 ### 2. Ainda dá para FORÇAR o fechamento
 
@@ -383,10 +407,129 @@ São **três pedaços**, e vale tratá-los separados porque a dificuldade é mui
   partida já guardada no `localStorage`. Hoje `retomarPartida` converte cadeira online em bot
   exatamente porque este pedaço não existe.
 
-**Tensão de desenho, para o Ricardo decidir:** código na tela é código em qualquer print,
+**Tensão de desenho, decidida em 30/07/2026:** código na tela é código em qualquer print,
 qualquer transmissão e qualquer tela compartilhada — inclusive na mesa mista, onde a tela passa
-de mão em mão no hotseat. Pode ser que ele deva ficar atrás de um clique, ou abreviado, em vez
-de sempre à mostra. **Perguntar antes**, é decisão de produto e não de código.
+de mão em mão no hotseat. O Ricardo escolheu **sempre à mostra**, num painel do `#topo` ao lado
+de Pontas/Monte/Mão. Escopo combinado: **(a) e (b) agora, (c) fica na fila.**
+
+**Duas armadilhas do (a), achadas ao planejar:**
+
+- `#topo` é `pointer-events: none` (`css/estilo.css`), para não roubar o toque da mesa — o que
+  também impede **selecionar e copiar** o código. Um código que não dá para copiar derrota
+  metade do motivo de mostrá-lo. Precisa de exceção pontual, como a que o `#conversa` já tem.
+- Em retrato o `#topo` já transbordou uma vez, e o comentário do CSS registra por quê: *"em
+  360px ele saía pelos dois lados SEM aparecer no scrollWidth, porque overflow negativo em
+  elemento fixo não conta"*. Um quinto painel é a mesma armadilha. E o `test-telas.mjs` **não
+  tem cenário online**, então o painel novo nasceria sem nenhuma foto — o cenário tem de ser
+  escrito junto, senão a suíte que existe exatamente para isso não enxerga isso.
+
+**O (b) depende do item 4.** Sem identidade, "voltar para a mesa" põe você na primeira vaga
+livre — que pode não ser a sua. Ver abaixo.
+
+### 4. A cadeira é da primeira vaga livre, não de quem é dono dela
+
+De **30/07/2026**, e é o achado que reorganizou a fila. O Ricardo relatou cinco defeitos
+diferentes no online (não conseguir voltar, entrar na cadeira errada, duas abas brigando,
+"lota o servidor"). **A maior parte deles é um bug só:** nada no protocolo diz *quem* é o
+cliente.
+
+```js
+// 15-rede.js, no peer.on('connection')
+const cadeira = MESA.cadeiras.slice(0, MESA.n)
+  .findIndex((c, i) => c.tipo === 'online' && !conexoes.has(i));
+```
+
+A cadeira sai da **primeira vaga livre**, decidida no instante da conexão — antes de o
+convidado ter dito uma palavra. O comentário logo abaixo afirma que ao voltar *"a cadeira é
+dele de novo"*, mas **nada no código torna a cadeira dele**: `conn.on('close')` faz
+`conexoes.delete(cadeira)` na hora, e o `ESPERA_VOLTA` de 30 s só adia o `abandonar()` — ele
+**não reserva o assento**.
+
+**Isto é mais grave do que parece, e vale dizer por quê.** O invariante 3 diz que
+`visaoDe(cadeira)` é a fronteira de segurança, e ela está correta. O problema mora uma camada
+abaixo: **o número da cadeira é a chave dessa fronteira, e ela é entregue por ordem de
+chegada.** Quem pegar a vaga recebe a mão de quem estava nela. Dois convidados que caem e
+voltam trocam de mão — em duplas, trocam de dupla; um terceiro com o código senta na cadeira
+de quem caiu e vê as peças dele. Não adianta a `visaoDe` não vazar a mão alheia se o motor
+pode achar que você é outra pessoa.
+
+**O conserto é um `clienteId`** — um identificador sorteado uma vez e guardado no
+`localStorage` do convidado, mandado ao anfitrião no aperto de mão. Barato, sem servidor (que
+é a premissa do jogo) e resolve os três de uma vez. Muda uma coisa de fundo: **a cadeira
+deixa de ser escolhida no `connection` e passa a ser escolhida quando o convidado se
+identifica** — hoje a decisão acontece cedo demais, antes de existir informação para tomá-la.
+
+Pontos a resolver junto, porque caem no mesmo lugar:
+
+- **Cadeira reservada durante o `ESPERA_VOLTA`**, senão o prazo continua sendo só um adiamento
+  da derrota em vez de um convite para voltar.
+- **A mesma pessoa em duas abas** é caso legítimo (fechar o notebook, abrir no celular) e
+  precisa de resposta escolhida: assumir a cadeira e fechar a conexão velha, ou recusar.
+- **Convidado de versão antiga** não manda `clienteId`. Decidir se ele senta como anônimo (o
+  comportamento de hoje) ou não senta.
+
+### 5. Cada clique em "Entrar" consome outra cadeira
+
+De **30/07/2026**. O `btConectar.onclick` (`15-rede.js`) **não tem guarda de reentrada**: cada
+clique faz um `new Peer`, abandona o peer anterior **vivo** e consome mais uma vaga. O
+"lota o servidor" que o Ricardo relatou é literal.
+
+E há um agravante de desenho que faz o usuário clicar de novo: depois de conectar, **a tela
+não muda** — ela só sai quando o anfitrião começa a partida. Ou seja, ela fica parada
+exatamente no instante em que parece ter falhado. A guarda conserta o dano; o retorno visual
+conserta a causa.
+
+Cai de graça junto do item 4: é a mesma função que precisa virar uma `conectarNaMesa(codigo)`
+para o botão "voltar para a mesa" reusar.
+
+### 6. Toque preso: o jogo parece congelar e não está
+
+De **30/07/2026**. `11-interacao.js` começa o trato do toque com `if (arrasto) return;`. Se o
+dedo sair da tela ainda apoiado, o `pointerup` **nunca chega**, `arrasto` fica preenchido para
+sempre e **todo toque seguinte é descartado**. O render loop continua rodando — por isso
+parece congelado sem estar, que é a parte que confunde na hora de relatar.
+
+Não existe **nenhum `visibilitychange` no projeto inteiro**, e é o gancho natural: a aba
+perdendo o foco é o sinal de que o `pointerup` não vai chegar. `pointercancel` e
+`lostpointercapture` são os outros dois.
+
+### 7. No celular, o clique às vezes não joga a peça
+
+De **30/07/2026**. Relato do Ricardo: **só no celular, e sem ter saído da tela** — o que
+descarta o resíduo do item 6 e aponta para o **limiar de arrasto**. Arrastar é separado de
+tocar por DISTÂNCIA (9 px), e 9 px é pouco para dedo: o toque vira arrasto sozinho, solta
+fora de qualquer peça e nunca conta como clique. Nunca aconteceu no PC, e mouse não treme —
+a assimetria é a evidência.
+
+O terceiro candidato, se não for isso, é o painel da conversa capturando o toque de
+propósito.
+
+### 8. Nome cortado com o celular deitado
+
+De **30/07/2026**, e é a **única sobra da Fila 2** aparecendo em campo. O `overflow`, o
+`ellipsis` e a rolagem dos nomes existem só dentro do `@media (orientation: portrait)`.
+Deitado o jogo cai no `@media (max-height: 560px)`, que só aperta o `gap` — o HUD de celular
+deitado nunca foi um layout próprio, é o de tela baixa reaproveitado.
+
+### 9. Peças "bugadas" em vertical — SEM diagnóstico
+
+De **30/07/2026**. Não foi iPhone; o modelo não é conhecido. **Deixado sem diagnóstico de
+propósito**, porque "bugadas" pode ser posição, escala, corte ou textura — quatro causas sem
+nada em comum entre elas. As três primeiras são layout e o conserto é genérico (o
+`test-telas.mjs` já roda os tamanhos de retrato); a última é o atlas de pintas gerado em
+canvas, que depende de driver e de WebGL do aparelho e **não dá para consertar às cegas**.
+**Um print decide em qual família estamos** e vale mais que qualquer leitura de código.
+
+### 10. O teste que falta: peça POR BAIXO de painel
+
+De **30/07/2026**. O `test-telas.mjs` reprova peça **fora do quadro** e painel **sobre**
+painel, mas não peça **por baixo** de painel — e é essa a família dos defeitos de
+sobreposição relatados (adversários, copo, dica). Escrever a asserção **antes** dos consertos
+faz os três reprovarem hoje, e impede que voltem.
+
+Não é hipótese de que ela reincide: o comentário do `07-cena.js` registra que o copo já foi
+movido à mão uma vez pelo mesmo motivo. Defeito que já voltou uma vez volta de novo, e a
+diferença entre um conserto e uma asserção é exatamente essa.
 
 ## Regras da casa (implementadas)
 
