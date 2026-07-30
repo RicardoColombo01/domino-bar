@@ -948,6 +948,11 @@ function pintar(w, h, desenho) {
   desenho(cv.getContext('2d'), w, h);
   const t = new THREE.CanvasTexture(cv);
   t.anisotropy = 4;
+  // O canvas é pintado em sRGB, e o default do Three é tratar textura como dado LINEAR.
+  // Sem esta linha as três texturas do jogo saem lavadas — é por isso que o marfim da
+  // peça e a madeira iluminada tendiam para o mesmo âmbar, e a pinta escura chegava
+  // cinza. Uma linha, e é a maior alavanca de contraste que existe aqui.
+  t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
 
@@ -1171,7 +1176,10 @@ if (typeof visualViewport !== 'undefined' && visualViewport) {
 //   atlas ▸ │ ·  │ ·· │ ⁚  │ ⁙  │ ⁘  │ ⁙· │ ⁚⁚ │      peça [3,5] = célula 3 + célula 5
 //            0    1    2    3    4    5    6
 
-const ATLAS_N = 7, CELULA = 128;
+// 256 e não 128: a peça na mesa chega a ocupar ~90px de tela no computador, e com a
+// célula pequena a borda da pinta ficava serrilhada justamente quando o tabuleiro
+// encolhe. É uma textura só, gerada uma vez — o custo é irrelevante.
+const ATLAS_N = 7, CELULA = 256;
 const G3 = [0.28, 0.5, 0.72];                     // as três colunas/linhas do desenho
 const PINTAS = [
   [],
@@ -1189,12 +1197,15 @@ const texPintas = pintar(CELULA * ATLAS_N, CELULA, (c) => {
     c.fillStyle = '#f4ecd9';
     c.fillRect(ox, 0, CELULA, CELULA);
     for (const [gx, gy] of PINTAS[n]) {
-      const x = ox + G3[gx] * CELULA, y = G3[gy] * CELULA, r = CELULA * 0.088;
-      c.fillStyle = 'rgba(255,255,255,.65)';      // lasquinha clara embaixo: dá relevo de furo
-      c.beginPath(); c.arc(x + 1.5, y + 1.5, r, 0, 7); c.fill();
-      c.fillStyle = '#191512';
+      // Pinta maior (0.088 → 0.102 da célula) e mais escura: sobre um tampo de madeira
+      // acesa pela lâmpada, o que custa leitura de longe é o TAMANHO do furo, não a
+      // cor do marfim.
+      const x = ox + G3[gx] * CELULA, y = G3[gy] * CELULA, r = CELULA * 0.102;
+      c.fillStyle = 'rgba(255,255,255,.7)';       // lasquinha clara embaixo: dá relevo de furo
+      c.beginPath(); c.arc(x + r * 0.12, y + r * 0.12, r, 0, 7); c.fill();
+      c.fillStyle = '#120f0c';
       c.beginPath(); c.arc(x, y, r, 0, 7); c.fill();
-      c.fillStyle = 'rgba(0,0,0,.35)';
+      c.fillStyle = 'rgba(0,0,0,.4)';
       c.beginPath(); c.arc(x - r * 0.25, y - r * 0.25, r * 0.75, 0, 7); c.fill();
     }
   }
@@ -1221,7 +1232,9 @@ function faceDaPinta(n) {
 // É a mesma convenção da linha do motor, e é o que faz o rotY do layout já vir certo.
 function criarPeca(peca, proprio) {
   const g = new THREE.Group();
-  // Peça na mão ganha material próprio para poder acender no hover sem acender as outras.
+  // Material próprio para poder acender ESTA peça sem acender as outras — a mão usa no
+  // hover, a mesa usa na última jogada. Sem o clone, `matMarfim` é uma instância só e
+  // acender uma acenderia as 28.
   const corpo = new THREE.Mesh(geomCorpo, proprio ? matMarfim.clone() : matMarfim);
   corpo.castShadow = true;
   corpo.receiveShadow = true;
@@ -1297,6 +1310,32 @@ grupoMesa.add(grupoPrevia);
 const matBrilho = new THREE.MeshBasicMaterial({ color: 0xffc451, transparent: true, opacity: 0.5 });
 const geomBrilho = new THREE.CircleGeometry(PECA_C * 0.8, 28);
 
+// A MARCA DA ÚLTIMA JOGADA. Numa mesa de quatro com o tabuleiro já comprido, "o que
+// acabou de acontecer" era invisível: a peça caía do alto, dava o baque, e um segundo
+// depois era idêntica às outras vinte. Quem chegava atrasado à tela tinha de ler o log.
+//
+// São duas coisas: um CLARÃO de meio segundo no instante da queda, e uma marca discreta
+// que fica até a próxima jogada. O disco é filho do GRUPO DA PEÇA — não de grupoMesa —
+// porque assim ele acompanha a peça sem entrar na conta de quem está fora do quadro
+// (tests/test-telas.mjs olha os filhos diretos de grupoMesa).
+const matMarca = new THREE.MeshBasicMaterial({
+  color: 0xffc451, transparent: true, opacity: 0.25, depthWrite: false,
+});
+const geomMarca = new THREE.CircleGeometry(PECA_C * 0.72, 24);
+let ultima = null;                 // { obj, marca, desde }
+
+function marcarUltima(obj) {
+  if (ultima) {
+    ultima.obj.remove(ultima.marca);
+    ultima.obj.userData.corpo.material.emissive.setHex(0x000000);
+  }
+  const marca = new THREE.Mesh(geomMarca, matMarca);
+  marca.rotation.x = -Math.PI / 2;
+  marca.position.y = -PECA_E / 2 + 0.012;         // colada no tampo, por baixo da peça
+  obj.add(marca);
+  ultima = { obj, marca, desde: performance.now() };
+}
+
 function sincronizarTabuleiro(vista) {
   const { postas, caixa } = layoutDaMesa(vista.linha, vista.iAncora);
 
@@ -1312,7 +1351,8 @@ function sincronizarTabuleiro(vista) {
     vivas.add(k);
     let reg = naMesa.get(k);
     if (!reg) {
-      const obj = criarPeca(p.peca);
+      // `true` = material próprio, para dar de acender só ESTA peça na marca da última.
+      const obj = criarPeca(p.peca, true);
       // Nasce no alto e um pouco torta: é a queda que dá o "toc" na mesa.
       obj.position.set(p.x, 2.4, p.z);
       obj.rotation.set(0, p.rotY + 0.5, 0);
@@ -1320,12 +1360,18 @@ function sincronizarTabuleiro(vista) {
       reg = { obj, alvo: p };
       naMesa.set(k, reg);
       tocarBaque(0.55);
+      // É o único lugar do jogo que sabe "esta peça é nova": roda uma vez por peça.
+      marcarUltima(obj);
     }
     reg.alvo = p;
   });
 
-  for (const [k, reg] of naMesa)
-    if (!vivas.has(k)) { grupoMesa.remove(reg.obj); naMesa.delete(k); }
+  for (const [k, reg] of naMesa) {
+    if (vivas.has(k)) continue;
+    if (ultima && ultima.obj === reg.obj) ultima = null;      // mão nova: some a marca
+    grupoMesa.remove(reg.obj);
+    naMesa.delete(k);
+  }
 
   esconderPrevia();
 }
@@ -1377,6 +1423,14 @@ function animarTabuleiro(dt) {
   matPreviaCorpo.opacity = 0.56 + 0.16 * pulso;
   // só a peça paira; o brilho fica colado no tampo, marcando o lugar
   for (const g of grupoPrevia.children) g.children[1].position.y = 0.07 + 0.035 * pulso;
+
+  // A última jogada: clarão de meio segundo na queda, e depois só a marca respirando.
+  if (ultima) {
+    const clarao = Math.max(0, 1 - (performance.now() - ultima.desde) / 500);
+    matMarca.opacity = 0.14 + 0.08 * pulso + 0.55 * clarao;
+    const q = 0.5 * clarao * clarao;                // some rápido: é um estalo, não um farol
+    ultima.obj.userData.corpo.material.emissive.setRGB(q, q * 0.68, q * 0.22);
+  }
 
   for (const { obj, alvo } of naMesa.values()) {
     obj.position.x = chegarPerto(obj.position.x, alvo.x, 13, dt);
