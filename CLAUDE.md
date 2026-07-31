@@ -151,6 +151,20 @@ As pontas são o primeiro e o último número; jogar na esquerda é um `unshift`
   `file://`, onde o armazenamento é do domínio inteiro: a partida guardada por uma cena
   fazia a seguinte abrir com "Continuar a partida de antes" na foto do menu. É a mesma
   lição do `contar()` — cada cena diz o que quer, e agora há `semGuardado()`.
+- **Fronteira de segurança tem CHAVE, e a chave também precisa de guarda.** `visaoDe(cadeira)`
+  estava correta o tempo todo e mesmo assim a mão vazava: o *número da cadeira* era entregue
+  por ordem de chegada, então bastava pegar a vaga de alguém para receber a mão dele. Ao
+  auditar o invariante 3, perguntar as duas coisas — "esta função vaza?" **e** "quem decide o
+  argumento dela?".
+- **Contexto isolado do Puppeteer derruba o cache HTTP.** Trocar `newPage()` por
+  `createBrowserContext().newPage()` para dar `localStorage` separado a cada aba fez cada uma
+  rebaixar three.js e PeerJS do CDN: a primeira levou 8 s e a segunda estourou os 45 s de
+  navegação. Quando o que se quer é só separar o armazenamento, `evaluateOnNewDocument`
+  injetando o valor custa zero.
+- **`catch` que guarda só a `message` esconde ONDE.** O `test-online.mjs` engolia o stack e
+  transformava "falhou em algum lugar dos 300 lances do teste" num palpite caro. Hoje
+  `DOMINO_DEBUG=1` imprime. Vale para qualquer `catch` que exista para transformar falha de
+  rede em aviso: ele também engole os defeitos de verdade.
 
 ---
 
@@ -297,8 +311,10 @@ saíram de jogo de verdade, no celular — são a primeira leva de defeitos rela
 e não de leitura de código. Vale a distinção: a leitura acha o que está escrito errado, o
 campo acha o que está escrito certo e mesmo assim não funciona.
 
-**Estado:** o item 1 está **feito**. O item 4 é **pré-requisito do 3(b)** e vem antes dele.
-O item 2 espera um caso concreto do Ricardo. O resto não está começado.
+**Estado:** **feitos** os itens 1, 3(a), 3(b) e 4 — nesta ordem, com o 4 antes do 3(b)
+porque sem identidade "voltar para a mesa" põe você em qualquer cadeira. Falta o **3(c)**
+(voltar como anfitrião). O item 2 espera um caso concreto do Ricardo. Os itens 5 a 11 não
+estão começados.
 
 ### 1. Lá-e-lô só existe com as pontas DIFERENTES ✔ feito
 
@@ -393,19 +409,26 @@ Uma metade do mecanismo sem a outra.
 
 São **três pedaços**, e vale tratá-los separados porque a dificuldade é muito diferente:
 
-- **(a) Ver.** Mostrar o código no HUD enquanto a mesa é online. Barato. O alfabeto já exclui
-  `I`, `O`, `0` e `1` de propósito, "porque código é para ditar em voz alta" — ele sempre foi
-  feito para ser compartilhado, então mantê-lo na tela é o que o desenho original pedia.
-- **(b) Voltar como convidado.** Guardar o código (`guardar('sala', …)`, ao lado de `mesa` e
-  `partida`) e o menu oferecer "voltar para a mesa XJCR", irmão do botão de retomar partida.
-  Precisa de prazo, como o das 12 h da partida guardada.
-- **(c) Voltar como ANFITRIÃO.** O difícil, e é o que falta para o "voltar para a mesma
+- **(a) Ver ✔ feito.** `codigoDaSala` no escopo do módulo e `pintarSala()` no HUD, num painel
+  do `#topo`. Ela fica **fora de `desenharHUD`** de propósito — aquela função só lê `vista`, e
+  o código não está na visão nem poderia estar: pô-lo lá seria furar a fronteira do `visaoDe`
+  por um dado de tela. É irmã de `pintarBotaoSom()`: quem muda o dado é quem chama.
+  Precisou de exceção ao `pointer-events: none` do `#topo`, senão o código apareceria e **não
+  daria para copiar** — metade do motivo de mostrá-lo.
+- **(b) Voltar como convidado ✔ feito.** `guardar('sala', …)` só no convidado e só quando o
+  `sentou` chega, porque sentar de fato é o que prova que o código presta. **Prazo de 2 h**, e
+  a assimetria com as 12 h da partida é o ponto: a partida é *sua* e não depende de ninguém,
+  a sala depende de o anfitrião ainda estar de pé. **Sair de propósito esquece; cair não** —
+  cair é exatamente o caso para o qual isto existe.
+- **(c) Voltar como ANFITRIÃO — o que FALTA.** O difícil, e é o que falta para o "voltar para a mesma
   partida" valer no online. `codigoNovo()` sorteia um código a cada `tentarAbrir`, então o
   anfitrião que recarrega abre uma mesa **outra** e os convidados tentando voltar batem numa
   porta que não existe. Precisaria reabrir com o MESMO código — o id do PeerJS é
   `dominobar-XXXX` e dá para reivindicá-lo se o peer antigo morreu — e casar isso com a
   partida já guardada no `localStorage`. Hoje `retomarPartida` converte cadeira online em bot
-  exatamente porque este pedaço não existe.
+  exatamente porque este pedaço não existe. **Detalhe descoberto ao fazer o resto:**
+  `tentarAbrir` já trata `unavailable-id` **sorteando outro código** — reivindicar o mesmo id
+  exige inverter esse comportamento, e é aí que o (c) vai doer.
 
 **Tensão de desenho, decidida em 30/07/2026:** código na tela é código em qualquer print,
 qualquer transmissão e qualquer tela compartilhada — inclusive na mesa mista, onde a tela passa
@@ -426,7 +449,7 @@ de Pontas/Monte/Mão. Escopo combinado: **(a) e (b) agora, (c) fica na fila.**
 **O (b) depende do item 4.** Sem identidade, "voltar para a mesa" põe você na primeira vaga
 livre — que pode não ser a sua. Ver abaixo.
 
-### 4. A cadeira é da primeira vaga livre, não de quem é dono dela
+### 4. A cadeira é da primeira vaga livre, não de quem é dono dela ✔ feito
 
 De **30/07/2026**, e é o achado que reorganizou a fila. O Ricardo relatou cinco defeitos
 diferentes no online (não conseguir voltar, entrar na cadeira errada, duas abas brigando,
@@ -459,28 +482,42 @@ pode achar que você é outra pessoa.
 deixa de ser escolhida no `connection` e passa a ser escolhida quando o convidado se
 identifica** — hoje a decisão acontece cedo demais, antes de existir informação para tomá-la.
 
-Pontos a resolver junto, porque caem no mesmo lugar:
+**Como ficou** — `sentar()` decide a cadeira, e `donoDaCadeira` (cadeira → clienteId) é o que
+a RESERVA:
 
-- **Cadeira reservada durante o `ESPERA_VOLTA`**, senão o prazo continua sendo só um adiamento
-  da derrota em vez de um convite para voltar.
-- **A mesma pessoa em duas abas** é caso legítimo (fechar o notebook, abrir no celular) e
-  precisa de resposta escolhida: assumir a cadeira e fechar a conexão velha, ou recusar.
-- **Convidado de versão antiga** não manda `clienteId`. Decidir se ele senta como anônimo (o
-  comportamento de hoje) ou não senta.
+- **Cadeira reservada durante o `ESPERA_VOLTA`.** Antes o prazo só adiava o `abandonar()`; um
+  estranho com o código sentava na cadeira de quem tinha acabado de cair.
+- **A mesma pessoa em duas abas:** a conexão **nova assume** e a velha recebe `expulso`.
+  Recusar deixaria você trancado do lado de fora da sua própria cadeira. `largar()` recebe a
+  `conn` junto porque a conexão velha ainda dispara o próprio `close` — sem essa conferência
+  ela liberaria a cadeira que a nova acabou de ocupar.
+- **Convidado de versão antiga** manda `nome` sem `ola` e **senta como anônimo**, que é o
+  comportamento de antes: quebrar quem não recarregou seria pior que a falta de identidade.
+- **O `clienteId` é lido na CARGA e fixado em memória.** O armazenamento é da origem inteira,
+  não da aba, e a identidade desta aba não pode mudar no meio da partida porque outra escreveu
+  lá. Já a **geração é preguiçosa**: sortear na carga gastaria `Math.random`, que no harness é
+  semeado — o embaralho inteiro andaria e uma suíte que depende de "quem abre" falharia sem
+  que nada do que ela testa tivesse mudado.
 
-### 5. Cada clique em "Entrar" consome outra cadeira
+**No teste:** cair e voltar tem de devolver a MESMA cadeira **com a mesma mão** — o número
+certo com a mão errada seria o bug passando despercebido —, e a mesma pessoa em duas abas tem
+de ocupar UMA conexão.
 
-De **30/07/2026**. O `btConectar.onclick` (`15-rede.js`) **não tem guarda de reentrada**: cada
-clique faz um `new Peer`, abandona o peer anterior **vivo** e consome mais uma vaga. O
-"lota o servidor" que o Ricardo relatou é literal.
+### 5. Cada clique em "Entrar" consome outra cadeira ✔ feito (junto do 4)
 
-E há um agravante de desenho que faz o usuário clicar de novo: depois de conectar, **a tela
-não muda** — ela só sai quando o anfitrião começa a partida. Ou seja, ela fica parada
-exatamente no instante em que parece ter falhado. A guarda conserta o dano; o retorno visual
-conserta a causa.
+De **30/07/2026**. O `btConectar.onclick` (`15-rede.js`) não tinha guarda de reentrada: cada
+clique fazia um `new Peer`, abandonava o peer anterior **vivo** e consumia mais uma vaga. O
+"lota o servidor" que o Ricardo relatou era literal.
 
-Cai de graça junto do item 4: é a mesma função que precisa virar uma `conectarNaMesa(codigo)`
-para o botão "voltar para a mesa" reusar.
+E havia um agravante de **desenho** que fazia o usuário clicar de novo: depois de conectar, a
+tela não mudava — ela só sai quando o anfitrião começa a partida. Ou seja, ficava parada
+exatamente no instante em que parecia ter falhado. A guarda consertou o dano; o retorno visual
+('Entrando…', 'Na mesa') consertou a causa.
+
+**Sentado NÃO é ocioso:** o botão fica travado depois do `sentou`. Solto, ele reconectaria — e
+como o `clienteId` é o mesmo, o jogador faria take-over da própria cadeira.
+
+O corpo virou `conectarNaMesa(codigo)`, que é o que o botão "voltar para a mesa" reusa.
 
 ### 6. Toque preso: o jogo parece congelar e não está
 
@@ -530,6 +567,30 @@ faz os três reprovarem hoje, e impede que voltem.
 Não é hipótese de que ela reincide: o comentário do `07-cena.js` registra que o copo já foi
 movido à mão uma vez pelo mesmo motivo. Defeito que já voltou uma vez volta de novo, e a
 diferença entre um conserto e uma asserção é exatamente essa.
+
+### 11. O `test-telas.mjs` é INTERMITENTE, e isso esconde regressão
+
+Descoberto em **30/07/2026**, ao acrescentar a cena da mesa online. Três rodadas seguidas do
+mesmo código deram: falha em `#acoes` × `#conversa` se sobrepondo, depois **passe limpo**,
+depois falha diferente (`o tabuleiro passou da borda, ndc.x 1.05`). Mesmo commit, três
+resultados.
+
+**A causa:** as cenas montam a mesa com `auto(6)` / `ateALinha(13)`, que jogam de verdade — e
+no navegador o `Math.random` **não é semeado**, ao contrário do harness em Node. Cada rodada
+monta um tabuleiro diferente, com uma quantidade diferente de linhas na conversa e um
+comprimento diferente de fileira. Vários casos ficam **na beirada** do limite, e a moeda
+decide.
+
+**Por que é pior do que parece:** um teste que falha às vezes ensina a rodar de novo. E "rodar
+de novo" é exatamente como uma regressão de verdade passa — foi o que quase aconteceu aqui: a
+primeira falha parecia culpa do painel novo, e não era. O tempo gasto separando as duas coisas
+é o custo recorrente.
+
+**O conserto** é semear o sorteio nas cenas (um `seedRandom` exposto à página, como o do
+harness) para que a mesma cena monte sempre o mesmo tabuleiro. Aí a beirada passa a ser uma
+decisão — cabe ou não cabe — em vez de um sorteio. **Cuidado:** isso vai fixar números que hoje
+variam, e alguma cena pode passar a reprovar sempre. Isso é a suíte funcionando, não uma
+regressão nova.
 
 ## Regras da casa (implementadas)
 
