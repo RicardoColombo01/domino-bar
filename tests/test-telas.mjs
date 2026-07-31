@@ -18,6 +18,11 @@ const TELAS = [
   { nome: 'retrato 390×844', width: 390, height: 844, touch: true },
   { nome: 'retrato 360×640', width: 360, height: 640, touch: true },
   { nome: 'paisagem 844×390', width: 844, height: 390, touch: true },
+  // O celular deitado PEQUENO. 844×390 é o maior deitado que existe em celular, e era o
+  // único aqui — por isso a suíte jurava que o deitado estava bem. Em 640×360 o #topo
+  // (454px, centrado) e o #jogadores (à direita) se encavalam em 58px, e nenhuma das duas
+  // caixas sabe disso: cada uma cabe na tela sozinha. O item 8 mora exatamente aqui.
+  { nome: 'paisagem 640×360', width: 640, height: 360, touch: true },
   { nome: 'tablet 820×1180', width: 820, height: 1180, touch: true },
   { nome: 'wide 1600×900', width: 1600, height: 900, touch: false },
 ];
@@ -41,6 +46,14 @@ const CASOS = [
   // overflow negativo em elemento fixo não aparece no scrollWidth. Sem esta cena o painel
   // novo nasceria sem nenhuma foto, já que nenhum outro caso é de mesa online.
   { nome: 'mesa online', montar: `mesa('classico', 4); contar(true); auto(11); window.__jogo.pintarSala('XJCR');` },
+  // NOMES NO LIMITE — item 8. Todas as cenas até aqui usavam os nomes padrão ("Você",
+  // "Bot 1"), que cabem em qualquer coisa: é por isso que a suíte nunca viu o nome cortado
+  // que o Ricardo relatou jogando. 14 é o `maxlength` do campo no menu (14-menu.js), então
+  // este é o pior caso que o jogo DEIXA existir, e não um exagero inventado para o teste.
+  // Em duplas o placar ainda soma dois deles ("Fulano e Sicrano"), que é onde o topo cresce.
+  { nome: 'nomes longos', montar:
+      `nomes('Ricardo Neves', 'Maria Fernanda', 'Sebastião Jr.', 'Ana Carolina');` +
+      `mesa('classico', 4); contar(true); auto(11);` },
 ];
 
 const AJUDA = `
@@ -71,6 +84,12 @@ const AJUDA = `
   const contar = (ligado) => {
     const b = document.getElementById('btContagem');
     if (b.classList.contains('on') !== ligado) b.click();
+  };
+  // Nomes ANTES de mesa(): quem lê a cadeira é o comecarLocal lá dentro. Trocar depois
+  // deixaria o placar e a lista pintados com o nome velho, e a cena mediria outra coisa.
+  const nomes = (...ns) => {
+    const j = window.__jogo;
+    ns.forEach((n, i) => { if (j.MESA.cadeiras[i]) j.MESA.cadeiras[i].nome = n; });
   };
   const mesa = (modo, n) => {
     const j = window.__jogo;
