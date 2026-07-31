@@ -104,6 +104,8 @@ function desenharHUD(vista) {
 
   desenharContagem(vista);
   desenharConversa(vista);
+  // Depois das duas, porque é a visibilidade DELAS que decide se há gaveta aberta.
+  atualizarCortina();
 }
 
 // Quantas peças de cada número já apareceram — as da mesa MAIS as da sua mão, como o
@@ -256,7 +258,52 @@ function alternarConversa(abrir) {
   HUD.conversa.classList.toggle('aberta', conversaAberta);
   if (conversaAberta) { naoLidas = 0; HUD.lista.scrollTop = HUD.lista.scrollHeight; }
   atualizarBotaoConversa();
+  atualizarCortina();
 }
+
+// ─── a gaveta do celular ─────────────────────────────────────────────────────
+// Numa tela de 360px a conversa tem 268px fixos: ela e a mão não cabem lado a lado. Não é
+// margem mal ajustada — os dois não cabem, e encolher a mesa até caber deixaria o
+// tabuleiro pequeno demais para ler. Então no celular estes painéis param de conviver com
+// o jogo: abrem por cima, com cortina atrás, e fecham num toque.
+//
+// A cortina não é enfeite. Sem ela, painel em cima de peça parece DEFEITO — foi
+// literalmente relatado assim ("peças bugadas em vertical"). Com ela, é uma gaveta aberta.
+const modoGaveta = () => matchMedia('(max-width: 560px), (max-height: 560px)').matches;
+
+// Olha a CLASSE e não a variável: a contagem também some quando não há mão (fim de mão,
+// saguão), e uma cortina sobre painel nenhum seria um vidro fosco no meio do jogo.
+const gavetaAberta = () =>
+  (conversaAberta && HUD.conversa.classList.contains('aberta')) ||
+  !HUD.contagem.classList.contains('oculta');
+
+function atualizarCortina() {
+  const aberta = modoGaveta() && gavetaAberta();
+  el('cortina').classList.toggle('oculta', !aberta);
+  // A classe no body é o que torna a gaveta MODAL: o CSS esconde o resto do HUD por ela.
+  // Sem isso a barra de ações e o "sua vez" boiam por cima da cortina, que é a mesma
+  // confusão de antes ao contrário.
+  document.body.classList.toggle('gaveta', aberta);
+}
+
+function fecharGavetas() {
+  if (conversaAberta) alternarConversa(false);
+  if (contando) {
+    contando = false;
+    guardar('contagem', contando);
+    if (vistaAtual) atualizarVista(vistaAtual);
+  }
+  atualizarCortina();
+}
+
+el('cortina').onclick = () => { tocarClique(); fecharGavetas(); };
+
+// Girar o aparelho pode cruzar o limiar dos 560px nos dois sentidos, e aí a mesma
+// conversa aberta deixa de ser gaveta (ou passa a ser). Sem isto sobra um vidro fosco por
+// cima do jogo, ou a gaveta abre sem cortina. Listener próprio e não um gancho no
+// `agendarEnquadre` do 07-cena.js: aquilo é sobre a câmera, isto é sobre o HUD.
+addEventListener('resize', atualizarCortina);
+addEventListener('orientationchange', atualizarCortina);
 
 // Só há com quem conversar se houver gente online. E o canal "dupla" só existe onde
 // existe dupla — o Clássico de 4 é o único modo em duplas.

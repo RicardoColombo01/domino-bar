@@ -374,6 +374,7 @@ HUD.contar.onclick = () => {
   contando = !contando;
   guardar('contagem', contando);
   if (vistaAtual) atualizarVista(vistaAtual);
+  atualizarCortina();                        // sem vista (saguão) o desenharHUD não roda
 };
 
 // ─── a dica ──────────────────────────────────────────────────────────────────

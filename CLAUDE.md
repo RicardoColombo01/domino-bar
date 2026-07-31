@@ -311,10 +311,11 @@ saíram de jogo de verdade, no celular — são a primeira leva de defeitos rela
 e não de leitura de código. Vale a distinção: a leitura acha o que está escrito errado, o
 campo acha o que está escrito certo e mesmo assim não funciona.
 
-**Estado:** **feitos** os itens 1, 3(a), 3(b) e 4 — nesta ordem, com o 4 antes do 3(b)
-porque sem identidade "voltar para a mesa" põe você em qualquer cadeira. Falta o **3(c)**
-(voltar como anfitrião). O item 2 espera um caso concreto do Ricardo. Os itens 5 a 11 não
-estão começados.
+**Estado:** **feitos** os itens 1, 3(a), 3(b), 4, 5, 9 e 10 — o 4 veio antes do 3(b) porque sem
+identidade "voltar para a mesa" põe você em qualquer cadeira. O **11 está pela metade** (o
+embaralho das cenas foi semeado; os temporizadores de bot ainda não). Falta o **3(c)** (voltar
+como anfitrião), e faltam o **6**, o **7** e o **8**. O item 2 espera um caso concreto do
+Ricardo.
 
 ### 1. Lá-e-lô só existe com as pontas DIFERENTES ✔ feito
 
@@ -548,27 +549,77 @@ De **30/07/2026**, e é a **única sobra da Fila 2** aparecendo em campo. O `ove
 Deitado o jogo cai no `@media (max-height: 560px)`, que só aperta o `gap` — o HUD de celular
 deitado nunca foi um layout próprio, é o de tela baixa reaproveitado.
 
-### 9. Peças "bugadas" em vertical — SEM diagnóstico
+### 9. Peças "bugadas" em vertical = peças POR BAIXO DE PAINEL
 
-De **30/07/2026**. Não foi iPhone; o modelo não é conhecido. **Deixado sem diagnóstico de
-propósito**, porque "bugadas" pode ser posição, escala, corte ou textura — quatro causas sem
-nada em comum entre elas. As três primeiras são layout e o conserto é genérico (o
-`test-telas.mjs` já roda os tamanhos de retrato); a última é o atlas de pintas gerado em
-canvas, que depende de driver e de WebGL do aparelho e **não dá para consertar às cegas**.
-**Um print decide em qual família estamos** e vale mais que qualquer leitura de código.
+De **30/07/2026**. O Ricardo confirmou que **é layout**, não textura — o que descartou o atlas
+de pintas e o WebGL do aparelho, que seriam os únicos ramos impossíveis de consertar às cegas.
 
-### 10. O teste que falta: peça POR BAIXO de painel
+Com isso o item 9 e o item 10 são **a mesma coisa**, e a asserção que faltava provou: em
+**retrato 360×640 com a conversa aberta, CINCO peças da sua mão ficam por baixo do
+`#conversa`**. A peça está no lugar certo, dentro do quadro, com um painel em cima — que é
+exatamente a pergunta que o teste não sabia fazer.
 
-De **30/07/2026**. O `test-telas.mjs` reprova peça **fora do quadro** e painel **sobre**
-painel, mas não peça **por baixo** de painel — e é essa a família dos defeitos de
-sobreposição relatados (adversários, copo, dica). Escrever a asserção **antes** dos consertos
-faz os três reprovarem hoje, e impede que voltem.
+### 10. Peça por baixo de painel ✔ feito — asserção e conserto
 
-Não é hipótese de que ela reincide: o comentário do `07-cena.js` registra que o copo já foi
-movido à mão uma vez pelo mesmo motivo. Defeito que já voltou uma vez volta de novo, e a
-diferença entre um conserto e uma asserção é exatamente essa.
+De **30/07/2026**. O `test-telas.mjs` reprovava peça **fora do quadro** e painel **sobre**
+painel, mas não peça **por baixo** de painel. São perguntas diferentes, e a que faltava é a
+que pega a família de defeitos que o Ricardo relatou.
 
-### 11. O `test-telas.mjs` é INTERMITENTE, e isso esconde regressão
+A asserção foi escrita **antes** do conserto e reprovou **20 vezes**, o que é o ponto: era um
+defeito relatado em palavras ("peças bugadas") e virou uma lista de linhas e telas. Ela ficou
+numa branch até o conserto existir — teste vermelho no tronco ensina exatamente o hábito que o
+item 11 condena.
+
+Ela mede as **caixas que PINTAM** (`.painel`, `button.canto`, `#acoes button`, `#confirmar`) e
+não os contêineres: o `#topo` em retrato é uma faixa da largura da tela com fundo
+transparente, e usar o retângulo dele acusaria cobertura no vão entre um painel e outro, onde
+dá para ver o jogo.
+
+**O que ela achou — 20 falhas, e o desenho delas é a informação:**
+
+| tela | o que fica coberto |
+|---|---|
+| retrato 390×844 | a mão de um adversário, por baixo do `#contagem` (3 cenas) |
+| retrato 360×640 | **5 peças da SUA mão** por baixo do `#conversa`; adversário sob `#contagem` |
+| paisagem 844×390 | peças da sua mão sob `#btContagem` e `#conversa`; adversário e tabuleiro sob `#contagem` |
+| tablet 820×1180 | limpo |
+| wide 1600×900 | limpo |
+
+**Tablet e wide passam.** É por isso que isto nunca apareceu no computador, e é a confirmação
+de que o relato "só no celular" está certo.
+
+**O conserto escolhido pelo Ricardo: GAVETA.** No celular a conversa e a contagem param de
+conviver com o jogo — abrem por cima, com cortina atrás, e fecham num toque. É a única saída
+que respeita a aritmética: numa tela de 360 px o `#conversa` tem **268 px fixos**, então painel
+e mão não cabem lado a lado, e encolher a mesa até caber deixaria o tabuleiro pequeno demais
+para ler.
+
+Três coisas que só apareceram ao fazer:
+
+- **A gaveta tem de ser MODAL** (`body.gaveta` esconde `#acoes`, `#vez` e `#confirmar`). Sem
+  isso a barra de ações fica boiando **por cima da cortina**, que é a mesma confusão de antes
+  de cabeça para baixo.
+- **A ASSERÇÃO estava incompleta**, e foi a gaveta que revelou: "nada do jogo sob painel" é
+  falso quando há gaveta aberta — uma gaveta **existe** para cobrir o jogo. O defeito nunca foi
+  cobrir; foi cobrir **sem dizer**. Hoje o teste exige coisas diferentes conforme o estado:
+  gaveta fechada, nada coberto; gaveta aberta, ela manda na tela sozinha.
+- **Zerar o `transform` é obrigatório.** Em tela baixa a contagem era centrada por `left: 50%`
+  + `translateX(-50%)`. Só trocar o `left` deixa o deslocamento de meia largura de pé, e a
+  gaveta nasce 414 px fora da tela.
+
+**Deitado, a barra de ações subiu para o topo.** Em 844×390 a mão se espalha por ~80% da
+largura e desce até a beirada de baixo: qualquer coisa no rodapé esquerdo fica em cima da peça
+mais à esquerda. É a última sobra da Fila 2, e ela finalmente apareceu **em número** em vez de
+em opinião.
+
+O caminho não escolhido, se um dia fizer falta: fazer o 3D **desviar** das faixas ocupadas,
+que combina com o `apertoDaMesa()` e o `larguraVisivelEm()` — e é o mais caro.
+
+Não é hipótese de que esta família reincide: o comentário do `07-cena.js` registra que o copo
+já foi movido à mão uma vez pelo mesmo motivo. Defeito que já voltou uma vez volta de novo, e
+a diferença entre um conserto e uma asserção é exatamente essa.
+
+### 11. O `test-telas.mjs` era INTERMITENTE — metade consertada
 
 Descoberto em **30/07/2026**, ao acrescentar a cena da mesa online. Três rodadas seguidas do
 mesmo código deram: falha em `#acoes` × `#conversa` se sobrepondo, depois **passe limpo**,
@@ -586,11 +637,19 @@ de novo" é exatamente como uma regressão de verdade passa — foi o que quase 
 primeira falha parecia culpa do painel novo, e não era. O tempo gasto separando as duas coisas
 é o custo recorrente.
 
-**O conserto** é semear o sorteio nas cenas (um `seedRandom` exposto à página, como o do
-harness) para que a mesma cena monte sempre o mesmo tabuleiro. Aí a beirada passa a ser uma
-decisão — cabe ou não cabe — em vez de um sorteio. **Cuidado:** isso vai fixar números que hoje
-variam, e alguma cena pode passar a reprovar sempre. Isso é a suíte funcionando, não uma
-regressão nova.
+**Feito pela metade, e vale saber qual metade.** As cenas passaram a semear `Math.random`
+dentro da própria página (`semear()` no `AJUDA`, um mulberry32 de cinco linhas) — não precisou
+de nada no jogo, porque a página inteira usa `Math.random`. Isso matou a variação do
+**embaralho**: a mesma cena monta sempre as mesmas peças.
+
+**O que SOBROU:** as cenas esperam 350 ms para a tela assentar, e nessa janela um número
+**variável** de temporizadores de bot dispara. Duas rodadas seguidas ainda dão `mesa 0.27` e
+`mesa 0.31` para a mesma cena. É muito menos folga do que antes, e nenhuma das duas rodadas
+reprovou — mas um caso na beirada ainda pode virar a moeda.
+
+**O que falta:** parar os temporizadores de bot durante a montagem da cena, de modo que o
+tabuleiro seja função só do que a cena pediu. Enquanto isso não existe, **uma rodada verde do
+`telas` não é prova** — rode duas.
 
 ## Regras da casa (implementadas)
 

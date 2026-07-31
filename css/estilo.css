@@ -131,6 +131,10 @@ html, body {
 }
 
 #acoes { position: fixed; bottom: 60px; left: 16px; z-index: 6; display: flex; gap: 9px; align-items: center; }
+
+/* A cortina da gaveta do celular — o posicionamento dela está no último bloco do arquivo,
+   junto do resto da gaveta. Aqui só o desenho. */
+#cortina { position: fixed; inset: 0; z-index: 5; background: rgba(8, 5, 3, .58); }
 .btn.peq.on { background: var(--ambar); color: #17100a; border-color: transparent; }
 
 /* Contagem do jogo: uma linha por número, barrinha do que já apareceu e quantas faltam.
@@ -345,7 +349,12 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
   #jogadores { gap: 4px; }
   .jog { min-width: 128px; padding: 4px 8px; }
   .jog .tipo { display: none; }
-  #acoes { bottom: 56px; }
+  /* DEITADO A BARRA SOBE PARA O TOPO, ao lado dos botões de canto. Em 844×390 a mão se
+     espalha por ~80% da largura e desce até a beirada de baixo: qualquer coisa no rodapé
+     esquerdo fica EM CIMA da peça mais à esquerda — foi o que o teste de "peça por baixo
+     de painel" acusou, e é a última sobra da Fila 2 aparecendo em número.
+     A faixa entre os botões de canto e o topo é a única sobra real de espaço aqui. */
+  #acoes { bottom: auto; top: calc(var(--seg-t) + 74px); left: calc(var(--seg-l) + 14px); }
   #vez { bottom: 12px; }
   /* Tela baixa não tem coluna direita sobrando: a contagem vira faixa, como no retrato. */
   #contagem {
@@ -441,4 +450,44 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
   #contagem s { text-align: center; }
   /* e o "sua vez" desce para não brigar com ela */
   #vez { top: calc(var(--seg-t) + 186px); }
+}
+
+/* ── a gaveta do celular ──────────────────────────────────────────────────────
+   ÚLTIMO BLOCO DO ARQUIVO de propósito: as regras de retrato e de tela baixa acima
+   também posicionam #conversa e #contagem, e a última com a mesma especificidade ganha.
+   Escrito antes delas, este bloco não valia nada.
+
+   Numa tela de 360px o #conversa tem 268px FIXOS: painel e mão não cabem lado a lado.
+   Não é margem mal ajustada, é que os dois não cabem — e encolher a mesa até caber
+   deixaria o tabuleiro pequeno demais para ler. Então no celular estes painéis param de
+   conviver com o jogo e viram coisa que se abre e se fecha, com cortina atrás dizendo
+   isso. Sem a cortina, painel em cima de peça parece defeito — e foi relatado como tal.
+
+   O limiar é 560px nos DOIS sentidos, e não o `(orientation: portrait) and (max-width:
+   860px)` do resto do arquivo: o tablet de 820×1180 casa com aquele e passa limpo no
+   teste de sobreposição. Virar gaveta lá seria consertar o que não está quebrado. */
+@media (max-width: 560px), (max-height: 560px) {
+  #conversa.aberta, #contagem {
+    left: calc(var(--seg-l) + 8px); right: calc(var(--seg-r) + 8px); width: auto;
+    bottom: calc(var(--seg-b) + 8px); top: auto;
+    z-index: 7; max-height: 62vh; overflow-y: auto;
+    /* ZERAR O TRANSFORM é obrigatório e não é óbvio: em tela baixa a contagem era
+       centrada por `left: 50%` + `translateX(-50%)`. Só trocar o `left` deixa o
+       deslocamento de meia largura de pé, e a gaveta nasce 414px fora da tela — foi
+       exatamente o que o teste acusou. */
+    transform: none;
+  }
+  #conversa.aberta #conversaLista { max-height: 34vh; }
+  /* A contagem só informava, e por isso era pointer-events:none. Como gaveta ela precisa
+     receber o dedo para rolar — sete números não cabem em 62vh de tela deitada. */
+  #contagem { pointer-events: auto; }
+
+  /* A GAVETA É MODAL, e isso não é enfeite: sem esconder o resto, a barra de ações e o
+     "sua vez" continuam boiando POR CIMA da cortina, o que é a mesma confusão de antes de
+     cabeça para baixo. Aberta, a gaveta manda na tela sozinha; fechada, tudo volta.
+     O #confirmar sai junto — uma peça levantada continua levantada quando a gaveta
+     fechar, e um botão de confirmar por cima de um painel modal é convite a erro. */
+  body.gaveta #acoes,
+  body.gaveta #vez,
+  body.gaveta #confirmar { display: none; }
 }
