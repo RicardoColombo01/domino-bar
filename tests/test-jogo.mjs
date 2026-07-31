@@ -371,6 +371,101 @@ console.log('\narrastar a peça');
     'um segundo dedo deixou a peça do primeiro congelada no ar');
 }
 
+console.log('\no toque no celular');
+{
+  // Os dois defeitos que o Ricardo relatou JOGANDO, e não lendo código (Fila 5, itens 6 e
+  // 7). Os dois são do dedo e nenhum acontece no mouse — a assimetria é o que aponta para
+  // onde olhar, e é ela que estas asserções congelam.
+  mod.MESA.modo = 'classico'; mod.MESA.n = 3;
+  mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[2].tipo = 'bot';
+  mod.comecarLocal();
+  // A vez tem de ser SUA. O portão de turno mora no pointerup, então fora da sua vez todo
+  // toque não seleciona nada — e o teste passaria verde sem ter exercitado coisa alguma.
+  for (let i = 0; i < 60 && mod.P.fase === 'mao' && mod.P.vez !== 0; i++) {
+    mod.aplicarIntencao(mod.P.vez, mod.jogadaDoBot(mod.P, mod.P.vez));
+  }
+  frames(40);
+  mod.scene.updateMatrixWorld(true);
+  mod.camera.updateMatrixWorld(true);
+
+  const V = mod.naMao[0].obj.position.constructor;
+  const naTela = m => {
+    const v = new V(m.xBase, m.yBase, m.zBase).project(mod.camera);
+    return { x: (v.x + 1) / 2 * 1600, y: (1 - v.y) / 2 * 900 };
+  };
+  const alvo = mod.renderer.domElement;
+  // O leque ANIMA: peça que volta de um arrasto desliza até o lugar, e o raycast mira
+  // onde ela ESTÁ, não onde ela vai parar (é a armadilha que o teste de arrasto acima já
+  // documenta). Todo gesto começa com a mão assentada, senão o toque erra a peça e a
+  // falha não fala do defeito que se está medindo.
+  const assentar = () => { frames(20); mod.scene.updateMatrixWorld(true); };
+  // Reprocurada a cada gesto: um arrasto que reordena muda os índices embaixo do teste.
+  const umaJogavel = () => {
+    const i = mod.naMao.findIndex(m => m.jogavel);
+    return i < 0 ? null : { k: mod.chave(mod.naMao[i].peca), p: naTela(mod.naMao[i]) };
+  };
+  ok(mod.P.vez === 0 && umaJogavel(), 'montagem do cenário: precisa da sua vez com peça jogável');
+
+  // Um toque, com o gesto inteiro descrito: quem chama diz de quanto foi o tremor.
+  const tocar = (id, tipo, dx, dy) => {
+    mod.cancelarEscolha();
+    assentar();
+    const a = umaJogavel();
+    fire('pointerdown', { target: alvo, pointerType: tipo, pointerId: id, clientX: a.p.x, clientY: a.p.y });
+    fire('pointermove', { pointerType: tipo, pointerId: id, clientX: a.p.x + dx, clientY: a.p.y + dy });
+    fire('pointerup', { pointerType: tipo, pointerId: id });
+    return a.k;
+  };
+
+  // A peça sai numa linha PRÓPRIA, sempre. `ok(mod.escolhida === tocar(...))` lê o
+  // operando da esquerda antes de chamar o da direita: compararia a escolha ANTERIOR com
+  // a peça deste gesto, e passa por coincidência toda vez que as duas forem a mesma. Foi
+  // exatamente assim que uma destas asserções nasceu verde sem testar nada.
+  let k;
+
+  // ITEM 7. 12 px passa dos 9 de antes e não chega aos 18 de hoje: é exatamente a faixa
+  // em que o toque virava arrasto sozinho, soltava sem reordenar nada e sumia.
+  k = tocar(21, 'touch', 12, 4);
+  ok(mod.escolhida === k, 'um tremor de 12 px no dedo engoliu o toque — é o clique que não joga a peça');
+
+  // O limiar do dedo não podia ter afrouxado o MOUSE: lá 12 px é gesto de verdade.
+  mod.cancelarEscolha(); assentar();
+  const m0 = umaJogavel();
+  fire('pointerdown', { target: alvo, pointerType: 'mouse', pointerId: 22, clientX: m0.p.x, clientY: m0.p.y });
+  fire('pointermove', { pointerType: 'mouse', pointerId: 22, clientX: m0.p.x + 12, clientY: m0.p.y + 4 });
+  ok(mod.naMao.some(m => m.arrastando), 'no mouse 12 px tem de continuar sendo arrasto');
+  fire('pointerup', { pointerType: 'mouse', pointerId: 22 });
+
+  // A rede embaixo do limiar: 300 px para CIMA sai da mão inteira, então `slotSob` não
+  // acha slot nenhum e nada troca de lugar. Gesto que não arrumou nada era para ser toque.
+  k = tocar(23, 'touch', 0, -300);
+  ok(mod.escolhida === k, 'um gesto longo que não trocou NENHUMA peça de lugar tinha de valer como toque');
+
+  // ITEM 6, o toque preso. O dedo sai pela beirada da tela ainda apoiado: o sistema leva
+  // a captura embora e o `pointerup` nunca chega. Antes, `arrasto` ficava preenchido para
+  // sempre e todo toque seguinte caía no `if (arrasto) return`.
+  assentar();
+  const s0 = umaJogavel();
+  fire('pointerdown', { target: alvo, pointerType: 'touch', pointerId: 31, clientX: s0.p.x, clientY: s0.p.y });
+  fire('pointermove', { pointerType: 'touch', pointerId: 31, clientX: s0.p.x + 60, clientY: s0.p.y });
+  alvo.releasePointerCapture(31);                  // o sistema levando o gesto embora
+  k = tocar(32, 'touch', 0, 0);
+  ok(mod.escolhida === k, 'depois do dedo perdido o jogo descartou o toque seguinte — parece congelado sem estar');
+
+  // Mesma doença, outra porta: a aba vai para o fundo (notificação, troca de app).
+  assentar();
+  const s1 = umaJogavel();
+  fire('pointerdown', { target: alvo, pointerType: 'touch', pointerId: 41, clientX: s1.p.x, clientY: s1.p.y });
+  fire('pointermove', { pointerType: 'touch', pointerId: 41, clientX: s1.p.x + 60, clientY: s1.p.y });
+  document.hidden = true;
+  fire('visibilitychange', {});
+  document.hidden = false;
+  ok(!mod.naMao.some(m => m.arrastando), 'a aba indo para o fundo deixou a peça presa no dedo');
+  k = tocar(42, 'touch', 0, 0);
+  ok(mod.escolhida === k, 'depois de a aba voltar do fundo o toque continuou sendo descartado');
+  mod.cancelarEscolha();
+}
+
 console.log('\na arrumação sobrevive à troca de jogador');
 {
   // Mesa com DUAS pessoas nesta tela: é o único jeito de `pedirTroca` rodar, e era

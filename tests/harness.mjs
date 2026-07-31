@@ -131,7 +131,17 @@ export function buildModule(exportar, htmlPath = JOGO_HTML, outPath = path.join(
 
   src = src.replace(
     /const renderer = new THREE\.WebGLRenderer\([^)]*\);/,
-    `const renderer = { shadowMap: {}, domElement: { style: {} }, setSize(){}, setPixelRatio(){}, setClearColor(){}, render(){ this.calls=(this.calls||0)+1; } };`
+    // A captura de ponteiro é de VERDADE (um Set) porque o jogo passou a PERGUNTAR a ela
+    // se o dedo ainda está na tela: é assim que ele descobre que um `pointerup` nunca vai
+    // chegar. Um dublê que só tivesse os métodos vazios responderia "não tenho captura" e
+    // o caminho inteiro do toque preso ficaria sem teste. Note que aqui a captura NÃO é
+    // solta sozinha no pointerup, como o navegador faz — quem quiser simular o dedo
+    // sumindo chama `releasePointerCapture` na mão, que é exatamente o que o sistema faz.
+    `const renderer = { shadowMap: {}, domElement: { style: {}, _cap: new Set(),
+       setPointerCapture(id){ this._cap.add(id); },
+       releasePointerCapture(id){ this._cap.delete(id); },
+       hasPointerCapture(id){ return this._cap.has(id); } },
+       setSize(){}, setPixelRatio(){}, setClearColor(){}, render(){ this.calls=(this.calls||0)+1; } };`
   );
   // No navegador `three/addons/` vem do importmap; aqui tem de apontar para o pacote instalado.
   src = src.replace(/'three\/addons\//g, "'./node_modules/three/examples/jsm/");
