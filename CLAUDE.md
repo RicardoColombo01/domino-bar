@@ -548,25 +548,53 @@ De **30/07/2026**, e é a **única sobra da Fila 2** aparecendo em campo. O `ove
 Deitado o jogo cai no `@media (max-height: 560px)`, que só aperta o `gap` — o HUD de celular
 deitado nunca foi um layout próprio, é o de tela baixa reaproveitado.
 
-### 9. Peças "bugadas" em vertical — SEM diagnóstico
+### 9. Peças "bugadas" em vertical = peças POR BAIXO DE PAINEL
 
-De **30/07/2026**. Não foi iPhone; o modelo não é conhecido. **Deixado sem diagnóstico de
-propósito**, porque "bugadas" pode ser posição, escala, corte ou textura — quatro causas sem
-nada em comum entre elas. As três primeiras são layout e o conserto é genérico (o
-`test-telas.mjs` já roda os tamanhos de retrato); a última é o atlas de pintas gerado em
-canvas, que depende de driver e de WebGL do aparelho e **não dá para consertar às cegas**.
-**Um print decide em qual família estamos** e vale mais que qualquer leitura de código.
+De **30/07/2026**. O Ricardo confirmou que **é layout**, não textura — o que descartou o atlas
+de pintas e o WebGL do aparelho, que seriam os únicos ramos impossíveis de consertar às cegas.
 
-### 10. O teste que falta: peça POR BAIXO de painel
+Com isso o item 9 e o item 10 são **a mesma coisa**, e a asserção que faltava provou: em
+**retrato 360×640 com a conversa aberta, CINCO peças da sua mão ficam por baixo do
+`#conversa`**. A peça está no lugar certo, dentro do quadro, com um painel em cima — que é
+exatamente a pergunta que o teste não sabia fazer.
 
-De **30/07/2026**. O `test-telas.mjs` reprova peça **fora do quadro** e painel **sobre**
-painel, mas não peça **por baixo** de painel — e é essa a família dos defeitos de
-sobreposição relatados (adversários, copo, dica). Escrever a asserção **antes** dos consertos
-faz os três reprovarem hoje, e impede que voltem.
+### 10. Peça por baixo de painel — a asserção existe (branch), o CONSERTO não
 
-Não é hipótese de que ela reincide: o comentário do `07-cena.js` registra que o copo já foi
-movido à mão uma vez pelo mesmo motivo. Defeito que já voltou uma vez volta de novo, e a
-diferença entre um conserto e uma asserção é exatamente essa.
+De **30/07/2026**. O `test-telas.mjs` reprovava peça **fora do quadro** e painel **sobre**
+painel, mas não peça **por baixo** de painel. São perguntas diferentes, e a que faltava é a
+que pega a família de defeitos que o Ricardo relatou.
+
+A asserção está escrita em **`feature/peca-por-baixo-de-painel`, e NÃO foi mergeada** — de
+propósito. Ela reprova 20 vezes hoje, e um teste vermelho no tronco ensina exatamente o hábito
+que o item 11 condena: rodar de novo e seguir a vida. Ela entra junto com o conserto.
+
+Ela mede as **caixas que PINTAM** (`.painel`, `button.canto`, `#acoes button`, `#confirmar`) e
+não os contêineres: o `#topo` em retrato é uma faixa da largura da tela com fundo
+transparente, e usar o retângulo dele acusaria cobertura no vão entre um painel e outro, onde
+dá para ver o jogo.
+
+**O que ela achou — 20 falhas, e o desenho delas é a informação:**
+
+| tela | o que fica coberto |
+|---|---|
+| retrato 390×844 | a mão de um adversário, por baixo do `#contagem` (3 cenas) |
+| retrato 360×640 | **5 peças da SUA mão** por baixo do `#conversa`; adversário sob `#contagem` |
+| paisagem 844×390 | peças da sua mão sob `#btContagem` e `#conversa`; adversário e tabuleiro sob `#contagem` |
+| tablet 820×1180 | limpo |
+| wide 1600×900 | limpo |
+
+**Tablet e wide passam.** É por isso que isto nunca apareceu no computador, e é a confirmação
+de que o relato "só no celular" está certo.
+
+**Por que o conserto não é óbvio, e por que ele não foi feito sem decidir antes:** todos os 20
+casos são "painel flutuando por cima do 3D", que é o desenho do HUD, não um acidente. Há três
+saídas e elas dão jogos diferentes — mover os painéis, torná-los modais no celular, ou fazer o
+3D **desviar** das faixas ocupadas (que é o caminho que combina com o `apertoDaMesa()` e o
+`larguraVisivelEm()` já existentes, e o mais caro). É decisão de produto.
+
+Não é hipótese de que esta família reincide: o comentário do `07-cena.js` registra que o copo
+já foi movido à mão uma vez pelo mesmo motivo. Defeito que já voltou uma vez volta de novo, e
+a diferença entre um conserto e uma asserção é exatamente essa.
 
 ### 11. O `test-telas.mjs` é INTERMITENTE, e isso esconde regressão
 

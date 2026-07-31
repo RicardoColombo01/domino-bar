@@ -124,10 +124,41 @@ const MEDIR = `(() => {
     return pior;
   };
 
+  // PEÇA POR BAIXO DE PAINEL. O teste sabia perguntar se a peça está dentro do quadro e se
+  // dois painéis se sobrepõem — nunca se o painel está EM CIMA da peça. É outra pergunta:
+  // uma peça no lugar certo, dentro da tela, pode estar simplesmente coberta.
+  //
+  // Mede as CAIXAS QUE PINTAM, não os contêineres: o #topo em retrato é uma faixa da
+  // largura da tela com fundo transparente e os quadrinhos dentro. Usar o retângulo dele
+  // acusaria cobertura no vão entre um painel e outro, onde dá para ver o jogo.
+  const caixas = [];
+  for (const n of document.querySelectorAll('.painel, button.canto, #acoes button, #confirmar')) {
+    const r = vis(n);
+    if (r) caixas.push({ id: n.id || n.className.split(' ')[0], ...r });
+  }
+  const naTela = v => ({ x: (v.x + 1) / 2 * window.innerWidth, y: (1 - v.y) / 2 * window.innerHeight });
+  const cobrindo = t => {
+    for (const c of caixas) if (t.x >= c.x && t.x <= c.r && t.y >= c.y && t.y <= c.b) return c.id;
+    return null;
+  };
+  const cobertas = [];
+  for (const m of j.naMao) {
+    const v = new V(m.xBase, m.yBase, m.zBase); v.project(j.camera);
+    const painel = cobrindo(naTela(v));
+    if (painel) cobertas.push({ oque: 'a peça ' + m.peca.join('|') + ' da sua mão', painel });
+  }
+  for (const [nome, grupo] of [['a mão de um adversário', j.grupoOutros], ['o monte', j.grupoMonte], ['o tabuleiro', j.grupoMesa]]) {
+    for (const o of grupo.children) {
+      const v = new V(); o.getWorldPosition(v); v.project(j.camera);
+      const painel = cobrindo(naTela(v));
+      if (painel) { cobertas.push({ oque: nome, painel }); break; }   // um exemplo por grupo basta
+    }
+  }
+
   return {
     transbordo: document.documentElement.scrollWidth - window.innerWidth,
     largura: window.innerWidth, altura: window.innerHeight,
-    fov: j.camera.fov, paineis, pecas,
+    fov: j.camera.fov, paineis, pecas, cobertas,
     fileiras: new Set(j.naMao.map(m => m.yBase.toFixed(3))).size,
     naLinha: j.vista ? j.vista.linha.length : 0,
     mesa: extremo(j.grupoMesa), outros: extremo(j.grupoOutros), monte: extremo(j.grupoMonte),
@@ -205,6 +236,13 @@ for (const tela of TELAS) {
     ok(m.mesa <= 1, `${onde}: o tabuleiro passou da borda da tela (ndc.x ${m.mesa.toFixed(2)}, com ${m.naLinha} peças na linha)`);
     ok(m.outros <= 1, `${onde}: a mão de um adversário saiu da tela (ndc.x ${m.outros.toFixed(2)})`);
     ok(m.monte <= 1, `${onde}: o monte saiu da tela (ndc.x ${m.monte.toFixed(2)})`);
+
+    // 6. e nada do jogo pode estar POR BAIXO de um painel. É a pergunta que faltava, e a
+    //    família de defeito que já reincidiu: o comentário do 07-cena.js registra que o
+    //    copo foi movido à mão uma vez por causa disso.
+    for (const c of m.cobertas) {
+      ok(false, `${onde}: ${c.oque} está por baixo de #${c.painel}`);
+    }
 
     const larguraNaTela = m.pecas.length
       ? (Math.max(...m.pecas.map(p => p.x)) - Math.min(...m.pecas.map(p => p.x))) : 0;
