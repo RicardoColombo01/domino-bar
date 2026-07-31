@@ -15,6 +15,7 @@ const HUD = {
   comprar: el('btComprar'), passar: el('btPassar'), acoes: el('acoes'),
   arrumar: el('btArrumar'), contar: el('btContagem'), contagem: el('contagem'),
   dica: el('btDica'),
+  sala: el('salaVal'), salaPainel: el('salaPainel'),
 };
 
 // "Contar o jogo" é a conta que jogador bom faz de cabeça e novato não faz. Fica
@@ -40,7 +41,7 @@ function mostrarTela(id) {
   // O botão de retomar é recalculado a cada vez que o menu aparece, e não uma vez no
   // início: entre um e outro você pode ter acabado a partida guardada, ou o prazo dela
   // pode ter vencido com a aba aberta.
-  if (id === 'telaMenu') atualizarBotaoRetomar();
+  if (id === 'telaMenu') { atualizarBotaoRetomar(); atualizarBotaoVoltarMesa(); }
   // A conversa do saguão vive por cima desta tela, então quem abre e fecha a tela é quem
   // liga e desliga aquilo.
   atualizarSaguao(id === 'telaOnline');
@@ -354,6 +355,15 @@ function mostrarFimDePartida(vista) {
     : `${vista.maoNum} ${vista.maoNum === 1 ? 'mão' : 'mãos'} · partida até ${vista.alvo}`;
   el('btRevanche').classList.toggle('oculta', modo === 'convidado');
   mostrarTela('telaFimPartida');
+}
+
+// O CÓDIGO DA MESA ENQUANTO ELA É ONLINE. Fica FORA de `desenharHUD` de propósito:
+// aquela função só lê `vista`, e o código da sala não está na visão nem poderia estar —
+// pô-lo lá seria furar a fronteira do `visaoDe` por um dado de tela. Irmã de
+// `pintarBotaoSom`: quem muda o dado é quem chama.
+function pintarSala(codigo) {
+  HUD.salaPainel.classList.toggle('oculta', !codigo);
+  HUD.sala.textContent = codigo || '—';
 }
 
 // Quem desligou o som desligou por um motivo — trabalho, gente dormindo, ou simplesmente

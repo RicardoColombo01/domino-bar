@@ -62,6 +62,13 @@ html, body {
 .dado { display: flex; flex-direction: column; align-items: center; min-width: 74px; }
 .dado b { font-size: 17px; font-variant-numeric: tabular-nums; color: var(--ambar); }
 
+/* O #topo é pointer-events:none para não roubar o toque da mesa — e isso também impediria
+   SELECIONAR o código da sala, que é metade do motivo de mostrá-lo. Exceção pontual, como
+   a que o #conversa já tem. `all` seleciona o código inteiro num toque, igual ao
+   #onlineCodigo do saguão. */
+#salaPainel { pointer-events: auto; }
+#salaVal { user-select: all; -webkit-user-select: all; letter-spacing: .08em; }
+
 #placar { display: flex; align-items: center; gap: 11px; }
 #placar .time { display: flex; flex-direction: column; align-items: center; }
 #placar .time i { font-style: normal; font-size: 11px; opacity: .65; max-width: 130px;
