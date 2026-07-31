@@ -35,6 +35,12 @@ const CASOS = [
   // Tabuleiro comprido: é quando a linha se espalha até a borda da mesa e o círculo dos
   // adversários fica mais apertado. Se algo vai sair do quadro, sai aqui.
   { nome: 'mesa cheia', montar: `mesa('classico', 4); contar(true); ateALinha(13);` },
+  // O QUINTO PAINEL DO TOPO. Mesa de 4 em duplas (placar com dois nomes) mais os três
+  // dados mais o código: é o topo mais cheio que existe. Vale o cenário porque o #topo já
+  // transbordou em 360px uma vez, e o comentário do CSS explica por que ninguém viu —
+  // overflow negativo em elemento fixo não aparece no scrollWidth. Sem esta cena o painel
+  // novo nasceria sem nenhuma foto, já que nenhum outro caso é de mesa online.
+  { nome: 'mesa online', montar: `mesa('classico', 4); contar(true); auto(11); window.__jogo.pintarSala('XJCR');` },
 ];
 
 const AJUDA = `

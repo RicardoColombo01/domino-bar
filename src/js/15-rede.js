@@ -22,6 +22,18 @@ let esperando = new Map();     // cadeira → temporizador de volta (no anfitri�
 let donoDaCadeira = new Map(); // cadeira → clienteId (no anfitrião)
 let linkAnfitriao = null;      // conn (no convidado)
 
+// O CÓDIGO DA MESA, que até aqui não existia em lugar nenhum. Ele era variável local do
+// `tentarAbrir` e do clique de entrar, e o único lugar onde sobrevivia era o texto de
+// `#onlineCodigo` — dentro da `telaOnline`, que o `esconderTelas()` apaga no primeiro
+// `t:'vista'`. Ou seja: no instante em que a partida começava, o código sumia da vida de
+// todo mundo, e com ele a chance de voltar.
+let codigoDaSala = '';
+
+function usarCodigo(codigo) {
+  codigoDaSala = codigo || '';
+  pintarSala(codigoDaSala);
+}
+
 // Quanto tempo a cadeira fica guardada para quem caiu. Curto o bastante para a mesa não
 // morrer de tédio, longo o bastante para uma troca de wi-fi ou um túnel de metrô.
 const ESPERA_VOLTA = 30000;
@@ -61,6 +73,7 @@ function erroOnline(txt) {
 }
 
 function encerrarRede() {
+  usarCodigo('');
   esperando.forEach(t => clearTimeout(t));
   esperando.clear();
   donoDaCadeira.clear();
@@ -93,6 +106,7 @@ function tentarAbrir(tentativa) {
 
   peer.on('open', () => {
     el('onlineCodigo').textContent = codigo;
+    usarCodigo(codigo);
     listarSala();
   });
 
@@ -244,7 +258,10 @@ function entrarNumaMesa() {
   el('onlineSub').textContent = 'Digite o código que o anfitrião passou.';
   el('onlineCodigo').textContent = '';
   el('onlineEntrada').classList.remove('oculta');
-  el('onlineEntrada').value = '';
+  // Pré-preenchido com a última mesa em que você sentou: quem volta quase sempre volta
+  // para a mesma, e antes o campo era zerado justamente aqui.
+  const guardada = salaGuardada();
+  el('onlineEntrada').value = guardada ? guardada.codigo : '';
   el('onlineEntrada').focus();
   el('btConectar').classList.remove('oculta');
   el('btIniciarOnline').classList.add('oculta');
@@ -279,6 +296,7 @@ function conectarNaMesa(codigo) {
   el('btConectar').textContent = 'Entrando…';
   erroOnline('Procurando a mesa…');
   modo = 'convidado';
+  usarCodigo(codigo);
   peer = new Peer(OPCOES_PEER);
   peer.on('open', () => {
     linkAnfitriao = peer.connect(PREFIXO + codigo, { reliable: true });
@@ -308,6 +326,11 @@ function conectarNaMesa(codigo) {
         el('btConectar').disabled = true;
         el('btConectar').textContent = 'Na mesa';
         erroOnline(`Você é a cadeira ${m.cadeira + 1}.`);
+        // Guardado só AQUI, e só no convidado: sentar de fato é o que prova que o código
+        // presta. O anfitrião não guarda porque `codigoNovo()` sorteia outro a cada
+        // abertura — oferecer "voltar" a ele o mandaria entrar como convidado na própria
+        // mesa morta. É o pedaço (c) da fila, e ele ainda não existe.
+        guardar('sala', { quando: Date.now(), codigo: codigoDaSala });
         // A partir daqui há com quem conversar, e `modo` já é 'convidado': a conversa do
         // saguão liga. O tamanho da lista de nomes é o número de cadeiras, e é dele que
         // sai se a mesa é em duplas — o convidado não tem MESA.n do anfitrião.
@@ -327,6 +350,33 @@ function conectarNaMesa(codigo) {
 }
 
 el('btConectar').onclick = () => conectarNaMesa(el('onlineEntrada').value.trim().toUpperCase());
+
+// ─── voltar para a mesa ──────────────────────────────────────────────────────
+// Prazo mais curto que as 12h da partida guardada, e por um motivo: a partida é SUA e não
+// depende de ninguém, enquanto a sala depende de o anfitrião ainda estar de pé. Uma mesa
+// de ontem vira um botão que mente.
+const HORAS_SALA = 2;
+
+function salaGuardada() {
+  const g = lido('sala', null);
+  if (!g || typeof g.codigo !== 'string' || !/^[A-Z0-9]{3,8}$/.test(g.codigo)) return null;
+  if (!g.quando || Date.now() - g.quando > HORAS_SALA * 3600e3) return null;
+  return g;
+}
+
+function atualizarBotaoVoltarMesa() {
+  const g = salaGuardada();
+  el('btVoltarMesa').classList.toggle('oculta', !g);
+  if (g) el('btVoltarMesa').textContent = `Voltar para a mesa ${g.codigo}`;
+}
+
+el('btVoltarMesa').onclick = () => {
+  const g = salaGuardada();
+  if (!g) { avisar('O código daquela mesa venceu.'); atualizarBotaoVoltarMesa(); return; }
+  tocarClique();
+  entrarNumaMesa();                       // prepara a tela; ela já pré-preenche o campo
+  conectarNaMesa(g.codigo);
+};
 
 function explicarErroDeRede(e) {
   const t = e && e.type;

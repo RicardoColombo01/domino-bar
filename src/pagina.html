@@ -19,6 +19,10 @@
   <div class="painel dado"><span class="rot">Pontas</span><b id="pontasVal">—</b></div>
   <div class="painel dado"><span class="rot">Monte</span><b id="monteVal">0</b></div>
   <div class="painel dado"><span class="rot">Mão</span><b id="maoVal">1</b></div>
+  <!-- Só na mesa online. O código sempre foi feito para ser compartilhado — o alfabeto
+       exclui I, O, 0 e 1 justamente porque ele é para ditar em voz alta —, e antes ele
+       desaparecia da tela no instante em que a partida começava. -->
+  <div class="painel dado oculta" id="salaPainel"><span class="rot">Mesa</span><b id="salaVal">—</b></div>
 </div>
 
 <div id="jogadores"></div>
@@ -105,6 +109,13 @@
          com o modo e a mão, para você saber o que vai retomar antes de clicar. -->
     <div class="linha acoesMenu">
       <button class="btn retomar oculta" id="btRetomar">Continuar a partida de antes</button>
+    </div>
+
+    <!-- Irmão do de cima, para o online: o código da última mesa em que você sentou como
+         convidado. Existe porque o ESPERA_VOLTA guarda a sua cadeira por 30s e, sem isto,
+         quem fechou a aba não tinha mais o código para digitar — metade do mecanismo. -->
+    <div class="linha acoesMenu">
+      <button class="btn retomar oculta" id="btVoltarMesa">Voltar para a mesa</button>
     </div>
 
     <details class="regras">

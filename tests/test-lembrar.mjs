@@ -283,6 +283,52 @@ try {
       'a partida retomada não andou: alguma cadeira ficou sem quem jogue');
     console.log(`  cadeiras ${tipos.join(', ')} — e a mesa andou até ${andou.linha} peças`);
   }
+
+  // ─── 5. o código da mesa sobrevive à recarga ───────────────────────────────
+  // O ESPERA_VOLTA guarda a sua cadeira por 30s, e até aqui quem fechava a aba não tinha
+  // mais o código para digitar: metade do mecanismo. O botão é irmão do de retomar, e
+  // como aquele tem prazo — 2h, mais curto que as 12h da partida, porque a sala depende
+  // de o anfitrião ainda estar de pé.
+  console.log('\no código da mesa volta depois de recarregar');
+  {
+    await pagina.evaluate(() => {
+      limpar();
+      localStorage.setItem('dominobar.sala', JSON.stringify({ quando: Date.now(), codigo: 'XJCR' }));
+    });
+    await recarregar();
+    const b = await pagina.evaluate(() => {
+      j.mostrarTela('telaMenu');
+      const bt = document.getElementById('btVoltarMesa');
+      return { oculto: bt.classList.contains('oculta'), texto: bt.textContent };
+    });
+    ok(!b.oculto, 'o botão de voltar para a mesa não apareceu com código guardado e no prazo');
+    ok(/XJCR/.test(b.texto), `o botão não mostrou o código: "${b.texto}"`);
+
+    // Pré-preenchido: quem volta quase sempre volta para a mesma mesa, e o campo era
+    // zerado justamente no `entrarNumaMesa`.
+    const campo = await pagina.evaluate(() => {
+      document.getElementById('btEntrar').click();
+      return document.getElementById('onlineEntrada').value;
+    });
+    ok(campo === 'XJCR', `o campo do código não veio pré-preenchido (veio "${campo}")`);
+    console.log(`  botão: "${b.texto.trim()}" · campo pré-preenchido com ${campo}`);
+
+    // VENCIDO não pode aparecer. Um código de ontem é uma mesa que não existe mais, e o
+    // botão viraria uma promessa falsa — a mesma razão do prazo da partida guardada.
+    await pagina.evaluate(() => {
+      localStorage.setItem('dominobar.sala',
+        JSON.stringify({ quando: Date.now() - 3 * 3600e3, codigo: 'XJCR' }));
+    });
+    await recarregar();
+    const venceu = await pagina.evaluate(() => {
+      j.mostrarTela('telaMenu');
+      return { oculto: document.getElementById('btVoltarMesa').classList.contains('oculta'), g: j.salaGuardada() };
+    });
+    ok(venceu.oculto && !venceu.g, 'o botão ofereceu uma mesa de 3h atrás — o prazo não valeu');
+    console.log('  vencido não aparece — mesa de 3h atrás não volta');
+
+    await pagina.evaluate(() => { try { localStorage.removeItem('dominobar.sala'); } catch (e) { void e; } });
+  }
 } catch (e) {
   console.error('  ✗ ' + e.message);
   falhas++;

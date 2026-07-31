@@ -217,6 +217,10 @@ function sairDaPartida() {
     // O anfitrião é a autoridade: ele é quem registra a derrota. Avisar antes de cair
     // fora evita depender de o `close` chegar — mas o prazo de volta cobre se não.
     if (linkAnfitriao && linkAnfitriao.open) linkAnfitriao.send({ t: 'desisto' });
+    // Sair de propósito é dizer que aquela mesa acabou para você: o botão de voltar não
+    // pode continuar oferecendo a partida que você mesmo entregou. Cair é outra coisa —
+    // ali o código FICA guardado, que é o motivo de tudo isto existir.
+    esquecer('sala');
     encerrarRede();
     P = null; vistaAtual = null;
     mostrarTela('telaMenu');
@@ -462,6 +466,10 @@ window.__jogo = {
   // pessoa em duas abas ocupa UMA cadeira, e não duas: sem isto, o take-over só daria
   // para conferir de fora pelo sintoma, que é a mesa lotar de fantasmas.
   conexoesAbertas: () => conexoes.size,
+  // O painel do código da sala. Exposto para o test-telas montar a cena de mesa online
+  // sem precisar de rede: ele chama a MESMA função que a rede chama, então o que a foto
+  // mostra é o que o jogo faz.
+  pintarSala, salaGuardada, atualizarBotaoVoltarMesa,
   get P() { return P; },
   get vista() { return vistaAtual; },
   // A ORDEM DA TELA, que desde a arrumação não é mais a de vista.mao. Quem quiser
