@@ -315,17 +315,21 @@ campo acha o que está escrito certo e mesmo assim não funciona.
 
 ---
 
-### ONDE PARAMOS — sessão de 30/07/2026
+### ONDE PARAMOS — sessões de 30 e 31/07/2026
 
 **Leia isto primeiro ao retomar.** É o estado real do trabalho, o que ele produziu, e o que
 fazer em seguida. Os detalhes de cada assunto estão nos itens numerados mais abaixo.
 
-#### Nada disto está no ar
+#### O QUE CUSTOU UM DIA INTEIRO, e não pode se repetir
 
-`develop` está **11 commits à frente de `origin/develop`**, e **`main` não foi tocada**. Como o
-Pages serve da `main`, o que está publicado ainda é a **v1.5.0** — nenhuma mudança desta sessão
-chegou a ninguém. Publicar exige `release/*` → merge em `main` com tag, pelo GitFlow do topo
-deste arquivo.
+Em 31/07 o Ricardo testou o jogo e **viu os mesmos defeitos**, e a conclusão natural foi que
+nada tinha sido feito. Estava tudo feito e tudo commitado — **e nada tinha saído da máquina**.
+Ele testou o `github.io`, que serve da `main`, e a `main` era a v1.5.0.
+
+A lição não é "lembrar de publicar". É que **o projeto tem duas travas contra bundle velho
+(`merge=ours` no `.gitattributes` e `npm run check`) e nenhuma contra trabalho não enviado** —
+porque enviar é decisão de gente. Ao FIM de qualquer sessão, dizer em voz alta e por escrito
+onde o trabalho está: commitado ≠ enviado ≠ publicado. São três lugares diferentes.
 
 #### O que mudou, e o que deu
 
@@ -338,8 +342,8 @@ deste arquivo.
 | 3(b) · voltar | `guardar('sala')` + botão no menu, prazo de 2 h | sobrevive à recarga |
 | 9 e 10 · gaveta | conversa/contagem viram gaveta modal no celular | **20 falhas → 0** |
 | 11 · intermitência | embaralho das cenas semeado | metade: ver ressalva |
-
-Suítes ao fim da sessão: `npm test` (3/3), `telas`, `lembrar` e `online` **todas verdes**.
+| **6 e 7** · toque | limiar por ponteiro + `foiMesmoArrasto` + `visibilitychange`/captura | **5 asserções novas**, todas vermelhas no código antigo |
+| **8** · deitado | `#topo` vira faixa entre as colunas; corte do nome na PALAVRA | **17 falhas → 0**; diagnóstico da fila estava INVERTIDO |
 
 #### A ressalva que não pode se perder
 
@@ -351,28 +355,19 @@ contrário também**.
 
 #### O plano, em ordem
 
-1. **Item 7 — o clique que não joga, no celular.** O mais barato e o mais sentido por quem
-   joga. O relato já isolou o candidato: só no celular, sem sair da tela → **limiar de arrasto
-   de 9 px**, apertado demais para dedo. Mouse não treme; é a assimetria que aponta.
-2. **Item 6 — o toque preso.** `if (arrasto) return;` no `11-interacao.js`: dedo que sai da
-   tela nunca manda `pointerup`, e todo toque seguinte é descartado. **Não existe um único
-   `visibilitychange` no projeto** — é o gancho que falta, com `pointercancel` e
-   `lostpointercapture`.
-3. **Item 11 — fechar a intermitência.** Parar os temporizadores de bot durante a montagem da
+1. **PUBLICAR.** Nove itens fechados, entre eles um conserto de regra de pontuação e um
+   vazamento de mão pela cadeira errada. O Ricardo pediu 6, 7 e 8 antes da release — os três
+   estão fechados, então a `release/1.6.0` é o próximo passo, não um item de fila.
+2. **Item 11 — fechar a intermitência.** Parar os temporizadores de bot durante a montagem da
    cena. Vem antes de qualquer trabalho grande de tela, senão a suíte não serve para julgá-lo.
-4. **Item 8 — celular deitado.** O `overflow`/`ellipsis` dos nomes só existe em retrato. Já
-   melhorou de lado (a barra de ações subiu no deitado), mas o layout próprio continua devendo.
-5. **Item 3(c) — voltar como anfitrião.** O maior. Reivindicar o mesmo id do PeerJS, e para
+3. **Item 3(c) — voltar como anfitrião.** O maior. Reivindicar o mesmo id do PeerJS, e para
    isso **inverter** o `unavailable-id` do `tentarAbrir`, que hoje sorteia outro código.
-6. **Item 2 — o fechamento forçado.** **Bloqueado esperando o Ricardo:** a mesa, as mãos, o
+4. **Item 2 — o fechamento forçado.** **Bloqueado esperando o Ricardo:** a mesa, as mãos, o
    lance, o modo, e se havia monte.
 
 #### Perguntas em aberto para o Ricardo
 
-- O **caso concreto** do item 2 (acima).
-- **Publicar ou não** o que já está em `develop`. São sete itens fechados, incluindo um
-  conserto de regra de pontuação e um de vazamento de mão pela cadeira errada — este último é
-  argumento forte para uma `release/1.6.0` cedo.
+- O **caso concreto** do item 2 (acima). É a única coisa que trava um item inteiro.
 
 ### 1. Lá-e-lô só existe com as pontas DIFERENTES ✔ feito
 
@@ -644,12 +639,63 @@ Duas armadilhas pagas ao escrever esse teste:
   `pointerup`; quem quiser simular o dedo sumindo chama `releasePointerCapture` na mão, que é
   o que o sistema faz.
 
-### 8. Nome cortado com o celular deitado — A FAZER
+### 8. Nome cortado com o celular deitado ✔ feito (31/07/2026)
 
-De **30/07/2026**, e é a **única sobra da Fila 2** aparecendo em campo. O `overflow`, o
-`ellipsis` e a rolagem dos nomes existem só dentro do `@media (orientation: portrait)`.
-Deitado o jogo cai no `@media (max-height: 560px)`, que só aperta o `gap` — o HUD de celular
-deitado nunca foi um layout próprio, é o de tela baixa reaproveitado.
+De **30/07/2026**, e é a **única sobra da Fila 2** aparecendo em campo.
+
+**A MEDIÇÃO CONTRADISSE O DIAGNÓSTICO, e essa é a lição do item.** A fila supunha que faltava
+`overflow`/`ellipsis` no deitado. Medindo com nomes de 14 caracteres (o `maxlength` do menu),
+o nome **cabe** deitado — 109 px de 109 px disponíveis. Quem corta é o **retrato**: com quatro
+jogadores a faixa dá **68 px** para 93–95 px de texto, e "Maria Fernanda" virava "Maria Fer…".
+
+O que existe deitado é outra coisa, e de longe se parece com nome cortado: **o `#topo` monta
+em cima da lista de jogadores.** Ele é centrado na TELA (454 px de largura) enquanto os três
+botões ocupam 14→146 px à esquerda e o `#jogadores` fica ancorado à direita. Cada caixa cabe
+sozinha e **nenhuma pergunta pela outra**:
+
+| tela | `#topo` | `#jogadores` | sobreposição |
+|---|---|---|---|
+| paisagem 844×390 | 195–649 | 693–830 | — |
+| paisagem 736×414 | 141–595 | 585–722 | 10 px |
+| paisagem 667×375 | 107–561 | 516–653 | 45 px |
+| paisagem 640×360 | 93–547 | 489–626 | **58 px** |
+
+**Por que a suíte jurava que o deitado estava bem:** ela só tinha `paisagem 844×390`, que é o
+**maior** deitado que existe em celular — e o único onde isto não acontece. Uma tela de teste
+escolhida pelo caso fácil é pior que nenhuma, porque ela dá um verde que parece cobertura.
+Entrou `paisagem 640×360`, e com ela **17 falhas** de cara.
+
+**O conserto — CADA FAIXA TEM DONO** (escolha do Ricardo em 31/07/2026). O `#topo` deixa de ser
+centrado na tela e vira uma faixa entre as duas colunas, por construção incapaz de alcançá-las.
+Como a faixa é estreita, sai o que se deduz de outro lugar: o "até 6" (está no menu e na tela de
+fim) e parte do nome do time (está na lista ao lado).
+
+- **As reservas são a largura da coluna MAIS a margem dela.** Reservar 124 px para uma coluna
+  que ocupa 130 (116 de largura + 14 de âncora) deixava 6 px de invasão — invisível a olho e
+  260 px² para o teste, que é exatamente para isso que ele serve.
+- **`#jogadores` ganhou largura FIXA**, e é o que torna a conta acima verdadeira: com largura de
+  conteúdo, um nome longo empurraria a coluna de volta para dentro da faixa do topo.
+- **Zerar o `transform` é obrigatório** — mesma armadilha que a gaveta pagou no item 10.
+
+**No retrato, o corte passou a ser na PALAVRA** (escolha do Ricardo): `nomeEmPartes()` em
+`13-hud.js` põe o sobrenome num `<i class="resto">` e o CSS o esconde onde a faixa aperta.
+"Maria Fernanda" vira **"Maria"**, inteiro e legível de relance, em vez de "Maria Fer…" — cortar
+no meio da palavra é o que fazia o nome deixar de identificar quem é. O ellipsis continua ali
+para o primeiro nome que ainda assim não couber.
+
+**As duas metades passam pelo `escapar`.** O nome do convidado é entrada de fora e fatiar uma
+string não a torna segura — repare que um nome-ataque como `<img src=x>` **também tem espaço**,
+então o corte cai no meio dele. Sai `&lt;img` + `<i class="resto"> src=x&gt;</i>`.
+
+**A barra de ações desceu para a faixa esquerda junto**, e o número explica por quê. `#acoes`
+tem a MESMA largura nas duas paisagens (x 14→264), mas o arco dos adversários não: em 844×390
+ele começa em 271 e escapa por **7 px**; em 640×360 começa em **181**, porque a mesa é mais
+estreita, e a barra monta em cima de 83 px de peça. Prendê-la à faixa que já era dela
+(`max-width` + `flex-wrap`) resolve os dois sem tocar no 3D. O caminho de fazer a mesa desviar
+existe (`apertoDaMesa`), e continua sendo o mais caro.
+
+**Sete pixels de folga não são um conserto, são sorte.** Era exatamente essa a folga em
+844×390, a única paisagem que a suíte tinha — mais um jeito de o mesmo defeito ter passado.
 
 ### 9. Peças "bugadas" em vertical = peças POR BAIXO DE PAINEL ✔ feito (ver item 10)
 
