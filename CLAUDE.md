@@ -178,14 +178,22 @@ motivo de este arquivo existir.
 fazer mora, e não em memória de sessão: memória não viaja com o repositório nem é lida por
 quem abrir o projeto amanhã.
 
-Da Fila 2 sobrou só uma coisa: o HUD de **celular deitado** ainda é o de tela baixa
-(`@media (max-height: 560px)`), não um layout próprio. O `#log` que faltava ali deixou de
-existir — a conversa o absorveu na v1.5.0.
+**A Fila 2 está fechada desde a v1.6.0.** O que sobrava dela era o HUD de **celular
+deitado**, que era o de tela baixa reaproveitado; o item 8 o transformou em layout próprio
+(cada faixa com dono). O `#log` que faltava ali deixou de existir — a conversa o absorveu
+na v1.5.0.
 
 Fora de fila, o que a v1.5.0 acrescentou além dos itens: a **conversa da mesa** (chat geral
 e por dupla, com a narração no mesmo fio, e conversa também no saguão), **voltar para a
 mesma partida** depois de a página morrer, e a **legibilidade da mesa** (sRGB, pinta maior,
 marca da última jogada).
+
+A **v1.6.0** é a primeira release cujos itens vieram quase todos de **jogo de verdade, no
+celular**, e não de leitura de código. Ela leva: o lá-e-lô com as pontas certas (1), a
+cadeira que passa a ser de quem é dono dela (4) — que era **vazamento de mão**, não só
+inconveniência —, o "Entrar" que parava de lotar a mesa (5), o código da sala visível e o
+caminho de volta (3a, 3b), a gaveta do celular (9, 10), e o toque que o celular engolia
+(6, 7) mais o deitado com layout próprio (8).
 
 ## Fila 1 — o bug dos pontos ✔ feito (v1.0.1)
 
@@ -355,9 +363,8 @@ contrário também**.
 
 #### O plano, em ordem
 
-1. **PUBLICAR.** Nove itens fechados, entre eles um conserto de regra de pontuação e um
-   vazamento de mão pela cadeira errada. O Ricardo pediu 6, 7 e 8 antes da release — os três
-   estão fechados, então a `release/1.6.0` é o próximo passo, não um item de fila.
+1. ~~**PUBLICAR.**~~ ✔ **v1.6.0 publicada em 31/07/2026.** Nove itens, entre eles um conserto
+   de regra de pontuação e um vazamento de mão pela cadeira errada.
 2. **Item 11 — fechar a intermitência.** Parar os temporizadores de bot durante a montagem da
    cena. Vem antes de qualquer trabalho grande de tela, senão a suíte não serve para julgá-lo.
 3. **Item 3(c) — voltar como anfitrião.** O maior. Reivindicar o mesmo id do PeerJS, e para
