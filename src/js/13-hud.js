@@ -61,6 +61,23 @@ function nomeDoTime(vista, time) {
   return `${escapar(vista.cadeiras[time].nome)} e ${escapar(vista.cadeiras[time + 2].nome)}`;
 }
 
+// O nome em DUAS PARTES, para a tela decidir quanto dele cabe. Em faixa estreita o CSS
+// esconde o resto e sobra o primeiro nome inteiro — "Maria Fernanda" vira "Maria", e não
+// "Maria Fer…". Cortar no meio da palavra é o que fazia o nome deixar de identificar
+// quem é, que era o ponto do item 8: com quatro jogadores em retrato a caixa dá 68px
+// para 95px de texto.
+//
+// Quem escapa continua sendo o `escapar`, e as DUAS metades passam por ele: o nome do
+// convidado é entrada de fora, e fatiar uma string não a torna segura. Repare que um
+// nome-ataque como `<img src=x>` também tem espaço, então o corte cai no meio dele — e
+// mesmo assim as duas bandas saem escapadas, cada uma por si.
+function nomeEmPartes(nome) {
+  const n = String(nome == null ? '' : nome);
+  const corte = n.indexOf(' ');
+  if (corte < 0) return escapar(n);
+  return escapar(n.slice(0, corte)) + `<i class="resto">${escapar(n.slice(corte))}</i>`;
+}
+
 function desenharHUD(vista) {
   HUD.pontas.textContent = vista.pontas ? vista.pontas.join('  ·  ') : '—';
   HUD.monte.textContent = vista.monte;
@@ -76,7 +93,7 @@ function desenharHUD(vista) {
   // Um cartão por cadeira, na ordem em que a vez anda. O da vez acende.
   HUD.jogadores.innerHTML = vista.cadeiras.map((c, i) => `
     <div class="jog ${i === vista.vez ? 'davez' : ''} ${i === vista.cadeira ? 'euu' : ''}">
-      <span class="nome">${escapar(c.nome)}</span>
+      <span class="nome">${nomeEmPartes(c.nome)}</span>
       <span class="tipo">${ETIQUETA[c.tipo] || c.tipo}</span>
       <span class="pecas">${'▮'.repeat(Math.min(vista.naMao[i], 9))}<i>${vista.naMao[i]}</i></span>
     </div>`).join('');
