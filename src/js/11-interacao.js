@@ -33,10 +33,13 @@ addEventListener('pointermove', mirar);
 
 // O dedo não fica em cima da tela como o mouse: sem soltar a mira, a peça em que você
 // tocou por último ficava erguida para sempre, como um hover que nunca acaba.
-const soltarMira = ev => {
-  if (ev.pointerType === 'mouse') return;
+function largarMira() {
   apontada = null;
   ponteiro.set(9, 9);                 // fora de qualquer coisa
+}
+const soltarMira = ev => {
+  if (ev.pointerType === 'mouse') return;
+  largarMira();
 };
 addEventListener('pointerup', soltarMira);
 addEventListener('pointercancel', soltarMira);
@@ -113,8 +116,21 @@ function confirmarJogada(lado) {
 // Um gesto só, dois significados, separados por DISTÂNCIA e não por tempo: passou de
 // alguns pixels, virou arrasto; não passou, foi toque. Limiar de tempo (o "toque longo")
 // atrasaria o gesto comum — escolher a peça — para servir ao raro.
-let arrasto = null;                 // { id, k, x0, y0, arrastando }
-const LIMIAR_ARRASTO = 9;           // px
+let arrasto = null;                 // { id, k, x0, y0, arrastando, mexeu, capturado }
+
+// O dedo TREME e o mouse não. 9 px é uma mão apoiada numa mesa; num celular na mão é
+// menos que a oscilação de um toque PARADO — o toque virava arrasto sozinho, soltava sem
+// ter reordenado nada e nunca contava como clique. Era o defeito de campo do item 7:
+// "às vezes o clique não joga a peça", só no celular. A assimetria era a evidência.
+const LIMIAR_ARRASTO = { mouse: 9, dedo: 18 };   // px
+const limiarDe = ev => ev.pointerType === 'mouse' ? LIMIAR_ARRASTO.mouse : LIMIAR_ARRASTO.dedo;
+
+// Passar do limiar não é o mesmo que ARRASTAR, e essa diferença é a rede embaixo do
+// número acima: um limiar é sempre um chute, 18 px serve para a maioria dos dedos e vai
+// continuar sendo pouco para alguém. Aqui a pergunta é pelo RESULTADO — um gesto que
+// atravessou o limiar e não trocou nenhuma peça de lugar não arrumou nada, e a única
+// intenção que sobra é a de tocar.
+const foiMesmoArrasto = g => g.arrastando && g.mexeu;
 
 const emArrasto = () => !!(arrasto && arrasto.arrastando);
 
@@ -135,7 +151,16 @@ addEventListener('pointerdown', ev => {
   // Um dedo de cada vez. Sem isto, um segundo toque sobrescrevia `arrasto` e a peça do
   // primeiro dedo ficava com `arrastando = true` para sempre — animarMao a ignora, e ela
   // congelava no ar. Dois dedos na tela é acidente comum no celular.
-  if (arrasto) return;
+  //
+  // Mas "de cada vez" precisa ACABAR, e era o item 6: um dedo que sai pela beirada da tela
+  // ainda apoiado nunca manda `pointerup`, `arrasto` fica preenchido para sempre e todo
+  // toque seguinte cai neste `return`. O render loop continua rodando — por isso parece
+  // congelado sem estar. A captura é quem sabe a verdade: se pedimos captura daquele
+  // ponteiro e o navegador já a tirou de nós, o dedo foi embora sem avisar.
+  if (arrasto) {
+    if (arrasto.capturado && !renderer.domElement.hasPointerCapture(arrasto.id)) encerrarArrasto();
+    else return;
+  }
   // O ponteiro só era atualizado no pointermove — o que no mouse é sempre verdade e no
   // dedo não é: o primeiro toque da tela não move nada antes de tocar, então a mira
   // ficava na posição do toque ANTERIOR e o raycast acertava outra peça.
@@ -148,9 +173,14 @@ addEventListener('pointerdown', ev => {
   // Abre o gesto SEMPRE, seja sua vez ou não: arrumar a mão enquanto os bots jogam é
   // metade da utilidade de poder arrumar. O portão de turno desceu para o toque, no
   // pointerup — são dois portões diferentes, e juntá-los num só quebra um dos dois.
-  arrasto = { id: ev.pointerId, k: chave(naMao[alvo.i].peca), x0: ev.clientX, y0: ev.clientY, arrastando: false };
+  arrasto = { id: ev.pointerId, k: chave(naMao[alvo.i].peca), x0: ev.clientX, y0: ev.clientY,
+              arrastando: false, mexeu: false, capturado: false };
   if (renderer.domElement.setPointerCapture) {
-    try { renderer.domElement.setPointerCapture(ev.pointerId); } catch (e) { void e; }
+    // `capturado` guarda se o pedido PEGOU. Sem essa marca, o guarda acima não saberia
+    // distinguir "a captura sumiu" de "nunca houve captura", e num navegador sem captura
+    // ele largaria o arrasto do primeiro dedo a cada segundo toque — trocando o toque
+    // preso pela peça congelada no ar, que é o bug que aquele guarda existe para impedir.
+    try { renderer.domElement.setPointerCapture(ev.pointerId); arrasto.capturado = true; } catch (e) { void e; }
   }
 });
 
@@ -160,7 +190,7 @@ addEventListener('pointermove', ev => {
   if (!m) { encerrarArrasto(); return; }              // a mão mudou embaixo do dedo
 
   if (!arrasto.arrastando) {
-    if (Math.hypot(ev.clientX - arrasto.x0, ev.clientY - arrasto.y0) < LIMIAR_ARRASTO) return;
+    if (Math.hypot(ev.clientX - arrasto.x0, ev.clientY - arrasto.y0) < limiarDe(ev)) return;
     arrasto.arrastando = true;
     m.arrastando = true;
     cancelarEscolha();
@@ -176,12 +206,13 @@ addEventListener('pointermove', ev => {
 
   const destino = slotSob(ev.clientX, ev.clientY);
   const atual = naMao.indexOf(m);
-  if (destino >= 0 && destino !== atual) moverNaMao(atual, destino);
+  // `mexeu` é o que separa arrastar de tremer: ver `foiMesmoArrasto`.
+  if (destino >= 0 && destino !== atual) { moverNaMao(atual, destino); arrasto.mexeu = true; }
 });
 
 function soltarArrasto(ev) {
   if (!arrasto || (ev && ev.pointerId !== arrasto.id)) return;
-  const foiArrasto = arrasto.arrastando;
+  const foiArrasto = foiMesmoArrasto(arrasto);
   const k = arrasto.k;
   encerrarArrasto();
 
@@ -201,6 +232,18 @@ function soltarArrasto(ev) {
 }
 addEventListener('pointerup', soltarArrasto);
 addEventListener('pointercancel', () => encerrarArrasto());
+
+// O gesto pode acabar sem que o navegador avise pelo PONTEIRO: a aba vai para o fundo, o
+// sistema abre a gaveta de notificações, o aparelho troca de app. Nenhum desses manda
+// `pointerup`, e sem isto o `arrasto` sobrevive ao gesto e tranca todo toque seguinte —
+// o item 6. Não existia um único `visibilitychange` no projeto inteiro; é o gancho que
+// faltava, e o `blur` cobre a janela que perde o foco sem chegar a ser escondida.
+//
+// Repare que aqui NÃO se pergunta se foi arrasto ou toque: um gesto interrompido pelo
+// sistema não é escolha de ninguém, e completá-lo como toque jogaria por você.
+function desistirDoGesto() { encerrarArrasto(); largarMira(); }
+document.addEventListener('visibilitychange', () => { if (document.hidden) desistirDoGesto(); });
+addEventListener('blur', desistirDoGesto);
 
 // POR QUE esta peça não dá. São três motivos diferentes e o jogador merece o certo:
 // dizer "não encaixa em nenhuma ponta" com a mesa vazia — onde toda peça encaixa — é

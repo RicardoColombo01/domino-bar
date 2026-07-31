@@ -125,9 +125,24 @@ secao('tipos de batida');
   ok(mod.tipoDaBatida([2, 4], linha) === 'laelo', 'peça comum servindo nas duas = lá-e-lô');
   ok(mod.tipoDaBatida([2, 2], linha) === 'carroca', 'carroça numa ponta só = carroça');
 
+  // PONTAS IGUAIS NÃO SÃO DOIS LADOS — regra da casa, e o contrário do que este teste
+  // afirmava até a v1.5.0. Com as duas pontas em 3, a 3|6 encosta num 3 só e o outro
+  // continua vivo: batida simples. A cruzada é o oposto e exige as pontas iguais, então
+  // as duas linhas abaixo têm de discordar uma da outra — se concordassem, seria sinal
+  // de que voltaram a compartilhar a mesma pergunta.
   const iguais = [[3, 5], [5, 5], [5, 3]];                 // pontas 3 e 3
   ok(mod.tipoDaBatida([3, 3], iguais) === 'cruzada', 'carroça com as duas pontas iguais = cruzada');
-  ok(mod.tipoDaBatida([3, 6], iguais) === 'laelo', 'peça comum com as duas pontas iguais = lá-e-lô');
+  ok(mod.tipoDaBatida([3, 6], iguais) === 'simples', 'pontas iguais não são dois lados: é batida simples');
+  ok(mod.tipoDaBatida([6, 6], iguais) === 'carroca', 'carroça de outro número não cruza nada');
+
+  // E o contraexemplo que prova que o `e !== d` não comeu o lá-e-lô junto.
+  ok(mod.tipoDaBatida([2, 4], linha) === 'laelo', 'com as pontas DIFERENTES, aí sim é lá-e-lô');
+
+  // A 3|6 cabe nos dois lados de verdade — `jogadasValidas` devolve duas. A regra é
+  // sobre os NÚMEROS das pontas, não sobre a contagem de encaixes, e confundir as duas
+  // coisas é exatamente o que criou o defeito.
+  ok(mod.jogadasValidas([[3, 6]], iguais).length === 2,
+    'a 3|6 encaixa nos dois lados mesmo não sendo lá-e-lô — a regra é sobre os números');
 }
 
 // ─── não dá para armar a tranca ─────────────────────────────────────────────

@@ -151,22 +151,49 @@ As pontas são o primeiro e o último número; jogar na esquerda é um `unshift`
   `file://`, onde o armazenamento é do domínio inteiro: a partida guardada por uma cena
   fazia a seguinte abrir com "Continuar a partida de antes" na foto do menu. É a mesma
   lição do `contar()` — cada cena diz o que quer, e agora há `semGuardado()`.
+- **Fronteira de segurança tem CHAVE, e a chave também precisa de guarda.** `visaoDe(cadeira)`
+  estava correta o tempo todo e mesmo assim a mão vazava: o *número da cadeira* era entregue
+  por ordem de chegada, então bastava pegar a vaga de alguém para receber a mão dele. Ao
+  auditar o invariante 3, perguntar as duas coisas — "esta função vaza?" **e** "quem decide o
+  argumento dela?".
+- **Contexto isolado do Puppeteer derruba o cache HTTP.** Trocar `newPage()` por
+  `createBrowserContext().newPage()` para dar `localStorage` separado a cada aba fez cada uma
+  rebaixar three.js e PeerJS do CDN: a primeira levou 8 s e a segunda estourou os 45 s de
+  navegação. Quando o que se quer é só separar o armazenamento, `evaluateOnNewDocument`
+  injetando o valor custa zero.
+- **`catch` que guarda só a `message` esconde ONDE.** O `test-online.mjs` engolia o stack e
+  transformava "falhou em algum lugar dos 300 lances do teste" num palpite caro. Hoje
+  `DOMINO_DEBUG=1` imprime. Vale para qualquer `catch` que exista para transformar falha de
+  rede em aviso: ele também engole os defeitos de verdade.
 
 ---
 
 # FILA DE TRABALHO
 
-**As quatro filas estão fechadas (v1.5.0).** Ficam registradas abaixo porque o que elas
-ensinaram sobre este código continua valendo — é o motivo de este arquivo existir.
+**As filas 1 a 4 estão fechadas (v1.5.0); a Fila 5 está aberta.** As fechadas ficam
+registradas abaixo porque o que elas ensinaram sobre este código continua valendo — é o
+motivo de este arquivo existir.
 
-Da Fila 2 sobrou só uma coisa: o HUD de **celular deitado** ainda é o de tela baixa
-(`@media (max-height: 560px)`), não um layout próprio. O `#log` que faltava ali deixou de
-existir — a conversa o absorveu na v1.5.0.
+**Toda ideia e toda implementação combinada entram na Fila 5.** É aqui que o trabalho por
+fazer mora, e não em memória de sessão: memória não viaja com o repositório nem é lida por
+quem abrir o projeto amanhã.
+
+**A Fila 2 está fechada desde a v1.6.0.** O que sobrava dela era o HUD de **celular
+deitado**, que era o de tela baixa reaproveitado; o item 8 o transformou em layout próprio
+(cada faixa com dono). O `#log` que faltava ali deixou de existir — a conversa o absorveu
+na v1.5.0.
 
 Fora de fila, o que a v1.5.0 acrescentou além dos itens: a **conversa da mesa** (chat geral
 e por dupla, com a narração no mesmo fio, e conversa também no saguão), **voltar para a
 mesma partida** depois de a página morrer, e a **legibilidade da mesa** (sRGB, pinta maior,
 marca da última jogada).
+
+A **v1.6.0** é a primeira release cujos itens vieram quase todos de **jogo de verdade, no
+celular**, e não de leitura de código. Ela leva: o lá-e-lô com as pontas certas (1), a
+cadeira que passa a ser de quem é dono dela (4) — que era **vazamento de mão**, não só
+inconveniência —, o "Entrar" que parava de lotar a mesa (5), o código da sala visível e o
+caminho de volta (3a, 3b), a gaveta do celular (9, 10), e o toque que o celular engolia
+(6, 7) mais o deitado com layout próprio (8).
 
 ## Fila 1 — o bug dos pontos ✔ feito (v1.0.1)
 
@@ -278,6 +305,506 @@ terminaria, com os fantasmas nas pontas e a barra de confirmar aberta. Ninguém 
 você. Só na sua vez, porque fora dela seria prometer jogada que o motor recusa.
 
 A fila 4 está fechada.
+
+## Fila 5 — as regras que ainda estão erradas
+
+**Comece pelo "ONDE PARAMOS" logo abaixo** — ele tem o estado, os números e o plano em ordem.
+
+**Esta fila é o lugar de toda ideia e de toda implementação combinada.** Ideia nova, minha
+ou do Ricardo, entra aqui — não em memória de sessão, que não viaja com o repositório e não
+é lida por quem abrir o projeto amanhã.
+
+Os itens 1 e 2 vieram do Ricardo em **29/07/2026** e são regra de casa: não se deduzem do
+código nem se resolvem por bom senso de programador. O item 3 é de **30/07/2026** e é o
+pedaço que falta para a reconexão do online valer. Os itens **4 a 11** são de **30/07/2026** e
+saíram de jogo de verdade, no celular — são a primeira leva de defeitos relatados **em campo**,
+e não de leitura de código. Vale a distinção: a leitura acha o que está escrito errado, o
+campo acha o que está escrito certo e mesmo assim não funciona.
+
+---
+
+### ONDE PARAMOS — sessões de 30 e 31/07/2026
+
+**Leia isto primeiro ao retomar.** É o estado real do trabalho, o que ele produziu, e o que
+fazer em seguida. Os detalhes de cada assunto estão nos itens numerados mais abaixo.
+
+#### O QUE CUSTOU UM DIA INTEIRO, e não pode se repetir
+
+Em 31/07 o Ricardo testou o jogo e **viu os mesmos defeitos**, e a conclusão natural foi que
+nada tinha sido feito. Estava tudo feito e tudo commitado — **e nada tinha saído da máquina**.
+Ele testou o `github.io`, que serve da `main`, e a `main` era a v1.5.0.
+
+A lição não é "lembrar de publicar". É que **o projeto tem duas travas contra bundle velho
+(`merge=ours` no `.gitattributes` e `npm run check`) e nenhuma contra trabalho não enviado** —
+porque enviar é decisão de gente. Ao FIM de qualquer sessão, dizer em voz alta e por escrito
+onde o trabalho está: commitado ≠ enviado ≠ publicado. São três lugares diferentes.
+
+#### O que mudou, e o que deu
+
+| item | o que ficou | o número |
+|---|---|---|
+| 1 · lá-e-lô | pontas iguais não são dois lados; cruzada mantida em 4 | força do bot 59,8% → **57,8% (3,8σ)**, limiar preservado |
+| 4 · identidade | `clienteId` + `sentar()` + `donoDaCadeira` reservando a cadeira | volta na cadeira certa **com a mesma mão**; 2 abas = 1 conexão |
+| 5 · reentrada | guarda no `btConectar` + retorno visual | um clique = uma conexão |
+| 3(a) · ver | código no `#topo`, copiável | — |
+| 3(b) · voltar | `guardar('sala')` + botão no menu, prazo de 2 h | sobrevive à recarga |
+| 9 e 10 · gaveta | conversa/contagem viram gaveta modal no celular | **20 falhas → 0** |
+| 11 · intermitência | embaralho das cenas semeado | metade: ver ressalva |
+| **6 e 7** · toque | limiar por ponteiro + `foiMesmoArrasto` + `visibilitychange`/captura | **5 asserções novas**, todas vermelhas no código antigo |
+| **8** · deitado | `#topo` vira faixa entre as colunas; corte do nome na PALAVRA | **17 falhas → 0**; diagnóstico da fila estava INVERTIDO |
+
+#### A ressalva que não pode se perder
+
+**Uma rodada verde do `npm run telas` NÃO é prova — rode duas.** Semear o `Math.random` matou
+a variação do embaralho, mas a espera de 350 ms das cenas ainda deixa passar um número variável
+de temporizadores de bot: a mesma cena dá `mesa 0.27` numa rodada e `0.31` na outra. Enquanto
+o item 11 não fechar, uma falha isolada do `telas` pode ser moeda, não regressão — **e o
+contrário também**.
+
+#### O plano, em ordem
+
+1. ~~**PUBLICAR.**~~ ✔ **v1.6.0 publicada em 31/07/2026.** Nove itens, entre eles um conserto
+   de regra de pontuação e um vazamento de mão pela cadeira errada.
+2. **Item 11 — fechar a intermitência.** Parar os temporizadores de bot durante a montagem da
+   cena. Vem antes de qualquer trabalho grande de tela, senão a suíte não serve para julgá-lo.
+3. **Item 3(c) — voltar como anfitrião.** O maior. Reivindicar o mesmo id do PeerJS, e para
+   isso **inverter** o `unavailable-id` do `tentarAbrir`, que hoje sorteia outro código.
+4. **Item 2 — o fechamento forçado.** **Bloqueado esperando o Ricardo:** a mesa, as mãos, o
+   lance, o modo, e se havia monte.
+
+#### Perguntas em aberto para o Ricardo
+
+- O **caso concreto** do item 2 (acima). É a única coisa que trava um item inteiro.
+
+### 1. Lá-e-lô só existe com as pontas DIFERENTES ✔ feito
+
+A batida de lá-e-lô (2 pontos) só vale quando as duas pontas da mesa são de números
+**diferentes** e a peça da batida carrega os dois — ou seja, quando ela realmente podia ter
+entrado de qualquer um dos lados.
+
+Pontas iguais não são "dois lados". Nas palavras do Ricardo: pontas `3` e `3`, jogador bate
+com a `3|1` — **não** conta como bater dos dois lados, é batida simples. Para valer, teria de
+ser uma ponta `3` e a outra `1`.
+
+O defeito estava em `tipoDaBatida` (`03-regras.js`), nesta linha:
+
+```js
+const nasDuas = (peca[0] === e || peca[1] === e) && (peca[0] === d || peca[1] === d);
+```
+
+Com `e === d === 3` e a peça `[3,1]`, os dois lados do `&&` davam verdadeiro **pelo mesmo 3**.
+
+**A cruzada continua valendo 4** — decisão do Ricardo em 30/07/2026. E é por causa dela que
+não deu para só acrescentar `e !== d` ao `nasDuas` compartilhado: a cruzada é o caso
+**oposto**, ela EXIGE as pontas iguais, porque é a carroça daquele número casando com as
+duas. Um `e !== d` comum teria matado a cruzada junto. Hoje os dois ramos fazem perguntas
+diferentes, e o comentário acima da função deixou de dizer que "a tabela cai sozinha".
+
+**Por que sobreviveu tanto tempo:** `PONTOS` dá 2 para `laelo` e 2 para `carroca`, então uma
+carroça classificada como lá-e-lô continua marcando o valor certo por acidente. O placar só
+mente quando a batida devia ser **simples (1)** e sai como lá-e-lô (2). Defeito que erra de
+graça na maioria dos casos é o que menos aparece e o que mais tempo dura.
+
+**O teste gravava a regra errada** (`test-regras.mjs`, "peça comum com as duas pontas iguais
+= lá-e-lô"), então a correção começou invertendo uma asserção. Ficou junto o caso que
+documenta a confusão de origem: a `3|6` **encaixa nos dois lados de verdade** em pontas `3` e
+`3` — `jogadasValidas` devolve duas. A regra é sobre os NÚMEROS das pontas, não sobre a
+contagem de encaixes, e trocar uma coisa pela outra é o que criou o defeito.
+
+`05-bot.js` pontua batida com `PONTOS[tipoDaBatida]`, então as partidas semeadas se mexeram:
+a força do bot foi de 359 × 241 (59,8%) para **347 × 253 (57,8%, 3,8σ)**. A asserção é
+**limiar** (`> 2σ`), não número fixo — foi de propósito que ela foi escrita assim, e é por
+isso que uma mudança semântica de regra não a derruba.
+
+**Pergunta que estava aberta e foi respondida:** o mesmo `nasDuas` alimentava a **cruzada** (4
+pontos), na linha de cima. Uma carroça `6|6` com as duas pontas em `6` cai no mesmo
+raciocínio — só encosta de um lado, o outro `6` continua vivo —, então pela regra do lá-e-lô
+ela *poderia* valer `carroca` (2). **O Ricardo decidiu que continua cruzada (4).** A regra da
+casa não é simétrica, e está tudo bem que não seja: a cruzada é a batida das pontas iguais, e
+o lá-e-lô é a das pontas diferentes. Registrado aqui porque nenhuma leitura de código chega
+a essa resposta — as duas saídas eram defensáveis.
+
+### 2. Ainda dá para FORÇAR o fechamento — BLOQUEADO, esperando o caso do Ricardo
+
+O Ricardo consegue forçar o jogo a trancar. A regra do fechamento armado existe (ver "Regras
+da casa" abaixo) e não está fechando o buraco todo.
+
+A regra, nas palavras dele:
+
+- **Fechamento natural** = você não consegue evitar que feche. **Permitido.**
+- **Fechamento forçado** = você escolhe o lance que faz não haver mais lance nenhum.
+  **Proibido.**
+- Se o lance fecha uma ponta mas **ainda sobram lances possíveis**, está tudo bem.
+- **Exceção:** bucha jogada por último é natural. Exemplo dele — as duas pontas em `6` e a
+  única peça na mão é a `6|6`: pode jogar, e mesmo fechando o jogo isso é natural.
+
+**Antes de mexer, pedir um caso concreto** (a mesa, as mãos, o lance usado). É o insumo que
+falta e vale mais que qualquer leitura de código: `fechamentosArmados` tem cinco condições,
+cada uma paga com um bug, e corrigir a errada reabre um dos antigos.
+
+**Candidato mais forte, NÃO confirmado:** a regra tem **um lance de profundidade**. Ela barra
+o lance que fecha agora, mas não impede armar em dois — jogar algo que não fecha e deixar a
+posição em que, na vez seguinte, o único lance possível fecha. Aí ele passa como natural
+justamente porque `jogadas.length > 1` é falso. Hipótese de leitura, não diagnóstico.
+
+**O que não pode ser tocado ao corrigir:** a conta usa só a mesa e a sua PRÓPRIA mão. Se
+olhasse a mão dos outros, a jogada desaparecendo da tela contaria ao jogador que ninguém tem
+aquele número — e isso é vazamento de informação, irmão do que a `visaoDe` existe para
+impedir.
+
+### 3. O código da sala tem de ficar visível, para dar de voltar — (a) e (b) ✔, falta o (c)
+
+Pedido do Ricardo em **30/07/2026**: deixar o código da mesa visível, para que quem sair tenha
+como voltar.
+
+Hoje o código **não existe em lugar nenhum** depois do saguão. Ele é variável local dentro de
+`tentarAbrir` (anfitrião) e do `btConectar` (convidado), nunca sai para o escopo do módulo e
+nunca é guardado. O `#onlineCodigo` vive dentro da `telaOnline`, que o `esconderTelas()`
+esconde no primeiro `t:'vista'` que chega. Ou seja: no instante em que a partida começa, o
+código desaparece da vida de todo mundo.
+
+Isso é o que estraga a reconexão que **já existe**: `ESPERA_VOLTA` guarda a cadeira por 30 s
+justamente para dar tempo de voltar, mas quem fechou a aba não tem mais o código para digitar.
+Uma metade do mecanismo sem a outra.
+
+São **três pedaços**, e vale tratá-los separados porque a dificuldade é muito diferente:
+
+- **(a) Ver ✔ feito.** `codigoDaSala` no escopo do módulo e `pintarSala()` no HUD, num painel
+  do `#topo`. Ela fica **fora de `desenharHUD`** de propósito — aquela função só lê `vista`, e
+  o código não está na visão nem poderia estar: pô-lo lá seria furar a fronteira do `visaoDe`
+  por um dado de tela. É irmã de `pintarBotaoSom()`: quem muda o dado é quem chama.
+  Precisou de exceção ao `pointer-events: none` do `#topo`, senão o código apareceria e **não
+  daria para copiar** — metade do motivo de mostrá-lo.
+- **(b) Voltar como convidado ✔ feito.** `guardar('sala', …)` só no convidado e só quando o
+  `sentou` chega, porque sentar de fato é o que prova que o código presta. **Prazo de 2 h**, e
+  a assimetria com as 12 h da partida é o ponto: a partida é *sua* e não depende de ninguém,
+  a sala depende de o anfitrião ainda estar de pé. **Sair de propósito esquece; cair não** —
+  cair é exatamente o caso para o qual isto existe.
+- **(c) Voltar como ANFITRIÃO — o que FALTA.** O difícil, e é o que falta para o "voltar para a mesma
+  partida" valer no online. `codigoNovo()` sorteia um código a cada `tentarAbrir`, então o
+  anfitrião que recarrega abre uma mesa **outra** e os convidados tentando voltar batem numa
+  porta que não existe. Precisaria reabrir com o MESMO código — o id do PeerJS é
+  `dominobar-XXXX` e dá para reivindicá-lo se o peer antigo morreu — e casar isso com a
+  partida já guardada no `localStorage`. Hoje `retomarPartida` converte cadeira online em bot
+  exatamente porque este pedaço não existe. **Detalhe descoberto ao fazer o resto:**
+  `tentarAbrir` já trata `unavailable-id` **sorteando outro código** — reivindicar o mesmo id
+  exige inverter esse comportamento, e é aí que o (c) vai doer.
+
+**Tensão de desenho, decidida em 30/07/2026:** código na tela é código em qualquer print,
+qualquer transmissão e qualquer tela compartilhada — inclusive na mesa mista, onde a tela passa
+de mão em mão no hotseat. O Ricardo escolheu **sempre à mostra**, num painel do `#topo` ao lado
+de Pontas/Monte/Mão. Escopo combinado: **(a) e (b) agora, (c) fica na fila.**
+
+**Duas armadilhas do (a), achadas ao planejar:**
+
+- `#topo` é `pointer-events: none` (`css/estilo.css`), para não roubar o toque da mesa — o que
+  também impede **selecionar e copiar** o código. Um código que não dá para copiar derrota
+  metade do motivo de mostrá-lo. Precisa de exceção pontual, como a que o `#conversa` já tem.
+- Em retrato o `#topo` já transbordou uma vez, e o comentário do CSS registra por quê: *"em
+  360px ele saía pelos dois lados SEM aparecer no scrollWidth, porque overflow negativo em
+  elemento fixo não conta"*. Um quinto painel é a mesma armadilha. E o `test-telas.mjs` **não
+  tem cenário online**, então o painel novo nasceria sem nenhuma foto — o cenário tem de ser
+  escrito junto, senão a suíte que existe exatamente para isso não enxerga isso.
+
+**O (b) depende do item 4.** Sem identidade, "voltar para a mesa" põe você na primeira vaga
+livre — que pode não ser a sua. Ver abaixo.
+
+### 4. A cadeira é da primeira vaga livre, não de quem é dono dela ✔ feito
+
+De **30/07/2026**, e é o achado que reorganizou a fila. O Ricardo relatou cinco defeitos
+diferentes no online (não conseguir voltar, entrar na cadeira errada, duas abas brigando,
+"lota o servidor"). **A maior parte deles é um bug só:** nada no protocolo diz *quem* é o
+cliente.
+
+```js
+// 15-rede.js, no peer.on('connection')
+const cadeira = MESA.cadeiras.slice(0, MESA.n)
+  .findIndex((c, i) => c.tipo === 'online' && !conexoes.has(i));
+```
+
+A cadeira sai da **primeira vaga livre**, decidida no instante da conexão — antes de o
+convidado ter dito uma palavra. O comentário logo abaixo afirma que ao voltar *"a cadeira é
+dele de novo"*, mas **nada no código torna a cadeira dele**: `conn.on('close')` faz
+`conexoes.delete(cadeira)` na hora, e o `ESPERA_VOLTA` de 30 s só adia o `abandonar()` — ele
+**não reserva o assento**.
+
+**Isto é mais grave do que parece, e vale dizer por quê.** O invariante 3 diz que
+`visaoDe(cadeira)` é a fronteira de segurança, e ela está correta. O problema mora uma camada
+abaixo: **o número da cadeira é a chave dessa fronteira, e ela é entregue por ordem de
+chegada.** Quem pegar a vaga recebe a mão de quem estava nela. Dois convidados que caem e
+voltam trocam de mão — em duplas, trocam de dupla; um terceiro com o código senta na cadeira
+de quem caiu e vê as peças dele. Não adianta a `visaoDe` não vazar a mão alheia se o motor
+pode achar que você é outra pessoa.
+
+**O conserto é um `clienteId`** — um identificador sorteado uma vez e guardado no
+`localStorage` do convidado, mandado ao anfitrião no aperto de mão. Barato, sem servidor (que
+é a premissa do jogo) e resolve os três de uma vez. Muda uma coisa de fundo: **a cadeira
+deixa de ser escolhida no `connection` e passa a ser escolhida quando o convidado se
+identifica** — hoje a decisão acontece cedo demais, antes de existir informação para tomá-la.
+
+**Como ficou** — `sentar()` decide a cadeira, e `donoDaCadeira` (cadeira → clienteId) é o que
+a RESERVA:
+
+- **Cadeira reservada durante o `ESPERA_VOLTA`.** Antes o prazo só adiava o `abandonar()`; um
+  estranho com o código sentava na cadeira de quem tinha acabado de cair.
+- **A mesma pessoa em duas abas:** a conexão **nova assume** e a velha recebe `expulso`.
+  Recusar deixaria você trancado do lado de fora da sua própria cadeira. `largar()` recebe a
+  `conn` junto porque a conexão velha ainda dispara o próprio `close` — sem essa conferência
+  ela liberaria a cadeira que a nova acabou de ocupar.
+- **Convidado de versão antiga** manda `nome` sem `ola` e **senta como anônimo**, que é o
+  comportamento de antes: quebrar quem não recarregou seria pior que a falta de identidade.
+- **O `clienteId` é lido na CARGA e fixado em memória.** O armazenamento é da origem inteira,
+  não da aba, e a identidade desta aba não pode mudar no meio da partida porque outra escreveu
+  lá. Já a **geração é preguiçosa**: sortear na carga gastaria `Math.random`, que no harness é
+  semeado — o embaralho inteiro andaria e uma suíte que depende de "quem abre" falharia sem
+  que nada do que ela testa tivesse mudado.
+
+**No teste:** cair e voltar tem de devolver a MESMA cadeira **com a mesma mão** — o número
+certo com a mão errada seria o bug passando despercebido —, e a mesma pessoa em duas abas tem
+de ocupar UMA conexão.
+
+### 5. Cada clique em "Entrar" consome outra cadeira ✔ feito (junto do 4)
+
+De **30/07/2026**. O `btConectar.onclick` (`15-rede.js`) não tinha guarda de reentrada: cada
+clique fazia um `new Peer`, abandonava o peer anterior **vivo** e consumia mais uma vaga. O
+"lota o servidor" que o Ricardo relatou era literal.
+
+E havia um agravante de **desenho** que fazia o usuário clicar de novo: depois de conectar, a
+tela não mudava — ela só sai quando o anfitrião começa a partida. Ou seja, ficava parada
+exatamente no instante em que parecia ter falhado. A guarda consertou o dano; o retorno visual
+('Entrando…', 'Na mesa') consertou a causa.
+
+**Sentado NÃO é ocioso:** o botão fica travado depois do `sentou`. Solto, ele reconectaria — e
+como o `clienteId` é o mesmo, o jogador faria take-over da própria cadeira.
+
+O corpo virou `conectarNaMesa(codigo)`, que é o que o botão "voltar para a mesa" reusa.
+
+### 6. Toque preso: o jogo parece congelar e não está ✔ feito (31/07/2026)
+
+De **30/07/2026**. `11-interacao.js` começava o trato do toque com `if (arrasto) return;`. Se o
+dedo saísse da tela ainda apoiado, o `pointerup` **nunca chegava**, `arrasto` ficava preenchido
+para sempre e **todo toque seguinte era descartado**. O render loop continua rodando — por isso
+parece congelado sem estar, que é a parte que confunde na hora de relatar.
+
+**O `pointerup` é um evento que o navegador PROMETE e não garante.** Dedo saindo pela beirada,
+troca de app, gaveta de notificação: nenhum deles manda `pointerup`. O guarda do dedo único
+estava certo; o que faltava era alguém para **destrancá-lo**.
+
+Duas portas, e as duas precisavam existir:
+
+- **A captura de ponteiro é a fonte de verdade.** Se pedimos captura daquele ponteiro e o
+  navegador já a tirou de nós, o dedo foi embora sem avisar — e aí o `arrasto` é fantasma e o
+  toque novo passa por cima. Por isso `capturado` é gravado: sem essa marca o guarda não
+  distingue *"a captura sumiu"* de *"nunca houve captura"*, e num navegador sem captura ele
+  largaria o arrasto do primeiro dedo a cada segundo toque — trocando o toque preso pela peça
+  congelada no ar, que é o bug que aquele guarda existe para impedir.
+- **`visibilitychange` + `blur`**, que não existiam em lugar nenhum do projeto. Repare que
+  ali NÃO se pergunta se foi arrasto ou toque: gesto interrompido pelo sistema não é escolha
+  de ninguém, e completá-lo como toque jogaria por você.
+
+`lostpointercapture` foi considerado e **recusado**: a ordem dele contra o `pointerup` não é
+confiável entre navegadores, e se chegasse antes ele zeraria o `arrasto` e faria todo toque
+normal deixar de selecionar — item 7 de volta, pior.
+
+### 7. No celular, o clique às vezes não joga a peça ✔ feito (31/07/2026)
+
+De **30/07/2026**. Relato do Ricardo: **só no celular, e sem ter saído da tela** — o que
+descartava o resíduo do item 6 e apontava para o **limiar de arrasto**. Era isso: 9 px é uma
+mão apoiada numa mesa, e num celular na mão é menos que a oscilação de um toque **parado**. O
+toque virava arrasto sozinho, soltava sem ter reordenado nada, e `foiArrasto` fazia o
+`soltarArrasto` voltar antes de selecionar. Nunca aconteceu no PC porque mouse não treme — **a
+assimetria era a evidência, e ela estava certa.**
+
+O conserto tem **duas camadas, e a segunda é a que importa**:
+
+1. `LIMIAR_ARRASTO` virou `{ mouse: 9, dedo: 18 }`. Direto, e resolve o caso comum.
+2. **`foiMesmoArrasto` julga pelo RESULTADO, não pela distância.** Um limiar é sempre um
+   chute — 18 px serve para a maioria dos dedos e vai continuar sendo pouco para alguém. Um
+   gesto que atravessou o limiar e **não trocou nenhuma peça de lugar** não arrumou nada, e a
+   única intenção que sobra é a de tocar. É a rede embaixo do número, e é ela que faz o
+   defeito não voltar com outro dedo.
+
+**A regra geral que isto ensina:** para todo `if (x) return`, perguntar as duas coisas — *quem
+zera o `x`* e *o que acontece se esse alguém não vier*. O item 7 é o jogo entrando no estado
+cedo demais; o item 6 é o jogo não saindo dele nunca. São a mesma borda, em espelho.
+
+**No teste** (`test-jogo.mjs`, "o toque no celular"): 12 px de tremor no dedo continua sendo
+toque, 12 px no **mouse** continua sendo arrasto (o limiar do dedo não podia afrouxar o
+mouse), gesto de 300 px que não reordenou nada vale como toque, e o toque seguinte funciona
+tanto depois da captura perdida quanto depois de a aba voltar do fundo. **As cinco reprovam no
+código antigo** — foram rodadas contra ele de propósito.
+
+Duas armadilhas pagas ao escrever esse teste:
+
+- **`ok(mod.escolhida === tocar(...))` lê o operando da ESQUERDA primeiro.** A asserção
+  comparava a escolha *anterior* com a peça deste gesto, e nasceu **verde sem testar nada**
+  toda vez que as duas coincidiam. A peça sai numa linha própria, sempre.
+- **O dublê do renderer não tinha captura de ponteiro**, então o caminho inteiro do item 6
+  ficaria sem teste — o jogo passou a *perguntar* à captura se o dedo ainda está lá. É
+  literalmente a lição que o `harness.mjs` já registrava sobre o `matchMedia`: *"quem estava
+  incompleto era o dublê, não o jogo"*. A captura do dublê **não** se solta sozinha no
+  `pointerup`; quem quiser simular o dedo sumindo chama `releasePointerCapture` na mão, que é
+  o que o sistema faz.
+
+### 8. Nome cortado com o celular deitado ✔ feito (31/07/2026)
+
+De **30/07/2026**, e é a **única sobra da Fila 2** aparecendo em campo.
+
+**A MEDIÇÃO CONTRADISSE O DIAGNÓSTICO, e essa é a lição do item.** A fila supunha que faltava
+`overflow`/`ellipsis` no deitado. Medindo com nomes de 14 caracteres (o `maxlength` do menu),
+o nome **cabe** deitado — 109 px de 109 px disponíveis. Quem corta é o **retrato**: com quatro
+jogadores a faixa dá **68 px** para 93–95 px de texto, e "Maria Fernanda" virava "Maria Fer…".
+
+O que existe deitado é outra coisa, e de longe se parece com nome cortado: **o `#topo` monta
+em cima da lista de jogadores.** Ele é centrado na TELA (454 px de largura) enquanto os três
+botões ocupam 14→146 px à esquerda e o `#jogadores` fica ancorado à direita. Cada caixa cabe
+sozinha e **nenhuma pergunta pela outra**:
+
+| tela | `#topo` | `#jogadores` | sobreposição |
+|---|---|---|---|
+| paisagem 844×390 | 195–649 | 693–830 | — |
+| paisagem 736×414 | 141–595 | 585–722 | 10 px |
+| paisagem 667×375 | 107–561 | 516–653 | 45 px |
+| paisagem 640×360 | 93–547 | 489–626 | **58 px** |
+
+**Por que a suíte jurava que o deitado estava bem:** ela só tinha `paisagem 844×390`, que é o
+**maior** deitado que existe em celular — e o único onde isto não acontece. Uma tela de teste
+escolhida pelo caso fácil é pior que nenhuma, porque ela dá um verde que parece cobertura.
+Entrou `paisagem 640×360`, e com ela **17 falhas** de cara.
+
+**O conserto — CADA FAIXA TEM DONO** (escolha do Ricardo em 31/07/2026). O `#topo` deixa de ser
+centrado na tela e vira uma faixa entre as duas colunas, por construção incapaz de alcançá-las.
+Como a faixa é estreita, sai o que se deduz de outro lugar: o "até 6" (está no menu e na tela de
+fim) e parte do nome do time (está na lista ao lado).
+
+- **As reservas são a largura da coluna MAIS a margem dela.** Reservar 124 px para uma coluna
+  que ocupa 130 (116 de largura + 14 de âncora) deixava 6 px de invasão — invisível a olho e
+  260 px² para o teste, que é exatamente para isso que ele serve.
+- **`#jogadores` ganhou largura FIXA**, e é o que torna a conta acima verdadeira: com largura de
+  conteúdo, um nome longo empurraria a coluna de volta para dentro da faixa do topo.
+- **Zerar o `transform` é obrigatório** — mesma armadilha que a gaveta pagou no item 10.
+
+**No retrato, o corte passou a ser na PALAVRA** (escolha do Ricardo): `nomeEmPartes()` em
+`13-hud.js` põe o sobrenome num `<i class="resto">` e o CSS o esconde onde a faixa aperta.
+"Maria Fernanda" vira **"Maria"**, inteiro e legível de relance, em vez de "Maria Fer…" — cortar
+no meio da palavra é o que fazia o nome deixar de identificar quem é. O ellipsis continua ali
+para o primeiro nome que ainda assim não couber.
+
+**As duas metades passam pelo `escapar`.** O nome do convidado é entrada de fora e fatiar uma
+string não a torna segura — repare que um nome-ataque como `<img src=x>` **também tem espaço**,
+então o corte cai no meio dele. Sai `&lt;img` + `<i class="resto"> src=x&gt;</i>`.
+
+**A barra de ações desceu para a faixa esquerda junto**, e o número explica por quê. `#acoes`
+tem a MESMA largura nas duas paisagens (x 14→264), mas o arco dos adversários não: em 844×390
+ele começa em 271 e escapa por **7 px**; em 640×360 começa em **181**, porque a mesa é mais
+estreita, e a barra monta em cima de 83 px de peça. Prendê-la à faixa que já era dela
+(`max-width` + `flex-wrap`) resolve os dois sem tocar no 3D. O caminho de fazer a mesa desviar
+existe (`apertoDaMesa`), e continua sendo o mais caro.
+
+**Sete pixels de folga não são um conserto, são sorte.** Era exatamente essa a folga em
+844×390, a única paisagem que a suíte tinha — mais um jeito de o mesmo defeito ter passado.
+
+### 9. Peças "bugadas" em vertical = peças POR BAIXO DE PAINEL ✔ feito (ver item 10)
+
+De **30/07/2026**. O Ricardo confirmou que **é layout**, não textura — o que descartou o atlas
+de pintas e o WebGL do aparelho, que seriam os únicos ramos impossíveis de consertar às cegas.
+
+Com isso o item 9 e o item 10 são **a mesma coisa**, e a asserção que faltava provou: em
+**retrato 360×640 com a conversa aberta, CINCO peças da sua mão ficam por baixo do
+`#conversa`**. A peça está no lugar certo, dentro do quadro, com um painel em cima — que é
+exatamente a pergunta que o teste não sabia fazer.
+
+### 10. Peça por baixo de painel ✔ feito — asserção e conserto
+
+De **30/07/2026**. O `test-telas.mjs` reprovava peça **fora do quadro** e painel **sobre**
+painel, mas não peça **por baixo** de painel. São perguntas diferentes, e a que faltava é a
+que pega a família de defeitos que o Ricardo relatou.
+
+A asserção foi escrita **antes** do conserto e reprovou **20 vezes**, o que é o ponto: era um
+defeito relatado em palavras ("peças bugadas") e virou uma lista de linhas e telas. Ela ficou
+numa branch até o conserto existir — teste vermelho no tronco ensina exatamente o hábito que o
+item 11 condena.
+
+Ela mede as **caixas que PINTAM** (`.painel`, `button.canto`, `#acoes button`, `#confirmar`) e
+não os contêineres: o `#topo` em retrato é uma faixa da largura da tela com fundo
+transparente, e usar o retângulo dele acusaria cobertura no vão entre um painel e outro, onde
+dá para ver o jogo.
+
+**O que ela achou — 20 falhas, e o desenho delas é a informação:**
+
+| tela | o que fica coberto |
+|---|---|
+| retrato 390×844 | a mão de um adversário, por baixo do `#contagem` (3 cenas) |
+| retrato 360×640 | **5 peças da SUA mão** por baixo do `#conversa`; adversário sob `#contagem` |
+| paisagem 844×390 | peças da sua mão sob `#btContagem` e `#conversa`; adversário e tabuleiro sob `#contagem` |
+| tablet 820×1180 | limpo |
+| wide 1600×900 | limpo |
+
+**Tablet e wide passam.** É por isso que isto nunca apareceu no computador, e é a confirmação
+de que o relato "só no celular" está certo.
+
+**O conserto escolhido pelo Ricardo: GAVETA.** No celular a conversa e a contagem param de
+conviver com o jogo — abrem por cima, com cortina atrás, e fecham num toque. É a única saída
+que respeita a aritmética: numa tela de 360 px o `#conversa` tem **268 px fixos**, então painel
+e mão não cabem lado a lado, e encolher a mesa até caber deixaria o tabuleiro pequeno demais
+para ler.
+
+Três coisas que só apareceram ao fazer:
+
+- **A gaveta tem de ser MODAL** (`body.gaveta` esconde `#acoes`, `#vez` e `#confirmar`). Sem
+  isso a barra de ações fica boiando **por cima da cortina**, que é a mesma confusão de antes
+  de cabeça para baixo.
+- **A ASSERÇÃO estava incompleta**, e foi a gaveta que revelou: "nada do jogo sob painel" é
+  falso quando há gaveta aberta — uma gaveta **existe** para cobrir o jogo. O defeito nunca foi
+  cobrir; foi cobrir **sem dizer**. Hoje o teste exige coisas diferentes conforme o estado:
+  gaveta fechada, nada coberto; gaveta aberta, ela manda na tela sozinha.
+- **Zerar o `transform` é obrigatório.** Em tela baixa a contagem era centrada por `left: 50%`
+  + `translateX(-50%)`. Só trocar o `left` deixa o deslocamento de meia largura de pé, e a
+  gaveta nasce 414 px fora da tela.
+
+**Deitado, a barra de ações subiu para o topo.** Em 844×390 a mão se espalha por ~80% da
+largura e desce até a beirada de baixo: qualquer coisa no rodapé esquerdo fica em cima da peça
+mais à esquerda. É a última sobra da Fila 2, e ela finalmente apareceu **em número** em vez de
+em opinião.
+
+O caminho não escolhido, se um dia fizer falta: fazer o 3D **desviar** das faixas ocupadas,
+que combina com o `apertoDaMesa()` e o `larguraVisivelEm()` — e é o mais caro.
+
+Não é hipótese de que esta família reincide: o comentário do `07-cena.js` registra que o copo
+já foi movido à mão uma vez pelo mesmo motivo. Defeito que já voltou uma vez volta de novo, e
+a diferença entre um conserto e uma asserção é exatamente essa.
+
+### 11. O `test-telas.mjs` era INTERMITENTE — METADE feita, A FAZER (3º da fila)
+
+Descoberto em **30/07/2026**, ao acrescentar a cena da mesa online. Três rodadas seguidas do
+mesmo código deram: falha em `#acoes` × `#conversa` se sobrepondo, depois **passe limpo**,
+depois falha diferente (`o tabuleiro passou da borda, ndc.x 1.05`). Mesmo commit, três
+resultados.
+
+**A causa:** as cenas montam a mesa com `auto(6)` / `ateALinha(13)`, que jogam de verdade — e
+no navegador o `Math.random` **não é semeado**, ao contrário do harness em Node. Cada rodada
+monta um tabuleiro diferente, com uma quantidade diferente de linhas na conversa e um
+comprimento diferente de fileira. Vários casos ficam **na beirada** do limite, e a moeda
+decide.
+
+**Por que é pior do que parece:** um teste que falha às vezes ensina a rodar de novo. E "rodar
+de novo" é exatamente como uma regressão de verdade passa — foi o que quase aconteceu aqui: a
+primeira falha parecia culpa do painel novo, e não era. O tempo gasto separando as duas coisas
+é o custo recorrente.
+
+**Feito pela metade, e vale saber qual metade.** As cenas passaram a semear `Math.random`
+dentro da própria página (`semear()` no `AJUDA`, um mulberry32 de cinco linhas) — não precisou
+de nada no jogo, porque a página inteira usa `Math.random`. Isso matou a variação do
+**embaralho**: a mesma cena monta sempre as mesmas peças.
+
+**O que SOBROU:** as cenas esperam 350 ms para a tela assentar, e nessa janela um número
+**variável** de temporizadores de bot dispara. Duas rodadas seguidas ainda dão `mesa 0.27` e
+`mesa 0.31` para a mesma cena. É muito menos folga do que antes, e nenhuma das duas rodadas
+reprovou — mas um caso na beirada ainda pode virar a moeda.
+
+**O que falta:** parar os temporizadores de bot durante a montagem da cena, de modo que o
+tabuleiro seja função só do que a cena pediu. Enquanto isso não existe, **uma rodada verde do
+`telas` não é prova** — rode duas.
 
 ## Regras da casa (implementadas)
 

@@ -19,7 +19,20 @@ const OPCOES_PEER = { config: { iceServers: [
 let peer = null;
 let conexoes = new Map();      // cadeira → conn (no anfitrião)
 let esperando = new Map();     // cadeira → temporizador de volta (no anfitrião)
+let donoDaCadeira = new Map(); // cadeira → clienteId (no anfitrião)
 let linkAnfitriao = null;      // conn (no convidado)
+
+// O CÓDIGO DA MESA, que até aqui não existia em lugar nenhum. Ele era variável local do
+// `tentarAbrir` e do clique de entrar, e o único lugar onde sobrevivia era o texto de
+// `#onlineCodigo` — dentro da `telaOnline`, que o `esconderTelas()` apaga no primeiro
+// `t:'vista'`. Ou seja: no instante em que a partida começava, o código sumia da vida de
+// todo mundo, e com ele a chance de voltar.
+let codigoDaSala = '';
+
+function usarCodigo(codigo) {
+  codigoDaSala = codigo || '';
+  pintarSala(codigoDaSala);
+}
 
 // Quanto tempo a cadeira fica guardada para quem caiu. Curto o bastante para a mesa não
 // morrer de tédio, longo o bastante para uma troca de wi-fi ou um túnel de metrô.
@@ -28,13 +41,42 @@ const ESPERA_VOLTA = 30000;
 const codigoNovo = () => Array.from({ length: 4 }, () => ALFABETO[Math.floor(Math.random() * ALFABETO.length)]).join('');
 const temPeerJS = () => typeof Peer !== 'undefined';
 
+// QUEM É VOCÊ. Sorteado uma vez e guardado para sempre — é o que faz o anfitrião saber
+// que você é VOCÊ voltando, e não alguém novo pegando a vaga que sobrou.
+//
+// Sem isto, a cadeira saía da primeira vaga livre e o número da cadeira é a CHAVE da
+// `visaoDe`: quem pegasse a vaga recebia a mão de quem estava nela. Dois convidados que
+// caem e voltam trocavam de mão — em duplas, de dupla. A `visaoDe` nunca vazou nada; o
+// furo era o motor achar que você era outra pessoa.
+//
+// Não tem prazo, ao contrário de `partida`: identidade não vence.
+//
+// LIDO NA CARGA e guardado em memória, não relido a cada uso. Duas coisas dependem disso:
+// a identidade desta aba não pode mudar no meio da partida porque outra aba escreveu no
+// armazenamento (que é da origem inteira, não da aba); e o teste do online precisa dar um
+// id a cada aba, coisa que só funciona se cada uma fixar o seu na carga.
+//
+// A GERAÇÃO é preguiçosa de propósito: sortear na carga gastaria Math.random, e no
+// harness dos testes ele é semeado — o embaralho inteiro andaria, e uma suíte que depende
+// de "quem abre" passaria a falhar sem que nada do que ela testa tivesse mudado.
+let idCliente = lido('cliente', '');
+function meuId() {
+  if (typeof idCliente !== 'string' || !idCliente) {
+    idCliente = Array.from({ length: 16 }, () => ALFABETO[Math.floor(Math.random() * ALFABETO.length)]).join('');
+    guardar('cliente', idCliente);
+  }
+  return idCliente;
+}
+
 function erroOnline(txt) {
   el('onlineErro').textContent = txt;
 }
 
 function encerrarRede() {
+  usarCodigo('');
   esperando.forEach(t => clearTimeout(t));
   esperando.clear();
+  donoDaCadeira.clear();
   conexoes.forEach(c => { try { c.close(); } catch (e) { void e; } });
   conexoes.clear();
   if (linkAnfitriao) { try { linkAnfitriao.close(); } catch (e) { void e; } linkAnfitriao = null; }
@@ -64,63 +106,40 @@ function tentarAbrir(tentativa) {
 
   peer.on('open', () => {
     el('onlineCodigo').textContent = codigo;
+    usarCodigo(codigo);
     listarSala();
   });
 
   peer.on('connection', conn => {
-    const cadeira = MESA.cadeiras.slice(0, MESA.n)
-      .findIndex((c, i) => c.tipo === 'online' && !conexoes.has(i));
-    if (cadeira < 0) { conn.on('open', () => { conn.send({ t: 'cheio' }); setTimeout(() => conn.close(), 0); }); return; }
+    // A CADEIRA NÃO É MAIS ESCOLHIDA AQUI, e essa é a mudança de fundo. Antes ela saía da
+    // primeira vaga livre no instante da conexão — antes de o convidado ter dito uma
+    // palavra —, o que é cedo demais: não existe ainda a informação para decidir. Agora
+    // espera-se o aperto de mão, e quem senta é `sentar()`.
+    let cadeira = -1;
 
-    conexoes.set(cadeira, conn);
-    conn.on('open', () => {
-      // Voltou dentro do prazo: cancela o relógio e a cadeira é dele de novo. Funciona
-      // porque a cadeira continua marcada como 'online' — é justamente por isso que ela
-      // não vira bot na hora da queda.
-      if (esperando.has(cadeira)) {
-        clearTimeout(esperando.get(cadeira));
-        esperando.delete(cadeira);
-        if (P && P.fase !== 'fim') narrar(`${MESA.cadeiras[cadeira].nome} voltou para a mesa.`);
-      }
-      conn.send({ t: 'sentou', cadeira, cadeiras: MESA.cadeiras.slice(0, MESA.n).map(c => c.nome) });
-      listarSala();
-      if (P) publicar();                                  // entrou no meio da partida: já recebe a mesa
-    });
     conn.on('data', m => {
+      if (cadeira < 0) {
+        // `ola` traz o clienteId. Um `nome` solto é convidado de versão antiga (uma
+        // página em cache), e ele senta como anônimo — o comportamento de antes. Quebrar
+        // quem não recarregou seria pior que a falta de identidade dele.
+        if (m.t !== 'ola' && m.t !== 'nome') return;
+        cadeira = sentar(conn, m.t === 'ola' ? String(m.id || '') : '', m.nome);
+        return;
+      }
       if (m.t === 'nome') { MESA.cadeiras[cadeira].nome = String(m.nome).slice(0, 14) || 'Visita'; listarSala(); if (P) publicar(); }
       if (m.t === 'acao' && P) aplicarIntencao(cadeira, m);
       if (m.t === 'chat') receberChat(cadeira, m);
-      // Saiu de propósito: não há prazo de volta, a partida acaba perdida para ele.
+      // Saiu de propósito: não há prazo de volta, a partida acaba perdida para ele. E a
+      // cadeira deixa de ser dele: quem desiste não volta com o mesmo clienteId.
       if (m.t === 'desisto' && P && P.fase !== 'fim') {
         clearTimeout(esperando.get(cadeira)); esperando.delete(cadeira);
+        donoDaCadeira.delete(cadeira);
         abandonar(P, cadeira);
         narrar(`${P.cadeiras[cadeira].nome} saiu da mesa — a partida foi dada como perdida para ele.`);
         publicar();
       }
     });
-    conn.on('close', () => {
-      conexoes.delete(cadeira);
-      // Caiu no meio do jogo? A CADEIRA FICA GUARDADA. Antes ela virava bot na hora, e
-      // com isso fechar a aba era a saída de emergência de qualquer partida perdida:
-      // não custava nada. Agora há um prazo para voltar — e, esgotado, a partida conta
-      // como derrota de quem saiu.
-      if (P && P.fase !== 'fim') {
-        const nome = P.cadeiras[cadeira].nome;
-        narrar(`${nome} caiu — a cadeira fica guardada por ${ESPERA_VOLTA / 1000}s.`);
-        clearTimeout(esperando.get(cadeira));
-        // setTimeout e NÃO um contador no requestAnimationFrame: o rAF para em aba de
-        // fundo, e o prazo tem de correr mesmo com o anfitrião noutra aba.
-        esperando.set(cadeira, setTimeout(() => {
-          esperando.delete(cadeira);
-          if (!P || P.fase === 'fim' || conexoes.has(cadeira)) return;
-          abandonar(P, cadeira);
-          narrar(`${nome} não voltou — a partida foi dada como perdida para ele.`);
-          publicar();
-        }, ESPERA_VOLTA));
-        publicar();
-      }
-      listarSala();
-    });
+    conn.on('close', () => { if (cadeira >= 0) largar(cadeira, conn); });
   });
 
   peer.on('error', e => {
@@ -128,6 +147,82 @@ function tentarAbrir(tentativa) {
     if (e.type === 'unavailable-id' && tentativa < 4) { peer.destroy(); tentarAbrir(tentativa + 1); return; }
     erroOnline(explicarErroDeRede(e));
   });
+}
+
+// Quem senta onde. Chamada no aperto de mão, e não na conexão, porque é aqui que pela
+// primeira vez se sabe QUEM chegou. Devolve a cadeira, ou -1 se a mesa estiver cheia.
+function sentar(conn, id, nome) {
+  const cadeiras = MESA.cadeiras.slice(0, MESA.n);
+
+  // 1. A cadeira de quem já é dono dela. É esta linha que faz "voltar" ser VOLTAR, e não
+  //    "entrar de novo em qualquer lugar".
+  let cadeira = id ? cadeiras.findIndex((c, i) => donoDaCadeira.get(i) === id) : -1;
+
+  // A mesma pessoa noutra aba — fechar o notebook e abrir no celular é o caso real. A
+  // conexão NOVA ganha, porque a velha é justamente a que provavelmente já morreu sem
+  // avisar. Recusar deixaria você trancado do lado de fora da sua própria cadeira.
+  if (cadeira >= 0 && conexoes.has(cadeira)) {
+    const velha = conexoes.get(cadeira);
+    conexoes.delete(cadeira);
+    try { velha.send({ t: 'expulso' }); velha.close(); } catch (e) { void e; }
+  }
+
+  // 2. Senão, a primeira vaga que não tem dono esperando por ela. `donoDaCadeira` é o que
+  //    RESERVA o assento durante o ESPERA_VOLTA: antes o prazo só adiava o abandonar(),
+  //    e um estranho com o código sentava na cadeira de quem tinha caído.
+  if (cadeira < 0) {
+    cadeira = cadeiras.findIndex((c, i) => c.tipo === 'online' && !conexoes.has(i) && !donoDaCadeira.has(i));
+  }
+  if (cadeira < 0) { try { conn.send({ t: 'cheio' }); } catch (e) { void e; } setTimeout(() => conn.close(), 0); return -1; }
+
+  if (id) donoDaCadeira.set(cadeira, id);
+  conexoes.set(cadeira, conn);
+  if (nome !== undefined) MESA.cadeiras[cadeira].nome = String(nome).slice(0, 14) || 'Visita';
+
+  // Voltou dentro do prazo: cancela o relógio. Funciona porque a cadeira continua marcada
+  // como 'online' — é justamente por isso que ela não vira bot na hora da queda.
+  if (esperando.has(cadeira)) {
+    clearTimeout(esperando.get(cadeira));
+    esperando.delete(cadeira);
+    if (P && P.fase !== 'fim') narrar(`${MESA.cadeiras[cadeira].nome} voltou para a mesa.`);
+  }
+  conn.send({ t: 'sentou', cadeira, cadeiras: cadeiras.map(c => c.nome) });
+  listarSala();
+  if (P) publicar();                                    // entrou no meio da partida: já recebe a mesa
+  return cadeira;
+}
+
+// Alguém largou a cadeira. Recebe a `conn` junto porque uma conexão VELHA, trocada por
+// take-over ali em cima, ainda vai disparar o seu próprio 'close' — e sem esta conferência
+// ela liberaria a cadeira que a conexão nova acabou de ocupar.
+function largar(cadeira, conn) {
+  if (conexoes.get(cadeira) !== conn) return;
+  conexoes.delete(cadeira);
+
+  // Caiu no meio do jogo? A CADEIRA FICA GUARDADA. Antes ela virava bot na hora, e com
+  // isso fechar a aba era a saída de emergência de qualquer partida perdida: não custava
+  // nada. Agora há um prazo para voltar — e, esgotado, a partida conta como derrota.
+  if (P && P.fase !== 'fim') {
+    const nome = P.cadeiras[cadeira].nome;
+    narrar(`${nome} caiu — a cadeira fica guardada por ${ESPERA_VOLTA / 1000}s.`);
+    clearTimeout(esperando.get(cadeira));
+    // setTimeout e NÃO um contador no requestAnimationFrame: o rAF para em aba de fundo,
+    // e o prazo tem de correr mesmo com o anfitrião noutra aba.
+    esperando.set(cadeira, setTimeout(() => {
+      esperando.delete(cadeira);
+      if (!P || P.fase === 'fim' || conexoes.has(cadeira)) return;
+      donoDaCadeira.delete(cadeira);                    // não voltou: a cadeira não é mais dele
+      abandonar(P, cadeira);
+      narrar(`${nome} não voltou — a partida foi dada como perdida para ele.`);
+      publicar();
+    }, ESPERA_VOLTA));
+    publicar();
+  } else {
+    // No saguão a mesa ainda não começou: a cadeira volta a ser de quem chegar. Guardar
+    // dono aqui faria a mesa encher de reservas de gente que só espiou e foi embora.
+    donoDaCadeira.delete(cadeira);
+  }
+  listarSala();
 }
 
 function listarSala() {
@@ -163,31 +258,79 @@ function entrarNumaMesa() {
   el('onlineSub').textContent = 'Digite o código que o anfitrião passou.';
   el('onlineCodigo').textContent = '';
   el('onlineEntrada').classList.remove('oculta');
-  el('onlineEntrada').value = '';
+  // Pré-preenchido com a última mesa em que você sentou: quem volta quase sempre volta
+  // para a mesma, e antes o campo era zerado justamente aqui.
+  const guardada = salaGuardada();
+  el('onlineEntrada').value = guardada ? guardada.codigo : '';
   el('onlineEntrada').focus();
   el('btConectar').classList.remove('oculta');
   el('btIniciarOnline').classList.add('oculta');
   el('onlineLista').innerHTML = '';
-  erroOnline('');
+  // Destrava o botão: a tentativa anterior pode ter deixado 'Entrando…' ou 'Na mesa'.
+  // Aqui e não no `encerrarRede`, que roda em pontos do carregamento onde `conectando`
+  // ainda estaria na zona morta — e `typeof` sobre `let` na zona morta LANÇA.
+  pararDeConectar('');
 }
 
-el('btConectar').onclick = () => {
-  const codigo = el('onlineEntrada').value.trim().toUpperCase();
-  if (codigo.length < 3) { erroOnline('Faltou o código.'); return; }
+// UMA TENTATIVA DE CADA VEZ. Sem esta guarda, cada clique fazia um `new Peer`, abandonava
+// o peer anterior VIVO e consumia mais uma cadeira — e a mesa enchia de fantasmas do mesmo
+// jogador. O convite ao clique repetido era de desenho: depois de conectar a tela não
+// mudava (ela só sai quando o anfitrião começa), então ela ficava parada exatamente no
+// instante em que parecia ter falhado. Por isso a guarda vem com retorno visual junto.
+let conectando = false;
+
+function pararDeConectar(recado) {
+  conectando = false;
+  el('btConectar').disabled = false;
+  el('btConectar').textContent = 'Entrar';
+  if (recado !== undefined) erroOnline(recado);
+}
+
+function conectarNaMesa(codigo) {
+  if (conectando) return;
+  if (!temPeerJS()) { avisar('A biblioteca de rede não carregou — sem internet, só dá para jogar local.'); return; }
+  if (!codigo || codigo.length < 3) { erroOnline('Faltou o código.'); return; }
+
+  conectando = true;
+  el('btConectar').disabled = true;
+  el('btConectar').textContent = 'Entrando…';
   erroOnline('Procurando a mesa…');
   modo = 'convidado';
+  usarCodigo(codigo);
   peer = new Peer(OPCOES_PEER);
   peer.on('open', () => {
     linkAnfitriao = peer.connect(PREFIXO + codigo, { reliable: true });
     linkAnfitriao.on('open', () => {
       erroOnline('Conectado. Esperando o anfitrião começar…');
-      linkAnfitriao.send({ t: 'nome', nome: MESA.cadeiras[0].nome });
+      // `ola` e não `nome`: é o aperto de mão que diz QUEM chegou, e é ele que faz o
+      // anfitrião devolver a cadeira certa em vez da que sobrou.
+      linkAnfitriao.send({ t: 'ola', id: meuId(), nome: MESA.cadeiras[0].nome });
     });
     linkAnfitriao.on('data', m => {
-      if (m.t === 'cheio') { erroOnline('Essa mesa já está cheia.'); return; }
+      if (m.t === 'cheio') { pararDeConectar('Essa mesa já está cheia.'); return; }
+      // A sua cadeira foi assumida por você mesmo, noutra aba ou noutro aparelho. Não é
+      // erro nem queda: é o take-over do anfitrião, e dizer "a mesa fechou" seria mentira.
+      if (m.t === 'expulso') {
+        pararDeConectar('');
+        avisar('Você entrou nesta mesa noutra aba — a cadeira foi para lá.');
+        mostrarTela('telaMenu');
+        modo = 'local';
+        return;
+      }
       if (m.t === 'sentou') {
         euNaTela = m.cadeira;
+        // Sentado NÃO é ocioso: `conectando` fica de pé e o botão fica travado. Solto,
+        // ele reconectaria — e como o clienteId é o mesmo, o jogador faria take-over da
+        // própria cadeira. O texto muda porque a tela não muda até o anfitrião começar, e
+        // era essa espera muda que convidava ao segundo clique.
+        el('btConectar').disabled = true;
+        el('btConectar').textContent = 'Na mesa';
         erroOnline(`Você é a cadeira ${m.cadeira + 1}.`);
+        // Guardado só AQUI, e só no convidado: sentar de fato é o que prova que o código
+        // presta. O anfitrião não guarda porque `codigoNovo()` sorteia outro a cada
+        // abertura — oferecer "voltar" a ele o mandaria entrar como convidado na própria
+        // mesa morta. É o pedaço (c) da fila, e ele ainda não existe.
+        guardar('sala', { quando: Date.now(), codigo: codigoDaSala });
         // A partir daqui há com quem conversar, e `modo` já é 'convidado': a conversa do
         // saguão liga. O tamanho da lista de nomes é o número de cadeiras, e é dele que
         // sai se a mesa é em duplas — o convidado não tem MESA.n do anfitrião.
@@ -198,9 +341,41 @@ el('btConectar').onclick = () => {
       if (m.t === 'log') anotar(m.txt);
       if (m.t === 'chat') dizer(vistaAtual, m.de, m.canal, m.txt, m.nome);
     });
-    linkAnfitriao.on('close', () => { avisar('A mesa fechou.'); mostrarTela('telaMenu'); modo = 'local'; });
+    linkAnfitriao.on('close', () => {
+      pararDeConectar();
+      avisar('A mesa fechou.'); mostrarTela('telaMenu'); modo = 'local';
+    });
   });
-  peer.on('error', e => erroOnline(explicarErroDeRede(e)));
+  peer.on('error', e => pararDeConectar(explicarErroDeRede(e)));
+}
+
+el('btConectar').onclick = () => conectarNaMesa(el('onlineEntrada').value.trim().toUpperCase());
+
+// ─── voltar para a mesa ──────────────────────────────────────────────────────
+// Prazo mais curto que as 12h da partida guardada, e por um motivo: a partida é SUA e não
+// depende de ninguém, enquanto a sala depende de o anfitrião ainda estar de pé. Uma mesa
+// de ontem vira um botão que mente.
+const HORAS_SALA = 2;
+
+function salaGuardada() {
+  const g = lido('sala', null);
+  if (!g || typeof g.codigo !== 'string' || !/^[A-Z0-9]{3,8}$/.test(g.codigo)) return null;
+  if (!g.quando || Date.now() - g.quando > HORAS_SALA * 3600e3) return null;
+  return g;
+}
+
+function atualizarBotaoVoltarMesa() {
+  const g = salaGuardada();
+  el('btVoltarMesa').classList.toggle('oculta', !g);
+  if (g) el('btVoltarMesa').textContent = `Voltar para a mesa ${g.codigo}`;
+}
+
+el('btVoltarMesa').onclick = () => {
+  const g = salaGuardada();
+  if (!g) { avisar('O código daquela mesa venceu.'); atualizarBotaoVoltarMesa(); return; }
+  tocarClique();
+  entrarNumaMesa();                       // prepara a tela; ela já pré-preenche o campo
+  conectarNaMesa(g.codigo);
 };
 
 function explicarErroDeRede(e) {

@@ -15,6 +15,7 @@ const HUD = {
   comprar: el('btComprar'), passar: el('btPassar'), acoes: el('acoes'),
   arrumar: el('btArrumar'), contar: el('btContagem'), contagem: el('contagem'),
   dica: el('btDica'),
+  sala: el('salaVal'), salaPainel: el('salaPainel'),
 };
 
 // "Contar o jogo" é a conta que jogador bom faz de cabeça e novato não faz. Fica
@@ -40,7 +41,7 @@ function mostrarTela(id) {
   // O botão de retomar é recalculado a cada vez que o menu aparece, e não uma vez no
   // início: entre um e outro você pode ter acabado a partida guardada, ou o prazo dela
   // pode ter vencido com a aba aberta.
-  if (id === 'telaMenu') atualizarBotaoRetomar();
+  if (id === 'telaMenu') { atualizarBotaoRetomar(); atualizarBotaoVoltarMesa(); }
   // A conversa do saguão vive por cima desta tela, então quem abre e fecha a tela é quem
   // liga e desliga aquilo.
   atualizarSaguao(id === 'telaOnline');
@@ -60,6 +61,23 @@ function nomeDoTime(vista, time) {
   return `${escapar(vista.cadeiras[time].nome)} e ${escapar(vista.cadeiras[time + 2].nome)}`;
 }
 
+// O nome em DUAS PARTES, para a tela decidir quanto dele cabe. Em faixa estreita o CSS
+// esconde o resto e sobra o primeiro nome inteiro — "Maria Fernanda" vira "Maria", e não
+// "Maria Fer…". Cortar no meio da palavra é o que fazia o nome deixar de identificar
+// quem é, que era o ponto do item 8: com quatro jogadores em retrato a caixa dá 68px
+// para 95px de texto.
+//
+// Quem escapa continua sendo o `escapar`, e as DUAS metades passam por ele: o nome do
+// convidado é entrada de fora, e fatiar uma string não a torna segura. Repare que um
+// nome-ataque como `<img src=x>` também tem espaço, então o corte cai no meio dele — e
+// mesmo assim as duas bandas saem escapadas, cada uma por si.
+function nomeEmPartes(nome) {
+  const n = String(nome == null ? '' : nome);
+  const corte = n.indexOf(' ');
+  if (corte < 0) return escapar(n);
+  return escapar(n.slice(0, corte)) + `<i class="resto">${escapar(n.slice(corte))}</i>`;
+}
+
 function desenharHUD(vista) {
   HUD.pontas.textContent = vista.pontas ? vista.pontas.join('  ·  ') : '—';
   HUD.monte.textContent = vista.monte;
@@ -75,7 +93,7 @@ function desenharHUD(vista) {
   // Um cartão por cadeira, na ordem em que a vez anda. O da vez acende.
   HUD.jogadores.innerHTML = vista.cadeiras.map((c, i) => `
     <div class="jog ${i === vista.vez ? 'davez' : ''} ${i === vista.cadeira ? 'euu' : ''}">
-      <span class="nome">${escapar(c.nome)}</span>
+      <span class="nome">${nomeEmPartes(c.nome)}</span>
       <span class="tipo">${ETIQUETA[c.tipo] || c.tipo}</span>
       <span class="pecas">${'▮'.repeat(Math.min(vista.naMao[i], 9))}<i>${vista.naMao[i]}</i></span>
     </div>`).join('');
@@ -103,6 +121,8 @@ function desenharHUD(vista) {
 
   desenharContagem(vista);
   desenharConversa(vista);
+  // Depois das duas, porque é a visibilidade DELAS que decide se há gaveta aberta.
+  atualizarCortina();
 }
 
 // Quantas peças de cada número já apareceram — as da mesa MAIS as da sua mão, como o
@@ -255,7 +275,52 @@ function alternarConversa(abrir) {
   HUD.conversa.classList.toggle('aberta', conversaAberta);
   if (conversaAberta) { naoLidas = 0; HUD.lista.scrollTop = HUD.lista.scrollHeight; }
   atualizarBotaoConversa();
+  atualizarCortina();
 }
+
+// ─── a gaveta do celular ─────────────────────────────────────────────────────
+// Numa tela de 360px a conversa tem 268px fixos: ela e a mão não cabem lado a lado. Não é
+// margem mal ajustada — os dois não cabem, e encolher a mesa até caber deixaria o
+// tabuleiro pequeno demais para ler. Então no celular estes painéis param de conviver com
+// o jogo: abrem por cima, com cortina atrás, e fecham num toque.
+//
+// A cortina não é enfeite. Sem ela, painel em cima de peça parece DEFEITO — foi
+// literalmente relatado assim ("peças bugadas em vertical"). Com ela, é uma gaveta aberta.
+const modoGaveta = () => matchMedia('(max-width: 560px), (max-height: 560px)').matches;
+
+// Olha a CLASSE e não a variável: a contagem também some quando não há mão (fim de mão,
+// saguão), e uma cortina sobre painel nenhum seria um vidro fosco no meio do jogo.
+const gavetaAberta = () =>
+  (conversaAberta && HUD.conversa.classList.contains('aberta')) ||
+  !HUD.contagem.classList.contains('oculta');
+
+function atualizarCortina() {
+  const aberta = modoGaveta() && gavetaAberta();
+  el('cortina').classList.toggle('oculta', !aberta);
+  // A classe no body é o que torna a gaveta MODAL: o CSS esconde o resto do HUD por ela.
+  // Sem isso a barra de ações e o "sua vez" boiam por cima da cortina, que é a mesma
+  // confusão de antes ao contrário.
+  document.body.classList.toggle('gaveta', aberta);
+}
+
+function fecharGavetas() {
+  if (conversaAberta) alternarConversa(false);
+  if (contando) {
+    contando = false;
+    guardar('contagem', contando);
+    if (vistaAtual) atualizarVista(vistaAtual);
+  }
+  atualizarCortina();
+}
+
+el('cortina').onclick = () => { tocarClique(); fecharGavetas(); };
+
+// Girar o aparelho pode cruzar o limiar dos 560px nos dois sentidos, e aí a mesma
+// conversa aberta deixa de ser gaveta (ou passa a ser). Sem isto sobra um vidro fosco por
+// cima do jogo, ou a gaveta abre sem cortina. Listener próprio e não um gancho no
+// `agendarEnquadre` do 07-cena.js: aquilo é sobre a câmera, isto é sobre o HUD.
+addEventListener('resize', atualizarCortina);
+addEventListener('orientationchange', atualizarCortina);
 
 // Só há com quem conversar se houver gente online. E o canal "dupla" só existe onde
 // existe dupla — o Clássico de 4 é o único modo em duplas.
@@ -354,6 +419,15 @@ function mostrarFimDePartida(vista) {
     : `${vista.maoNum} ${vista.maoNum === 1 ? 'mão' : 'mãos'} · partida até ${vista.alvo}`;
   el('btRevanche').classList.toggle('oculta', modo === 'convidado');
   mostrarTela('telaFimPartida');
+}
+
+// O CÓDIGO DA MESA ENQUANTO ELA É ONLINE. Fica FORA de `desenharHUD` de propósito:
+// aquela função só lê `vista`, e o código da sala não está na visão nem poderia estar —
+// pô-lo lá seria furar a fronteira do `visaoDe` por um dado de tela. Irmã de
+// `pintarBotaoSom`: quem muda o dado é quem chama.
+function pintarSala(codigo) {
+  HUD.salaPainel.classList.toggle('oculta', !codigo);
+  HUD.sala.textContent = codigo || '—';
 }
 
 // Quem desligou o som desligou por um motivo — trabalho, gente dormindo, ou simplesmente

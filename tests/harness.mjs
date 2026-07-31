@@ -65,6 +65,13 @@ export function installStubs() {
   global.innerWidth = 1600;
   global.innerHeight = 900;
   global.devicePixelRatio = 1;
+  // O harness roda sempre em 1600×900, então nenhuma media query de celular casa — e é
+  // exatamente isso que este dublê devolve. Existe porque o HUD passou a perguntar à
+  // tela se está em modo gaveta: guardar com `typeof matchMedia` no jogo seria peso morto
+  // em qualquer navegador de verdade, já que quem não tem matchMedia também não tem WebGL.
+  // Quem estava incompleto era o dublê, não o jogo.
+  global.matchMedia = consulta => ({ matches: false, media: consulta,
+    addEventListener: () => {}, removeEventListener: () => {} });
   global.performance = { now: () => (fakeTime += 1000 / 60) };
   global.addEventListener = (type, fn) => {
     if (!listeners.has(type)) listeners.set(type, []);
@@ -124,7 +131,17 @@ export function buildModule(exportar, htmlPath = JOGO_HTML, outPath = path.join(
 
   src = src.replace(
     /const renderer = new THREE\.WebGLRenderer\([^)]*\);/,
-    `const renderer = { shadowMap: {}, domElement: { style: {} }, setSize(){}, setPixelRatio(){}, setClearColor(){}, render(){ this.calls=(this.calls||0)+1; } };`
+    // A captura de ponteiro é de VERDADE (um Set) porque o jogo passou a PERGUNTAR a ela
+    // se o dedo ainda está na tela: é assim que ele descobre que um `pointerup` nunca vai
+    // chegar. Um dublê que só tivesse os métodos vazios responderia "não tenho captura" e
+    // o caminho inteiro do toque preso ficaria sem teste. Note que aqui a captura NÃO é
+    // solta sozinha no pointerup, como o navegador faz — quem quiser simular o dedo
+    // sumindo chama `releasePointerCapture` na mão, que é exatamente o que o sistema faz.
+    `const renderer = { shadowMap: {}, domElement: { style: {}, _cap: new Set(),
+       setPointerCapture(id){ this._cap.add(id); },
+       releasePointerCapture(id){ this._cap.delete(id); },
+       hasPointerCapture(id){ return this._cap.has(id); } },
+       setSize(){}, setPixelRatio(){}, setClearColor(){}, render(){ this.calls=(this.calls||0)+1; } };`
   );
   // No navegador `three/addons/` vem do importmap; aqui tem de apontar para o pacote instalado.
   src = src.replace(/'three\/addons\//g, "'./node_modules/three/examples/jsm/");

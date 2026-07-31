@@ -18,6 +18,11 @@ const TELAS = [
   { nome: 'retrato 390×844', width: 390, height: 844, touch: true },
   { nome: 'retrato 360×640', width: 360, height: 640, touch: true },
   { nome: 'paisagem 844×390', width: 844, height: 390, touch: true },
+  // O celular deitado PEQUENO. 844×390 é o maior deitado que existe em celular, e era o
+  // único aqui — por isso a suíte jurava que o deitado estava bem. Em 640×360 o #topo
+  // (454px, centrado) e o #jogadores (à direita) se encavalam em 58px, e nenhuma das duas
+  // caixas sabe disso: cada uma cabe na tela sozinha. O item 8 mora exatamente aqui.
+  { nome: 'paisagem 640×360', width: 640, height: 360, touch: true },
   { nome: 'tablet 820×1180', width: 820, height: 1180, touch: true },
   { nome: 'wide 1600×900', width: 1600, height: 900, touch: false },
 ];
@@ -35,14 +40,56 @@ const CASOS = [
   // Tabuleiro comprido: é quando a linha se espalha até a borda da mesa e o círculo dos
   // adversários fica mais apertado. Se algo vai sair do quadro, sai aqui.
   { nome: 'mesa cheia', montar: `mesa('classico', 4); contar(true); ateALinha(13);` },
+  // O QUINTO PAINEL DO TOPO. Mesa de 4 em duplas (placar com dois nomes) mais os três
+  // dados mais o código: é o topo mais cheio que existe. Vale o cenário porque o #topo já
+  // transbordou em 360px uma vez, e o comentário do CSS explica por que ninguém viu —
+  // overflow negativo em elemento fixo não aparece no scrollWidth. Sem esta cena o painel
+  // novo nasceria sem nenhuma foto, já que nenhum outro caso é de mesa online.
+  { nome: 'mesa online', montar: `mesa('classico', 4); contar(true); auto(11); window.__jogo.pintarSala('XJCR');` },
+  // NOMES NO LIMITE — item 8. Todas as cenas até aqui usavam os nomes padrão ("Você",
+  // "Bot 1"), que cabem em qualquer coisa: é por isso que a suíte nunca viu o nome cortado
+  // que o Ricardo relatou jogando. 14 é o `maxlength` do campo no menu (14-menu.js), então
+  // este é o pior caso que o jogo DEIXA existir, e não um exagero inventado para o teste.
+  // Em duplas o placar ainda soma dois deles ("Fulano e Sicrano"), que é onde o topo cresce.
+  { nome: 'nomes longos', montar:
+      `nomes('Ricardo Neves', 'Maria Fernanda', 'Sebastião Jr.', 'Ana Carolina');` +
+      `mesa('classico', 4); contar(true); auto(11);` },
 ];
 
 const AJUDA = `
+  // SEMEAR O SORTEIO, e esta é a linha que transforma esta suíte de intermitente em
+  // teste. As cenas montam a mesa JOGANDO de verdade, e o Math.random do navegador não é
+  // semeado como o do harness em Node: cada rodada montava um tabuleiro diferente, com
+  // outra quantidade de linhas na conversa e outro comprimento de fileira. Vários casos
+  // ficam na beirada do limite, e a moeda decidia.
+  //
+  // Três rodadas do mesmo commit chegaram a dar falha, passe limpo e uma falha DIFERENTE.
+  // Isso é pior do que parece: teste que falha às vezes ensina a rodar de novo, e "rodar
+  // de novo" é exatamente como uma regressão de verdade passa.
+  //
+  // Não precisou de nada no jogo — a página inteira usa Math.random, então trocá-lo aqui
+  // basta. mulberry32: pequeno, sem dependência, e bom o bastante para embaralhar peça.
+  const semear = (s) => {
+    let a = s >>> 0;
+    Math.random = () => {
+      a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  };
+
   // O localStorage é do file:// inteiro, então uma cena que liga a contagem contamina as
   // seguintes. Cada caso diz explicitamente o que quer.
   const contar = (ligado) => {
     const b = document.getElementById('btContagem');
     if (b.classList.contains('on') !== ligado) b.click();
+  };
+  // Nomes ANTES de mesa(): quem lê a cadeira é o comecarLocal lá dentro. Trocar depois
+  // deixaria o placar e a lista pintados com o nome velho, e a cena mediria outra coisa.
+  const nomes = (...ns) => {
+    const j = window.__jogo;
+    ns.forEach((n, i) => { if (j.MESA.cadeiras[i]) j.MESA.cadeiras[i].nome = n; });
   };
   const mesa = (modo, n) => {
     const j = window.__jogo;
@@ -118,10 +165,44 @@ const MEDIR = `(() => {
     return pior;
   };
 
+  // PEÇA POR BAIXO DE PAINEL. O teste sabia perguntar se a peça está dentro do quadro e se
+  // dois painéis se sobrepõem — nunca se o painel está EM CIMA da peça. É outra pergunta:
+  // uma peça no lugar certo, dentro da tela, pode estar simplesmente coberta.
+  //
+  // Mede as CAIXAS QUE PINTAM, não os contêineres: o #topo em retrato é uma faixa da
+  // largura da tela com fundo transparente e os quadrinhos dentro. Usar o retângulo dele
+  // acusaria cobertura no vão entre um painel e outro, onde dá para ver o jogo.
+  const caixas = [];
+  for (const n of document.querySelectorAll('.painel, button.canto, #acoes button, #confirmar')) {
+    const r = vis(n);
+    if (r) caixas.push({ id: n.id || n.className.split(' ')[0], ...r });
+  }
+  const naTela = v => ({ x: (v.x + 1) / 2 * window.innerWidth, y: (1 - v.y) / 2 * window.innerHeight });
+  const cobrindo = t => {
+    for (const c of caixas) if (t.x >= c.x && t.x <= c.r && t.y >= c.y && t.y <= c.b) return c.id;
+    return null;
+  };
+  const cobertas = [];
+  for (const m of j.naMao) {
+    const v = new V(m.xBase, m.yBase, m.zBase); v.project(j.camera);
+    const painel = cobrindo(naTela(v));
+    if (painel) cobertas.push({ oque: 'a peça ' + m.peca.join('|') + ' da sua mão', painel });
+  }
+  for (const [nome, grupo] of [['a mão de um adversário', j.grupoOutros], ['o monte', j.grupoMonte], ['o tabuleiro', j.grupoMesa]]) {
+    for (const o of grupo.children) {
+      const v = new V(); o.getWorldPosition(v); v.project(j.camera);
+      const painel = cobrindo(naTela(v));
+      if (painel) { cobertas.push({ oque: nome, painel }); break; }   // um exemplo por grupo basta
+    }
+  }
+
+  const cortina = document.getElementById('cortina');
   return {
     transbordo: document.documentElement.scrollWidth - window.innerWidth,
     largura: window.innerWidth, altura: window.innerHeight,
-    fov: j.camera.fov, paineis, pecas,
+    // Gaveta aberta muda o que se exige da tela: cobrir o jogo passa a ser o PONTO.
+    gaveta: !!cortina && !cortina.classList.contains('oculta'),
+    fov: j.camera.fov, paineis, pecas, cobertas,
     fileiras: new Set(j.naMao.map(m => m.yBase.toFixed(3))).size,
     naLinha: j.vista ? j.vista.linha.length : 0,
     mesa: extremo(j.grupoMesa), outros: extremo(j.grupoOutros), monte: extremo(j.grupoMonte),
@@ -157,7 +238,10 @@ for (const tela of TELAS) {
     await pagina.goto(JOGO, { waitUntil: 'networkidle2', timeout: 45000 });
     await pagina.waitForFunction('window.__jogo && window.__jogo.pronto',
       { timeout: 30000, polling: 400 });
-    await pagina.evaluate(AJUDA + caso.montar);
+    // A MESMA semente para toda cena: o que muda entre elas é o tamanho da tela e o que a
+    // cena monta, nunca o sorteio. Assim uma falha é sempre reproduzível — e uma cena que
+    // ficar na beirada passa a ser uma decisão (cabe ou não cabe), não uma moeda.
+    await pagina.evaluate(AJUDA + 'semear(20260730);' + caso.montar);
     await pagina.evaluate(() => new Promise(r => setTimeout(r, 350)));
 
     const m = await pagina.evaluate(MEDIR);
@@ -199,6 +283,23 @@ for (const tela of TELAS) {
     ok(m.mesa <= 1, `${onde}: o tabuleiro passou da borda da tela (ndc.x ${m.mesa.toFixed(2)}, com ${m.naLinha} peças na linha)`);
     ok(m.outros <= 1, `${onde}: a mão de um adversário saiu da tela (ndc.x ${m.outros.toFixed(2)})`);
     ok(m.monte <= 1, `${onde}: o monte saiu da tela (ndc.x ${m.monte.toFixed(2)})`);
+
+    // 6. nada do jogo POR BAIXO de painel — a pergunta que faltava, e a família de defeito
+    //    que já reincidiu (o comentário do 07-cena.js registra o copo movido à mão uma vez
+    //    pelo mesmo motivo).
+    //
+    //    MAS a exigência muda com o estado, e essa distinção é o coração do conserto: uma
+    //    GAVETA existe para cobrir o jogo. Com a cortina no ar, cobrir é o comportamento
+    //    certo — o defeito era cobrir sem dizer. Então:
+    //      gaveta fechada → nada do jogo pode estar coberto;
+    //      gaveta aberta  → ela manda na tela sozinha, sem HUD boiando por cima.
+    if (!m.gaveta) {
+      for (const c of m.cobertas) ok(false, `${onde}: ${c.oque} está por baixo de #${c.painel}`);
+    } else {
+      for (const id of ['acoes', 'vez', 'confirmar']) {
+        ok(!m.paineis[id], `${onde}: #${id} continua visível por cima da gaveta — ela não está modal`);
+      }
+    }
 
     const larguraNaTela = m.pecas.length
       ? (Math.max(...m.pecas.map(p => p.x)) - Math.min(...m.pecas.map(p => p.x))) : 0;
