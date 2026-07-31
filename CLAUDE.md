@@ -300,22 +300,79 @@ A fila 4 está fechada.
 
 ## Fila 5 — as regras que ainda estão erradas
 
+**Comece pelo "ONDE PARAMOS" logo abaixo** — ele tem o estado, os números e o plano em ordem.
+
 **Esta fila é o lugar de toda ideia e de toda implementação combinada.** Ideia nova, minha
 ou do Ricardo, entra aqui — não em memória de sessão, que não viaja com o repositório e não
 é lida por quem abrir o projeto amanhã.
 
 Os itens 1 e 2 vieram do Ricardo em **29/07/2026** e são regra de casa: não se deduzem do
 código nem se resolvem por bom senso de programador. O item 3 é de **30/07/2026** e é o
-pedaço que falta para a reconexão do online valer. Os itens **4 a 10** são de **30/07/2026** e
+pedaço que falta para a reconexão do online valer. Os itens **4 a 11** são de **30/07/2026** e
 saíram de jogo de verdade, no celular — são a primeira leva de defeitos relatados **em campo**,
 e não de leitura de código. Vale a distinção: a leitura acha o que está escrito errado, o
 campo acha o que está escrito certo e mesmo assim não funciona.
 
-**Estado:** **feitos** os itens 1, 3(a), 3(b), 4, 5, 9 e 10 — o 4 veio antes do 3(b) porque sem
-identidade "voltar para a mesa" põe você em qualquer cadeira. O **11 está pela metade** (o
-embaralho das cenas foi semeado; os temporizadores de bot ainda não). Falta o **3(c)** (voltar
-como anfitrião), e faltam o **6**, o **7** e o **8**. O item 2 espera um caso concreto do
-Ricardo.
+---
+
+### ONDE PARAMOS — sessão de 30/07/2026
+
+**Leia isto primeiro ao retomar.** É o estado real do trabalho, o que ele produziu, e o que
+fazer em seguida. Os detalhes de cada assunto estão nos itens numerados mais abaixo.
+
+#### Nada disto está no ar
+
+`develop` está **11 commits à frente de `origin/develop`**, e **`main` não foi tocada**. Como o
+Pages serve da `main`, o que está publicado ainda é a **v1.5.0** — nenhuma mudança desta sessão
+chegou a ninguém. Publicar exige `release/*` → merge em `main` com tag, pelo GitFlow do topo
+deste arquivo.
+
+#### O que mudou, e o que deu
+
+| item | o que ficou | o número |
+|---|---|---|
+| 1 · lá-e-lô | pontas iguais não são dois lados; cruzada mantida em 4 | força do bot 59,8% → **57,8% (3,8σ)**, limiar preservado |
+| 4 · identidade | `clienteId` + `sentar()` + `donoDaCadeira` reservando a cadeira | volta na cadeira certa **com a mesma mão**; 2 abas = 1 conexão |
+| 5 · reentrada | guarda no `btConectar` + retorno visual | um clique = uma conexão |
+| 3(a) · ver | código no `#topo`, copiável | — |
+| 3(b) · voltar | `guardar('sala')` + botão no menu, prazo de 2 h | sobrevive à recarga |
+| 9 e 10 · gaveta | conversa/contagem viram gaveta modal no celular | **20 falhas → 0** |
+| 11 · intermitência | embaralho das cenas semeado | metade: ver ressalva |
+
+Suítes ao fim da sessão: `npm test` (3/3), `telas`, `lembrar` e `online` **todas verdes**.
+
+#### A ressalva que não pode se perder
+
+**Uma rodada verde do `npm run telas` NÃO é prova — rode duas.** Semear o `Math.random` matou
+a variação do embaralho, mas a espera de 350 ms das cenas ainda deixa passar um número variável
+de temporizadores de bot: a mesma cena dá `mesa 0.27` numa rodada e `0.31` na outra. Enquanto
+o item 11 não fechar, uma falha isolada do `telas` pode ser moeda, não regressão — **e o
+contrário também**.
+
+#### O plano, em ordem
+
+1. **Item 7 — o clique que não joga, no celular.** O mais barato e o mais sentido por quem
+   joga. O relato já isolou o candidato: só no celular, sem sair da tela → **limiar de arrasto
+   de 9 px**, apertado demais para dedo. Mouse não treme; é a assimetria que aponta.
+2. **Item 6 — o toque preso.** `if (arrasto) return;` no `11-interacao.js`: dedo que sai da
+   tela nunca manda `pointerup`, e todo toque seguinte é descartado. **Não existe um único
+   `visibilitychange` no projeto** — é o gancho que falta, com `pointercancel` e
+   `lostpointercapture`.
+3. **Item 11 — fechar a intermitência.** Parar os temporizadores de bot durante a montagem da
+   cena. Vem antes de qualquer trabalho grande de tela, senão a suíte não serve para julgá-lo.
+4. **Item 8 — celular deitado.** O `overflow`/`ellipsis` dos nomes só existe em retrato. Já
+   melhorou de lado (a barra de ações subiu no deitado), mas o layout próprio continua devendo.
+5. **Item 3(c) — voltar como anfitrião.** O maior. Reivindicar o mesmo id do PeerJS, e para
+   isso **inverter** o `unavailable-id` do `tentarAbrir`, que hoje sorteia outro código.
+6. **Item 2 — o fechamento forçado.** **Bloqueado esperando o Ricardo:** a mesa, as mãos, o
+   lance, o modo, e se havia monte.
+
+#### Perguntas em aberto para o Ricardo
+
+- O **caso concreto** do item 2 (acima).
+- **Publicar ou não** o que já está em `develop`. São sete itens fechados, incluindo um
+  conserto de regra de pontuação e um de vazamento de mão pela cadeira errada — este último é
+  argumento forte para uma `release/1.6.0` cedo.
 
 ### 1. Lá-e-lô só existe com as pontas DIFERENTES ✔ feito
 
@@ -365,7 +422,7 @@ casa não é simétrica, e está tudo bem que não seja: a cruzada é a batida d
 o lá-e-lô é a das pontas diferentes. Registrado aqui porque nenhuma leitura de código chega
 a essa resposta — as duas saídas eram defensáveis.
 
-### 2. Ainda dá para FORÇAR o fechamento
+### 2. Ainda dá para FORÇAR o fechamento — BLOQUEADO, esperando o caso do Ricardo
 
 O Ricardo consegue forçar o jogo a trancar. A regra do fechamento armado existe (ver "Regras
 da casa" abaixo) e não está fechando o buraco todo.
@@ -393,7 +450,7 @@ olhasse a mão dos outros, a jogada desaparecendo da tela contaria ao jogador qu
 aquele número — e isso é vazamento de informação, irmão do que a `visaoDe` existe para
 impedir.
 
-### 3. O código da sala tem de ficar visível, para dar de voltar
+### 3. O código da sala tem de ficar visível, para dar de voltar — (a) e (b) ✔, falta o (c)
 
 Pedido do Ricardo em **30/07/2026**: deixar o código da mesa visível, para que quem sair tenha
 como voltar.
@@ -520,7 +577,7 @@ como o `clienteId` é o mesmo, o jogador faria take-over da própria cadeira.
 
 O corpo virou `conectarNaMesa(codigo)`, que é o que o botão "voltar para a mesa" reusa.
 
-### 6. Toque preso: o jogo parece congelar e não está
+### 6. Toque preso: o jogo parece congelar e não está — A FAZER (2º da fila)
 
 De **30/07/2026**. `11-interacao.js` começa o trato do toque com `if (arrasto) return;`. Se o
 dedo sair da tela ainda apoiado, o `pointerup` **nunca chega**, `arrasto` fica preenchido para
@@ -531,7 +588,7 @@ Não existe **nenhum `visibilitychange` no projeto inteiro**, e é o gancho natu
 perdendo o foco é o sinal de que o `pointerup` não vai chegar. `pointercancel` e
 `lostpointercapture` são os outros dois.
 
-### 7. No celular, o clique às vezes não joga a peça
+### 7. No celular, o clique às vezes não joga a peça — A FAZER (1º da fila)
 
 De **30/07/2026**. Relato do Ricardo: **só no celular, e sem ter saído da tela** — o que
 descarta o resíduo do item 6 e aponta para o **limiar de arrasto**. Arrastar é separado de
@@ -542,14 +599,14 @@ a assimetria é a evidência.
 O terceiro candidato, se não for isso, é o painel da conversa capturando o toque de
 propósito.
 
-### 8. Nome cortado com o celular deitado
+### 8. Nome cortado com o celular deitado — A FAZER
 
 De **30/07/2026**, e é a **única sobra da Fila 2** aparecendo em campo. O `overflow`, o
 `ellipsis` e a rolagem dos nomes existem só dentro do `@media (orientation: portrait)`.
 Deitado o jogo cai no `@media (max-height: 560px)`, que só aperta o `gap` — o HUD de celular
 deitado nunca foi um layout próprio, é o de tela baixa reaproveitado.
 
-### 9. Peças "bugadas" em vertical = peças POR BAIXO DE PAINEL
+### 9. Peças "bugadas" em vertical = peças POR BAIXO DE PAINEL ✔ feito (ver item 10)
 
 De **30/07/2026**. O Ricardo confirmou que **é layout**, não textura — o que descartou o atlas
 de pintas e o WebGL do aparelho, que seriam os únicos ramos impossíveis de consertar às cegas.
@@ -619,7 +676,7 @@ Não é hipótese de que esta família reincide: o comentário do `07-cena.js` r
 já foi movido à mão uma vez pelo mesmo motivo. Defeito que já voltou uma vez volta de novo, e
 a diferença entre um conserto e uma asserção é exatamente essa.
 
-### 11. O `test-telas.mjs` era INTERMITENTE — metade consertada
+### 11. O `test-telas.mjs` era INTERMITENTE — METADE feita, A FAZER (3º da fila)
 
 Descoberto em **30/07/2026**, ao acrescentar a cena da mesa online. Três rodadas seguidas do
 mesmo código deram: falha em `#acoes` × `#conversa` se sobrepondo, depois **passe limpo**,
