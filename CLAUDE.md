@@ -577,27 +577,72 @@ como o `clienteId` é o mesmo, o jogador faria take-over da própria cadeira.
 
 O corpo virou `conectarNaMesa(codigo)`, que é o que o botão "voltar para a mesa" reusa.
 
-### 6. Toque preso: o jogo parece congelar e não está — A FAZER (2º da fila)
+### 6. Toque preso: o jogo parece congelar e não está ✔ feito (31/07/2026)
 
-De **30/07/2026**. `11-interacao.js` começa o trato do toque com `if (arrasto) return;`. Se o
-dedo sair da tela ainda apoiado, o `pointerup` **nunca chega**, `arrasto` fica preenchido para
-sempre e **todo toque seguinte é descartado**. O render loop continua rodando — por isso
+De **30/07/2026**. `11-interacao.js` começava o trato do toque com `if (arrasto) return;`. Se o
+dedo saísse da tela ainda apoiado, o `pointerup` **nunca chegava**, `arrasto` ficava preenchido
+para sempre e **todo toque seguinte era descartado**. O render loop continua rodando — por isso
 parece congelado sem estar, que é a parte que confunde na hora de relatar.
 
-Não existe **nenhum `visibilitychange` no projeto inteiro**, e é o gancho natural: a aba
-perdendo o foco é o sinal de que o `pointerup` não vai chegar. `pointercancel` e
-`lostpointercapture` são os outros dois.
+**O `pointerup` é um evento que o navegador PROMETE e não garante.** Dedo saindo pela beirada,
+troca de app, gaveta de notificação: nenhum deles manda `pointerup`. O guarda do dedo único
+estava certo; o que faltava era alguém para **destrancá-lo**.
 
-### 7. No celular, o clique às vezes não joga a peça — A FAZER (1º da fila)
+Duas portas, e as duas precisavam existir:
+
+- **A captura de ponteiro é a fonte de verdade.** Se pedimos captura daquele ponteiro e o
+  navegador já a tirou de nós, o dedo foi embora sem avisar — e aí o `arrasto` é fantasma e o
+  toque novo passa por cima. Por isso `capturado` é gravado: sem essa marca o guarda não
+  distingue *"a captura sumiu"* de *"nunca houve captura"*, e num navegador sem captura ele
+  largaria o arrasto do primeiro dedo a cada segundo toque — trocando o toque preso pela peça
+  congelada no ar, que é o bug que aquele guarda existe para impedir.
+- **`visibilitychange` + `blur`**, que não existiam em lugar nenhum do projeto. Repare que
+  ali NÃO se pergunta se foi arrasto ou toque: gesto interrompido pelo sistema não é escolha
+  de ninguém, e completá-lo como toque jogaria por você.
+
+`lostpointercapture` foi considerado e **recusado**: a ordem dele contra o `pointerup` não é
+confiável entre navegadores, e se chegasse antes ele zeraria o `arrasto` e faria todo toque
+normal deixar de selecionar — item 7 de volta, pior.
+
+### 7. No celular, o clique às vezes não joga a peça ✔ feito (31/07/2026)
 
 De **30/07/2026**. Relato do Ricardo: **só no celular, e sem ter saído da tela** — o que
-descarta o resíduo do item 6 e aponta para o **limiar de arrasto**. Arrastar é separado de
-tocar por DISTÂNCIA (9 px), e 9 px é pouco para dedo: o toque vira arrasto sozinho, solta
-fora de qualquer peça e nunca conta como clique. Nunca aconteceu no PC, e mouse não treme —
-a assimetria é a evidência.
+descartava o resíduo do item 6 e apontava para o **limiar de arrasto**. Era isso: 9 px é uma
+mão apoiada numa mesa, e num celular na mão é menos que a oscilação de um toque **parado**. O
+toque virava arrasto sozinho, soltava sem ter reordenado nada, e `foiArrasto` fazia o
+`soltarArrasto` voltar antes de selecionar. Nunca aconteceu no PC porque mouse não treme — **a
+assimetria era a evidência, e ela estava certa.**
 
-O terceiro candidato, se não for isso, é o painel da conversa capturando o toque de
-propósito.
+O conserto tem **duas camadas, e a segunda é a que importa**:
+
+1. `LIMIAR_ARRASTO` virou `{ mouse: 9, dedo: 18 }`. Direto, e resolve o caso comum.
+2. **`foiMesmoArrasto` julga pelo RESULTADO, não pela distância.** Um limiar é sempre um
+   chute — 18 px serve para a maioria dos dedos e vai continuar sendo pouco para alguém. Um
+   gesto que atravessou o limiar e **não trocou nenhuma peça de lugar** não arrumou nada, e a
+   única intenção que sobra é a de tocar. É a rede embaixo do número, e é ela que faz o
+   defeito não voltar com outro dedo.
+
+**A regra geral que isto ensina:** para todo `if (x) return`, perguntar as duas coisas — *quem
+zera o `x`* e *o que acontece se esse alguém não vier*. O item 7 é o jogo entrando no estado
+cedo demais; o item 6 é o jogo não saindo dele nunca. São a mesma borda, em espelho.
+
+**No teste** (`test-jogo.mjs`, "o toque no celular"): 12 px de tremor no dedo continua sendo
+toque, 12 px no **mouse** continua sendo arrasto (o limiar do dedo não podia afrouxar o
+mouse), gesto de 300 px que não reordenou nada vale como toque, e o toque seguinte funciona
+tanto depois da captura perdida quanto depois de a aba voltar do fundo. **As cinco reprovam no
+código antigo** — foram rodadas contra ele de propósito.
+
+Duas armadilhas pagas ao escrever esse teste:
+
+- **`ok(mod.escolhida === tocar(...))` lê o operando da ESQUERDA primeiro.** A asserção
+  comparava a escolha *anterior* com a peça deste gesto, e nasceu **verde sem testar nada**
+  toda vez que as duas coincidiam. A peça sai numa linha própria, sempre.
+- **O dublê do renderer não tinha captura de ponteiro**, então o caminho inteiro do item 6
+  ficaria sem teste — o jogo passou a *perguntar* à captura se o dedo ainda está lá. É
+  literalmente a lição que o `harness.mjs` já registrava sobre o `matchMedia`: *"quem estava
+  incompleto era o dublê, não o jogo"*. A captura do dublê **não** se solta sozinha no
+  `pointerup`; quem quiser simular o dedo sumindo chama `releasePointerCapture` na mão, que é
+  o que o sistema faz.
 
 ### 8. Nome cortado com o celular deitado — A FAZER
 
