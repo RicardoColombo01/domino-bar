@@ -44,6 +44,28 @@ const CASOS = [
 ];
 
 const AJUDA = `
+  // SEMEAR O SORTEIO, e esta é a linha que transforma esta suíte de intermitente em
+  // teste. As cenas montam a mesa JOGANDO de verdade, e o Math.random do navegador não é
+  // semeado como o do harness em Node: cada rodada montava um tabuleiro diferente, com
+  // outra quantidade de linhas na conversa e outro comprimento de fileira. Vários casos
+  // ficam na beirada do limite, e a moeda decidia.
+  //
+  // Três rodadas do mesmo commit chegaram a dar falha, passe limpo e uma falha DIFERENTE.
+  // Isso é pior do que parece: teste que falha às vezes ensina a rodar de novo, e "rodar
+  // de novo" é exatamente como uma regressão de verdade passa.
+  //
+  // Não precisou de nada no jogo — a página inteira usa Math.random, então trocá-lo aqui
+  // basta. mulberry32: pequeno, sem dependência, e bom o bastante para embaralhar peça.
+  const semear = (s) => {
+    let a = s >>> 0;
+    Math.random = () => {
+      a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  };
+
   // O localStorage é do file:// inteiro, então uma cena que liga a contagem contamina as
   // seguintes. Cada caso diz explicitamente o que quer.
   const contar = (ligado) => {
@@ -155,9 +177,12 @@ const MEDIR = `(() => {
     }
   }
 
+  const cortina = document.getElementById('cortina');
   return {
     transbordo: document.documentElement.scrollWidth - window.innerWidth,
     largura: window.innerWidth, altura: window.innerHeight,
+    // Gaveta aberta muda o que se exige da tela: cobrir o jogo passa a ser o PONTO.
+    gaveta: !!cortina && !cortina.classList.contains('oculta'),
     fov: j.camera.fov, paineis, pecas, cobertas,
     fileiras: new Set(j.naMao.map(m => m.yBase.toFixed(3))).size,
     naLinha: j.vista ? j.vista.linha.length : 0,
@@ -194,7 +219,10 @@ for (const tela of TELAS) {
     await pagina.goto(JOGO, { waitUntil: 'networkidle2', timeout: 45000 });
     await pagina.waitForFunction('window.__jogo && window.__jogo.pronto',
       { timeout: 30000, polling: 400 });
-    await pagina.evaluate(AJUDA + caso.montar);
+    // A MESMA semente para toda cena: o que muda entre elas é o tamanho da tela e o que a
+    // cena monta, nunca o sorteio. Assim uma falha é sempre reproduzível — e uma cena que
+    // ficar na beirada passa a ser uma decisão (cabe ou não cabe), não uma moeda.
+    await pagina.evaluate(AJUDA + 'semear(20260730);' + caso.montar);
     await pagina.evaluate(() => new Promise(r => setTimeout(r, 350)));
 
     const m = await pagina.evaluate(MEDIR);
@@ -237,11 +265,21 @@ for (const tela of TELAS) {
     ok(m.outros <= 1, `${onde}: a mão de um adversário saiu da tela (ndc.x ${m.outros.toFixed(2)})`);
     ok(m.monte <= 1, `${onde}: o monte saiu da tela (ndc.x ${m.monte.toFixed(2)})`);
 
-    // 6. e nada do jogo pode estar POR BAIXO de um painel. É a pergunta que faltava, e a
-    //    família de defeito que já reincidiu: o comentário do 07-cena.js registra que o
-    //    copo foi movido à mão uma vez por causa disso.
-    for (const c of m.cobertas) {
-      ok(false, `${onde}: ${c.oque} está por baixo de #${c.painel}`);
+    // 6. nada do jogo POR BAIXO de painel — a pergunta que faltava, e a família de defeito
+    //    que já reincidiu (o comentário do 07-cena.js registra o copo movido à mão uma vez
+    //    pelo mesmo motivo).
+    //
+    //    MAS a exigência muda com o estado, e essa distinção é o coração do conserto: uma
+    //    GAVETA existe para cobrir o jogo. Com a cortina no ar, cobrir é o comportamento
+    //    certo — o defeito era cobrir sem dizer. Então:
+    //      gaveta fechada → nada do jogo pode estar coberto;
+    //      gaveta aberta  → ela manda na tela sozinha, sem HUD boiando por cima.
+    if (!m.gaveta) {
+      for (const c of m.cobertas) ok(false, `${onde}: ${c.oque} está por baixo de #${c.painel}`);
+    } else {
+      for (const id of ['acoes', 'vez', 'confirmar']) {
+        ok(!m.paineis[id], `${onde}: #${id} continua visível por cima da gaveta — ela não está modal`);
+      }
     }
 
     const larguraNaTela = m.pecas.length

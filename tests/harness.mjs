@@ -65,6 +65,13 @@ export function installStubs() {
   global.innerWidth = 1600;
   global.innerHeight = 900;
   global.devicePixelRatio = 1;
+  // O harness roda sempre em 1600×900, então nenhuma media query de celular casa — e é
+  // exatamente isso que este dublê devolve. Existe porque o HUD passou a perguntar à
+  // tela se está em modo gaveta: guardar com `typeof matchMedia` no jogo seria peso morto
+  // em qualquer navegador de verdade, já que quem não tem matchMedia também não tem WebGL.
+  // Quem estava incompleto era o dublê, não o jogo.
+  global.matchMedia = consulta => ({ matches: false, media: consulta,
+    addEventListener: () => {}, removeEventListener: () => {} });
   global.performance = { now: () => (fakeTime += 1000 / 60) };
   global.addEventListener = (type, fn) => {
     if (!listeners.has(type)) listeners.set(type, []);
