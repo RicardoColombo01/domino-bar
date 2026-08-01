@@ -5,9 +5,13 @@ bot, na mesma tela ou pela internet. No ar em
 **https://ricardocolombo01.github.io/domino-bar/** (repo público `RicardoColombo01/domino-bar`).
 
 Sem framework, sem bundler, sem asset: madeira, pintas e sons são gerados em canvas e
-WebAudio na hora. Three.js e PeerJS vêm de CDN. **4.880 linhas** no total (`src/js` +
+WebAudio na hora. Three.js e PeerJS vêm de CDN. **~5.100 linhas** no total (`src/js` +
 `pagina.html` + `css/estilo.css`), conferido em 02/08/2026 — este número **envelhece**, e
 envelheceu: ficou dizendo 2.100 por três releases seguidas.
+
+**Conte com `node`, não com o PowerShell.** `Measure-Object -Line` **não conta linha em
+branco** e devolve ~450 a menos; a discordância entre as duas réguas já custou uma
+investigação. `node -e "…split('\n').length"` é a que bate com o `wc -l`.
 
 ## Comandos
 
