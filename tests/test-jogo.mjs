@@ -19,6 +19,10 @@ const mod = await import(buildModule([
   // o botão mostrar ✕ não prova nada, era exatamente esse o defeito. `conexoes` diz
   // quais cadeiras online têm alguém vivo do outro lado.
   'ac', 'conexoes', 'montarCadeiras', 'abrirMesaOnline', 'encerrarRede',
+  // `apontada` é o realce da peça — o mesmo campo que o mouse alimenta e que o teclado
+  // passou a alimentar também. Perguntar por ele é como se vê o cursor de teclado sem
+  // inventar um segundo estado só para o teste.
+  'apontada', 'porQueNaoDa',
 ], undefined, path.join(import.meta.dirname, 'built-jogo.mjs')));
 
 let falhas = 0;
@@ -375,6 +379,93 @@ console.log('\narrastar a peça');
     'um segundo dedo deixou a peça do primeiro congelada no ar');
 }
 
+// Até a v1.8.0 não havia como ESCOLHER UMA PEÇA sem mouse ou dedo: o jogo tinha três
+// teclas (Esc, A, D) e nenhuma delas jogava. Estas asserções cobrem o ciclo novo — passear
+// com as setas, pular com os números — e a mais importante delas é a do SILÊNCIO: um
+// caminho novo de entrada que desiste calado é a doença que os itens 6 e 7 da Fila 5 e a
+// Fila 6 inteira passaram consertando.
+//
+// SETE DAS NOVE REPROVAM no código sem teclado — foram rodadas contra ele. As duas que
+// não: "mexer o ponteiro largou o cursor" e "digitar no campo não escolheu peça" passam
+// sem a funcionalidade porque lá nada acontecia mesmo. Elas são GUARDA contra regressão,
+// não prova do conserto, e ficam ditas assim para ninguém as contar como evidência.
+console.log('\njogar sem apontador');
+{
+  mod.MESA.modo = 'classico'; mod.MESA.n = 3;
+  mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[1].nivel = 'normal';
+  mod.MESA.cadeiras[2].tipo = 'bot'; mod.MESA.cadeiras[2].nivel = 'normal';
+  mod.comecarLocal();
+  // A vez pode nascer num bot — a primeira mão abre com o 6|6, e ele cai onde cair. Sem
+  // esta espera as `acoes.jogadas` vêm vazias, nenhuma peça é jogável, e a suíte reprovaria
+  // por causa do sorteio em vez de por causa do teclado.
+  for (let i = 0; i < 60 && mod.P.fase === 'mao' && mod.P.vez !== 0; i++) { frames(2); correrTimers(); }
+  frames(40);
+
+  const tecla = k => { fire('keydown', { key: k }); frames(1); };
+  const aviso = els.get('aviso');
+
+  // Uma seta e a peça levantada é a primeira da mão. `apontada` é o MESMO campo do hover
+  // do mouse: se um dia ele deixar de ser, o realce some sem ninguém perceber.
+  mod.cancelarEscolha();
+  tecla('ArrowRight');
+  ok(mod.apontada === 0, `a primeira seta devia apontar a peça 0 e apontou ${mod.apontada}`);
+  tecla('ArrowRight'); tecla('ArrowRight');
+  ok(mod.apontada === 2, `três setas à direita deviam parar na peça 2 e pararam em ${mod.apontada}`);
+  tecla('ArrowLeft');
+  ok(mod.apontada === 1, `a seta à esquerda devia voltar para 1 e foi para ${mod.apontada}`);
+
+  // A BEIRADA NÃO DÁ A VOLTA. Circular, o cursor some de um canto e reaparece no outro —
+  // e quem joga sem ver a tela perde a única referência que tem de onde está.
+  for (let i = 0; i < 30; i++) fire('keydown', { key: 'ArrowLeft' });
+  frames(1);
+  ok(mod.apontada === 0, `trinta setas à esquerda deviam parar na beirada 0 e pararam em ${mod.apontada}`);
+  for (let i = 0; i < 40; i++) fire('keydown', { key: 'ArrowRight' });
+  frames(1);
+  ok(mod.apontada === mod.naMao.length - 1,
+    `quarenta setas à direita deviam parar na última peça (${mod.naMao.length - 1}) e pararam em ${mod.apontada}`);
+
+  // MEXER O PONTEIRO LARGA O TECLADO. Sem esta regra os dois donos do `apontada` brigam a
+  // 60 quadros por segundo e o cursor de teclado é apagado no quadro seguinte ao de nascer.
+  fire('pointermove', { clientX: 5, clientY: 5 });
+  frames(1);
+  ok(mod.apontada === null, 'mexer o ponteiro devia ter largado o cursor de teclado');
+
+  // O NÚMERO ESCOLHE. Procuro uma peça jogável para não depender do sorteio.
+  const jogavel = mod.naMao.findIndex(m => m.jogavel);
+  ok(jogavel >= 0 && jogavel < 9, 'o cenário não deu peça jogável ao alcance das teclas 1..9');
+  if (jogavel >= 0 && jogavel < 9) {
+    mod.cancelarEscolha();
+    tecla(String(jogavel + 1));
+    ok(mod.escolhida === mod.chave(mod.naMao[jogavel].peca),
+      `a tecla ${jogavel + 1} devia ter levantado a peça ${mod.naMao[jogavel].peca.join('|')}`);
+    // A mesma tecla de novo larga a peça, como o segundo toque nela.
+    tecla(String(jogavel + 1));
+    ok(mod.escolhida === null, 'apertar a mesma tecla de novo devia ter cancelado a escolha');
+  }
+
+  // O SILÊNCIO É O DEFEITO, NÃO A RECUSA. `selecionarPeca` desiste calada quando a peça
+  // não dá — no mouse quem explica é o `soltarArrasto`. Sem uma linha equivalente aqui, o
+  // teclado apertaria o número e não aconteceria nada, para sempre, sem uma palavra.
+  const naoDa = mod.naMao.findIndex(m => !m.jogavel);
+  if (naoDa >= 0 && naoDa < 9) {
+    mod.cancelarEscolha();
+    aviso.textContent = '';
+    tecla(String(naoDa + 1));
+    ok(mod.escolhida === null, 'a tecla de uma peça que não dá não podia ter levantado nada');
+    ok(aviso.textContent === mod.porQueNaoDa(mod.naMao[naoDa].peca),
+      `a peça que não dá devia dizer POR QUE, e o aviso ficou "${aviso.textContent}"`);
+  }
+
+  // ESCREVER NA CONVERSA NÃO É JOGAR. O projeto já pagou isto uma vez com o 'a' de
+  // arrumar e o 'd' de dica (16-loop.js): com um campo na tela, digitar "vamos" chamava
+  // arrumarMao() a cada 'a'. Um caminho novo de teclado herda a mesma armadilha, e agora
+  // ela é pior — os dígitos aparecem em qualquer texto.
+  mod.cancelarEscolha();
+  fire('keydown', { key: String(jogavel + 1), target: { tagName: 'INPUT' } });
+  frames(1);
+  ok(mod.escolhida === null, 'digitar um número dentro do campo da conversa escolheu uma peça');
+}
+
 console.log('\no mudo tem de durar');
 {
   // O mudo é implementado suspendendo o AudioContext, e o listener de pointerdown que
@@ -393,7 +484,22 @@ console.log('\no mudo tem de durar');
 
   som.onclick();                                    // clica no ♪
   ok(mod.ac.state === 'suspended', 'clicar no botão de som não calou o áudio');
-  ok(som.textContent === '✕', 'o botão de som não virou ✕');
+  // O QUE SE EXIGE AQUI É O REQUISITO, NÃO O DESENHO. A asserção dizia `=== '✕'` e
+  // gravava o defeito: ✕ era o mesmo glifo do botão de SAIR DA PARTIDA, 22px ao lado —
+  // dois botões idênticos com consequências opostas. Trocar o glifo fazia o teste
+  // reprovar por ter melhorado, que é o sinal de que ele media a implementação.
+  // Agora ele pede as duas coisas que importam: mudou de cara, e não virou a cara do
+  // vizinho perigoso.
+  ok(som.textContent !== '♪', 'o botão de som não mudou de cara ao calar');
+  // O '✕' está ESCRITO AQUI de propósito, e não lido de `els.get('btSair')`: o harness não
+  // lê a página, então o botão de sair é um dublê vazio e a comparação daria `'🔇' !== ''`
+  // — verde por trivialidade, que é a armadilha nº 1 desta casa. Escrito à mão, isto
+  // reprova no código antigo, que é o único jeito de a asserção querer dizer alguma coisa.
+  // Se um dia o botão de sair trocar de glifo, esta linha fica desatualizada — e é por
+  // isso que o motivo está escrito, não só o número.
+  ok(som.textContent !== '✕', 'o botão de som virou ✕, o MESMO glifo do de sair da partida (22px ao lado)');
+  ok(som.getAttribute('aria-pressed') === 'true',
+    'o botão de som é um interruptor e não anunciou que está apertado');
 
   tocarNaMesa();                                    // ...e agora o toque seguinte
   ok(mod.ac.state === 'suspended',
