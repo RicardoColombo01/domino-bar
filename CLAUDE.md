@@ -353,20 +353,22 @@ onde o trabalho está: commitado ≠ enviado ≠ publicado. São três lugares d
 | **6 e 7** · toque | limiar por ponteiro + `foiMesmoArrasto` + `visibilitychange`/captura | **5 asserções novas**, todas vermelhas no código antigo |
 | **8** · deitado | `#topo` vira faixa entre as colunas; corte do nome na PALAVRA | **17 falhas → 0**; diagnóstico da fila estava INVERTIDO |
 
-#### A ressalva que não pode se perder
+#### A ressalva CAIU — e como se prova que caiu
 
-**Uma rodada verde do `npm run telas` NÃO é prova — rode duas.** Semear o `Math.random` matou
-a variação do embaralho, mas a espera de 350 ms das cenas ainda deixa passar um número variável
-de temporizadores de bot: a mesma cena dá `mesa 0.27` numa rodada e `0.31` na outra. Enquanto
-o item 11 não fechar, uma falha isolada do `telas` pode ser moeda, não regressão — **e o
-contrário também**.
+Durante toda a Fila 5 valeu: *"uma rodada verde do `telas` não é prova, rode duas"*. **O item 11
+fechou em 31/07/2026 e ela não vale mais** — uma rodada voltou a ser prova.
+
+O que a derrubou não foi a suíte ficar verde: foi ela ficar **igual**. Duas rodadas seguidas,
+49 linhas de números cada, idênticas linha a linha. Verde é o critério fraco — um teste
+intermitente também fica verde metade das vezes. **Determinismo se mede comparando rodadas, não
+contando aprovações**, e é assim que se confere se ele voltou a valer no futuro.
 
 #### O plano, em ordem
 
 1. ~~**PUBLICAR.**~~ ✔ **v1.6.0 publicada em 31/07/2026.** Nove itens, entre eles um conserto
    de regra de pontuação e um vazamento de mão pela cadeira errada.
-2. **Item 11 — fechar a intermitência.** Parar os temporizadores de bot durante a montagem da
-   cena. Vem antes de qualquer trabalho grande de tela, senão a suíte não serve para julgá-lo.
+2. ~~**Item 11 — fechar a intermitência.**~~ ✔ **feito em 31/07/2026.** A causa não era a
+   prevista (temporizador de bot), era a animação pega no meio por uma espera fixa.
 3. **Item 3(c) — voltar como anfitrião.** O maior. Reivindicar o mesmo id do PeerJS, e para
    isso **inverter** o `unavailable-id` do `tentarAbrir`, que hoje sorteia outro código.
 4. **Item 2 — o fechamento forçado.** **Bloqueado esperando o Ricardo:** a mesa, as mãos, o
@@ -797,14 +799,42 @@ dentro da própria página (`semear()` no `AJUDA`, um mulberry32 de cinco linhas
 de nada no jogo, porque a página inteira usa `Math.random`. Isso matou a variação do
 **embaralho**: a mesma cena monta sempre as mesmas peças.
 
-**O que SOBROU:** as cenas esperam 350 ms para a tela assentar, e nessa janela um número
-**variável** de temporizadores de bot dispara. Duas rodadas seguidas ainda dão `mesa 0.27` e
-`mesa 0.31` para a mesma cena. É muito menos folga do que antes, e nenhuma das duas rodadas
-reprovou — mas um caso na beirada ainda pode virar a moeda.
+### 11. O `test-telas.mjs` era INTERMITENTE ✔ feito (31/07/2026)
 
-**O que falta:** parar os temporizadores de bot durante a montagem da cena, de modo que o
-tabuleiro seja função só do que a cena pediu. Enquanto isso não existe, **uma rodada verde do
-`telas` não é prova** — rode duas.
+**A segunda metade não era o que a fila dizia.** A previsão era "parar os temporizadores de
+bot durante a montagem". Isso foi feito (`pararBots()` na ponte, um `clearTimeout(timerBot)`;
+uma chamada basta, porque `seguirOTurno` só roda em `publicar()`) — **e não bastou.**
+
+Comparando duas rodadas **linha a linha** em vez de só olhar o verde, o desenho apontou
+sozinho: **só o `mesa` variava.** `outros`, `monte`, `fileiras`, `peças` e `fov` saíam
+idênticos. E algumas variações eram grandes — `mão de 7` dava `0.48` e `0.66`, `contando` dava
+`0.59` e `0.89`.
+
+A causa real: **as peças DESLIZAM até o lugar**, e a espera fixa de 350 ms pegava a animação no
+meio. Quem decidia onde a peça estava era o relógio de parede e o jitter do software
+rendering, não a cena. O `pararBots` tirou a variação de *quantas* jogadas aconteceram; faltava
+a de *onde elas pararam*.
+
+**O conserto: esperar a tela PARAR, e não contar tempo.** A cena tira uma foto das posições a
+cada quadro e segue quando oito quadros saem iguais, com teto de 240 quadros para uma cena que
+nunca assente não travar a suíte.
+
+**Veredito:** duas rodadas seguidas, 49 linhas cada, **idênticas**. Com isso a ressalva "rode
+duas" deixa de valer — uma rodada do `telas` voltou a ser prova.
+
+Três armadilhas pagas, e as três valem mais que o conserto:
+
+- **A posição do GRUPO conta, não só a das peças.** O `grupoMesa` faz o próprio easing em z
+  para manter o tabuleiro centrado (`09-tabuleiro.js`). Olhando só os filhos, a foto ficava
+  parada enquanto o mundo inteiro ainda deslizava — e a medida é em coordenadas de **mundo**.
+- **`throw` dentro de um callback de `requestAnimationFrame` NÃO rejeita a `Promise` que o
+  envolve.** O `reject` nunca é chamado, então o erro vira travamento silencioso: a suíte
+  parou 30 s e o puppeteer cuspiu um `ProtocolError` que não fala da causa. O erro era um
+  `j.grupoMao` inexistente — **a ponte nunca expôs esse grupo** (a mão sai do `naMao`).
+- **`diff` de dois arquivos VAZIOS passa.** A suíte travada não gerou saída, os dois arquivos
+  saíram com zero linhas, e a comparação declarou "idênticas". Um teste de igualdade tem de
+  exigir também que **haja o que comparar** — senão a ausência de dados vira prova de
+  consistência. Hoje a comparação reprova abaixo de 40 linhas.
 
 ## Regras da casa (implementadas)
 

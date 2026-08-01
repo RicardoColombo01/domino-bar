@@ -241,8 +241,49 @@ for (const tela of TELAS) {
     // A MESMA semente para toda cena: o que muda entre elas é o tamanho da tela e o que a
     // cena monta, nunca o sorteio. Assim uma falha é sempre reproduzível — e uma cena que
     // ficar na beirada passa a ser uma decisão (cabe ou não cabe), não uma moeda.
-    await pagina.evaluate(AJUDA + 'semear(20260730);' + caso.montar);
-    await pagina.evaluate(() => new Promise(r => setTimeout(r, 350)));
+    // `pararBots()` DEPOIS de montar, e é a outra metade do item 11. Semear o Math.random
+    // tirou a variação do embaralho, mas a espera abaixo deixava passar um número variável
+    // de temporizadores de bot: a mesma cena dava `mesa 0.27` numa rodada e `0.31` na
+    // outra, e um caso na beirada do limite virava moeda. Com a mesa congelada, o
+    // tabuleiro é função só do que a cena pediu — e uma falha volta a ser reproduzível.
+    await pagina.evaluate(AJUDA + 'semear(20260730);' + caso.montar + ';window.__jogo.pararBots();');
+    // ...e ESPERA A TELA PARAR, em vez de contar 350 ms. Era a outra metade da
+    // intermitência, e a maior: as peças DESLIZAM até o lugar, então uma espera fixa pega
+    // a animação no meio e quem decide onde a peça está é o relógio de parede e o jitter
+    // do software rendering — não a cena. Comparando duas rodadas linha a linha, `mão de
+    // 7` dava `mesa 0.48` e `0.66`, e `contando` dava `0.59` e `0.89`. Repare que só o
+    // `mesa` variava: `outros`, `monte`, `fileiras` e `fov` já estavam parados, e foi esse
+    // desenho que apontou para a animação em vez dos temporizadores.
+    //
+    // O teto de quadros existe para uma cena que nunca assente não travar a suíte: ela
+    // segue com o que tem, que é o comportamento de antes.
+    await pagina.evaluate(() => new Promise(pronto => {
+      const j = window.__jogo;
+      // A posição do GRUPO entra junto com a das peças, e não é detalhe: o `grupoMesa`
+      // faz o próprio easing em z para manter o tabuleiro centrado (`09-tabuleiro.js`).
+      // Olhando só os filhos, a foto ficaria parada enquanto o mundo inteiro ainda
+      // deslizava — e a medida é em coordenadas de MUNDO, então é o grupo que manda.
+      // A mão vem do `naMao`, e não de um `grupoMao`: a ponte nunca expôs esse grupo.
+      const lugar = o => o.position.toArray().map(n => n.toFixed(4)).join(',');
+      const foto = () =>
+        [j.grupoMesa, j.grupoOutros, j.grupoMonte]
+          .map(g => lugar(g) + '>' + g.children.map(lugar).join(';')).join('|') +
+        '#' + j.naMao.map(m => lugar(m.obj)).join(';');
+      let antes = '', parados = 0, quadros = 0;
+      const olhar = () => {
+        let agora;
+        // Erro aqui dentro NÃO rejeita a promessa — ela simplesmente nunca resolve, e o
+        // puppeteer só reclama 30 s depois com um ProtocolError que não fala da causa.
+        // Foi assim que um `j.grupoMao` inexistente travou a suíte inteira, e o pior: a
+        // captura ficou VAZIA, e dois arquivos vazios passam no `diff` como "idênticos".
+        try { agora = foto(); } catch (e) { void e; return pronto(); }
+        parados = agora === antes ? parados + 1 : 0;
+        antes = agora;
+        if (parados >= 8 || ++quadros > 240) return pronto();
+        requestAnimationFrame(olhar);
+      };
+      requestAnimationFrame(olhar);
+    }));
 
     const m = await pagina.evaluate(MEDIR);
     const onde = `${tela.nome} · ${caso.nome}`;
