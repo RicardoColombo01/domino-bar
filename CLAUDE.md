@@ -5,9 +5,13 @@ bot, na mesma tela ou pela internet. No ar em
 **https://ricardocolombo01.github.io/domino-bar/** (repo público `RicardoColombo01/domino-bar`).
 
 Sem framework, sem bundler, sem asset: madeira, pintas e sons são gerados em canvas e
-WebAudio na hora. Three.js e PeerJS vêm de CDN. **4.880 linhas** no total (`src/js` +
+WebAudio na hora. Three.js e PeerJS vêm de CDN. **~5.100 linhas** no total (`src/js` +
 `pagina.html` + `css/estilo.css`), conferido em 02/08/2026 — este número **envelhece**, e
 envelheceu: ficou dizendo 2.100 por três releases seguidas.
+
+**Conte com `node`, não com o PowerShell.** `Measure-Object -Line` **não conta linha em
+branco** e devolve ~450 a menos; a discordância entre as duas réguas já custou uma
+investigação. `node -e "…split('\n').length"` é a que bate com o `wc -l`.
 
 ## Comandos
 
@@ -24,6 +28,12 @@ npm run online    testa o online abrindo duas abas e uma mesa real
                   aceita escolher: node tests/test-online.mjs --so=saguao
 npm run fechamento  caça fechamento forçado jogando milhares de mãos (~3 min)
 npm run servir    servidor local (o online não fecha conexão em file://)
+
+A suíte de telas passa de 10 min e já foi interrompida por limite de tempo. Rode em
+DUAS METADES, que é o que o argumento existe para permitir:
+  node tests/test-telas.mjs 360x640,390x844,640x360
+  node tests/test-telas.mjs 844x390,820x1180,1600x900
+O rodapé grita "RODADA PARCIAL" — é ele que impede meia suíte passar por suíte inteira.
 
 node tests/test-online.mjs https://ricardocolombo01.github.io/domino-bar/
                   testa o que está PUBLICADO, não o local
@@ -189,6 +199,30 @@ As pontas são o primeiro e o último número; jogar na esquerda é um `unshift`
   diferentes** — até um desenho sem um sorteio sequer muda ~0,6% ao ser repintado. Para
   perguntar "o desenho é determinístico?", compare repintura contra repintura, nunca contra a
   primeira pintura.
+- **Ao acrescentar uma API de navegador ao jogo, o primeiro lugar a olhar é o `harness.mjs`.**
+  O dublê já ficou para trás **sete vezes** (`matchMedia`, captura de ponteiro,
+  `AudioContext`, `Peer`, eventos de contexto WebGL, `setAttribute`, `preventDefault`). Sete
+  não é acaso. E a tentação, todas as vezes, é guardar no JOGO (`if (el.setAttribute)`) —
+  isso troca um defeito por um ramo que o teste nunca alcança.
+- **`opacity` não escurece a cor, ela MISTURA o texto com o fundo.** Então contraste de
+  texto desbotado depende de onde ele está, e o piso do projeto tem nome: `--fraco: .58`
+  (medido, `.52` é o mínimo do AA e folga zero não é conserto). Opacidade de texto abaixo
+  do piso precisa de motivo escrito ao lado.
+- **Região `aria-live` reescrita a cada quadro vira ruído.** `desenharHUD` roda em todo
+  `publicar()`, e atribuir `textContent` troca o nó de texto mesmo quando a frase é
+  idêntica — o leitor de tela anuncia a TROCA, não a diferença. Texto de região viva só se
+  escreve quando muda. E `opacity: 0` mantém o elemento na árvore de acessibilidade;
+  `display: none` o tira, e o anúncio morre junto sem aparecer em foto nenhuma.
+- **Asserção comparada contra um dublê VAZIO é verde por trivialidade.** Comparar o glifo do
+  botão de som com `els.get('btSair').textContent` parece mais robusto que escrever `'✕'` à
+  mão, e é o contrário: o harness não lê a página, então aquilo é `''`. Quando o teste
+  precisa de um valor que só existe no HTML, escreva-o à mão **com o motivo ao lado**.
+- **Asserção nova sobre comportamento que já está CERTO não pode nascer vermelha** — e por
+  isso não prova nada sozinha. A prova equivalente é **mutação**: quebre a linha que ela
+  deveria proteger e confira que ela cai.
+- **`Measure-Object -Line` do PowerShell NÃO conta linha em branco** (~450 a menos que o
+  `wc -l` neste repositório). Contar linha com ele fez a base parecer ter encolhido depois
+  de ganhar código.
 - **`catch` que guarda só a `message` esconde ONDE.** O `test-online.mjs` engolia o stack e
   transformava "falhou em algum lugar dos 300 lances do teste" num palpite caro. Hoje
   `DOMINO_DEBUG=1` imprime. Vale para qualquer `catch` que exista para transformar falha de
@@ -366,13 +400,14 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 
 | | |
 |---|---|
-| publicado | **v1.8.0** — https://ricardocolombo01.github.io/domino-bar/ |
+| publicado | **v1.9.0** — https://ricardocolombo01.github.io/domino-bar/ |
 | `main` ↔ `origin/main` | `0 ← \| 0 →` |
 | `develop` ↔ `origin/develop` | `0 ← \| 0 →` |
 | árvore de trabalho | limpa |
 | Fila 5 | **fechada** — 11 itens |
-| Fila 6 | **5 defeitos fechados**, o resto do escopo à espera (ver a seção da Fila 6) |
-| **Fila 7** | **fechada** — as cinco fotos de campo de 31/07 (ver a seção da Fila 7) |
+| Fila 6 | **fechada** — os 5 defeitos, e o resto do escopo na v1.9.0 (ver a Fila 8) |
+| Fila 7 | **fechada** — as cinco fotos de campo de 31/07 |
+| **Fila 8** | **fechada** — acessibilidade, teclado, README e três lacunas de teste |
 | pendências bloqueadas | **nenhuma** — nada esperando resposta do Ricardo |
 
 **Não há defeito conhecido em aberto.** O que sobra é trabalho de qualidade, listado no fim
@@ -407,9 +442,13 @@ onde o trabalho está: **commitado ≠ enviado ≠ publicado.** São três lugar
 | **3(c)** · reabrir | reivindica o mesmo id do PeerJS; `donoDaCadeira` guardado | convidado volta **sozinho** na cadeira dele |
 | **2** · fechamento | cai o `!temMonte`; o `morto[]` já era a pergunta forte | **313 casos em 1000 mãos → 0** |
 | **F6** · cinco defeitos | mudo, escape do nome, revanche, CDN, chave de protótipo | todos com asserção **vermelha antes** |
+| **F8** · acessibilidade | `--fraco: .58` com nome e motivo; aria-live; 🔇 | **7 seletores** reprovavam o AA, 5 nunca citados |
+| **F8** · teclado | `← →`, `1..9`, Enter — o realce já existia | **9 asserções**, 7 vermelhas antes |
+| **F8** · lacunas | duplas, painel de contagem, `<select>` | provadas por **mutação**, não por vermelho |
 
 **As releases:** v1.6.0 (itens 1, 3a, 3b, 4, 5, 6, 7, 8, 9, 10) → v1.7.0 (itens 2, 3c, e o 11)
-→ v1.7.1 (os cinco defeitos da varredura).
+→ v1.7.1 (os cinco defeitos da varredura) → v1.8.0 (as cinco fotos da Fila 7) → **v1.9.0** (a
+Fila 8: acessibilidade, teclado, README e três lacunas de teste).
 
 #### A ressalva CAIU — e como se prova que caiu
 
@@ -477,47 +516,28 @@ de igualdade tem de exigir também que **haja o que comparar**.
 
 #### O QUE FAZER AMANHÃ — em ordem, e por quê
 
-Nada disto é defeito: são melhorias medidas, todas com arquivo e linha na seção da **Fila 6**
-lá embaixo. A ordem abaixo é uma recomendação com justificativa, não uma sentença — o escopo é
-do Ricardo, e ele já mostrou que prefere ondas pequenas com release no fim de cada uma.
+**Os seis itens que moravam aqui foram todos feitos** — os 3 e 4 na v1.8.0, os outros quatro
+na **v1.9.0** (Fila 8, lá embaixo). O que sobra é a lista curta abaixo, e nenhum deles é
+defeito.
 
-**1. Acessibilidade barata — meio dia, e é a maior alavanca por real gasto.**
-O projeto não tem **um único** `aria-*`, `role`, `alt`, `tabindex`, `:focus-visible` ou
-`prefers-*`. Comece por três coisas que somam poucas linhas:
-- `aria-live="polite"` em `#aviso`, `#vez` e `#conversaLista`. O `avisar()` é o canal de TODO
-  erro do motor e do porquê de a peça não dar; hoje nada disso existe para leitor de tela.
-- **Contraste do texto de erro.** `#onlineErro` usa `.nota` (`opacity: .5` em 12 px, ~4.3:1) —
-  é o texto de MENOR contraste da tela, e é justamente o que avisa que algo deu errado. Erro
-  não é decoração. Subir as opacidades de `.45–.58` para `~.72` resolve sem tocar no estilo
-  âmbar-sobre-marrom.
-- **O botão de mudo vira `✕`, o mesmo glifo do botão de sair, 22 px ao lado.** Trocar por 🔇.
+**1. As lacunas de teste que a Fila 8 NÃO fechou**, e as duas são de rede — precisam de um
+Chrome de verdade, no `test-online.mjs`:
+- **O esgotamento do prazo de 30 s** de quem cai. Hoje há asserção de cair e VOLTAR; não há
+  de cair e não voltar, que é o ramo que transforma a queda em derrota.
+- **Os ramos de rede do sair da partida**, e a metade do `<select>` de cadeira que grava
+  (o `onchange`): o harness de Node não constrói elementos a partir de `innerHTML`, então o
+  handler nunca é ligado. Está dito no próprio teste em vez de contornado.
 
-**2. Teclado — meio dia, e fecha um ciclo que já está quase pronto.**
-Hoje o teclado tem três teclas (`Esc`, `A`, `D`) e **não existe** como escolher uma peça. Mas
-os botões de confirmar já são `<button>` de verdade e já pegam Tab. Teclas `1..9` chamando
-`selecionarPeca(i-1)` — função que já existe e é a mesma que a dica usa — fecham o ciclo
-inteiro: selecionar → Tab → Enter. O custo real é o realce visual da peça focada no 3D.
+**2. `prefers-reduced-motion`.** Deixou de ser hipotético agora que o resto da acessibilidade
+existe — é a única linha do checklist que ficou de fora. A lâmpada respira para sempre e a
+câmera reenquadra; é o pior conjunto para sensibilidade vestibular. **Pequeno no CSS
+(três animações), médio no 3D**, e é essa segunda metade que faz valer a pena decidir o
+escopo antes de começar: só o CSS entrega meia promessa.
 
-~~**3. As pintas da peça — a lacuna de teste mais perigosa que existe hoje.**~~ ✔ **feita na
-v1.8.0**, de carona na suíte de textura (Fila 7, item 1): cada célula do atlas é amostrada
-nos 9 pontos da grade contra uma tabela escrita no teste, e a UV de cada metade prova a
-convenção "o `[0]` à esquerda". Conferida por mutação.
-
-~~**4. O argumento de linha de comando do `test-telas`.**~~ ✔ **feito na v1.8.0**, e virou
-pré-requisito prático em vez de conforto — com ele, iterar num defeito de uma tela custa um
-minuto em vez de dez. O `test-online` ganhou o mesmo (`--so=`).
-
-**5. Documentação — o README está duas releases atrás.** Não menciona a conversa da mesa, a
-dica de jogada, a gaveta do celular nem o reabrir a mesa; diz que o bot difícil ganha ~59% (é
-**55,8%** desde os itens 1 e 2); o diagrama de branches para na v1.1.0. E o cabeçalho DESTE
-arquivo dizia ~2.100 linhas (corrigido em 01/08). É a porta de entrada de um repositório
-público, e hoje ela descreve um jogo mais pobre do que o que está no ar.
-
-**6. As outras lacunas de teste**, em ordem de gravidade: o som e o mudo (hoje o dublê existe,
-então ficou barato), o fim de mão **em duplas** (só há asserção com `MESA.n = 2`, e mesa de 4 é
-o modo clássico de boteco), o **conteúdo** do painel de contagem (só se testa se ele cobre a
-mesa, nunca se conta certo — e é ferramenta de decisão), o `<select>` de cadeira do menu, o
-esgotamento do prazo de 30 s de quem cai, e os ramos de rede do sair da partida.
+**3. A compra voluntária, que existe no menu e cujo ramo NUNCA RODA.** É persistida,
+validada, aparece na tela — e o bot nunca compra tendo jogada, então nenhuma linha do
+caminho é exercitada. É a lacuna mais curiosa do projeto: uma regra da casa que talvez não
+funcione, e ninguém saberia.
 
 #### O QUE PODERIA SER FEITO, mas não recomendo agora
 
@@ -537,6 +557,8 @@ Registrado para não ser redescoberto do zero — e com o motivo de não ser pri
   elegância, para o número de jogadores.
 - **`prefers-reduced-motion`.** A lâmpada respira para sempre e a câmera reenquadra; é o pior
   conjunto para sensibilidade vestibular. Pequeno no CSS, médio no 3D.
+- ~~**`prefers-reduced-motion`.**~~ subiu para o "O QUE FAZER AMANHÃ": era o único item do
+  checklist de acessibilidade que a Fila 8 não fechou, e agora é o que sobra dele.
 - **Dívidas que investiguei e concluí que NÃO são defeito hoje** — não refaça o trabalho:
   o clone de material por peça sem `dispose()` (mesma `cacheKey`, os materiais viram lixo
   coletável; é churn, não vazamento); o `alvos.esq === alvos.dir` do `06-layout.js` (aliasing
@@ -545,9 +567,11 @@ Registrado para não ser redescoberto do zero — e com o motivo de não ser pri
 
 #### Perguntas em aberto para o Ricardo
 
-- **Nenhuma bloqueia.** O item 2 era a única e a busca respondeu no lugar dele.
+- **Nenhuma bloqueia.**
 - A única decisão que vale perguntar antes de agir é **o escopo da próxima onda** (a lista de
-  1 a 6 acima), porque ele já disse que prefere ondas pequenas com release no fim.
+  1 a 3 acima), porque ele já disse que prefere ondas pequenas com release no fim. E a do
+  `prefers-reduced-motion` tem uma pergunta dentro: **só o CSS, ou o 3D junto?** — só o CSS
+  para a lâmpada de respirar e deixa a câmera reenquadrando, que é meia promessa.
 
 #### Como retomar em cinco minutos
 
@@ -1147,10 +1171,10 @@ experiência/acessibilidade. **Cada achado foi conferido à mão antes de entrar
 Saíram cinco defeitos, todos ✔ feitos na v1.7.1. **Dois deles são a mesma doença dos itens
 6 e 7: o jogo falhando em silêncio.**
 
-**A FILA 6 CONTINUA ABERTA.** Os cinco defeitos fecharam; o resto do que a varredura achou
-está na seção **"o que ficou de FORA do escopo"**, no fim desta fila — acessibilidade,
-cobertura de teste e documentação. Nada disso é defeito, tudo isso é medido, e a ordem
-recomendada está no **"O QUE FAZER AMANHÃ"** lá em cima.
+**A FILA 6 ESTÁ FECHADA.** Os cinco defeitos fecharam na v1.7.1; o resto do que a varredura
+achou — acessibilidade, cobertura de teste e documentação, na seção "o que ficou de FORA do
+escopo" no fim desta fila — foi feito na **v1.9.0**, e está registrado na **Fila 8**. O que
+sobrou dali (dois ramos de rede, a compra voluntária) está no "O QUE FAZER AMANHÃ" lá em cima.
 
 **Nenhum destes cinco foi relatado por ninguém.** Vieram de procurar, não de esperar — e é
 uma diferença que vale registrar, porque a Fila 5 inteira nasceu de relato. Os dois modos se
@@ -1475,6 +1499,157 @@ nasce verde como coisa que não prova conserto nenhum. Foi conferida por mutaç�
 - **`npm run textura`** — suíte nova, ~40 s, que também é a única asserção que existe sobre o
   que as peças desenham.
 - **A folga 3D e a largura do nome no log do `telas`**, sempre.
+
+## Fila 8 — o resto do escopo da Fila 6 ✔ fechada (v1.9.0)
+
+Com a Fila 7 fechada e nenhum defeito em aberto, o Ricardo escolheu as **quatro frentes de
+qualidade** que a varredura de 31/07 tinha deixado à espera: acessibilidade, teclado, README
+e as lacunas de teste. Nenhuma delas é defeito relatado — é a primeira release inteira feita
+de trabalho que ninguém pediu porque ninguém sabia que faltava.
+
+### 1. Acessibilidade ✔ feito
+
+O projeto não tinha **um único** `aria-*`, `role`, `alt`, `tabindex` ou `:focus-visible`.
+
+**A MEDIÇÃO CORRIGIU A FILA EM DUAS DIREÇÕES, e é a lição do item.** A fila mandava "subir as
+opacidades de `.45–.58` para `~.72`". Medindo o contraste real contra os três fundos do jogo
+(`tests/` não tem essa suíte; foi um script de uma vez só):
+
+| a fila dizia | a medida |
+|---|---|
+| `.nota` está em ~4.3:1 | 4,37:1 — reprova mesmo, mas por pouco |
+| subir `.45–.58` → `.72` | `.58` (o valor do `.rot`) **já passava**, com 5,4:1 |
+| a linha de corte | **`.52`**, não `.72` — `.72` seria achatar a hierarquia à toa |
+| só o `#onlineErro` | **sete** seletores reprovavam, cinco nunca citados |
+
+`opacity` não escurece a cor, ela **mistura** o texto com o que está atrás — por isso o
+contraste real depende do fundo. Aqui a variação entre os três fundos é de só ~0,07:1, porque
+o `.painel` (`rgba .82`) é opaco o bastante para o 3D atrás quase não contar. **Isso é sorte
+de projeto, não desenho:** um painel mais transparente faria o mesmo texto passar sobre
+madeira escura e reprovar sobre madeira clara.
+
+**O piso ganhou nome: `--fraco: .58`.** É a mesma lição do `baralhoDoModo()` — número solto
+apodrece, número com nome e motivo escritos sobrevive. E a regra que veio junto: **toda
+opacidade de texto abaixo do piso tem de ter um motivo escrito ao lado**. As quatro exceções
+de hoje: o `×` separador (não é texto, é o traço entre dois placares), o botão desabilitado (o
+WCAG dispensa, e aqui o apagado É a informação), e o placar de 34 px (texto grande pede 3:1,
+não 4,5:1).
+
+**Duas opacidades eram SEMÂNTICAS e mesmo assim subiram**, e vale saber por quê:
+- `.doJogo` (a narração, contra a fala) — o que carrega a distinção não é o quanto a narração
+  desbota, é o quanto a **fala acende**: nome em âmbar e opacidade cheia. `.58` contra `1.0`
+  continua sendo 42% de diferença.
+- `.zerado` (o número que já apareceu inteiro) estava em `.38` = 3,04:1. O painel de contagem
+  é **ferramenta de decisão**: saber que o 5 acabou decide a jogada tanto quanto saber que
+  faltam dois. Linha que não dá para ler não informa, esconde.
+
+**`aria-live` tem uma armadilha que só aparece neste jogo.** `#vez` virou região viva, e
+`desenharHUD` roda em **todo** `publicar()` — várias vezes por jogada. Atribuir `textContent`
+troca o nó de texto mesmo quando a frase é idêntica, e o leitor de tela anuncia a **troca**,
+não a diferença: sem guarda ele repetiria "Vez de Tião" a cada compra do bot, e a região viva
+viraria o motivo de desligar o leitor. Hoje só escreve quando muda.
+
+`#aviso` é `alert`/assertive e não polite, e a razão é o prazo: ele some em 2,2 s, então na
+fila atrás da narração seria lido depois de já ter sumido. E ele é `opacity: 0` quando
+escondido, **não `display: none`** — continua na árvore de acessibilidade, que é o que faz o
+anúncio funcionar. Quem um dia "arrumar" isso para `display: none` mata o anúncio junto, e
+não vai aparecer em foto nenhuma.
+
+`#conversaLista` é `role="log"` e não `status`: log é a semântica de fio cronológico em que só
+o que **chega** é anunciado — que é o que `porNaConversa` faz com `appendChild`.
+
+O botão de mudo virou **🔇**. Era `✕`, o mesmo glifo do botão de sair da partida, 22 px ao
+lado: dois botões com o mesmo desenho e consequências opostas.
+
+### 2. Teclado ✔ feito
+
+**A fila previa que "o custo real é o realce visual da peça focada no 3D". QUINTO diagnóstico
+de leitura que esta base perde para um número:** o realce já existia inteiro.
+`animarMao(dt, apontada)` levanta a peça apontada em `0.2` desde sempre, e ela nunca soube que
+aquilo vinha de um mouse. `apontada` é só um índice.
+
+O que precisou existir foi a **regra de dono**: `atualizarPonteiro` roda em todo quadro e
+reescreve `apontada` a partir do raycast, então um cursor de teclado seria apagado no quadro
+seguinte ao de nascer. Hoje **o último dispositivo que falou manda** — mexer o ponteiro larga
+o teclado, teclar larga o ponteiro.
+
+```
+← →            passeia pela mão        1 … 9  pula direto e escolhe
+Enter/espaço   escolhe                 Esc    cancela (já existia)
+```
+
+**As duas portas existem de propósito.** O número é o caminho rápido e é o que a fila pedia,
+mas ele **para no 9 e o Duelo dá catorze peças na mão** — sem as setas, cinco peças ficariam
+inalcançáveis num dos três modos da casa.
+
+Escolher pelo teclado passa pelo **mesmo caminho do toque**, na mesma ordem (mesma peça
+cancela, peça que não dá explica por quê, e só então seleciona). Um segundo caminho com regras
+próprias é como as duas metades passam a discordar — foi literalmente o defeito 3 da Fila 6,
+com duas cópias da regra da revanche.
+
+**O silêncio é o defeito, não a recusa.** `selecionarPeca` desiste calada quando a peça não é
+jogável; no mouse quem explica é o `soltarArrasto`. Sem a linha equivalente no teclado, apertar
+o número não faria nada, para sempre, sem uma palavra — a doença que os itens 6 e 7 da Fila 5 e
+a Fila 6 inteira passaram consertando.
+
+**Um furo que só aparece olhando o ciclo inteiro:** escolher põe o foco no botão de confirmar
+(é o que faz `3`+`Enter` funcionar). Se daí o jogador aperta `→`, o cursor anda e o **foco
+não** — e o Enter seguinte é entregue ao navegador, que aciona o botão focado e joga a peça
+**antiga**. Seta significa "voltei a passear", então ela larga o botão.
+
+O anel de foco é `:focus-visible` e não `:focus`, e é isso que o torna indolor: o navegador só
+o acende quando o foco veio de teclado. É `outline` e não `border`/`box-shadow` porque outline
+não ocupa espaço — num HUD em que cada faixa tem dono (item 8 da Fila 5), mexer em caixa é caro.
+
+### 3. README ✔ feito
+
+Estava duas releases atrás e descrevia um jogo mais pobre do que o que está no ar. Entrou o
+que faltava (conversa, dica, gaveta, reabrir a mesa, voltar para a partida, identidade no
+online, teclado), o número do bot foi **conferido rodando** (55,8%, não lembrado), e o
+diagrama de branches saiu da v1.1.0 para a v1.8.0.
+
+### 4. Três lacunas de teste ✔ feito
+
+**Cobertura de comportamento que já está CERTO não pode nascer vermelha — a prova equivalente
+é MUTAÇÃO.** As três foram conferidas assim, e é o método a repetir sempre que a asserção
+nova não estiver consertando nada.
+
+- **Fim de mão em duplas.** Toda asserção de fim de mão usava `n = 2`, e com dois jogadores
+  `timeDe` é a identidade: as três contas de duplas do `fecharMao` **não rodam**. Testar a
+  mesa de 2 era testar o caso em que a regra some. O cenário da tranca separa as duas leituras
+  de propósito — a mão mais leve da mesa é do time **perdedor**. E o empate por time só existe
+  aqui: quatro somas todas diferentes e mesmo assim 14 × 14. *Mutação: `timeDe` virando
+  identidade mata 9 das 12.*
+- **O conteúdo do painel de contagem.** Só era testado por fora, nas suítes de tela, onde a
+  pergunta é se ele cobre a mesa. O caso que a leitura de código erra: **o total não é 7
+  fixo** — no Trio o `0|0` sai e o zero mora em seis peças. *Mutação: total fixo em 7, o
+  filtro do `i !== vista.cadeira` e o `escapar`, os três pegos.*
+- **O `<select>` de cadeira.** Tem duas metades e só uma é alcançável no harness de Node, que
+  não constrói elementos a partir de `innerHTML` — o `onchange` nunca é ligado. **Isso está
+  dito no teste em vez de contornado.** A metade que dá para exigir é a do defeito que a casa
+  já pagou: a marca `selected` sai de uma string montada à mão (`'bot:' + c.nivel`), e se ela
+  discordar de `MESA`, o jogo está certo e a tela mente — o mesmo que `refletirMesaNosBotoes`
+  impede nos botões. *Mutação: `val` deixando de compor o nível mata 4.*
+
+### O que esta fila deixou de lição
+
+- **O dublê ficou para trás mais DUAS vezes** — sexta e sétima da série (`matchMedia`, captura
+  de ponteiro, `AudioContext`, `Peer`, contexto WebGL). Faltavam `setAttribute` no elemento e
+  `preventDefault` no evento. **A tentação, nas duas, era guardar no jogo** com um
+  `if (b.setAttribute)`; isso troca um defeito por um ramo que o teste nunca alcança. Sete
+  vezes já não é acaso: **ao acrescentar qualquer API de navegador ao jogo, o primeiro lugar
+  a olhar é o `harness.mjs`.**
+- **Asserção que grava a implementação reprova por ter melhorado.** A do botão de som dizia
+  `=== '✕'` — e o `✕` era o próprio defeito. Trocar o glifo a derrubou. Hoje ela exige o
+  requisito ("não pode ser o glifo do botão de sair"), com o valor escrito à mão e o motivo
+  ao lado.
+- **E eu caí na armadilha nº 1 desta casa ao escrever essa mesma asserção:** a primeira versão
+  comparava com `els.get('btSair').textContent`, que no harness é `''` — `'🔇' !== ''` é verde
+  por trivialidade. Comparar com um dublê vazio parece mais robusto que escrever o valor à
+  mão, e é o contrário.
+- **`Measure-Object -Line` do PowerShell não conta linha em branco** e devolve ~450 a menos que
+  o `wc -l`. Foi por isso que a contagem de linhas pareceu ter *encolhido* depois de eu
+  acrescentar código.
 
 ## Regras da casa (implementadas)
 

@@ -43,8 +43,18 @@
   <button class="btn peq" id="btCancelar">Cancelar</button>
 </div>
 
-<div id="vez" class="painel"></div>
-<div id="aviso"></div>
+<!-- `role="status"` já implica aria-live="polite"; o atributo vai junto porque leitor
+     antigo entende um e não o outro, e são dois bytes. POLITE e não assertive: isto muda
+     a cada jogada de bot, e assertive interromperia a leitura da mão do jogador a cada
+     três segundos. Quem cuida de não repetir a mesma frase é o `desenharHUD`. -->
+<div id="vez" class="painel" role="status" aria-live="polite"></div>
+<!-- O #aviso é o canal de TODO erro do motor e do porquê de a peça não dar, e sempre é
+     resposta a uma ação que a pessoa acabou de fazer — daí `alert`/assertive: se ficar na
+     fila atrás da narração, ele é lido depois de já ter sumido da tela (2,2 s).
+     Ele é `opacity: 0` quando escondido, e NÃO `display: none`: continua na árvore de
+     acessibilidade o tempo todo, então trocar o texto anuncia. Se um dia alguém "arrumar"
+     isso para `display: none`, o anúncio morre junto e não vai aparecer em foto nenhuma. -->
+<div id="aviso" role="alert" aria-live="assertive"></div>
 
 <!-- A narração do jogo e a conversa no mesmo fio: um lugar só para olhar. O campo de
      escrever só aparece quando há gente online — no solo isto é o log de sempre. -->
@@ -54,17 +64,23 @@
      que diz isso ao jogador — sem ela, painel em cima de peça parece defeito. -->
 <div id="cortina" class="oculta"></div>
 
-<div id="conversa" class="painel">
-  <div id="conversaLista"></div>
+<div id="conversa" class="painel" role="region" aria-label="Conversa da mesa">
+  <!-- `role="log"` e não `status`: log é a semântica de fio cronológico em que só o que
+       CHEGA é anunciado. É o que `porNaConversa` faz (appendChild), e é o que evita reler
+       as quarenta linhas toda vez que uma nova entra. -->
+  <div id="conversaLista" role="log" aria-live="polite" aria-label="Jogadas e falas"></div>
   <div id="conversaEscrever" class="oculta">
     <button class="btn peq" id="btCanal" title="Para quem você está falando">Todos</button>
     <input id="conversaTexto" class="entrada" maxlength="160" placeholder="falar com a mesa…" autocomplete="off" />
   </div>
 </div>
 
-<button id="btSom" class="painel canto" title="Som">♪</button>
-<button id="btConversa" class="painel canto oculta" title="Conversa">💬</button>
-<button id="btSair" class="painel canto oculta" title="Sair da partida">✕</button>
+<!-- Os três do canto têm o rótulo num glifo, e glifo não tem nome: sem `aria-label` o
+     leitor de tela lê "botão ♪" — ou, no de conversa, lê o número de não-lidas sozinho.
+     O do som tem os dele escritos por `pintarBotaoSom`, porque mudam com o estado. -->
+<button id="btSom" class="painel canto" title="Desligar o som" aria-pressed="false" aria-label="Som ligado — desligar">♪</button>
+<button id="btConversa" class="painel canto oculta" title="Conversa" aria-label="Conversa da mesa">💬</button>
+<button id="btSair" class="painel canto oculta" title="Sair da partida" aria-label="Sair da partida">✕</button>
 
 <!-- ─── montagem da mesa ─────────────────────────────────────────────────── -->
 <div class="tela" id="telaMenu">

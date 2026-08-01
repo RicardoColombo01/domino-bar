@@ -23,8 +23,18 @@ export function correrTimers() {
 
 function makeEl(id) {
   const e = {
-    id, textContent: '', innerHTML: '', className: '', value: '', offsetWidth: 1,
+    id, textContent: '', innerHTML: '', className: '', value: '', title: '', offsetWidth: 1,
     onclick: null, style: {}, dataset: {}, _cls: new Set(), children: [],
+    // Os atributos. É a SEXTA vez que o dublê fica para trás do jogo (as outras foram
+    // matchMedia, a captura de ponteiro, o AudioContext, o Peer e os eventos de contexto
+    // WebGL), e a lição já está escrita no CLAUDE.md: a tentação é guardar no JOGO com um
+    // `if (b.setAttribute)`, e isso troca um defeito por um ramo que o teste nunca alcança.
+    // Guardar de verdade é aqui.
+    _attr: new Map(),
+    setAttribute(k, v) { e._attr.set(k, String(v)); },
+    getAttribute: k => (e._attr.has(k) ? e._attr.get(k) : null),
+    removeAttribute(k) { e._attr.delete(k); },
+    hasAttribute: k => e._attr.has(k),
     classList: {
       add: c => e._cls.add(c), remove: c => e._cls.delete(c),
       contains: c => e._cls.has(c),
@@ -149,7 +159,15 @@ export function seedRandom(seed = 1) {
   };
 }
 
+// `preventDefault` e `stopPropagation` entram por padrão porque TODO evento de navegador
+// os tem: sem eles, código novo que chame um dos dois estoura aqui com TypeError e a
+// falha aponta para o teste em vez de para o dublê. É a mesma lição que este arquivo já
+// pagou com o matchMedia, a captura de ponteiro, o AudioContext, o Peer, os eventos de
+// contexto WebGL e o setAttribute: quem estava incompleto era o dublê, não o jogo.
+// O `??=` deixa o teste sobrescrever quando ele quiser ESPIAR se o jogo preveniu.
 export function fire(type, ev = {}) {
+  ev.preventDefault ??= () => { ev.defaultPrevented = true; };
+  ev.stopPropagation ??= () => {};
   for (const fn of listeners.get(type) || []) fn(ev);
 }
 

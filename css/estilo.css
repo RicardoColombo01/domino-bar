@@ -6,6 +6,18 @@
   --escuro: rgba(20, 13, 9, .82);
   --borda: rgba(240, 194, 116, .22);
   --texto: #efe3cf;
+  /* O PISO DA OPACIDADE. Texto secundário desbota para dizer "isto é fundo, não figura" —
+     e desbotar demais é o mesmo que apagar. `opacity` não escurece a cor, ela MISTURA o
+     texto com o que está atrás, então o contraste real depende do fundo: aqui é o .painel
+     (rgba .82) por cima da cena 3D. Medido nos três fundos do jogo, .52 é onde o AA
+     (4.5:1 para texto pequeno) começa a passar — e .52 é folga zero, que a casa já
+     aprendeu a não chamar de conserto. .58 é o valor que o `.rot` sempre usou e que já
+     passava (5,4:1), então isto não inventa número novo na paleta: promove um que já era
+     bom a REGRA. Toda opacidade de texto abaixo daqui tem de ter um motivo escrito. */
+  --fraco: .58;
+  /* Vermelho de boteco, o mesmo do hover do botão de sair. Erro não é decoração: é o
+     único texto da tela que aparece justamente quando alguém já está confuso. */
+  --erro: #ff9b86;
 }
 
 * { box-sizing: border-box; }
@@ -53,7 +65,7 @@ html, body {
   box-shadow: 0 6px 22px rgba(0, 0, 0, .5);
 }
 
-.rot { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; opacity: .58; }
+.rot { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; opacity: var(--fraco); }
 
 #topo {
   position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
@@ -74,8 +86,11 @@ html, body {
 #placar .time i { font-style: normal; font-size: 11px; opacity: .65; max-width: 130px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #placar .time b { font-size: 22px; line-height: 1; color: var(--ambar-forte); }
+/* EXCEÇÃO ao --fraco, e o motivo é que este × não é texto: é o traço que separa um placar
+   do outro. Quem informa são os dois números que ele fica no meio, e a separação também é
+   feita pelo espaço. Subi-lo faria ele competir com o que ele existe para separar. */
 #placar .x { opacity: .35; }
-#placar .ate { font-size: 10.5px; opacity: .5; margin-left: 4px; }
+#placar .ate { font-size: 10.5px; opacity: var(--fraco); margin-left: 4px; }
 
 /* lista de jogadores, canto superior direito */
 #jogadores { position: fixed; top: 14px; right: 14px; z-index: 5; display: grid; gap: 6px; }
@@ -90,7 +105,7 @@ html, body {
 /* O sobrenome vive num <i> só para o CSS poder escondê-lo onde a faixa aperta — não é
    ênfase, então não é itálico. Onde há espaço o nome inteiro aparece, como sempre. */
 .jog .nome .resto { font-style: normal; }
-.jog .tipo { font-size: 10.5px; opacity: .5; text-align: right; }
+.jog .tipo { font-size: 10.5px; opacity: var(--fraco); text-align: right; }
 .jog .pecas { grid-column: 1/3; font-size: 10px; letter-spacing: -1px; color: var(--ambar); opacity: .8; }
 .jog .pecas i { font-style: normal; opacity: .6; margin-left: 6px; letter-spacing: 0; }
 
@@ -118,13 +133,16 @@ html, body {
 #conversaLista::-webkit-scrollbar { width: 4px; }
 #conversaLista::-webkit-scrollbar-thumb { background: var(--borda); border-radius: 2px; }
 #conversaLista > div { margin-top: 2px; overflow-wrap: anywhere; }
-/* Jogada é fundo, fala é figura: a diferença tem de ser vista sem ler. */
-#conversaLista .doJogo { opacity: .45; }
+/* Jogada é fundo, fala é figura: a diferença tem de ser vista sem ler. Estava em .45,
+   que dava 3,79:1 — reprovado. O que carrega a distinção não é o quanto isto desbota, é o
+   quanto a FALA acende: ela tem o nome em âmbar e vem a opacidade cheia. .58 contra 1.0
+   continua sendo uma diferença de 42%, e agora a narração também dá para ler. */
+#conversaLista .doJogo { opacity: var(--fraco); }
 #conversaLista .fala b { color: var(--ambar); font-weight: 600; }
 #conversaLista .daDupla b { color: #9fd6a0; }
 #conversaLista .fala i {
   font-style: normal; font-size: 9px; text-transform: uppercase; letter-spacing: .08em;
-  opacity: .5; margin-left: 4px;
+  opacity: var(--fraco); margin-left: 4px;
 }
 #conversaEscrever { display: flex; gap: 5px; align-items: center; }
 #conversaEscrever .entrada { font-size: 12px; padding: 5px 8px; }
@@ -154,10 +172,13 @@ html, body {
 #contagem b { color: var(--ambar-forte); font-size: 13px; }
 #contagem i { font-style: normal; letter-spacing: -1px; color: var(--ambar); opacity: .85; }
 #contagem s { text-decoration: none; text-align: right; font-variant-numeric: tabular-nums; opacity: .75; }
-#contagem em { font-style: normal; font-size: 10px; opacity: .5; max-width: 92px;
+#contagem em { font-style: normal; font-size: 10px; opacity: var(--fraco); max-width: 92px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* número que já apareceu inteiro: apaga, porque não há mais nada para esperar dele */
-#contagem .zerado { opacity: .38; }
+/* Número que já apareceu inteiro: apaga, porque não há mais nada para esperar dele.
+   Estava em .38 (3,04:1) — e "apagado" virou "ilegível". O painel de contagem é
+   FERRAMENTA DE DECISÃO: saber que o 5 acabou é o que decide a jogada, tanto quanto saber
+   que faltam dois. Uma linha zerada que não dá para ler não informa, esconde. */
+#contagem .zerado { opacity: var(--fraco); }
 
 /* Barra de confirmação: no centro, acima da mão, porque é onde os olhos já estão
    quando você acabou de levantar uma peça. */
@@ -187,7 +208,10 @@ html, body {
   width: 36px; height: 36px; padding: 0; cursor: pointer; color: var(--ambar);
   font-size: 15px; line-height: 1;
 }
-.canto.desligado { opacity: .45; }
+/* O botão de som desligado. Estava em .45 — e um botão de ESTADO cujo estado não dá para
+   ler é um botão que não diz nada. Quem carrega o "desligado" é o glifo (♪ vira 🔇), não
+   o desbotamento; ele só acompanha. */
+.canto.desligado { opacity: var(--fraco); }
 /* O de sair fica ao lado do som no computador, e embaixo dele no celular em pé, onde a
    coluna da esquerda é dos dois e a faixa do topo começa depois dela. */
 #btSair { left: 58px; }
@@ -207,7 +231,9 @@ html, body {
 .btn.principal:hover { background: var(--ambar-forte); }
 .btn.peq { padding: 6px 13px; font-size: 13px; font-weight: 500; }
 .btn.peq.on { background: var(--ambar); color: #17100a; border-color: transparent; }
-/* cadeira que não fecha com o modo escolhido (Duelo é 1v1, Trio é 3) */
+/* Cadeira que não fecha com o modo escolhido (Duelo é 1v1, Trio é 3).
+   EXCEÇÃO ao --fraco: o WCAG dispensa componente DESABILITADO justamente porque o
+   apagado é a informação. Aqui é literal — o botão não está fraco, ele está fora. */
 .btn:disabled { opacity: .28; cursor: not-allowed; }
 .btn:disabled:hover { background: rgba(52, 34, 20, .92); border-color: var(--borda); }
 .btn.peq i { font-style: normal; opacity: .55; font-size: 11.5px; margin-left: 5px; }
@@ -246,7 +272,11 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
 .carta h1 { margin: 0 0 4px; font-size: 30px; letter-spacing: -.01em; color: var(--ambar-forte); }
 .carta h2 { margin: 0 0 6px; font-size: 22px; color: var(--ambar-forte); }
 .sub { margin: 0 0 18px; opacity: .62; font-size: 13.5px; }
-.nota { font-size: 12px; opacity: .5; }
+.nota { font-size: 12px; opacity: var(--fraco); }
+/* O TEXTO DE ERRO DO ONLINE. Ele era `.nota` e nada mais — ou seja, o texto de MENOR
+   contraste da tela era justamente o que avisa que algo deu errado, em 12px e 4,4:1.
+   Erro não é nota de rodapé: opacidade cheia e a cor de perigo da casa. */
+#onlineErro:not(:empty) { opacity: 1; color: var(--erro); }
 .grandao { font-size: 27px; font-weight: 700; color: var(--ambar); margin: 6px 0 10px; }
 
 .linha { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 14px 0; }
@@ -259,14 +289,17 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
   background: rgba(0, 0, 0, .26); border: 1px solid rgba(240, 194, 116, .12);
   border-radius: 10px; padding: 8px 12px;
 }
-.cadeira .num { font-size: 11.5px; opacity: .55; text-transform: uppercase; letter-spacing: .07em; }
-.cadeira .fixo { font-size: 12px; opacity: .45; text-align: center; }
+.cadeira .num { font-size: 11.5px; opacity: var(--fraco); text-transform: uppercase; letter-spacing: .07em; }
+.cadeira .fixo { font-size: 12px; opacity: var(--fraco); text-align: center; }
 
 .entrada, .cadeira select {
   background: rgba(0, 0, 0, .35); color: var(--texto);
   border: 1px solid var(--borda); border-radius: 7px;
   padding: 7px 10px; font: inherit; font-size: 14px; width: 100%;
 }
+/* O `outline: none` aqui é seguro porque a borda âmbar É o indicador — mas ela só existe
+   nestes dois, e o resto da tela não tinha indicador nenhum. Ver o `:focus-visible`
+   global lá embaixo. */
 .entrada:focus, .cadeira select:focus { outline: none; border-color: var(--ambar); }
 .cadeira select option { background: #241811; }
 
@@ -292,21 +325,48 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
   border-bottom: 1px dotted rgba(240, 194, 116, .14); padding-bottom: 3px; }
 .sobrou b { color: var(--texto); opacity: .8; font-variant-numeric: tabular-nums; }
 /* em duplas, as parcelas de cada parceiro ao lado do nome da dupla */
-.sobrou i { font-style: normal; opacity: .45; font-size: 12px; margin-left: 8px; }
+.sobrou i { font-style: normal; opacity: var(--fraco); font-size: 12px; margin-left: 8px; }
 
 /* placar final, na tela de campeão: mesmo desenho do placar do topo */
 #placarFinal { display: flex; align-items: center; gap: 18px; margin: 10px 0 14px; }
 #placarFinal .time { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 #placarFinal .time i { font-style: normal; font-size: 12px; opacity: .6; max-width: 190px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* EXCEÇÃO ao --fraco, e aqui é a regra do AA que muda, não o desenho: 34px é TEXTO GRANDE,
+   que pede 3:1 e não 4.5:1 — .45 dá 4,3:1 e passa com folga. */
 #placarFinal .time b { font-size: 34px; line-height: 1; opacity: .45; }
 #placarFinal .time.venceu b { color: var(--ambar-forte); opacity: 1; }
+/* separador, como o #placar .x */
 #placarFinal .x { opacity: .3; font-size: 18px; align-self: flex-end; padding-bottom: 4px; }
 
 .regras { margin-top: 20px; font-size: 13px; opacity: .72; }
 .regras summary { cursor: pointer; opacity: .8; }
 .regras ul { margin: 10px 0 0; padding-left: 20px; line-height: 1.75; }
 .regras b { color: var(--ambar); }
+
+/* ── o anel de foco ───────────────────────────────────────────────────────────
+   Não existia UM indicador de foco no projeto inteiro, e os botões de confirmar sempre
+   foram <button> de verdade que pegam Tab — ou seja, dava para chegar neles pelo teclado
+   e não dava para saber que se chegou.
+
+   `:focus-visible` e não `:focus`, e a diferença é o motivo de isto poder existir sem
+   incomodar ninguém: o navegador só o acende quando o foco veio de TECLADO. Clicar num
+   botão com o mouse não deixa anel para trás — que é exatamente a queixa que fez meio
+   mundo escrever `outline: none` e quebrar o teclado junto.
+
+   `outline` e não `border`/`box-shadow`: outline não ocupa espaço, então não empurra
+   layout nenhum — e num HUD onde cada faixa tem dono (item 8), mexer em caixa é caro.
+   O `offset` negativo no .canto é porque ele é redondo e pequeno: por fora, o anel
+   encostaria no botão vizinho, que fica a 22px. */
+:focus-visible {
+  outline: 2px solid var(--ambar-forte);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.canto:focus-visible { outline-offset: -3px; }
+/* A borda âmbar já era o indicador destes dois; o anel por cima seria ruído em cima de
+   sinal. Mas só quando o foco é de teclado — daí não voltar a ser um `:focus` seco. */
+.entrada:focus-visible, .cadeira select:focus-visible { outline: none; }
 
 /* ── tela pequena ─────────────────────────────────────────────────────────────
    Duas perguntas diferentes: `max-width` é "cabe texto?", `orientation` é "que forma

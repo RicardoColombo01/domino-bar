@@ -19,6 +19,13 @@ const mod = await import(buildModule([
   // o botão mostrar ✕ não prova nada, era exatamente esse o defeito. `conexoes` diz
   // quais cadeiras online têm alguém vivo do outro lado.
   'ac', 'conexoes', 'montarCadeiras', 'abrirMesaOnline', 'encerrarRede',
+  // `apontada` é o realce da peça — o mesmo campo que o mouse alimenta e que o teclado
+  // passou a alimentar também. Perguntar por ele é como se vê o cursor de teclado sem
+  // inventar um segundo estado só para o teste.
+  'apontada', 'porQueNaoDa',
+  // O painel de contagem só era testado por FORA (se cobre a mesa, nas suítes de tela).
+  // Ele é ferramenta de decisão: contar errado é pior que não contar.
+  'desenharContagem',
 ], undefined, path.join(import.meta.dirname, 'built-jogo.mjs')));
 
 let falhas = 0;
@@ -375,6 +382,264 @@ console.log('\narrastar a peça');
     'um segundo dedo deixou a peça do primeiro congelada no ar');
 }
 
+// Até a v1.8.0 não havia como ESCOLHER UMA PEÇA sem mouse ou dedo: o jogo tinha três
+// teclas (Esc, A, D) e nenhuma delas jogava. Estas asserções cobrem o ciclo novo — passear
+// com as setas, pular com os números — e a mais importante delas é a do SILÊNCIO: um
+// caminho novo de entrada que desiste calado é a doença que os itens 6 e 7 da Fila 5 e a
+// Fila 6 inteira passaram consertando.
+//
+// SETE DAS NOVE REPROVAM no código sem teclado — foram rodadas contra ele. As duas que
+// não: "mexer o ponteiro largou o cursor" e "digitar no campo não escolheu peça" passam
+// sem a funcionalidade porque lá nada acontecia mesmo. Elas são GUARDA contra regressão,
+// não prova do conserto, e ficam ditas assim para ninguém as contar como evidência.
+console.log('\njogar sem apontador');
+{
+  mod.MESA.modo = 'classico'; mod.MESA.n = 3;
+  mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[1].nivel = 'normal';
+  mod.MESA.cadeiras[2].tipo = 'bot'; mod.MESA.cadeiras[2].nivel = 'normal';
+  mod.comecarLocal();
+  // A vez pode nascer num bot — a primeira mão abre com o 6|6, e ele cai onde cair. Sem
+  // esta espera as `acoes.jogadas` vêm vazias, nenhuma peça é jogável, e a suíte reprovaria
+  // por causa do sorteio em vez de por causa do teclado.
+  for (let i = 0; i < 60 && mod.P.fase === 'mao' && mod.P.vez !== 0; i++) { frames(2); correrTimers(); }
+  frames(40);
+
+  const tecla = k => { fire('keydown', { key: k }); frames(1); };
+  const aviso = els.get('aviso');
+
+  // Uma seta e a peça levantada é a primeira da mão. `apontada` é o MESMO campo do hover
+  // do mouse: se um dia ele deixar de ser, o realce some sem ninguém perceber.
+  mod.cancelarEscolha();
+  tecla('ArrowRight');
+  ok(mod.apontada === 0, `a primeira seta devia apontar a peça 0 e apontou ${mod.apontada}`);
+  tecla('ArrowRight'); tecla('ArrowRight');
+  ok(mod.apontada === 2, `três setas à direita deviam parar na peça 2 e pararam em ${mod.apontada}`);
+  tecla('ArrowLeft');
+  ok(mod.apontada === 1, `a seta à esquerda devia voltar para 1 e foi para ${mod.apontada}`);
+
+  // A BEIRADA NÃO DÁ A VOLTA. Circular, o cursor some de um canto e reaparece no outro —
+  // e quem joga sem ver a tela perde a única referência que tem de onde está.
+  for (let i = 0; i < 30; i++) fire('keydown', { key: 'ArrowLeft' });
+  frames(1);
+  ok(mod.apontada === 0, `trinta setas à esquerda deviam parar na beirada 0 e pararam em ${mod.apontada}`);
+  for (let i = 0; i < 40; i++) fire('keydown', { key: 'ArrowRight' });
+  frames(1);
+  ok(mod.apontada === mod.naMao.length - 1,
+    `quarenta setas à direita deviam parar na última peça (${mod.naMao.length - 1}) e pararam em ${mod.apontada}`);
+
+  // MEXER O PONTEIRO LARGA O TECLADO. Sem esta regra os dois donos do `apontada` brigam a
+  // 60 quadros por segundo e o cursor de teclado é apagado no quadro seguinte ao de nascer.
+  fire('pointermove', { clientX: 5, clientY: 5 });
+  frames(1);
+  ok(mod.apontada === null, 'mexer o ponteiro devia ter largado o cursor de teclado');
+
+  // O NÚMERO ESCOLHE. Procuro uma peça jogável para não depender do sorteio.
+  const jogavel = mod.naMao.findIndex(m => m.jogavel);
+  ok(jogavel >= 0 && jogavel < 9, 'o cenário não deu peça jogável ao alcance das teclas 1..9');
+  if (jogavel >= 0 && jogavel < 9) {
+    mod.cancelarEscolha();
+    tecla(String(jogavel + 1));
+    ok(mod.escolhida === mod.chave(mod.naMao[jogavel].peca),
+      `a tecla ${jogavel + 1} devia ter levantado a peça ${mod.naMao[jogavel].peca.join('|')}`);
+    // A mesma tecla de novo larga a peça, como o segundo toque nela.
+    tecla(String(jogavel + 1));
+    ok(mod.escolhida === null, 'apertar a mesma tecla de novo devia ter cancelado a escolha');
+  }
+
+  // O SILÊNCIO É O DEFEITO, NÃO A RECUSA. `selecionarPeca` desiste calada quando a peça
+  // não dá — no mouse quem explica é o `soltarArrasto`. Sem uma linha equivalente aqui, o
+  // teclado apertaria o número e não aconteceria nada, para sempre, sem uma palavra.
+  const naoDa = mod.naMao.findIndex(m => !m.jogavel);
+  if (naoDa >= 0 && naoDa < 9) {
+    mod.cancelarEscolha();
+    aviso.textContent = '';
+    tecla(String(naoDa + 1));
+    ok(mod.escolhida === null, 'a tecla de uma peça que não dá não podia ter levantado nada');
+    ok(aviso.textContent === mod.porQueNaoDa(mod.naMao[naoDa].peca),
+      `a peça que não dá devia dizer POR QUE, e o aviso ficou "${aviso.textContent}"`);
+  }
+
+  // ESCREVER NA CONVERSA NÃO É JOGAR. O projeto já pagou isto uma vez com o 'a' de
+  // arrumar e o 'd' de dica (16-loop.js): com um campo na tela, digitar "vamos" chamava
+  // arrumarMao() a cada 'a'. Um caminho novo de teclado herda a mesma armadilha, e agora
+  // ela é pior — os dígitos aparecem em qualquer texto.
+  mod.cancelarEscolha();
+  fire('keydown', { key: String(jogavel + 1), target: { tagName: 'INPUT' } });
+  frames(1);
+  ok(mod.escolhida === null, 'digitar um número dentro do campo da conversa escolheu uma peça');
+}
+
+// O painel de contagem tinha asserção só nas suítes de TELA, e lá a pergunta é se ele
+// cobre a mesa — nunca se ele conta certo. É a ferramenta com que se decide a jogada:
+// contar errado é pior que não contar, porque quem não conta desconfia e quem conta errado
+// acredita.
+console.log('\no painel de contagem conta certo');
+{
+  const painel = els.get('contagem');
+  // Liga a contagem pelo botão, que é o caminho de verdade — `contando` é estado de
+  // módulo e não dá para escrever de fora.
+  if (painel.classList.contains('oculta')) els.get('btContagem').onclick();
+
+  // Lê o painel de volta como uma tabela. Cada linha é <b>número</b><i>barrinha</i>
+  // <s>faltam</s><em>quem passou</em>, e o `zerado` é a classe da linha.
+  const ler = () => {
+    const linhas = {};
+    const re = /<div( class="zerado")?><b>(\d)<\/b><i>([^<]*)<\/i><s>([^<]*)<\/s><em>([^<]*)<\/em><\/div>/g;
+    let m;
+    while ((m = re.exec(painel.innerHTML))) {
+      linhas[m[2]] = { zerado: !!m[1], vistos: (m[3].match(/▮/g) || []).length,
+                       total: m[3].length, faltam: m[4], quemPassou: m[5] };
+    }
+    return linhas;
+  };
+
+  // O TOTAL NÃO É 7 FIXO, e este é o caso que a leitura de código erra: no Trio o 0|0 sai
+  // do baralho, então o zero mora em SEIS peças e todos os outros números em sete. Um
+  // painel que diga "faltam 7 zeros" no Trio manda o jogador esperar uma peça que não
+  // existe — e é o tipo de erro que só aparece jogando.
+  {
+    const vista = {
+      modo: 'trio', cadeira: 0, linha: [], mao: [], faltaNo: [[], [], []],
+      cadeiras: [{ nome: 'eu' }, { nome: 'Zé' }, { nome: 'Ana' }],
+    };
+    mod.desenharContagem(vista);
+    const t = ler();
+    ok(t['0'] && t['0'].total === 6,
+      `no Trio o zero mora em 6 peças (o 0|0 sai do baralho) e o painel disse ${t['0'] && t['0'].total}`);
+    ok(t['6'] && t['6'].total === 7,
+      `no Trio os outros números continuam em 7 peças e o painel disse ${t['6'] && t['6'].total}`);
+    ok(t['0'] && t['0'].faltam === '6', `o zero devia faltar 6 e o painel disse ${t['0'] && t['0'].faltam}`);
+  }
+
+  // O QUE JÁ APARECEU É A MESA MAIS A SUA MÃO. As duas, e é de propósito: a peça na sua
+  // mão não vai sair do baralho para ninguém, então contá-la é o que torna a conta útil.
+  {
+    const vista = {
+      modo: 'classico', cadeira: 0,
+      linha: [[3, 3], [3, 5], [5, 6]],       // três 3, um 5, um 6 — e o 3|3 conta UMA vez
+      mao: [[3, 0], [6, 6]],                 // mais um 3, mais um 6
+      faltaNo: [[], [], []],
+      cadeiras: [{ nome: 'eu' }, { nome: 'Zé' }, { nome: 'Ana' }],
+    };
+    mod.desenharContagem(vista);
+    const t = ler();
+    // Peças com o 3: 3|3, 3|5, 3|0 = três peças. O 3|3 é UMA peça, não duas — contar por
+    // metade daria quatro e o painel mentiria a favor do jogador.
+    ok(t['3'].vistos === 3, `deviam ter aparecido 3 peças com o número 3 e o painel disse ${t['3'].vistos}`);
+    ok(t['3'].faltam === '4', `deviam faltar 4 peças com o 3 e o painel disse ${t['3'].faltam}`);
+    ok(t['6'].vistos === 2, `o 5|6 da mesa e o 6|6 da mão são 2, e o painel disse ${t['6'].vistos}`);
+    ok(t['1'].vistos === 0 && t['1'].faltam === '7', 'o número que ninguém viu tem de mostrar os 7 inteiros');
+  }
+
+  // A LINHA ZERADA. Quando todas as sete apareceram não há mais nada a esperar daquele
+  // número — o painel apaga a linha e o traço vira '—'. É informação, não enfeite: é ela
+  // que diz "essa ponta está morta".
+  {
+    const todosOs2 = [[2, 0], [2, 1], [2, 2], [2, 3], [2, 4], [2, 5], [2, 6]];
+    const vista = {
+      modo: 'classico', cadeira: 0, linha: todosOs2, mao: [], faltaNo: [[], [], []],
+      cadeiras: [{ nome: 'eu' }, { nome: 'Zé' }, { nome: 'Ana' }],
+    };
+    mod.desenharContagem(vista);
+    const t = ler();
+    ok(t['2'].zerado, 'o número que apareceu inteiro tinha de vir marcado como zerado');
+    ok(t['2'].faltam === '—', `zerado, o "faltam" vira um traço, e veio "${t['2'].faltam}"`);
+    ok(!t['5'].zerado, 'um número com peça faltando não podia estar marcado como zerado');
+  }
+
+  // QUEM PASSOU NUM NÚMERO provou não tê-lo, e isso é público — a mesa inteira viu o
+  // passe. Mas VOCÊ nunca entra nessa lista: o painel é para saber dos outros, e ler o
+  // próprio nome ali seria ruído no lugar do sinal.
+  {
+    const vista = {
+      modo: 'classico', cadeira: 0, linha: [], mao: [],
+      faltaNo: [[4], [4], [4]],              // os TRÊS passaram no 4, inclusive você
+      cadeiras: [{ nome: 'eu' }, { nome: 'Zé' }, { nome: 'Ana' }],
+    };
+    mod.desenharContagem(vista);
+    const t = ler();
+    ok(t['4'].quemPassou === 'Zé, Ana',
+      `deviam aparecer só os outros dois, e o painel disse "${t['4'].quemPassou}"`);
+    ok(t['4'].quemPassou.indexOf('eu') < 0, 'o painel listou VOCÊ como quem passou no número');
+  }
+
+  // O NOME DO CONVIDADO É ENTRADA DE FORA, e aqui ele vai para innerHTML. É a quarta
+  // superfície do projeto a receber nome alheio (as outras: listarSala, o cartão do
+  // jogador, e o value= do menu), e as três anteriores foram mordidas.
+  {
+    const vista = {
+      modo: 'classico', cadeira: 0, linha: [], mao: [], faltaNo: [[], [6], []],
+      cadeiras: [{ nome: 'eu' }, { nome: '<img src=x onerror=alert(1)>' }, { nome: 'Ana' }],
+    };
+    mod.desenharContagem(vista);
+    ok(painel.innerHTML.indexOf('<img') < 0,
+      'o nome do convidado virou um elemento dentro do painel de contagem');
+    ok(painel.innerHTML.indexOf('&lt;img') >= 0, 'o nome devia ter saído escapado, e não sumido');
+  }
+}
+
+// O <select> de cadeira é COMO SE ESCOLHE CONTRA QUEM JOGAR, e não tinha asserção
+// nenhuma. Ele tem duas metades: o que o menu DESENHA e o que o `onchange` GRAVA. Só a
+// primeira é alcançável aqui — o harness não constrói elementos a partir de innerHTML,
+// então o handler nunca é ligado (`querySelectorAll` devolve vazio). Está dito de frente
+// em vez de contornado: a segunda metade continua sem cobertura, e o lugar de pagá-la é
+// o `test-online.mjs`, que roda num Chrome de verdade.
+//
+// A metade que dá para exigir é justamente a do defeito que este projeto já pagou uma vez:
+// os botões do menu nasciam marcados com o PADRÃO e a marca não andava até a preferência
+// lembrada, então a tela prometia "Clássico até 6" e a partida começava num Trio até 10.
+// `refletirMesaNosBotoes` existe por causa disso. O <select> tem a mesma armadilha —
+// a marca `selected` sai de uma string montada à mão (`'bot:' + c.nivel`), e se ela
+// discordar do que está em MESA, o jogo está certo e a tela mente.
+console.log('\no select de cadeira mostra o que está valendo');
+{
+  const caixa = els.get('cadeiras');
+  // Qual opção está marcada na cadeira `i`, lida do HTML que o menu acabou de escrever.
+  const marcada = i => {
+    const bloco = caixa.innerHTML.split(`<select data-i="${i}">`)[1];
+    if (!bloco) return null;
+    const m = /<option value="([^"]+)" selected>/.exec(bloco.split('</select>')[0]);
+    return m ? m[1] : null;
+  };
+
+  mod.MESA.modo = 'classico'; mod.MESA.n = 4;
+  const combinacoes = [
+    ['bot', 'facil', 'bot:facil'],
+    ['bot', 'normal', 'bot:normal'],
+    ['bot', 'dificil', 'bot:dificil'],
+    ['local', undefined, 'local'],
+    ['online', undefined, 'online'],
+  ];
+  for (const [tipo, nivel, esperado] of combinacoes) {
+    mod.MESA.cadeiras[1].tipo = tipo;
+    mod.MESA.cadeiras[1].nivel = nivel;
+    mod.montarCadeiras();
+    ok(marcada(1) === esperado,
+      `cadeira ${tipo}${nivel ? '/' + nivel : ''} devia aparecer marcada como "${esperado}" e veio "${marcada(1)}"`);
+  }
+
+  // UMA MARCA SÓ. Duas opções com `selected` é HTML que o navegador resolve escolhendo a
+  // última — e aí a tela mostraria um bot difícil onde MESA guarda um fácil.
+  mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[1].nivel = 'normal';
+  mod.montarCadeiras();
+  const bloco1 = caixa.innerHTML.split('<select data-i="1">')[1].split('</select>')[0];
+  ok((bloco1.match(/ selected>/g) || []).length === 1,
+    `a cadeira devia ter exatamente uma opção marcada e tem ${(bloco1.match(/ selected>/g) || []).length}`);
+
+  // A CADEIRA 0 NÃO TEM <select>: ela é sempre você, nesta tela. Um seletor ali deixaria
+  // montar uma mesa sem ninguém do lado de cá — e o motor esperaria para sempre.
+  ok(caixa.innerHTML.indexOf('<select data-i="0">') < 0,
+    'a cadeira 0 é sempre você e não podia ter seletor de tipo');
+
+  // AS OPÇÕES SÃO AS MESMAS EM TODA CADEIRA, e o número delas é o que o menu promete.
+  // Uma cadeira com menos opções que outra seria a mesma classe de mentira, por omissão.
+  for (const i of [1, 2, 3]) {
+    const b = caixa.innerHTML.split(`<select data-i="${i}">`)[1];
+    ok(b && (b.split('</select>')[0].match(/<option /g) || []).length === 5,
+      `a cadeira ${i} devia oferecer as 5 opções de sempre`);
+  }
+}
+
 console.log('\no mudo tem de durar');
 {
   // O mudo é implementado suspendendo o AudioContext, e o listener de pointerdown que
@@ -393,7 +658,22 @@ console.log('\no mudo tem de durar');
 
   som.onclick();                                    // clica no ♪
   ok(mod.ac.state === 'suspended', 'clicar no botão de som não calou o áudio');
-  ok(som.textContent === '✕', 'o botão de som não virou ✕');
+  // O QUE SE EXIGE AQUI É O REQUISITO, NÃO O DESENHO. A asserção dizia `=== '✕'` e
+  // gravava o defeito: ✕ era o mesmo glifo do botão de SAIR DA PARTIDA, 22px ao lado —
+  // dois botões idênticos com consequências opostas. Trocar o glifo fazia o teste
+  // reprovar por ter melhorado, que é o sinal de que ele media a implementação.
+  // Agora ele pede as duas coisas que importam: mudou de cara, e não virou a cara do
+  // vizinho perigoso.
+  ok(som.textContent !== '♪', 'o botão de som não mudou de cara ao calar');
+  // O '✕' está ESCRITO AQUI de propósito, e não lido de `els.get('btSair')`: o harness não
+  // lê a página, então o botão de sair é um dublê vazio e a comparação daria `'🔇' !== ''`
+  // — verde por trivialidade, que é a armadilha nº 1 desta casa. Escrito à mão, isto
+  // reprova no código antigo, que é o único jeito de a asserção querer dizer alguma coisa.
+  // Se um dia o botão de sair trocar de glifo, esta linha fica desatualizada — e é por
+  // isso que o motivo está escrito, não só o número.
+  ok(som.textContent !== '✕', 'o botão de som virou ✕, o MESMO glifo do de sair da partida (22px ao lado)');
+  ok(som.getAttribute('aria-pressed') === 'true',
+    'o botão de som é um interruptor e não anunciou que está apertado');
 
   tocarNaMesa();                                    // ...e agora o toque seguinte
   ok(mod.ac.state === 'suspended',
