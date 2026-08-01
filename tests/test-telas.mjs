@@ -222,6 +222,51 @@ const MEDIR = `(() => {
     const r = vis(n);
     if (r) caixas.push({ id: n.id || n.className.split(' ')[0], ...r });
   }
+  // FILHO QUE VAZA DO PRÓPRIO PAINEL. O \`paineis\` lá em cima mede CONTÊINERES, e um
+  // contêiner com overflow MENTE sobre o que está dentro dele: ele cabe na tela sempre, e
+  // o filho que saiu é invisível para toda medida que esta suíte fazia. Foi assim que o
+  // quarto cartão de jogador nasceu inteiro fora da tela sem ninguém notar — três
+  // cegueiras somadas, e todas com a mesma raiz:
+  //   · os painéis eram coletados por ID, então os .jog nunca eram medidos;
+  //   · o transbordo saía de documentElement.scrollWidth, e transbordo dentro de um
+  //     position:fixed com overflow-x nunca chega ao documento (é a mesma cegueira que o
+  //     comentário do CSS já descrevia para o #topo, um nível acima);
+  //   · a varredura de "peça por baixo de painel" procura .painel, e .jog não tem a classe.
+  //
+  // O "A MENOS QUE" é o que torna a asserção honesta: um painel com overflow rolável TEM o
+  // direito de o filho passar da caixa — é o que rolar significa. Mas só se der para rolar.
+  // \`pointer-events: none\` faz a rolagem ser decoração, e a barra escondida tira até a
+  // pista visual de que há mais coisa. A pergunta certa não é "o filho saiu?", é "o filho
+  // saiu para onde não dá para alcançá-lo?" — e assim a asserção fica verde tanto se o
+  // cartão encolher quanto se a rolagem virar real, que é o requisito, não a implementação.
+  const rolavel = (el, eixo) => {
+    const s = getComputedStyle(el);
+    const ov = eixo === 'x' ? s.overflowX : s.overflowY;
+    return (ov === 'auto' || ov === 'scroll') && s.pointerEvents !== 'none';
+  };
+  const vazando = [];
+  for (const id of ['topo', 'jogadores', 'contagem', 'acoes', 'confirmar', 'conversa']) {
+    const pai = document.getElementById(id);
+    const rp = vis(pai);
+    if (!rp) continue;
+    const podeX = rolavel(pai, 'x'), podeY = rolavel(pai, 'y');
+    for (const f of pai.children) {          // DIRETOS: o #conversaLista rola por dentro e
+      const rf = vis(f);                     // é filho legítimo daqui
+      if (!rf) continue;
+      const foraX = Math.max(rp.x - rf.x, rf.r - rp.r);
+      const foraY = Math.max(rp.y - rf.y, rf.b - rp.b);
+      const sobra = Math.max(podeX ? 0 : foraX, podeY ? 0 : foraY);
+      if (sobra > 1) vazando.push({
+        pai: id, filho: (f.className || f.tagName).split(' ')[0],
+        // O textContent do cartão traz nome, etiqueta e a régua de peças em linhas
+        // separadas; sem colapsar o branco a mensagem de falha sai quebrada no meio.
+        texto: (f.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 16),
+        sobra, x: rf.x, r: rf.r,
+        foraDaTela: rf.r > window.innerWidth + 1 || rf.x < -1,
+      });
+    }
+  }
+
   const naTela = v => ({ x: (v.x + 1) / 2 * window.innerWidth, y: (1 - v.y) / 2 * window.innerHeight });
   const cobrindo = t => {
     for (const c of caixas) if (t.x >= c.x && t.x <= c.r && t.y >= c.y && t.y <= c.b) return c.id;
@@ -282,9 +327,19 @@ const MEDIR = `(() => {
         if (f < pior.folga) pior = { folga: f, a: A.nome, b: C.nome };
       }
 
+  // Quantos NOMES de jogador estão sendo cortados por ellipsis, e quanto sobra de largura
+  // para eles. Não é asserção: é o número que diz se encolher o cartão custou o nome. A
+  // decisão do item 8 foi cortar na PALAVRA (some o sobrenome inteiro) e deixar o ellipsis
+  // só para o primeiro nome que ainda assim não couber — se este número crescer, a decisão
+  // está sendo desfeita por baixo.
+  const nomes = [...document.querySelectorAll('.jog .nome')].map(n => ({
+    largura: Math.round(n.clientWidth),
+    cortado: n.scrollWidth > n.clientWidth + 1,
+  }));
+
   const cortina = document.getElementById('cortina');
   return {
-    pior,
+    pior, vazando, nomes,
     transbordo: document.documentElement.scrollWidth - window.innerWidth,
     largura: window.innerWidth, altura: window.innerHeight,
     // Gaveta aberta muda o que se exige da tela: cobrir o jogo passa a ser o PONTO.
@@ -442,6 +497,22 @@ for (const tela of TELAS_ESCOLHIDAS) {
       }
     }
 
+    // 7. NADA DO PAINEL PODE SAIR DO PAINEL. Os cartões de jogador são o caso de origem:
+    //    em retrato o #jogadores é uma faixa com `grid-auto-columns: minmax(96px, 1fr)`, e
+    //    `1fr` NUNCA encolhe abaixo do piso do minmax — com quatro cadeiras a trilha pede
+    //    399px numa caixa de 322 (tela de 390) ou 292 (tela de 360), e o quarto cartão
+    //    nasce INTEIRO fora da tela.
+    //
+    //    Roda com ou sem gaveta de propósito: a gaveta esconde #acoes, #vez e #confirmar,
+    //    mas não o #jogadores — e as cenas de mesa de 4 ligam a contagem, ou seja, abrem a
+    //    gaveta. Amarrar esta asserção ao `!m.gaveta` a mataria justamente nas cenas que
+    //    interessam.
+    for (const v of m.vazando) {
+      ok(false, `${onde}: .${v.filho}${v.texto ? ` ("${v.texto}")` : ''} saiu ${v.sobra.toFixed(0)}px ` +
+        `de #${v.pai}${v.foraDaTela ? ' e está FORA DA TELA' : ''} — ` +
+        `vai de x=${v.x.toFixed(0)} a ${v.r.toFixed(0)} numa tela de ${m.largura}px`);
+    }
+
     const larguraNaTela = m.pecas.length
       ? (Math.max(...m.pecas.map(p => p.x)) - Math.min(...m.pecas.map(p => p.x))) : 0;
     console.log(`  ${caso.nome.padEnd(13)} fov ${m.fov.toFixed(0).padStart(2)}° · ` +
@@ -449,7 +520,9 @@ for (const tela of TELAS_ESCOLHIDAS) {
       `mesa ${m.mesa.toFixed(2)} outros ${m.outros.toFixed(2)} monte ${m.monte.toFixed(2)} · ` +
       // A FOLGA SAI SEMPRE, mesmo verde: é a margem que encolhe em silêncio, e foi
       // exatamente uma folga de sete pixels que passou por conserto no item 8.
-      `folga ${m.pior.folga.toFixed(2)}`);
+      `folga ${m.pior.folga.toFixed(2)}` +
+      (m.nomes.length ? ` · nome ${Math.min(...m.nomes.map(n => n.largura))}px` +
+        `${m.nomes.some(n => n.cortado) ? ` (${m.nomes.filter(n => n.cortado).length} cortado)` : ''}` : ''));
     if (m.pior.folga < piorGlobal.folga) piorGlobal = { ...m.pior, onde };
 
     await pagina.close();

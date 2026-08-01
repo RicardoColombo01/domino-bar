@@ -34,7 +34,7 @@ const so = (args.find(a => a.startsWith('--so=')) || '').slice(5).split(',').fil
 // A lista existe para que uma cena inexistente REPROVE em vez de rodar zero asserção e
 // imprimir "tudo certo" — verde vazio é a armadilha que o `diff` de arquivos vazios já
 // pagou aqui. Quem acrescentar cena nova acrescenta o nome aqui, no mesmo commit.
-const CENAS = ['duelo', 'conversa'];
+const CENAS = ['duelo', 'conversa', 'saguao'];
 for (const s of so) if (!CENAS.includes(s)) {
   // Cena que não existe é ERRO e não "rodar tudo": um erro de digitação daria a suíte
   // inteira quando se pediu uma cena, ou zero asserção — e as duas mentem.
@@ -429,6 +429,98 @@ try {
       `HTML chegou como ${virouTag ? 'ELEMENTO' : 'texto'}`);
 
     await dono.close(); await parceiro.close(); await rival.close();
+  }
+
+  if (rodar('saguao')) {   // Três abas da MESMA pessoa, no saguão de uma mesa de 4.
+    // ─── a mesma pessoa não lota a mesa ────────────────────────────────────────
+    // Relato do Ricardo com foto: "Lia" aparecendo TRÊS vezes na lista da sala. A foto é
+    // da v1.5.0 e o item 4 da v1.6.0 já resolveu isso (clienteId + sentar() +
+    // donoDaCadeira), então:
+    //
+    //   ESTA CENA É VERDE NO CÓDIGO DE HOJE. É REGRESSÃO, NÃO CONSERTO.
+    //
+    // Está dito com todas as letras porque a casa trata asserção que nasce verde como
+    // coisa que não prova conserto nenhum — e aqui isso é escolha, não descuido.
+    //
+    // O valor dela é cobrir três eixos que a asserção existente ("a mesma pessoa entra
+    // noutra aba", lá em cima) não cobre, e que são exatamente os da foto:
+    //   · SAGUÃO (P nulo) é o único lugar onde `largar()` APAGA o dono da cadeira, de
+    //     propósito, para a mesa não encher de reserva de quem só espiou;
+    //   · mesa de QUATRO, onde há três vagas online e o `findIndex` tem para onde errar —
+    //     com duas cadeiras ele não tinha;
+    //   · TRÊS abas encadeiam DOIS take-overs, e é no segundo que a conexão velha e a nova
+    //     disputam a mesma entrada do mapa.
+    //
+    // O que ficaria VERMELHO e por que não se escreve assim: o aperto de mão legado
+    // (convidado que manda `nome` sem `ola`) não registra dono, e três abas antigas pegam
+    // três cadeiras. Mas isso é comportamento DESENHADO — quebrar quem não recarregou
+    // seria pior —, e uma asserção em cima disso gravaria a regra errada, que é o erro que
+    // os itens 1 e 2 da Fila 5 pagaram duas vezes.
+    console.log('\ntrês abas da mesma pessoa, no saguão de uma mesa de 4');
+    const anf4 = await abrir('anfitrião de 4');
+    await anf4.evaluate(() => {
+      const j = window.__jogo;
+      j.MESA.modo = 'classico'; j.MESA.n = 4;
+      j.MESA.cadeiras[0].nome = 'Ricardo';
+      for (let i = 1; i < 4; i++) { j.MESA.cadeiras[i].tipo = 'online'; j.MESA.cadeiras[i].nome = `Vaga ${i}`; }
+      document.getElementById('btComecar').click();
+    });
+    await anf4.waitForFunction(
+      () => (document.getElementById('onlineCodigo').textContent || '').match(/^[A-Z0-9]{4}$/),
+      { timeout: 25000, polling: 400 });
+    const cod4 = await anf4.evaluate(() => document.getElementById('onlineCodigo').textContent);
+
+    // Uma pessoa só, três abas: `abrir` injeta o MESMO clienteId nas três, que é como se
+    // diz "é a mesma pessoa" sem pagar o cache HTTP de um contexto isolado.
+    const MESMA = 'LIADETESTE';
+    const sentar = async (nome) => {
+      const p = await abrir(nome, MESMA);
+      await p.evaluate(c => {
+        window.__jogo.MESA.cadeiras[0].nome = 'Lia';
+        document.getElementById('btEntrar').click();
+        document.getElementById('onlineEntrada').value = c;
+        document.getElementById('btConectar').click();
+      }, cod4);
+      await p.waitForFunction(() => /Você é a cadeira/.test(document.getElementById('onlineErro').textContent),
+        { timeout: 30000, polling: 400 });
+      return p;
+    };
+    const naCadeira = p => p.evaluate(() =>
+      Number((document.getElementById('onlineErro').textContent.match(/cadeira (\d)/) || [])[1]));
+
+    const ab1 = await sentar('aba 1'); const primeira = await naCadeira(ab1);
+    const ab2 = await sentar('aba 2');
+    const ab3 = await sentar('aba 3');
+
+    // Dá tempo de as cadeiras a mais aparecerem, SE forem aparecer. Sem esta pausa a
+    // asserção poderia medir antes de o terceiro `ola` chegar e passar por PRESSA — verde
+    // de teste que não alcançou o estado interessante é a armadilha nº 3 do CLAUDE.md.
+    await anf4.evaluate(() => new Promise(r => setTimeout(r, 1500)));
+
+    const sala = await anf4.evaluate(() => ({
+      chegaram: (document.getElementById('onlineLista').textContent.match(/chegou/g) || []).length,
+      conexoes: window.__jogo.conexoesAbertas(),
+    }));
+    ok(sala.chegaram === 1,
+      `no SAGUÃO a mesma pessoa ocupou ${sala.chegaram} das 3 cadeiras online — era para ser 1`);
+    ok(sala.conexoes === 1,
+      `a mesa ficou com ${sala.conexoes} conexões para a MESMA pessoa — era para ser 1`);
+    // E é a MESMA cadeira: take-over não pode andar com a pessoa pela mesa. O número certo
+    // é o que faz "voltar" ser VOLTAR e não "entrar de novo em qualquer lugar" — e no
+    // começo da partida ele vira a chave da visaoDe.
+    const ultima = await naCadeira(ab3);
+    ok(ultima === primeira,
+      `a terceira aba sentou na cadeira ${ultima} em vez de assumir a ${primeira}`);
+    // As abas velhas foram AVISADAS. Sem isto, "1 conexão" também descreveria uma aba que
+    // simplesmente caiu sem ninguém saber.
+    const expulsa = p => p.evaluate(() =>
+      /noutra aba/.test(document.getElementById('onlineErro').textContent) ||
+      !document.getElementById('telaMenu').classList.contains('oculta'));
+    ok(await expulsa(ab1) && await expulsa(ab2),
+      'as abas antigas não foram avisadas de que a cadeira passou para a nova');
+
+    console.log(`  1 pessoa · ${sala.chegaram} cadeira · ${sala.conexoes} conexão · sempre a ${primeira}`);
+    await ab1.close(); await ab2.close(); await ab3.close(); await anf4.close();
   }
 } catch (e) {
   if (process.env.DOMINO_DEBUG) console.error(e.stack);
