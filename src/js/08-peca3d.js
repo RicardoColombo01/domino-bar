@@ -23,7 +23,7 @@ const PINTAS = [
   [[0, 0], [2, 0], [0, 1], [2, 1], [0, 2], [2, 2]],
 ];
 
-const texPintas = pintar(CELULA * ATLAS_N, CELULA, (c) => {
+const texPintas = pintar('pintas', CELULA * ATLAS_N, CELULA, (c) => {
   for (let n = 0; n < ATLAS_N; n++) {
     const ox = n * CELULA;
     c.fillStyle = '#f4ecd9';

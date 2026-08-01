@@ -1111,10 +1111,33 @@ function profundidadeDe(y, z) {
 const larguraVisivelEm = (y, z) =>
   2 * profundidadeDe(y, z) * Math.tan(camera.fov * Math.PI / 360) * camera.aspect;
 
-function pintar(w, h, desenho) {
+// ─── as texturas, e por que elas sabem se repintar ───────────────────────────
+// Toda textura do jogo é um <canvas> 2D desenhado UMA vez, na carga, e isso valeu
+// enquanto a página era imortal. No Android, sair para outro aplicativo e voltar devolve
+// DUAS perdas somadas: o contexto WebGL (o navegador libera a GPU da aba de fundo) e o
+// BITMAP do canvas 2D (descartado por pressão de memória, volta em branco).
+//
+// Separadas, nenhuma das duas aparece, e isso foi MEDIDO antes de consertar
+// (tests/test-textura.mjs): só perder o contexto não muda nada, porque o three reenvia a
+// textura a partir de `texture.image` e o canvas está íntegro; só apagar o bitmap também
+// não, porque ninguém reenvia nada e a GPU segue com a cópia boa — o único `needsUpdate`
+// do projeto é de UV. JUNTAS, o restore sobe um bitmap em branco: a luz da peça na tela
+// cai de 166 para 3, e é a peça preta da foto.
+//
+// Repare no tampo, que cai só de 132 para 80 e continua parecendo madeira: com o albedo
+// zerado o `MeshStandardMaterial` ainda devolve o brilho ESPECULAR da lâmpada. Era por
+// isso que a foto mostrava mesa marrom e peça preta ao mesmo tempo — e é por isso que
+// "se as três caíssem juntas o tampo estaria preto" era um palpite errado. A medição
+// derrubou o palpite; é o terceiro diagnóstico de leitura que este projeto perde para um
+// número.
+//
+// O que faltava era guardar o `desenho`: ele era um arrow inline usado uma vez e jogado
+// fora, então não existia como repintar. É o conserto inteiro.
+const texturas = [];
+
+function pintar(nome, w, h, desenho) {
   const cv = document.createElement('canvas');
   cv.width = w; cv.height = h;
-  desenho(cv.getContext('2d'), w, h);
   const t = new THREE.CanvasTexture(cv);
   t.anisotropy = 4;
   // O canvas é pintado em sRGB, e o default do Three é tratar textura como dado LINEAR.
@@ -1122,30 +1145,59 @@ function pintar(w, h, desenho) {
   // peça e a madeira iluminada tendiam para o mesmo âmbar, e a pinta escura chegava
   // cinza. Uma linha, e é a maior alavanca de contraste que existe aqui.
   t.colorSpace = THREE.SRGBColorSpace;
+  // Repinta o MESMO canvas e a MESMA textura, nunca uma nova: `matPintas` e
+  // `matPreviaPinta` apontam para esta instância, e trocá-la consertaria uma e deixaria a
+  // outra preta. `needsUpdate` porque o bitmap mudou e a cópia na GPU é velha.
+  const repintar = () => { desenho(cv.getContext('2d'), w, h); t.needsUpdate = true; };
+  repintar();
+  texturas.push({ nome, canvas: cv, textura: t, repintar });
   return t;
 }
 
-const texMadeira = pintar(512, 512, (c, w, h) => {
+// O veio tem GERADOR PRÓPRIO, e não é preciosismo — são duas razões, nesta ordem:
+//
+// (1) Repintar tem de devolver a MESMA madeira. O tampo trocando de veio ao voltar do
+//     outro aplicativo seria o conserto virando um segundo defeito visível, menor e mais
+//     difícil de explicar. É também o que deixa o teste exigir que o bitmap volte
+//     idêntico, que é muito mais forte do que "não está em branco".
+// (2) `Math.random` é GLOBAL, e as suítes de tela semeiam esse gerador dentro da própria
+//     página (item 11 da Fila 5). Uma repintura consome ~1.000 sorteios e deslocaria a
+//     sequência semeada — a cena que hoje é reproduzível voltaria a ser moeda, e a
+//     intermitência que custou uma sessão inteira voltaria pela porta dos fundos.
+//
+// mulberry32, o mesmo do test-telas, reinstanciado a cada pintura.
+const veioDaMadeira = () => {
+  let a = 0x5b3a22;                                     // a própria cor da madeira, de semente
+  return () => {
+    a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+};
+
+const texMadeira = pintar('madeira', 512, 512, (c, w, h) => {
+  const rnd = veioDaMadeira();
   c.fillStyle = '#5b3a22'; c.fillRect(0, 0, w, h);
   for (let i = 0; i < 260; i++) {                       // veios: faixas horizontais tortas
-    c.strokeStyle = `rgba(${30 + Math.random() * 60},${15 + Math.random() * 30},0,${0.06 + Math.random() * 0.12})`;
-    c.lineWidth = 0.5 + Math.random() * 2.5;
+    c.strokeStyle = `rgba(${30 + rnd() * 60},${15 + rnd() * 30},0,${0.06 + rnd() * 0.12})`;
+    c.lineWidth = 0.5 + rnd() * 2.5;
     c.beginPath();
-    const y = Math.random() * h;
+    const y = rnd() * h;
     c.moveTo(0, y);
     for (let x = 0; x <= w; x += 32) c.lineTo(x, y + Math.sin(x / 40 + i) * 3);
     c.stroke();
   }
   for (let i = 0; i < 60; i++) {                        // marcas de copo e de uso
-    c.fillStyle = `rgba(0,0,0,${0.03 + Math.random() * 0.05})`;
+    c.fillStyle = `rgba(0,0,0,${0.03 + rnd() * 0.05})`;
     c.beginPath();
-    c.arc(Math.random() * w, Math.random() * h, 6 + Math.random() * 30, 0, 7);
+    c.arc(rnd() * w, rnd() * h, 6 + rnd() * 30, 0, 7);
     c.fill();
   }
 });
 texMadeira.wrapS = texMadeira.wrapT = THREE.RepeatWrapping;
 
-const texPiso = pintar(256, 256, (c, w, h) => {
+const texPiso = pintar('piso', 256, 256, (c, w, h) => {
   c.fillStyle = '#2a2320'; c.fillRect(0, 0, w, h);
   c.fillStyle = '#332a26';
   for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++)
@@ -1158,6 +1210,50 @@ const texPiso = pintar(256, 256, (c, w, h) => {
 });
 texPiso.wrapS = texPiso.wrapT = THREE.RepeatWrapping;
 texPiso.repeat.set(9, 9);
+
+// ─── e quem devolve a textura quando o sistema a leva ────────────────────────
+// O bitmap descartado volta como PRETO TRANSPARENTE, e toda receita daqui começa com um
+// fillRect opaco cobrindo o canvas — então alfa 0 no canto é a assinatura do descarte, e
+// custa um getImageData de 1×1 por textura. Quem escrever textura nova aqui herda essa
+// obrigação: começar opaca, ou a sonda mente.
+//
+// A sonda olha UM pixel. Um descarte parcial passaria batido; ninguém relatou nada assim,
+// o mecanismo conhecido joga fora o bitmap inteiro, e se um dia aparecer a resposta é
+// amostrar três pontos — não abandonar a sonda, que é o que torna o segundo gancho barato.
+const bitmapApagado = t => {
+  try { return t.canvas.getContext('2d').getImageData(0, 0, 1, 1).data[3] < 8; }
+  catch (e) { void e; return false; }      // canvas que não deixa ler não é canvas apagado
+};
+
+let perdasDeContexto = 0, restauracoes = 0, repinturas = 0;
+
+function conferirTexturas() {
+  let n = 0;
+  for (const t of texturas) if (bitmapApagado(t)) { t.repintar(); n++; }
+  repinturas += n;
+  return n;
+}
+
+// GANCHO 1 — o restore, que é o que o three NÃO pode fazer por nós. Ele reinicializa o
+// contexto e reenvia cada textura a partir de `texture.image`; se a imagem voltou em
+// branco, ele reenvia o branco com toda a diligência do mundo. Nosso listener nasce depois
+// do dele (o dele é do construtor do WebGLRenderer, lá em cima), então repintamos antes do
+// primeiro render — e mesmo que a ordem fosse outra, `repintar()` marca `needsUpdate`.
+renderer.domElement.addEventListener('webglcontextlost', () => { perdasDeContexto++; });
+renderer.domElement.addEventListener('webglcontextrestored', () => {
+  restauracoes++;
+  conferirTexturas();
+});
+
+// GANCHO 2 — a volta da aba. A perda de contexto NÃO é obrigatória: o bitmap pode ser
+// descartado sozinho, e aí nenhum evento avisa ninguém. Sem contexto perdido a tela
+// continua certa (a GPU tem a cópia velha), mas o bitmap em branco fica armado para o
+// próximo restore. O retorno da aba é o único momento em que dá para PERGUNTAR, e a
+// pergunta custa três pixels.
+//
+// O `visibilitychange` do 11-interacao.js trata a SAÍDA (document.hidden) e é sobre gesto
+// preso; este é o outro lado, e mora aqui, junto do assunto dele.
+document.addEventListener('visibilitychange', () => { if (!document.hidden) conferirTexturas(); });
 
 // ─── luz ─────────────────────────────────────────────────────────────────────
 // Uma lâmpada baixa em cima da mesa, e o resto na penumbra: é o contraste que faz
@@ -1360,7 +1456,7 @@ const PINTAS = [
   [[0, 0], [2, 0], [0, 1], [2, 1], [0, 2], [2, 2]],
 ];
 
-const texPintas = pintar(CELULA * ATLAS_N, CELULA, (c) => {
+const texPintas = pintar('pintas', CELULA * ATLAS_N, CELULA, (c) => {
   for (let n = 0; n < ATLAS_N; n++) {
     const ox = n * CELULA;
     c.fillStyle = '#f4ecd9';
@@ -4044,6 +4140,22 @@ window.__jogo = {
   // sem precisar de rede: ele chama a MESMA função que a rede chama, então o que a foto
   // mostra é o que o jogo faz.
   pintarSala, salaGuardada, atualizarBotaoVoltarMesa,
+  // A TEXTURA é a única coisa do jogo cujo estado não está em `vista` nem em `P`: ela vive
+  // num <canvas> que o sistema operacional pode jogar fora enquanto a aba está no fundo.
+  // `texturas` é para a suíte perguntar pelo nome em vez de caçar material no grafo.
+  texturas, conferirTexturas,
+  // E este é para o CELULAR responder, que é a única medição que vale de verdade aqui: o
+  // laboratório prova que o mecanismo existe, não que é o que acontece no aparelho do
+  // Ricardo. Celular no chrome://inspect, sair para outro aplicativo, voltar, e chamar
+  // isto — seis números. Os contadores moram no jogo porque quem volta do outro
+  // aplicativo não tinha console aberto na hora do evento. Serializável de propósito.
+  diagnosticoTexturas: () => ({
+    perdas: perdasDeContexto, restauracoes, repinturas,
+    texturas: texturas.map(t => ({
+      nome: t.nome, w: t.canvas.width, h: t.canvas.height,
+      alfa: t.canvas.getContext('2d').getImageData(0, 0, 1, 1).data[3],
+    })),
+  }),
   // O menu redesenha a lista de cadeiras com o nome que o convidado mandou pela REDE —
   // e por isso o teste do online precisa poder forçar esse redesenho para conferir que
   // o nome chega como texto, e não como elemento.

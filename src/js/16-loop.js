@@ -498,6 +498,22 @@ window.__jogo = {
   // sem precisar de rede: ele chama a MESMA função que a rede chama, então o que a foto
   // mostra é o que o jogo faz.
   pintarSala, salaGuardada, atualizarBotaoVoltarMesa,
+  // A TEXTURA é a única coisa do jogo cujo estado não está em `vista` nem em `P`: ela vive
+  // num <canvas> que o sistema operacional pode jogar fora enquanto a aba está no fundo.
+  // `texturas` é para a suíte perguntar pelo nome em vez de caçar material no grafo.
+  texturas, conferirTexturas,
+  // E este é para o CELULAR responder, que é a única medição que vale de verdade aqui: o
+  // laboratório prova que o mecanismo existe, não que é o que acontece no aparelho do
+  // Ricardo. Celular no chrome://inspect, sair para outro aplicativo, voltar, e chamar
+  // isto — seis números. Os contadores moram no jogo porque quem volta do outro
+  // aplicativo não tinha console aberto na hora do evento. Serializável de propósito.
+  diagnosticoTexturas: () => ({
+    perdas: perdasDeContexto, restauracoes, repinturas,
+    texturas: texturas.map(t => ({
+      nome: t.nome, w: t.canvas.width, h: t.canvas.height,
+      alfa: t.canvas.getContext('2d').getImageData(0, 0, 1, 1).data[3],
+    })),
+  }),
   // O menu redesenha a lista de cadeiras com o nome que o convidado mandou pela REDE —
   // e por isso o teste do online precisa poder forçar esse redesenho para conferir que
   // o nome chega como texto, e não como elemento.
