@@ -18,7 +18,30 @@ const RAIZ = path.join(import.meta.dirname, '..');
 const PORTA = 8137;
 const TIPOS = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.png': 'image/png' };
 
-const externo = process.argv[2];
+// ESCOLHER A CENA, pelo mesmo motivo do test-telas: esta suíte é linear, sobe um servidor,
+// abre meia dúzia de abas e depende do broker público do PeerJS. Iterar num defeito de uma
+// cena só custava a suíte inteira.
+//
+//   node test-online.mjs                       tudo, local
+//   node test-online.mjs --so=saguao           só esta cena
+//   node test-online.mjs https://… --so=conversa
+//
+// O corte é limpo porque cada cena abre a PRÓPRIA mesa e as próprias abas — a única coisa
+// que atravessa a fronteira é o `codigo`, e ele nasce e morre dentro da primeira.
+const args = process.argv.slice(2);
+const externo = args.find(a => !a.startsWith('--'));
+const so = (args.find(a => a.startsWith('--so=')) || '').slice(5).split(',').filter(Boolean);
+// A lista existe para que uma cena inexistente REPROVE em vez de rodar zero asserção e
+// imprimir "tudo certo" — verde vazio é a armadilha que o `diff` de arquivos vazios já
+// pagou aqui. Quem acrescentar cena nova acrescenta o nome aqui, no mesmo commit.
+const CENAS = ['duelo', 'conversa'];
+for (const s of so) if (!CENAS.includes(s)) {
+  // Cena que não existe é ERRO e não "rodar tudo": um erro de digitação daria a suíte
+  // inteira quando se pediu uma cena, ou zero asserção — e as duas mentem.
+  console.error(`não existe a cena "${s}" — havia: ${CENAS.join(', ')}`);
+  process.exit(2);
+}
+const rodar = nome => !so.length || so.includes(nome);
 const servidor = externo ? null : http.createServer((req, res) => {
   const rel = decodeURIComponent(req.url.split('?')[0]);
   const arq = path.join(RAIZ, rel === '/' ? 'index.html' : rel);
@@ -70,339 +93,343 @@ try {
   const temPeerJS = await anfitriao.evaluate(() => typeof Peer !== 'undefined');
   if (!temPeerJS) throw new Error('PeerJS não carregou (sem internet?)');
 
-  console.log('\nanfitrião abre a mesa');
-  await anfitriao.evaluate(() => {
-    const j = window.__jogo;
-    j.MESA.n = 2;
-    // De propósito no Duelo: a mesa é 1v1 e serve para provar que o MODO chega ao
-    // convidado. Ele não tem MESA nem P.regras — só o que vier dentro da visão.
-    j.MESA.modo = 'duelo';
-    j.MESA.cadeiras[0].nome = 'Anfitriã';
-    j.MESA.cadeiras[1].tipo = 'online';
-    j.MESA.cadeiras[1].nome = 'Visita';
-    document.getElementById('btComecar').click();
-  });
-  await anfitriao.waitForFunction(
-    () => (document.getElementById('onlineCodigo').textContent || '').match(/^[A-Z0-9]{4}$/),
-    { timeout: 25000, polling: 400 });
-  const codigo = await anfitriao.evaluate(() => document.getElementById('onlineCodigo').textContent);
-  console.log(`  código da mesa: ${codigo}`);
+  if (rodar('duelo')) {   // A mesa de DUELO, a reconexão dos dois lados e o take-over da mesma pessoa.
+    console.log('\nanfitrião abre a mesa');
+    await anfitriao.evaluate(() => {
+      const j = window.__jogo;
+      j.MESA.n = 2;
+      // De propósito no Duelo: a mesa é 1v1 e serve para provar que o MODO chega ao
+      // convidado. Ele não tem MESA nem P.regras — só o que vier dentro da visão.
+      j.MESA.modo = 'duelo';
+      j.MESA.cadeiras[0].nome = 'Anfitriã';
+      j.MESA.cadeiras[1].tipo = 'online';
+      j.MESA.cadeiras[1].nome = 'Visita';
+      document.getElementById('btComecar').click();
+    });
+    await anfitriao.waitForFunction(
+      () => (document.getElementById('onlineCodigo').textContent || '').match(/^[A-Z0-9]{4}$/),
+      { timeout: 25000, polling: 400 });
+    const codigo = await anfitriao.evaluate(() => document.getElementById('onlineCodigo').textContent);
+    console.log(`  código da mesa: ${codigo}`);
 
-  // O ANFITRIÃO GUARDA A MESA, e tem de ser conferido AGORA — as abas do teste vivem na
-  // mesma origem e portanto no MESMO localStorage, então o `guardar('sala')` do convidado
-  // vai passar por cima deste daqui a poucas linhas. Não é defeito do jogo: na vida real
-  // o anfitrião e a visita são navegadores diferentes.
-  const salaDoAnfitriao = await anfitriao.evaluate(() => window.__jogo.salaGuardada());
-  ok(salaDoAnfitriao && salaDoAnfitriao.anfitriao === true && salaDoAnfitriao.codigo === codigo,
-    `o anfitrião não guardou a própria mesa: ${JSON.stringify(salaDoAnfitriao)}`);
+    // O ANFITRIÃO GUARDA A MESA, e tem de ser conferido AGORA — as abas do teste vivem na
+    // mesma origem e portanto no MESMO localStorage, então o `guardar('sala')` do convidado
+    // vai passar por cima deste daqui a poucas linhas. Não é defeito do jogo: na vida real
+    // o anfitrião e a visita são navegadores diferentes.
+    const salaDoAnfitriao = await anfitriao.evaluate(() => window.__jogo.salaGuardada());
+    ok(salaDoAnfitriao && salaDoAnfitriao.anfitriao === true && salaDoAnfitriao.codigo === codigo,
+      `o anfitrião não guardou a própria mesa: ${JSON.stringify(salaDoAnfitriao)}`);
 
-  console.log('\nconvidado entra pelo código');
-  await convidado.evaluate(cod => {
-    document.getElementById('btEntrar').click();
-    document.getElementById('onlineEntrada').value = cod;
-    document.getElementById('btConectar').click();
-  }, codigo);
+    console.log('\nconvidado entra pelo código');
+    await convidado.evaluate(cod => {
+      document.getElementById('btEntrar').click();
+      document.getElementById('onlineEntrada').value = cod;
+      document.getElementById('btConectar').click();
+    }, codigo);
 
-  await anfitriao.waitForFunction(
-    () => document.getElementById('onlineLista').textContent.includes('chegou'), { timeout: 30000, polling: 400 });
-  console.log('  o anfitrião viu a visita sentar');
+    await anfitriao.waitForFunction(
+      () => document.getElementById('onlineLista').textContent.includes('chegou'), { timeout: 30000, polling: 400 });
+    console.log('  o anfitrião viu a visita sentar');
 
-  await anfitriao.evaluate(() => document.getElementById('btIniciarOnline').click());
-  await convidado.waitForFunction('window.__jogo.vista && window.__jogo.vista.mao.length === 14', { timeout: 25000, polling: 400 });
+    await anfitriao.evaluate(() => document.getElementById('btIniciarOnline').click());
+    await convidado.waitForFunction('window.__jogo.vista && window.__jogo.vista.mao.length === 14', { timeout: 25000, polling: 400 });
 
-  console.log('\no que o convidado recebeu');
-  const v = await convidado.evaluate(() => JSON.parse(JSON.stringify(window.__jogo.vista)));
-  ok(v.cadeira === 1, `o convidado deveria ser a cadeira 1, veio ${v.cadeira}`);
-  ok(v.modo === 'duelo', `o modo da mesa não chegou ao convidado (veio ${v.modo})`);
-  ok(v.mao.length === 14, 'a mão do convidado não chegou completa');
-  ok(v.monte === 0, `o Duelo consome o baralho e o convidado viu monte de ${v.monte}`);
-  ok(v.naMao.length === 2 && v.naMao[0] === 14, 'a contagem de peças do anfitrião não chegou');
-  ok(!await convidado.evaluate(() => !!window.__jogo.P), 'o convidado não pode ter a partida na memória');
+    console.log('\no que o convidado recebeu');
+    const v = await convidado.evaluate(() => JSON.parse(JSON.stringify(window.__jogo.vista)));
+    ok(v.cadeira === 1, `o convidado deveria ser a cadeira 1, veio ${v.cadeira}`);
+    ok(v.modo === 'duelo', `o modo da mesa não chegou ao convidado (veio ${v.modo})`);
+    ok(v.mao.length === 14, 'a mão do convidado não chegou completa');
+    ok(v.monte === 0, `o Duelo consome o baralho e o convidado viu monte de ${v.monte}`);
+    ok(v.naMao.length === 2 && v.naMao[0] === 14, 'a contagem de peças do anfitrião não chegou');
+    ok(!await convidado.evaluate(() => !!window.__jogo.P), 'o convidado não pode ter a partida na memória');
 
-  // O PONTO DE TODO O DESENHO: a mão do anfitrião não existe do lado do convidado.
-  // Vale comparar peça a peça em vez de procurar texto no JSON — "[0,0]" aparece no
-  // placar de uma partida 0×0 e um teste desses acusaria vazamento onde não há.
-  const norma = p => Math.min(p[0], p[1]) + '|' + Math.max(p[0], p[1]);
-  const maoDoAnfitriao = await anfitriao.evaluate(() => window.__jogo.P.maos[0].map(p => p.slice()));
-  const visiveis = new Set([...v.mao, ...v.linha].map(norma));
-  const vazadas = maoDoAnfitriao.map(norma).filter(k => visiveis.has(k));
-  ok(vazadas.length === 0, `a mão do anfitrião vazou para o convidado: ${vazadas.join(', ')}`);
-  ok(visiveis.size === v.mao.length + v.linha.length, 'apareceu peça repetida no que o convidado vê');
-  console.log(`  o anfitrião tem ${maoDoAnfitriao.length} peças · o convidado enxerga ${visiveis.size} · vazaram ${vazadas.length}`);
+    // O PONTO DE TODO O DESENHO: a mão do anfitrião não existe do lado do convidado.
+    // Vale comparar peça a peça em vez de procurar texto no JSON — "[0,0]" aparece no
+    // placar de uma partida 0×0 e um teste desses acusaria vazamento onde não há.
+    const norma = p => Math.min(p[0], p[1]) + '|' + Math.max(p[0], p[1]);
+    const maoDoAnfitriao = await anfitriao.evaluate(() => window.__jogo.P.maos[0].map(p => p.slice()));
+    const visiveis = new Set([...v.mao, ...v.linha].map(norma));
+    const vazadas = maoDoAnfitriao.map(norma).filter(k => visiveis.has(k));
+    ok(vazadas.length === 0, `a mão do anfitrião vazou para o convidado: ${vazadas.join(', ')}`);
+    ok(visiveis.size === v.mao.length + v.linha.length, 'apareceu peça repetida no que o convidado vê');
+    console.log(`  o anfitrião tem ${maoDoAnfitriao.length} peças · o convidado enxerga ${visiveis.size} · vazaram ${vazadas.length}`);
 
-  console.log('\no convidado joga e o anfitrião obedece');
-  // Faz a vez chegar no convidado: o anfitrião joga a dele primeiro, se for o caso.
-  await anfitriao.evaluate(() => {
-    const j = window.__jogo;
-    if (j.P.vez === 0) j.aplicarIntencao(0, j.jogadaDoBot(j.P, 0));
-  });
-  await convidado.waitForFunction('window.__jogo.vista.vez === window.__jogo.vista.cadeira', { timeout: 15000, polling: 400 });
+    console.log('\no convidado joga e o anfitrião obedece');
+    // Faz a vez chegar no convidado: o anfitrião joga a dele primeiro, se for o caso.
+    await anfitriao.evaluate(() => {
+      const j = window.__jogo;
+      if (j.P.vez === 0) j.aplicarIntencao(0, j.jogadaDoBot(j.P, 0));
+    });
+    await convidado.waitForFunction('window.__jogo.vista.vez === window.__jogo.vista.cadeira', { timeout: 15000, polling: 400 });
 
-  const antes = await anfitriao.evaluate(() => ({ linha: window.__jogo.P.linha.length, monte: window.__jogo.P.monte.length }));
-  // Vai pelo caminho de verdade: pedirAcao empurra a INTENÇÃO pelo fio e quem decide
-  // se ela vale é o anfitrião, do outro lado.
-  await convidado.evaluate(() => {
-    const a = window.__jogo.vista.acoes;
-    window.__jogo.pedirAcao(
-      a.jogadas.length ? { acao: 'jogar', peca: a.jogadas[0].peca, ponta: a.jogadas[0].ponta }
-        : a.comprar ? { acao: 'comprar' } : { acao: 'passar' });
-  });
-  await anfitriao.waitForFunction(
-    an => window.__jogo.P.linha.length > an.linha || window.__jogo.P.monte.length < an.monte,
-    { timeout: 15000, polling: 400 }, antes).catch(() => { ok(false, 'a jogada do convidado não chegou no anfitrião'); });
-  console.log('  a jogada do convidado foi aplicada pelo anfitrião');
+    const antes = await anfitriao.evaluate(() => ({ linha: window.__jogo.P.linha.length, monte: window.__jogo.P.monte.length }));
+    // Vai pelo caminho de verdade: pedirAcao empurra a INTENÇÃO pelo fio e quem decide
+    // se ela vale é o anfitrião, do outro lado.
+    await convidado.evaluate(() => {
+      const a = window.__jogo.vista.acoes;
+      window.__jogo.pedirAcao(
+        a.jogadas.length ? { acao: 'jogar', peca: a.jogadas[0].peca, ponta: a.jogadas[0].ponta }
+          : a.comprar ? { acao: 'comprar' } : { acao: 'passar' });
+    });
+    await anfitriao.waitForFunction(
+      an => window.__jogo.P.linha.length > an.linha || window.__jogo.P.monte.length < an.monte,
+      { timeout: 15000, polling: 400 }, antes).catch(() => { ok(false, 'a jogada do convidado não chegou no anfitrião'); });
+    console.log('  a jogada do convidado foi aplicada pelo anfitrião');
 
-  // ─── caiu e voltou: a MESMA cadeira ────────────────────────────────────────
-  // A prova do clienteId, e o motivo de ele existir. Antes a cadeira saía da primeira
-  // vaga livre, decidida no instante da conexão: "voltar" era sentar onde sobrou. E o
-  // número da cadeira é a CHAVE da visaoDe — sentar na cadeira errada é receber a mão de
-  // outra pessoa. Por isso a asserção confere a MÃO e não só o número: o número certo com
-  // a mão errada seria um jeito de o bug passar despercebido.
-  console.log('\no convidado cai e volta');
-  const maoDaVisita = (await convidado.evaluate(() => window.__jogo.vista.mao.map(p => p.slice())))
-    .map(norma).sort().join(' ');
-  await convidado.reload({ waitUntil: 'networkidle2', timeout: 45000 });
-  await convidado.waitForFunction('window.__jogo && window.__jogo.pronto', { timeout: 30000, polling: 400 });
-  await convidado.evaluate(cod => {
-    document.getElementById('btEntrar').click();
-    document.getElementById('onlineEntrada').value = cod;
-    document.getElementById('btConectar').click();
-  }, codigo);
-  await convidado.waitForFunction('window.__jogo.vista && window.__jogo.vista.mao.length', { timeout: 30000, polling: 400 })
-    .catch(() => ok(false, 'o convidado não conseguiu voltar para a mesa'));
-  const volta = await convidado.evaluate(() => JSON.parse(JSON.stringify(window.__jogo.vista)));
-  ok(volta.cadeira === 1, `voltou na cadeira ${volta.cadeira} em vez da 1 — a cadeira não é de quem é dono dela`);
-  ok(volta.mao.map(norma).sort().join(' ') === maoDaVisita,
-    'voltou com outra mão: sentou na cadeira de outra pessoa');
-  console.log(`  voltou na cadeira ${volta.cadeira}, com as mesmas ${volta.mao.length} peças`);
+    // ─── caiu e voltou: a MESMA cadeira ────────────────────────────────────────
+    // A prova do clienteId, e o motivo de ele existir. Antes a cadeira saía da primeira
+    // vaga livre, decidida no instante da conexão: "voltar" era sentar onde sobrou. E o
+    // número da cadeira é a CHAVE da visaoDe — sentar na cadeira errada é receber a mão de
+    // outra pessoa. Por isso a asserção confere a MÃO e não só o número: o número certo com
+    // a mão errada seria um jeito de o bug passar despercebido.
+    console.log('\no convidado cai e volta');
+    const maoDaVisita = (await convidado.evaluate(() => window.__jogo.vista.mao.map(p => p.slice())))
+      .map(norma).sort().join(' ');
+    await convidado.reload({ waitUntil: 'networkidle2', timeout: 45000 });
+    await convidado.waitForFunction('window.__jogo && window.__jogo.pronto', { timeout: 30000, polling: 400 });
+    await convidado.evaluate(cod => {
+      document.getElementById('btEntrar').click();
+      document.getElementById('onlineEntrada').value = cod;
+      document.getElementById('btConectar').click();
+    }, codigo);
+    await convidado.waitForFunction('window.__jogo.vista && window.__jogo.vista.mao.length', { timeout: 30000, polling: 400 })
+      .catch(() => ok(false, 'o convidado não conseguiu voltar para a mesa'));
+    const volta = await convidado.evaluate(() => JSON.parse(JSON.stringify(window.__jogo.vista)));
+    ok(volta.cadeira === 1, `voltou na cadeira ${volta.cadeira} em vez da 1 — a cadeira não é de quem é dono dela`);
+    ok(volta.mao.map(norma).sort().join(' ') === maoDaVisita,
+      'voltou com outra mão: sentou na cadeira de outra pessoa');
+    console.log(`  voltou na cadeira ${volta.cadeira}, com as mesmas ${volta.mao.length} peças`);
 
-  // ─── o ANFITRIÃO cai e reabre a MESMA mesa ─────────────────────────────────
-  // O item 3(c), e é o que faz a reconexão do online valer de verdade: antes, o anfitrião
-  // que recarregava abria uma mesa OUTRA (`codigoNovo()` a cada `tentarAbrir`), e os
-  // convidados tentando voltar batiam numa porta que não existe. Metade do mecanismo sem
-  // a outra. A asserção cobre as três coisas que têm de acontecer juntas: o MESMO código,
-  // a partida de volta com as cadeiras ainda online, e o convidado sentando sozinho na
-  // cadeira dele COM A MESMA MÃO.
-  console.log('\no anfitrião cai e reabre a mesma mesa');
-  const antesDaQueda = await anfitriao.evaluate(() => ({
-    maoNum: window.__jogo.P.maoNum, naLinha: window.__jogo.P.linha.length }));
-  const maoAntesDaQueda = (await convidado.evaluate(() => window.__jogo.vista.mao.map(p => p.slice())))
-    .map(norma).sort().join(' ');
+    // ─── o ANFITRIÃO cai e reabre a MESMA mesa ─────────────────────────────────
+    // O item 3(c), e é o que faz a reconexão do online valer de verdade: antes, o anfitrião
+    // que recarregava abria uma mesa OUTRA (`codigoNovo()` a cada `tentarAbrir`), e os
+    // convidados tentando voltar batiam numa porta que não existe. Metade do mecanismo sem
+    // a outra. A asserção cobre as três coisas que têm de acontecer juntas: o MESMO código,
+    // a partida de volta com as cadeiras ainda online, e o convidado sentando sozinho na
+    // cadeira dele COM A MESMA MÃO.
+    console.log('\no anfitrião cai e reabre a mesma mesa');
+    const antesDaQueda = await anfitriao.evaluate(() => ({
+      maoNum: window.__jogo.P.maoNum, naLinha: window.__jogo.P.linha.length }));
+    const maoAntesDaQueda = (await convidado.evaluate(() => window.__jogo.vista.mao.map(p => p.slice())))
+      .map(norma).sort().join(' ');
 
-  await anfitriao.reload({ waitUntil: 'networkidle2', timeout: 45000 });
-  await anfitriao.waitForFunction('window.__jogo && window.__jogo.pronto', { timeout: 30000, polling: 400 });
-  // Recompõe o registro que o convidado sobrescreveu — artefato do localStorage
-  // compartilhado explicado lá em cima, e não parte do que se está testando.
-  await anfitriao.evaluate(s => {
-    localStorage.setItem('dominobar.sala', JSON.stringify(s));
-    window.__jogo.atualizarBotaoVoltarMesa();
-  }, salaDoAnfitriao);
+    await anfitriao.reload({ waitUntil: 'networkidle2', timeout: 45000 });
+    await anfitriao.waitForFunction('window.__jogo && window.__jogo.pronto', { timeout: 30000, polling: 400 });
+    // Recompõe o registro que o convidado sobrescreveu — artefato do localStorage
+    // compartilhado explicado lá em cima, e não parte do que se está testando.
+    await anfitriao.evaluate(s => {
+      localStorage.setItem('dominobar.sala', JSON.stringify(s));
+      window.__jogo.atualizarBotaoVoltarMesa();
+    }, salaDoAnfitriao);
 
-  const rotulo = await anfitriao.evaluate(() => document.getElementById('btVoltarMesa').textContent);
-  ok(/Reabrir a sua mesa/.test(rotulo), `o menu ofereceu "${rotulo}" em vez de reabrir a mesa`);
+    const rotulo = await anfitriao.evaluate(() => document.getElementById('btVoltarMesa').textContent);
+    ok(/Reabrir a sua mesa/.test(rotulo), `o menu ofereceu "${rotulo}" em vez de reabrir a mesa`);
 
-  await anfitriao.evaluate(() => document.getElementById('btVoltarMesa').click());
-  await anfitriao.waitForFunction(
-    cod => document.getElementById('onlineCodigo').textContent === cod,
-    { timeout: 40000, polling: 500 }, codigo)
-    .catch(() => ok(false, 'o anfitrião não conseguiu reivindicar o mesmo código'));
-  console.log(`  reabriu com o mesmo código: ${codigo}`);
+    await anfitriao.evaluate(() => document.getElementById('btVoltarMesa').click());
+    await anfitriao.waitForFunction(
+      cod => document.getElementById('onlineCodigo').textContent === cod,
+      { timeout: 40000, polling: 500 }, codigo)
+      .catch(() => ok(false, 'o anfitrião não conseguiu reivindicar o mesmo código'));
+    console.log(`  reabriu com o mesmo código: ${codigo}`);
 
-  await anfitriao.waitForFunction(
-    an => window.__jogo.P && window.__jogo.P.maoNum === an.maoNum && window.__jogo.P.linha.length === an.naLinha,
-    { timeout: 30000, polling: 500 }, antesDaQueda)
-    .catch(() => ok(false, 'a partida não voltou igual ao reabrir a mesa'));
-  const cadeirasDepois = await anfitriao.evaluate(() => window.__jogo.P.cadeiras.map(c => c.tipo));
-  ok(cadeirasDepois.includes('online'),
-    `ao reabrir, as cadeiras viraram ${cadeirasDepois.join('/')} — quem reabre a mesa não pode transformar a visita em bot`);
-  console.log(`  partida de volta na mão ${antesDaQueda.maoNum} com as cadeiras ${cadeirasDepois.join('/')}`);
+    await anfitriao.waitForFunction(
+      an => window.__jogo.P && window.__jogo.P.maoNum === an.maoNum && window.__jogo.P.linha.length === an.naLinha,
+      { timeout: 30000, polling: 500 }, antesDaQueda)
+      .catch(() => ok(false, 'a partida não voltou igual ao reabrir a mesa'));
+    const cadeirasDepois = await anfitriao.evaluate(() => window.__jogo.P.cadeiras.map(c => c.tipo));
+    ok(cadeirasDepois.includes('online'),
+      `ao reabrir, as cadeiras viraram ${cadeirasDepois.join('/')} — quem reabre a mesa não pode transformar a visita em bot`);
+    console.log(`  partida de volta na mão ${antesDaQueda.maoNum} com as cadeiras ${cadeirasDepois.join('/')}`);
 
-  // E o convidado volta SOZINHO: daqui de fora, anfitrião recarregando e mesa fechando são
-  // o mesmo evento (o link cai igual), então desistir na primeira queda desperdiçaria
-  // justamente o mecanismo acima.
-  await convidado.waitForFunction('window.__jogo.vista && window.__jogo.vista.mao.length',
-    { timeout: 60000, polling: 500 })
-    .catch(() => ok(false, 'o convidado não voltou sozinho depois de o anfitrião reabrir'));
-  const depois = await convidado.evaluate(() => JSON.parse(JSON.stringify(window.__jogo.vista)));
-  ok(depois.cadeira === 1, `o convidado voltou na cadeira ${depois.cadeira} em vez da 1`);
-  ok(depois.mao.map(norma).sort().join(' ') === maoAntesDaQueda,
-    'o convidado voltou com outra mão depois de o anfitrião reabrir a mesa');
-  console.log(`  o convidado voltou sozinho na cadeira ${depois.cadeira}, com as mesmas ${depois.mao.length} peças`);
+    // E o convidado volta SOZINHO: daqui de fora, anfitrião recarregando e mesa fechando são
+    // o mesmo evento (o link cai igual), então desistir na primeira queda desperdiçaria
+    // justamente o mecanismo acima.
+    await convidado.waitForFunction('window.__jogo.vista && window.__jogo.vista.mao.length',
+      { timeout: 60000, polling: 500 })
+      .catch(() => ok(false, 'o convidado não voltou sozinho depois de o anfitrião reabrir'));
+    const depois = await convidado.evaluate(() => JSON.parse(JSON.stringify(window.__jogo.vista)));
+    ok(depois.cadeira === 1, `o convidado voltou na cadeira ${depois.cadeira} em vez da 1`);
+    ok(depois.mao.map(norma).sort().join(' ') === maoAntesDaQueda,
+      'o convidado voltou com outra mão depois de o anfitrião reabrir a mesa');
+    console.log(`  o convidado voltou sozinho na cadeira ${depois.cadeira}, com as mesmas ${depois.mao.length} peças`);
 
-  // ─── a mesma pessoa, noutra aba ────────────────────────────────────────────
-  // Mesmo contexto = mesmo localStorage = mesmo clienteId. É fechar o notebook e abrir
-  // no celular. A aba nova assume a cadeira e a velha é avisada — antes as duas brigavam
-  // pela mesa, cada uma consumindo uma vaga.
-  console.log('\na mesma pessoa entra noutra aba');
-  const outraAba = await abrir('outra aba', convidado.idDeTeste);
-  await outraAba.evaluate(cod => {
-    document.getElementById('btEntrar').click();
-    document.getElementById('onlineEntrada').value = cod;
-    document.getElementById('btConectar').click();
-  }, codigo);
-  await outraAba.waitForFunction('window.__jogo.vista && window.__jogo.vista.mao.length', { timeout: 30000, polling: 400 })
-    .catch(() => ok(false, 'a segunda aba não conseguiu assumir a cadeira'));
-  const naNova = await outraAba.evaluate(() => window.__jogo.vista.cadeira);
-  ok(naNova === 1, `a segunda aba sentou na cadeira ${naNova} em vez de assumir a 1`);
-  const ocupadas = await anfitriao.evaluate(() => window.__jogo.conexoesAbertas());
-  ok(ocupadas === 1, `a mesa ficou com ${ocupadas} conexões para a MESMA pessoa — era para ser 1`);
-  console.log(`  a aba nova assumiu a cadeira ${naNova}, e a mesa tem ${ocupadas} conexão`);
-  await outraAba.close();
+    // ─── a mesma pessoa, noutra aba ────────────────────────────────────────────
+    // Mesmo contexto = mesmo localStorage = mesmo clienteId. É fechar o notebook e abrir
+    // no celular. A aba nova assume a cadeira e a velha é avisada — antes as duas brigavam
+    // pela mesa, cada uma consumindo uma vaga.
+    console.log('\na mesma pessoa entra noutra aba');
+    const outraAba = await abrir('outra aba', convidado.idDeTeste);
+    await outraAba.evaluate(cod => {
+      document.getElementById('btEntrar').click();
+      document.getElementById('onlineEntrada').value = cod;
+      document.getElementById('btConectar').click();
+    }, codigo);
+    await outraAba.waitForFunction('window.__jogo.vista && window.__jogo.vista.mao.length', { timeout: 30000, polling: 400 })
+      .catch(() => ok(false, 'a segunda aba não conseguiu assumir a cadeira'));
+    const naNova = await outraAba.evaluate(() => window.__jogo.vista.cadeira);
+    ok(naNova === 1, `a segunda aba sentou na cadeira ${naNova} em vez de assumir a 1`);
+    const ocupadas = await anfitriao.evaluate(() => window.__jogo.conexoesAbertas());
+    ok(ocupadas === 1, `a mesa ficou com ${ocupadas} conexões para a MESMA pessoa — era para ser 1`);
+    console.log(`  a aba nova assumiu a cadeira ${naNova}, e a mesa tem ${ocupadas} conexão`);
+    await outraAba.close();
+  }
 
   await anfitriao.close();
   await convidado.close();
 
-  // ─── a conversa ────────────────────────────────────────────────────────────
-  // Mesa de 4 em duplas (0&2 × 1&3), com o anfitrião na 0 e duas visitas nas cadeiras
-  // 1 e 2. O parceiro do anfitrião é a cadeira 2; a cadeira 1 é adversária. É o único
-  // arranjo que responde à pergunta que interessa: a fala da dupla vaza?
-  console.log('\na conversa da mesa');
-  const dono = await abrir('dono');
-  const parceiro = await abrir('parceiro');
-  const rival = await abrir('rival');
+  if (rodar('conversa')) {   // A conversa: fala geral, fala da dupla e o nome hostil.
+    // ─── a conversa ────────────────────────────────────────────────────────────
+    // Mesa de 4 em duplas (0&2 × 1&3), com o anfitrião na 0 e duas visitas nas cadeiras
+    // 1 e 2. O parceiro do anfitrião é a cadeira 2; a cadeira 1 é adversária. É o único
+    // arranjo que responde à pergunta que interessa: a fala da dupla vaza?
+    console.log('\na conversa da mesa');
+    const dono = await abrir('dono');
+    const parceiro = await abrir('parceiro');
+    const rival = await abrir('rival');
 
-  await dono.evaluate(() => {
-    const j = window.__jogo;
-    j.MESA.modo = 'classico'; j.MESA.n = 4;
-    j.MESA.cadeiras[0].nome = 'Dono';
-    j.MESA.cadeiras[1].tipo = 'online'; j.MESA.cadeiras[1].nome = 'Rival';
-    j.MESA.cadeiras[2].tipo = 'online'; j.MESA.cadeiras[2].nome = 'Parceiro';
-    j.MESA.cadeiras[3].tipo = 'bot'; j.MESA.cadeiras[3].nivel = 'normal';
-    document.getElementById('btComecar').click();
-  });
-  await dono.waitForFunction(
-    () => (document.getElementById('onlineCodigo').textContent || '').match(/^[A-Z0-9]{4}$/),
-    { timeout: 25000, polling: 400 });
-  const cod2 = await dono.evaluate(() => document.getElementById('onlineCodigo').textContent);
+    await dono.evaluate(() => {
+      const j = window.__jogo;
+      j.MESA.modo = 'classico'; j.MESA.n = 4;
+      j.MESA.cadeiras[0].nome = 'Dono';
+      j.MESA.cadeiras[1].tipo = 'online'; j.MESA.cadeiras[1].nome = 'Rival';
+      j.MESA.cadeiras[2].tipo = 'online'; j.MESA.cadeiras[2].nome = 'Parceiro';
+      j.MESA.cadeiras[3].tipo = 'bot'; j.MESA.cadeiras[3].nivel = 'normal';
+      document.getElementById('btComecar').click();
+    });
+    await dono.waitForFunction(
+      () => (document.getElementById('onlineCodigo').textContent || '').match(/^[A-Z0-9]{4}$/),
+      { timeout: 25000, polling: 400 });
+    const cod2 = await dono.evaluate(() => document.getElementById('onlineCodigo').textContent);
 
-  const conversa = p => p.evaluate(() => document.getElementById('conversaLista').textContent);
-  const falarComo = (p, canal, txt) => p.evaluate(([c, t]) => {
-    window.__jogo.trocarCanal(c);
-    document.getElementById('conversaTexto').value = t;
-    window.__jogo.falar();
-  }, [canal, txt]);
+    const conversa = p => p.evaluate(() => document.getElementById('conversaLista').textContent);
+    const falarComo = (p, canal, txt) => p.evaluate(([c, t]) => {
+      window.__jogo.trocarCanal(c);
+      document.getElementById('conversaTexto').value = t;
+      window.__jogo.falar();
+    }, [canal, txt]);
 
-  // A ordem importa: a primeira conexão pega a cadeira 1 (a adversária), a segunda a 2.
-  //
-  // O nome vai junto: quem senta manda o PRÓPRIO nome, e ele sobrescreve o que o anfitrião
-  // tinha posto na cadeira. Atribuir direto no MESA não passa por `lembrarMesa` — só o
-  // campo do menu grava —, então isto não contamina o localStorage das outras cenas.
-  const entrar = async (pagina, codigo, nome) => {
-    await pagina.evaluate(([c, n]) => {
-      window.__jogo.MESA.cadeiras[0].nome = n;
-      document.getElementById('btEntrar').click();
-      document.getElementById('onlineEntrada').value = c;
-      document.getElementById('btConectar').click();
-    }, [codigo, nome]);
-  };
-  // O nome do rival é uma tag: `listarSala` desenhava o nome do convidado direto em
-  // innerHTML, e era um buraco mais antigo que o do chat — mais curto que os 14 caracteres
-  // do corte, então ele chegava inteiro.
-  await entrar(rival, cod2, '<img src=x>');
-  await dono.waitForFunction(() => (document.getElementById('onlineLista').textContent.match(/chegou/g) || []).length === 1,
-    { timeout: 30000, polling: 400 });
-  await entrar(parceiro, cod2, 'Parceirão');
-  await dono.waitForFunction(() => (document.getElementById('onlineLista').textContent.match(/chegou/g) || []).length === 2,
-    { timeout: 30000, polling: 400 });
-
-  const nomeVirouTag = await dono.evaluate(() => !!document.querySelector('#onlineLista img'));
-  ok(!nomeVirouTag, 'o nome do convidado virou elemento na lista da sala em vez de texto');
-
-  // ...E O MESMO NOME NO MENU, que era o buraco que sobrou. `listarSala` foi consertado
-  // (é a asserção acima); `montarCadeiras` ficou para trás, e é pior por ser dentro de um
-  // ATRIBUTO `value=` — basta uma aspa para sair dele. O nome vem da rede e `lembrarMesa`
-  // o persiste, então o anfitrião mexer no modo, no número de jogadores ou simplesmente
-  // recarregar já bastava para o script do convidado rodar na máquina dele.
-  const noMenu = await dono.evaluate(() => {
-    const j = window.__jogo;
-    // O NOME QUE QUEBRA PARA FORA DO ATRIBUTO. Repare que o `<img src=x>` que já circulou
-    // acima NÃO serve aqui: sem aspa ele fica preso dentro do `value=` e não vira elemento
-    // nem no código com defeito — a asserção passaria dos dois lados e não provaria nada.
-    // Quem abre o atributo é a aspa, e é por isso que ela lidera este nome.
+    // A ordem importa: a primeira conexão pega a cadeira 1 (a adversária), a segunda a 2.
     //
-    // Atribuir direto é o que `sentar()`/`{t:'nome'}` fazem quando o convidado se apresenta
-    // (15-rede.js), com o mesmo corte de 14 caracteres; o caminho de rede já está provado
-    // pela asserção do saguão logo acima.
-    j.MESA.cadeiras[1].nome = '"><img src=x>';
-    j.montarCadeiras();
-    const virouTag = !!document.querySelector('#cadeiras img');
+    // O nome vai junto: quem senta manda o PRÓPRIO nome, e ele sobrescreve o que o anfitrião
+    // tinha posto na cadeira. Atribuir direto no MESA não passa por `lembrarMesa` — só o
+    // campo do menu grava —, então isto não contamina o localStorage das outras cenas.
+    const entrar = async (pagina, codigo, nome) => {
+      await pagina.evaluate(([c, n]) => {
+        window.__jogo.MESA.cadeiras[0].nome = n;
+        document.getElementById('btEntrar').click();
+        document.getElementById('onlineEntrada').value = c;
+        document.getElementById('btConectar').click();
+      }, [codigo, nome]);
+    };
+    // O nome do rival é uma tag: `listarSala` desenhava o nome do convidado direto em
+    // innerHTML, e era um buraco mais antigo que o do chat — mais curto que os 14 caracteres
+    // do corte, então ele chegava inteiro.
+    await entrar(rival, cod2, '<img src=x>');
+    await dono.waitForFunction(() => (document.getElementById('onlineLista').textContent.match(/chegou/g) || []).length === 1,
+      { timeout: 30000, polling: 400 });
+    await entrar(parceiro, cod2, 'Parceirão');
+    await dono.waitForFunction(() => (document.getElementById('onlineLista').textContent.match(/chegou/g) || []).length === 2,
+      { timeout: 30000, polling: 400 });
 
-    // E a aspa sozinha, que nem precisa de má intenção: um jogador chamado Zé "O Rei"
-    // fechava o atributo e o campo passava a mostrar o nome pela metade — com o nome já
-    // corrompido gravado no armazenamento.
-    j.MESA.cadeiras[1].nome = 'Zé "O" \'R\'';
-    j.montarCadeiras();
-    const campo = document.querySelector('#cadeiras .nome[data-i="1"]');
-    return { virouTag, valor: campo ? campo.value : null };
-  });
-  ok(!noMenu.virouTag, 'o nome do convidado virou ELEMENTO na lista de cadeiras do menu');
-  ok(noMenu.valor === 'Zé "O" \'R\'',
-    `aspas no nome quebraram o atributo do campo: veio ${JSON.stringify(noMenu.valor)}`);
-  console.log('  o nome hostil chegou como texto no saguão e no menu');
+    const nomeVirouTag = await dono.evaluate(() => !!document.querySelector('#onlineLista img'));
+    ok(!nomeVirouTag, 'o nome do convidado virou elemento na lista da sala em vez de texto');
 
-  // ─── o saguão ──────────────────────────────────────────────────────────────
-  // Falar ANTES de a partida começar. É quando as pessoas mais querem falar ("cadê você?",
-  // "entra aí") e era o único momento em que não havia conversa: a visibilidade dela saía
-  // de `desenharHUD`, que só roda quando já existe partida, e o painel ficava por baixo do
-  // overlay da tela de espera.
-  const saguao = await parceiro.evaluate(() => ({
-    campo: !document.getElementById('conversaEscrever').classList.contains('oculta'),
-    porCima: document.body.classList.contains('saguao'),
-  }));
-  ok(saguao.campo, 'no saguão o campo de escrever não apareceu');
-  ok(saguao.porCima, 'a conversa não subiu acima da tela de espera — ficaria coberta por ela');
+    // ...E O MESMO NOME NO MENU, que era o buraco que sobrou. `listarSala` foi consertado
+    // (é a asserção acima); `montarCadeiras` ficou para trás, e é pior por ser dentro de um
+    // ATRIBUTO `value=` — basta uma aspa para sair dele. O nome vem da rede e `lembrarMesa`
+    // o persiste, então o anfitrião mexer no modo, no número de jogadores ou simplesmente
+    // recarregar já bastava para o script do convidado rodar na máquina dele.
+    const noMenu = await dono.evaluate(() => {
+      const j = window.__jogo;
+      // O NOME QUE QUEBRA PARA FORA DO ATRIBUTO. Repare que o `<img src=x>` que já circulou
+      // acima NÃO serve aqui: sem aspa ele fica preso dentro do `value=` e não vira elemento
+      // nem no código com defeito — a asserção passaria dos dois lados e não provaria nada.
+      // Quem abre o atributo é a aspa, e é por isso que ela lidera este nome.
+      //
+      // Atribuir direto é o que `sentar()`/`{t:'nome'}` fazem quando o convidado se apresenta
+      // (15-rede.js), com o mesmo corte de 14 caracteres; o caminho de rede já está provado
+      // pela asserção do saguão logo acima.
+      j.MESA.cadeiras[1].nome = '"><img src=x>';
+      j.montarCadeiras();
+      const virouTag = !!document.querySelector('#cadeiras img');
 
-  await falarComo(parceiro, 'todos', 'cheguei, e vocês?');
-  await dono.waitForFunction(() => document.getElementById('conversaLista').textContent.includes('cheguei'),
-    { timeout: 15000, polling: 300 }).catch(() => { ok(false, 'a fala do saguão não chegou ao anfitrião'); });
-  await rival.waitForFunction(() => document.getElementById('conversaLista').textContent.includes('cheguei'),
-    { timeout: 15000, polling: 300 }).catch(() => { ok(false, 'a fala do saguão não chegou ao outro convidado'); });
-  // No saguão não há vista de onde tirar o nome, então ele vem pelo fio — escrito pelo
-  // ANFITRIÃO, a partir do MESA dele.
-  const doSaguao = await conversa(dono);
-  ok(/Parceirão/.test(doSaguao), `a fala do saguão saiu sem nome: "${doSaguao.slice(-90)}"`);
-  console.log('  saguão: campo aberto por cima da tela, fala chegou aos dois, com nome');
+      // E a aspa sozinha, que nem precisa de má intenção: um jogador chamado Zé "O Rei"
+      // fechava o atributo e o campo passava a mostrar o nome pela metade — com o nome já
+      // corrompido gravado no armazenamento.
+      j.MESA.cadeiras[1].nome = 'Zé "O" \'R\'';
+      j.montarCadeiras();
+      const campo = document.querySelector('#cadeiras .nome[data-i="1"]');
+      return { virouTag, valor: campo ? campo.value : null };
+    });
+    ok(!noMenu.virouTag, 'o nome do convidado virou ELEMENTO na lista de cadeiras do menu');
+    ok(noMenu.valor === 'Zé "O" \'R\'',
+      `aspas no nome quebraram o atributo do campo: veio ${JSON.stringify(noMenu.valor)}`);
+    console.log('  o nome hostil chegou como texto no saguão e no menu');
 
-  // O intervalo do anfitrião vale para o convidado também: dá o tempo antes de seguir.
-  await parceiro.evaluate(() => new Promise(r => setTimeout(r, 800)));
+    // ─── o saguão ──────────────────────────────────────────────────────────────
+    // Falar ANTES de a partida começar. É quando as pessoas mais querem falar ("cadê você?",
+    // "entra aí") e era o único momento em que não havia conversa: a visibilidade dela saía
+    // de `desenharHUD`, que só roda quando já existe partida, e o painel ficava por baixo do
+    // overlay da tela de espera.
+    const saguao = await parceiro.evaluate(() => ({
+      campo: !document.getElementById('conversaEscrever').classList.contains('oculta'),
+      porCima: document.body.classList.contains('saguao'),
+    }));
+    ok(saguao.campo, 'no saguão o campo de escrever não apareceu');
+    ok(saguao.porCima, 'a conversa não subiu acima da tela de espera — ficaria coberta por ela');
 
-  await dono.evaluate(() => document.getElementById('btIniciarOnline').click());
-  await parceiro.waitForFunction('window.__jogo.vista && window.__jogo.vista.cadeira === 2',
-    { timeout: 25000, polling: 400 });
-  await rival.waitForFunction('window.__jogo.vista && window.__jogo.vista.cadeira === 1',
-    { timeout: 25000, polling: 400 });
-  console.log('  mesa de 4 montada: dono na 0, rival na 1, parceiro na 2');
+    await falarComo(parceiro, 'todos', 'cheguei, e vocês?');
+    await dono.waitForFunction(() => document.getElementById('conversaLista').textContent.includes('cheguei'),
+      { timeout: 15000, polling: 300 }).catch(() => { ok(false, 'a fala do saguão não chegou ao anfitrião'); });
+    await rival.waitForFunction(() => document.getElementById('conversaLista').textContent.includes('cheguei'),
+      { timeout: 15000, polling: 300 }).catch(() => { ok(false, 'a fala do saguão não chegou ao outro convidado'); });
+    // No saguão não há vista de onde tirar o nome, então ele vem pelo fio — escrito pelo
+    // ANFITRIÃO, a partir do MESA dele.
+    const doSaguao = await conversa(dono);
+    ok(/Parceirão/.test(doSaguao), `a fala do saguão saiu sem nome: "${doSaguao.slice(-90)}"`);
+    console.log('  saguão: campo aberto por cima da tela, fala chegou aos dois, com nome');
 
-  await falarComo(parceiro, 'todos', 'boa noite a todos');
-  await rival.waitForFunction(() => document.getElementById('conversaLista').textContent.includes('boa noite'),
-    { timeout: 15000, polling: 300 }).catch(() => { ok(false, 'a fala para TODOS não chegou no adversário'); });
+    // O intervalo do anfitrião vale para o convidado também: dá o tempo antes de seguir.
+    await parceiro.evaluate(() => new Promise(r => setTimeout(r, 800)));
 
-  // O anfitrião derruba mensagem que chega rápido demais da mesma cadeira — é a guarda
-  // contra um convidado que trava a mesa dos outros com um laço. Um humano digitando
-  // nunca encosta nela; um teste automatizado encosta sempre.
-  await parceiro.evaluate(() => new Promise(r => setTimeout(r, 800)));
+    await dono.evaluate(() => document.getElementById('btIniciarOnline').click());
+    await parceiro.waitForFunction('window.__jogo.vista && window.__jogo.vista.cadeira === 2',
+      { timeout: 25000, polling: 400 });
+    await rival.waitForFunction('window.__jogo.vista && window.__jogo.vista.cadeira === 1',
+      { timeout: 25000, polling: 400 });
+    console.log('  mesa de 4 montada: dono na 0, rival na 1, parceiro na 2');
 
-  // O PONTO: só o parceiro e o anfitrião (que retransmite) podem ler.
-  await falarComo(parceiro, 'dupla', 'segura o quatro');
-  await dono.waitForFunction(() => document.getElementById('conversaLista').textContent.includes('segura o quatro'),
-    { timeout: 15000, polling: 300 }).catch(() => { ok(false, 'a fala da dupla não chegou ao parceiro dela'); });
-  // Dá tempo de a mensagem errada chegar, se for chegar.
-  await rival.evaluate(() => new Promise(r => setTimeout(r, 1200)));
-  const noRival = await conversa(rival);
-  const vazou = noRival.includes('segura o quatro');
-  ok(!vazou, 'A FALA DA DUPLA VAZOU para o adversário — é o equivalente exato da mão vazando.');
+    await falarComo(parceiro, 'todos', 'boa noite a todos');
+    await rival.waitForFunction(() => document.getElementById('conversaLista').textContent.includes('boa noite'),
+      { timeout: 15000, polling: 300 }).catch(() => { ok(false, 'a fala para TODOS não chegou no adversário'); });
 
-  // Texto de chat é o primeiro campo livre vindo da rede: tem de chegar como TEXTO.
-  await rival.evaluate(() => new Promise(r => setTimeout(r, 800)));
-  await falarComo(rival, 'todos', '<img src=x onerror=alert(1)>');
-  await dono.waitForFunction(() => document.getElementById('conversaLista').textContent.includes('onerror'),
-    { timeout: 15000, polling: 300 }).catch(() => { ok(false, 'a mensagem com HTML não chegou'); });
-  const virouTag = await dono.evaluate(() => !!document.querySelector('#conversaLista img'));
-  ok(!virouTag, 'o HTML do chat virou elemento na página em vez de texto');
-  console.log(`  fala geral chegou · fala da dupla ${vazou ? 'VAZOU' : 'não vazou'} · ` +
-    `HTML chegou como ${virouTag ? 'ELEMENTO' : 'texto'}`);
+    // O anfitrião derruba mensagem que chega rápido demais da mesma cadeira — é a guarda
+    // contra um convidado que trava a mesa dos outros com um laço. Um humano digitando
+    // nunca encosta nela; um teste automatizado encosta sempre.
+    await parceiro.evaluate(() => new Promise(r => setTimeout(r, 800)));
 
-  await dono.close(); await parceiro.close(); await rival.close();
+    // O PONTO: só o parceiro e o anfitrião (que retransmite) podem ler.
+    await falarComo(parceiro, 'dupla', 'segura o quatro');
+    await dono.waitForFunction(() => document.getElementById('conversaLista').textContent.includes('segura o quatro'),
+      { timeout: 15000, polling: 300 }).catch(() => { ok(false, 'a fala da dupla não chegou ao parceiro dela'); });
+    // Dá tempo de a mensagem errada chegar, se for chegar.
+    await rival.evaluate(() => new Promise(r => setTimeout(r, 1200)));
+    const noRival = await conversa(rival);
+    const vazou = noRival.includes('segura o quatro');
+    ok(!vazou, 'A FALA DA DUPLA VAZOU para o adversário — é o equivalente exato da mão vazando.');
+
+    // Texto de chat é o primeiro campo livre vindo da rede: tem de chegar como TEXTO.
+    await rival.evaluate(() => new Promise(r => setTimeout(r, 800)));
+    await falarComo(rival, 'todos', '<img src=x onerror=alert(1)>');
+    await dono.waitForFunction(() => document.getElementById('conversaLista').textContent.includes('onerror'),
+      { timeout: 15000, polling: 300 }).catch(() => { ok(false, 'a mensagem com HTML não chegou'); });
+    const virouTag = await dono.evaluate(() => !!document.querySelector('#conversaLista img'));
+    ok(!virouTag, 'o HTML do chat virou elemento na página em vez de texto');
+    console.log(`  fala geral chegou · fala da dupla ${vazou ? 'VAZOU' : 'não vazou'} · ` +
+      `HTML chegou como ${virouTag ? 'ELEMENTO' : 'texto'}`);
+
+    await dono.close(); await parceiro.close(); await rival.close();
+  }
 } catch (e) {
   if (process.env.DOMINO_DEBUG) console.error(e.stack);
   avisos.push(e.message);
@@ -417,5 +444,9 @@ if (avisos.length) {
   console.log('  Isso não reprova o jogo — solo e local não dependem de rede nenhuma.');
   process.exit(0);
 }
-console.log(falhas ? `\n${falhas} falha(s)` : '\ntudo certo');
+// Como no test-telas: rodada parcial tem de DIZER que foi parcial, senão "tudo certo"
+// descreve as cenas que não rodaram tão bem quanto as que rodaram.
+console.log(falhas ? `\n${falhas} falha(s)`
+  : so.length ? `\ntudo certo — RODADA PARCIAL: só ${so.join(', ')} de ${CENAS.join(', ')}`
+              : '\ntudo certo');
 process.exit(falhas ? 1 : 0);
