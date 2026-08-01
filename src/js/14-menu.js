@@ -26,7 +26,14 @@ const TIPOS_VALIDOS = new Set(['local', 'bot', 'online']);   // a cadeira 0 é s
 // quem só quer jogar, e o menu mostra na tela o que ficou valendo.
 function mesaLembrada() {
   const g = lido('mesa', null) || {};
-  const modo = MODOS[g.modo] ? g.modo : MODO_PADRAO;
+  // `Object.hasOwn` e não `MODOS[g.modo] ?`, e a diferença é uma TELA PRETA PERMANENTE.
+  // MODOS é objeto literal, então `MODOS['constructor']` é truthy e passava no teste — e
+  // `MODOS['constructor'].cadeiras` é undefined, logo a linha de baixo lançava TypeError.
+  // Como `mesaLembrada()` roda no TOPO do módulo, a exceção matava o script concatenado
+  // inteiro: tela preta que voltava a cada recarregamento, até alguém limpar o
+  // armazenamento à mão. É exatamente o "alguém mexendo no armazenamento" que o comentário
+  // acima promete cobrir — a validação existia e tinha um buraco do tamanho do protótipo.
+  const modo = Object.hasOwn(MODOS, g.modo) ? g.modo : MODO_PADRAO;
   const cabem = MODOS[modo].cadeiras;
   return {
     modo,
@@ -41,8 +48,12 @@ function mesaLembrada() {
         nome: (guardado || nome).slice(0, 14),
         tipo,
         // Nível válido é o que o BOT reconhece, conferido na tabela dele — uma segunda
-        // lista aqui apodreceria no dia em que aparecesse um nível novo.
-        nivel: tipo === 'bot' ? (NIVEIS[c.nivel] ? c.nivel : 'normal') : undefined,
+        // lista aqui apodreceria no dia em que aparecesse um nível novo. `hasOwn` pela
+        // mesma razão do modo, ali em cima: aqui o efeito era brando (nível 'constructor'
+        // passava e o bot jogava sem ruído e sem memória, degradação invisível), mas é o
+        // mesmo furo, e deixar dois padrões de validação no mesmo arquivo é como o
+        // primeiro volta.
+        nivel: tipo === 'bot' ? (Object.hasOwn(NIVEIS, c.nivel) ? c.nivel : 'normal') : undefined,
       };
     }),
   };
@@ -59,12 +70,23 @@ function lembrarMesa() {
   });
 }
 
+// O `escapar` no `value=` foi a TERCEIRA mordida da mesma classe. `listarSala` (15-rede)
+// punha `c.nome` direto em innerHTML e foi consertado; esta linha ficou para trás, e é pior
+// por ser dentro de um ATRIBUTO — basta uma aspa para sair dele.
+//
+// E `c.nome` vem de fora: o convidado manda o nome dele pela rede e `15-rede.js` escreve em
+// `MESA.cadeiras[cadeira].nome`; `lembrarMesa()` persiste as quatro cadeiras, então o valor
+// sobrevive à recarga. Sem escape, um convidado com nome `"><img src=x onerror=…>` roda
+// script na máquina do ANFITRIÃO assim que ele mexe no modo ou no número de jogadores.
+//
+// Sem risco de zona morta: 13-hud é concatenado ANTES de 14-menu, então `escapar` já está
+// de pé quando `montarCadeiras()` roda no fim deste arquivo.
 function montarCadeiras() {
   el('cadeiras').innerHTML = MESA.cadeiras.slice(0, MESA.n).map((c, i) => {
     const val = c.tipo === 'bot' ? 'bot:' + c.nivel : c.tipo;
     return `<div class="cadeira">
       <span class="num">${i === 0 ? 'Você' : 'Cadeira ' + (i + 1)}</span>
-      <input class="entrada nome" data-i="${i}" value="${c.nome}" maxlength="14" />
+      <input class="entrada nome" data-i="${i}" value="${escapar(c.nome)}" maxlength="14" />
       ${i === 0 ? '<span class="fixo">nesta tela</span>' :
         `<select data-i="${i}">${TIPOS.map(([v, t]) =>
           `<option value="${v}"${v === val ? ' selected' : ''}>${t}</option>`).join('')}</select>`}

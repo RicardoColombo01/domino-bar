@@ -208,6 +208,20 @@
   </div>
 </div>
 
+<!-- O RECADO DE QUANDO O JOGO NÃO CARREGA. Nasce escondido; quem o mostra é a sonda no
+     fim do arquivo. Fica FORA do módulo de propósito: se ele fosse parte do jogo, não
+     existiria justamente no caso em que é necessário. -->
+<div id="semCarga" class="tela oculta">
+  <div class="carta">
+    <h1>Não consegui carregar o jogo</h1>
+    <p class="nota">O 3D vem da internet na primeira vez. Confira a conexão e recarregue —
+      depois de carregar uma vez, o jogo abre offline.</p>
+    <div class="linha">
+      <button class="btn principal" onclick="location.reload()">Tentar de novo</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 
 <script type="importmap">
@@ -221,6 +235,38 @@
 
 <script type="module">
 __JOGO__
+</script>
+
+<!-- SONDA DE CARGA — script CLÁSSICO, não módulo, e é o ponto todo.
+     O jogo inteiro é aquele um `<script type="module">` acima, que começa importando o
+     three do CDN. Se esse import falhar — wifi de bar, WebGL desligado, aparelho velho —
+     NADA daquele módulo executa, e portanto nenhum handler de botão é registrado. Como o
+     #telaMenu nasce visível no HTML, a pessoa via o menu inteiro, digitava os nomes,
+     apertava "Sentar e jogar" e não acontecia nada. Para sempre, sem uma palavra.
+     (Havia tratamento cuidadoso para o PeerJS faltar, e nenhum para a biblioteca sem a
+     qual o jogo não existe.)
+
+     SONDA, e não um setTimeout único: com prazo fixo, uma máquina lenta mostraria o recado
+     com o jogo ainda a caminho — e a suíte test-telas reprovaria por painel a mais na
+     tela. Aqui ele só aparece se o jogo continuar ausente ao fim da janela, e some sozinho
+     se chegar depois (o `pointer-events: none` enquanto escondido não basta: a tela é
+     `z-index: 30` e cobriria o jogo). -->
+<script>
+(function () {
+  var prazo = 12000, passo = 500, gasto = 0;
+  var recado = document.getElementById('semCarga');
+  var pronto = function () { return !!(window.__jogo && window.__jogo.pronto); };
+  var olhar = setInterval(function () {
+    // Pronto: esconde e para de olhar. É o único jeito de sair deste laço, e é de propósito.
+    if (pronto()) { recado.classList.add('oculta'); clearInterval(olhar); return; }
+    gasto += passo;
+    // Vencido o prazo, MOSTRA E CONTINUA OLHANDO. Parar aqui deixaria o recado na tela para
+    // sempre numa máquina que só estava lenta — e num teste de tela isso é um painel a mais
+    // no quadro, que a suíte reprovaria com razão. Enquanto o jogo não vem, olhar a cada
+    // meio segundo não custa nada: a página está parada mesmo.
+    if (gasto >= prazo) recado.classList.remove('oculta');
+  }, passo);
+})();
 </script>
 </body>
 </html>

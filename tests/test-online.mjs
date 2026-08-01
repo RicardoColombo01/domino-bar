@@ -308,6 +308,38 @@ try {
   const nomeVirouTag = await dono.evaluate(() => !!document.querySelector('#onlineLista img'));
   ok(!nomeVirouTag, 'o nome do convidado virou elemento na lista da sala em vez de texto');
 
+  // ...E O MESMO NOME NO MENU, que era o buraco que sobrou. `listarSala` foi consertado
+  // (é a asserção acima); `montarCadeiras` ficou para trás, e é pior por ser dentro de um
+  // ATRIBUTO `value=` — basta uma aspa para sair dele. O nome vem da rede e `lembrarMesa`
+  // o persiste, então o anfitrião mexer no modo, no número de jogadores ou simplesmente
+  // recarregar já bastava para o script do convidado rodar na máquina dele.
+  const noMenu = await dono.evaluate(() => {
+    const j = window.__jogo;
+    // O NOME QUE QUEBRA PARA FORA DO ATRIBUTO. Repare que o `<img src=x>` que já circulou
+    // acima NÃO serve aqui: sem aspa ele fica preso dentro do `value=` e não vira elemento
+    // nem no código com defeito — a asserção passaria dos dois lados e não provaria nada.
+    // Quem abre o atributo é a aspa, e é por isso que ela lidera este nome.
+    //
+    // Atribuir direto é o que `sentar()`/`{t:'nome'}` fazem quando o convidado se apresenta
+    // (15-rede.js), com o mesmo corte de 14 caracteres; o caminho de rede já está provado
+    // pela asserção do saguão logo acima.
+    j.MESA.cadeiras[1].nome = '"><img src=x>';
+    j.montarCadeiras();
+    const virouTag = !!document.querySelector('#cadeiras img');
+
+    // E a aspa sozinha, que nem precisa de má intenção: um jogador chamado Zé "O Rei"
+    // fechava o atributo e o campo passava a mostrar o nome pela metade — com o nome já
+    // corrompido gravado no armazenamento.
+    j.MESA.cadeiras[1].nome = 'Zé "O" \'R\'';
+    j.montarCadeiras();
+    const campo = document.querySelector('#cadeiras .nome[data-i="1"]');
+    return { virouTag, valor: campo ? campo.value : null };
+  });
+  ok(!noMenu.virouTag, 'o nome do convidado virou ELEMENTO na lista de cadeiras do menu');
+  ok(noMenu.valor === 'Zé "O" \'R\'',
+    `aspas no nome quebraram o atributo do campo: veio ${JSON.stringify(noMenu.valor)}`);
+  console.log('  o nome hostil chegou como texto no saguão e no menu');
+
   // ─── o saguão ──────────────────────────────────────────────────────────────
   // Falar ANTES de a partida começar. É quando as pessoas mais querem falar ("cadê você?",
   // "entra aí") e era o único momento em que não havia conversa: a visibilidade dela saía
