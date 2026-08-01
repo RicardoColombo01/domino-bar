@@ -12,6 +12,7 @@
     "shots": "node build.mjs && cd tests && npm run shots",
     "online": "node build.mjs && node tests/test-online.mjs",
     "fechamento": "node build.mjs && cd tests && npm run fechamento",
-    "servir": "npx --yes serve ."
+    "servir": "npx --yes serve .",
+    "textura": "node build.mjs && node tests/test-textura.mjs"
   }
 }

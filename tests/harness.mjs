@@ -184,10 +184,21 @@ export function buildModule(exportar, htmlPath = JOGO_HTML, outPath = path.join(
     // o caminho inteiro do toque preso ficaria sem teste. Note que aqui a captura NÃO é
     // solta sozinha no pointerup, como o navegador faz — quem quiser simular o dedo
     // sumindo chama `releasePointerCapture` na mão, que é exatamente o que o sistema faz.
-    `const renderer = { shadowMap: {}, domElement: { style: {}, _cap: new Set(),
+    // `addEventListener` no domElement é a QUINTA vez que este dublê fica para trás do
+    // jogo (matchMedia, captura de ponteiro, AudioContext, Peer — e agora os eventos de
+    // contexto WebGL). O jogo passou a escutar `webglcontextlost`/`webglcontextrestored`
+    // para repintar as texturas de canvas que o Android descarta, e sem isto as três
+    // suítes de Node estourariam com TypeError na CARGA do módulo. A tentação é guardar no
+    // jogo (`if (domElement.addEventListener)`), e é errado pelo mesmo motivo de sempre:
+    // quem está incompleto é o dublê. Guardar os ouvintes num Map deixa o teste DISPARAR o
+    // evento, que é o que faz o caminho existir aqui dentro.
+    `const renderer = { shadowMap: {}, domElement: { style: {}, _cap: new Set(), _ouv: new Map(),
        setPointerCapture(id){ this._cap.add(id); },
        releasePointerCapture(id){ this._cap.delete(id); },
-       hasPointerCapture(id){ return this._cap.has(id); } },
+       hasPointerCapture(id){ return this._cap.has(id); },
+       addEventListener(t, f){ if (!this._ouv.has(t)) this._ouv.set(t, []); this._ouv.get(t).push(f); },
+       removeEventListener(t, f){ const l = this._ouv.get(t) || []; const i = l.indexOf(f); if (i >= 0) l.splice(i, 1); },
+       dispatchEvent(e){ for (const f of this._ouv.get(e && e.type) || []) f(e); return true; } },
        setSize(){}, setPixelRatio(){}, setClearColor(){}, render(){ this.calls=(this.calls||0)+1; } };`
   );
   // No navegador `three/addons/` vem do importmap; aqui tem de apontar para o pacote instalado.
