@@ -953,6 +953,19 @@ nunca assente não travar a suíte.
 **Veredito:** duas rodadas seguidas, 49 linhas cada, **idênticas**. Com isso a ressalva "rode
 duas" deixa de valer — uma rodada do `telas` voltou a ser prova.
 
+**O preço, dito de frente:** a suíte passou de ~5 para **mais de 10 minutos**. Esperar oito
+quadros parados custa mais que contar 350 ms, e são 54 cenas (6 telas × 9 casos). Foi troca
+consciente — antes eram duas rodadas de 5 min para ter meia certeza; hoje é uma de 10 para ter
+certeza. Se um dia incomodar, o lugar de mexer é o número de quadros parados exigidos, não a
+volta ao prazo fixo.
+
+**E ela já passou do que uma sessão aguenta numa tacada.** Em 01/08/2026 a rodada completa foi
+interrompida por limite de tempo **quatro vezes seguidas**, e o jeito de obter veredito foi
+cortar a lista de `TELAS` em duas metades e rodar cada uma. Funciona, mas é manual e fácil de
+esquecer metade. **O próximo a mexer aqui deveria dar à suíte um argumento de linha de comando
+para escolher telas** (`node test-telas.mjs 640x360,360x640`), que é barato e transforma a
+gambiarra de hoje em ferramenta — inclusive para iterar num defeito de uma tela só.
+
 Três armadilhas pagas, e as três valem mais que o conserto:
 
 - **A posição do GRUPO conta, não só a das peças.** O `grupoMesa` faz o próprio easing em z
@@ -966,6 +979,159 @@ Três armadilhas pagas, e as três valem mais que o conserto:
   saíram com zero linhas, e a comparação declarou "idênticas". Um teste de igualdade tem de
   exigir também que **haja o que comparar** — senão a ausência de dados vira prova de
   consistência. Hoje a comparação reprova abaixo de 40 linhas.
+
+## Fila 6 — o que a varredura de 31/07/2026 achou
+
+Com a Fila 5 fechada e nada relatado em aberto, a pergunta virou "o que ainda vale
+melhorar?". Foram varridas três frentes que a Fila 5 não cobria: cobertura de teste,
+robustez dos módulos não auditados naquele dia (`05`, `06`, `07`, `08`, `12`, `14`), e
+experiência/acessibilidade. **Cada achado foi conferido à mão antes de entrar aqui.**
+
+Saíram cinco defeitos, todos ✔ feitos na v1.7.1. **Dois deles são a mesma doença dos itens
+6 e 7: o jogo falhando em silêncio.**
+
+### 1. O mudo durava exatamente um clique ✔ feito
+
+`12-audio.js` implementa o mudo suspendendo o AudioContext. O listener de `pointerdown`
+que existe para destravar o áudio (navegador exige um gesto) retomava o contexto em
+**qualquer** toque, sem perguntar se o jogador tinha pedido silêncio. Clicava em ♪, calava;
+o toque seguinte — escolher uma peça — religava tudo, **com o botão ainda mostrando ✕**. A
+preferência lembrada morria igual: `ligarMurmuro` aplica o mudo no começo da partida e o
+primeiro toque na mesa desfazia.
+
+**Por que durou tanto:** `AudioContext` era `undefined` no harness, então o áudio inteiro
+nunca ligava e o mudo não tinha um único teste. Hoje o dublê tem `state` e o par
+`suspend`/`resume` de verdade — **terceira vez que a lição "quem estava incompleto era o
+dublê" se paga** (as outras foram `matchMedia` e a captura de ponteiro).
+
+Junto veio um detalhe de legibilidade que não é acessório: o parâmetro de `silenciar(mudo)`
+**sombreava a global de mesmo nome**, e é o tipo de coisa que faz um defeito assim ser
+difícil de enxergar. Chama-se `calado` agora.
+
+### 2. O nome ia para `innerHTML` sem escape — a TERCEIRA mordida ✔ feito
+
+`montarCadeiras` (`14-menu.js`) escrevia `value="${c.nome}"`. Era o único `innerHTML` do
+projeto fora do `escapar()`, e **pior que os anteriores por estar dentro de um ATRIBUTO**:
+basta uma aspa para sair dele.
+
+`c.nome` vem de fora — o convidado manda o nome pela rede, `15-rede.js` escreve em
+`MESA.cadeiras[].nome`, e `lembrarMesa()` persiste as quatro cadeiras. Um convidado com
+nome `"><img src=x onerror=…>` rodava script na máquina do **anfitrião** assim que ele
+mexesse no modo, no número de jogadores, ou recarregasse.
+
+**O caso benigno também era real:** um jogador chamado `Zé "O Rei"` fechava o atributo
+sozinho; o campo passava a mostrar `Zé ` e o nome corrompido já estava gravado.
+
+**Lição da asserção:** a primeira versão dela usava o nome `<img src=x>` que a suíte já
+tinha — e **passava nos dois lados**. Sem aspa, aquele nome fica preso dentro do `value=` e
+não vira elemento nem no código com defeito. Quem abre o atributo é a aspa. *Asserção que
+não reprova no código antigo não prova nada, e "parece o mesmo ataque" não é o mesmo
+ataque.*
+
+### 3. A revanche congelava a mesa ✔ feito
+
+`comecarLocal()` convertia cadeira `online` em bot **só `if (modo === 'local')`**. Isso
+cobria a revanche depois de SAIR de uma mesa e deixava passar a revanche DENTRO de uma: o
+anfitrião clicando "Revanche" com um convidado que já fechou a aba montava uma partida com
+uma cadeira que ninguém joga. `seguirOTurno` não faz nada quando chega a vez dela, e a mesa
+**para para sempre** — sem mensagem, sem botão.
+
+**A guarda estava condicionada ao lugar errado.** A pergunta nunca foi "em que modo estou",
+é **"esta cadeira tem alguém do outro lado"** — e quem sabe isso é `conexoes`, vazio em mesa
+local e portanto convertendo tudo, como antes. Com a regra aqui, o `btIniciarOnline` voltou
+a ser só `comecarLocal()`: **duas cópias da mesma regra, uma delas com defeito, é como o
+defeito dura.**
+
+**Lição da asserção:** a primeira versão passava no código antigo, porque em Node `modo`
+era eternamente `'local'` — `temPeerJS()` era falso e `abrirMesaOnline` desistia na primeira
+linha. O harness ganhou um `Peer` que ABRE E NÃO FALA, só para o jogo poder alcançar o
+estado de anfitrião. *Um dublê que nunca deixa o código chegar no estado interessante dá um
+verde que não quer dizer nada.*
+
+### 4. Se o CDN não carregasse, o menu ficava na tela e nada funcionava ✔ feito
+
+O jogo inteiro é **um `<script type="module">`** que começa importando o three do CDN. Se
+esse import falha — wifi de bar, WebGL desligado, aparelho velho — **nada daquele módulo
+executa**, e portanto nenhum handler de botão é registrado. Como o `#telaMenu` nasce visível
+no HTML, a pessoa via o menu inteiro, digitava os nomes, apertava "Sentar e jogar" e não
+acontecia nada. Para sempre.
+
+Havia tratamento explícito e cuidadoso para o **PeerJS** faltar, e **nenhum para a
+biblioteca sem a qual o jogo não existe**.
+
+Hoje há um `<script>` clássico (não-módulo) que sonda `window.__jogo.pronto` e mostra um
+recado se ele não aparecer. **Sonda, e não um `setTimeout` único:** com prazo fixo, uma
+máquina lenta mostraria o recado com o jogo ainda a caminho — e o `test-telas` reprovaria
+por painel a mais na tela. O `#semCarga` fica **fora** da lista do `mostrarTela`, então o
+jogo nunca disputa esse elemento com a sonda.
+
+**Não tem teste automatizado**, e isso está dito de propósito: exigiria interceptar rede no
+puppeteer. Confere-se bloqueando `cdn.jsdelivr.net` no DevTools e recarregando.
+
+### 5. Chave de protótipo no `localStorage` dava tela preta permanente ✔ feito
+
+`MODOS[g.modo] ? g.modo : MODO_PADRAO` — `MODOS` é objeto literal, então
+`MODOS['constructor']` é **truthy** e passava; `MODOS['constructor'].cadeiras` é `undefined`
+e a linha seguinte lançava `TypeError`. Como `mesaLembrada()` roda no **topo do módulo**, a
+exceção matava o script concatenado inteiro: **tela preta que voltava a cada
+recarregamento**, porque a causa estava guardada. O jogador não tinha como sair sem limpar o
+armazenamento.
+
+O comentário logo acima da função promete cobrir "alguém mexendo no armazenamento à mão" —
+**a validação existia e tinha um buraco do tamanho do protótipo do `Object`.** Hoje é
+`Object.hasOwn`, aqui e no `NIVEIS` (onde o efeito era brando, mas deixar dois padrões de
+validação no mesmo arquivo é como o primeiro volta).
+
+A asserção contra o código antigo é a mais eloquente do projeto: **`window.__jogo` nem
+existe.**
+
+---
+
+### O que ficou de FORA do escopo, e continua valendo
+
+O Ricardo escolheu só os cinco defeitos nesta rodada. Isto aqui é trabalho real, medido, à
+espera:
+
+**Acessibilidade — o projeto não tem UM `aria-*`.** Busca no repositório inteiro: zero
+`aria-*`, `role`, `alt`, `tabindex`, `:focus-visible`, `prefers-*`. Por ordem de alavanca
+sobre custo:
+
+- `aria-live` em três elementos (`#aviso`, `#vez`, `#conversaLista`). `avisar()` é o canal
+  de **todo** erro do motor e do porquê de a peça não dar. Três atributos.
+- **O texto de ERRO é o de menor contraste da tela**: `#onlineErro` usa `.nota`
+  (`opacity: .5` em 12 px, ~4.3:1 — abaixo do AA). Erro não é decoração.
+- `prefers-reduced-motion` não existe; a lâmpada pulsa para sempre e a câmera reenquadra.
+- **O botão de mudo vira `✕` — o mesmo glifo do botão de sair, 22 px ao lado.**
+- Não dá para jogar sem apontador. Os botões de confirmar já são `<button>` de verdade e
+  já pegam Tab; falta só selecionar a peça (teclas `1..9` chamando `selecionarPeca`, que já
+  existe e é a mesma que a dica usa).
+
+**Cobertura — o buraco é a camada que o olho e o dedo tocam.** O motor e a rede estão muito
+bem testados; sem asserção nenhuma estão: **as pintas da peça** (`08-peca3d.js` — se
+`faceDaPinta(3)` desenhasse 4 pintas, *tudo continuaria verde* e o jogo mostraria peças
+erradas), o **fim de mão em duplas** (só há asserção com `MESA.n = 2`), **o conteúdo** do
+painel de contagem (só se testa se ele cobre a mesa, nunca se conta certo), o **`<select>`
+de cadeira** do menu (é como se escolhe contra quem jogar), o **esgotamento** do prazo de
+30 s de quem cai, e os ramos de rede do **sair da partida**. A **compra voluntária** é o
+caso mais curioso: existe no menu, é persistida e validada, e **o ramo nunca roda**, porque
+o bot nunca compra tendo jogada.
+
+**Documentação, duas releases atrás.** O `README.md` não menciona a conversa da mesa, a dica
+de jogada, a gaveta do celular nem o reabrir a mesa; diz que o bot difícil ganha ~59% (é
+**55,8%** depois das mudanças de regra dos itens 1 e 2); e o diagrama de branches para na
+v1.1.0. Aqui no `CLAUDE.md`, o cabeçalho ainda diz **~2.100 linhas** — são **4.537**.
+
+**Dívidas registradas e NÃO consertadas, com o porquê:**
+
+- `08-peca3d.js` clona um material por peça e o projeto **não tem um único `dispose()`**.
+  Investigado: os clones têm parâmetros idênticos, logo mesma `cacheKey` no three — é um
+  programa só, e os materiais viram lixo coletável ao sair da cena. É churn de alocação por
+  rodada, não memória crescente. Dívida, não defeito que o jogador sente.
+- `06-layout.js` devolve o MESMO objeto em `alvos.esq` e `alvos.dir` quando a linha está
+  vazia. Aliasing armado — mas `alvos` **não é lido por ninguém**: é código morto. Consertar
+  ou remover, e remover é provavelmente melhor.
+- `05-bot.js` entrega o mesmo array `VAZIO` de Sets a todos os bots fáceis. Hoje só é lido,
+  então está correto; um `add` ali um dia envenenaria o esquecimento de todos.
 
 ## Regras da casa (implementadas)
 

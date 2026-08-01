@@ -17,7 +17,17 @@ function ligarAudio() {
   return ac;
 }
 // Navegador só deixa tocar som depois de um gesto do usuário — este é o gesto.
-addEventListener('pointerdown', () => { ligarAudio(); if (ac && ac.state === 'suspended') ac.resume(); });
+//
+// O `!mudo` NÃO É DETALHE: sem ele o silêncio durava exatamente um clique. `silenciar()`
+// implementa o mudo suspendendo o contexto, e este listener retomava em QUALQUER
+// pointerdown — então clicar em ♪ calava, e o toque seguinte (escolher uma peça, abrir a
+// gaveta) via `state === 'suspended'` e religava tudo, com o botão ainda mostrando ✕ e
+// `mudo` ainda true. A preferência lembrada morria do mesmo jeito: `ligarMurmuro` aplica o
+// mudo no começo da partida e o primeiro toque na mesa desfazia.
+//
+// Ler `mudo` daqui é seguro pela mesma razão explicada em `ligarMurmuro`: ele mora no
+// 13-hud, concatenado DEPOIS, mas o corpo desta função só roda a um clique de distância.
+addEventListener('pointerdown', () => { ligarAudio(); if (ac && ac.state === 'suspended' && !mudo) ac.resume(); });
 
 function estalo({ dur = 0.09, freq = 1500, q = 1.1, vol = 0.3, tipo = 'bandpass' }) {
   if (!ligarAudio()) return;
@@ -73,6 +83,9 @@ function ligarMurmuro() {
   if (mudo) silenciar(true);
 }
 
-function silenciar(mudo) {
-  if (ac) ac[mudo ? 'suspend' : 'resume']();
+// O parâmetro chama-se `calado` e não `mudo` de propósito: `mudo` é uma global (13-hud) que
+// o listener de pointerdown lá em cima consulta, e um parâmetro de mesmo nome sombreando-a
+// aqui dentro é o tipo de coisa que faz o defeito de cima ser difícil de enxergar.
+function silenciar(calado) {
+  if (ac) ac[calado ? 'suspend' : 'resume']();
 }

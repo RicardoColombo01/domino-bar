@@ -23,15 +23,22 @@ const podeAgirAgora = () =>
   !!vistaAtual && !travado && vistaAtual.fase === 'mao' && vistaAtual.vez === vistaAtual.cadeira;
 
 function comecarLocal() {
-  // Sem rede não existe cadeira online: depois de sair de uma mesa, MESA.cadeiras ainda
-  // guarda o tipo 'online' e a revanche montava uma partida com uma cadeira que ninguém
-  // jogava — nem bot, nem troca de tela — e a mesa morria em silêncio. É a mesma
-  // conversão que o btIniciarOnline faz quando a vaga não é preenchida.
-  if (modo === 'local') {
-    MESA.cadeiras.slice(0, MESA.n).forEach(c => {
-      if (c.tipo === 'online') { c.tipo = 'bot'; c.nivel = c.nivel || 'normal'; }
-    });
-  }
+  // CADEIRA ONLINE SEM NINGUÉM VIVO NELA VIRA BOT. Senão a partida nasce com uma cadeira
+  // que ninguém joga — nem bot, nem troca de tela —, `seguirOTurno` não faz nada quando
+  // chega a vez dela, e a mesa morre em silêncio.
+  //
+  // A pergunta era `modo === 'local'` e estava condicionada ao lugar errado. Ela cobria a
+  // revanche depois de SAIR de uma mesa, e deixava passar a revanche DENTRO de uma: o
+  // anfitrião clicando "Revanche" com um convidado que já fechou a aba montava a mesma
+  // partida travada. A pergunta certa nunca foi "em que modo estou", é "esta cadeira tem
+  // alguém do outro lado" — e quem sabe isso é `conexoes`, que em mesa local está vazio e
+  // portanto converte tudo, como antes.
+  //
+  // É também a conversão que o `btIniciarOnline` fazia por conta própria; com ela aqui,
+  // aquele botão voltou a ser só `comecarLocal()`. Uma regra em vez de duas.
+  MESA.cadeiras.slice(0, MESA.n).forEach((c, i) => {
+    if (c.tipo === 'online' && !conexoes.has(i)) { c.tipo = 'bot'; c.nivel = c.nivel || 'normal'; }
+  });
   const cadeiras = MESA.cadeiras.slice(0, MESA.n)
     .map(c => ({ nome: c.nome, tipo: c.tipo, nivel: c.nivel }));
   P = novaPartida(cadeiras, {
@@ -491,6 +498,10 @@ window.__jogo = {
   // sem precisar de rede: ele chama a MESMA função que a rede chama, então o que a foto
   // mostra é o que o jogo faz.
   pintarSala, salaGuardada, atualizarBotaoVoltarMesa,
+  // O menu redesenha a lista de cadeiras com o nome que o convidado mandou pela REDE —
+  // e por isso o teste do online precisa poder forçar esse redesenho para conferir que
+  // o nome chega como texto, e não como elemento.
+  montarCadeiras,
   get P() { return P; },
   get vista() { return vistaAtual; },
   // A ORDEM DA TELA, que desde a arrumação não é mais a de vista.mao. Quem quiser

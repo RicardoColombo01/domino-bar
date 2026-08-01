@@ -319,13 +319,11 @@ function listarSala() {
   atualizarSaguao();
 }
 
-el('btIniciarOnline').onclick = () => {
-  // Cadeira online vazia na hora de começar vira bot: melhor jogar do que esperar.
-  MESA.cadeiras.slice(0, MESA.n).forEach((c, i) => {
-    if (c.tipo === 'online' && !conexoes.has(i)) { c.tipo = 'bot'; c.nivel = 'normal'; }
-  });
-  comecarLocal();
-};
+// Cadeira online vazia na hora de começar vira bot: melhor jogar do que esperar. A
+// conversão MUDOU DE CASA e agora mora no `comecarLocal` — ela era feita aqui, certa, e
+// lá era feita errada (condicionada a `modo === 'local'`), o que travava a revanche do
+// anfitrião. Duas cópias da mesma regra, uma delas com defeito, é como o defeito dura.
+el('btIniciarOnline').onclick = () => comecarLocal();
 
 el('btCancelarOnline').onclick = () => { encerrarRede(); mostrarTela('telaMenu'); };
 

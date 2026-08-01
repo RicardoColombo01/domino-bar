@@ -15,6 +15,10 @@ const mod = await import(buildModule([
   'arrumarMao', 'moverNaMao', 'carroca',
   'guardarFala', 'soltarFalasGuardadas', 'falasGuardadas', 'donoLocalDaFala', 'limparConversa',
   'dicaDaVista', 'pedirDica', 'receberChat', 'atualizarConversa',
+  // `ac` é o AudioContext, e é o único jeito de perguntar se o jogo está MESMO calado —
+  // o botão mostrar ✕ não prova nada, era exatamente esse o defeito. `conexoes` diz
+  // quais cadeiras online têm alguém vivo do outro lado.
+  'ac', 'conexoes', 'montarCadeiras', 'abrirMesaOnline', 'encerrarRede',
 ], undefined, path.join(import.meta.dirname, 'built-jogo.mjs')));
 
 let falhas = 0;
@@ -369,6 +373,77 @@ console.log('\narrastar a peça');
   fire('pointerup', { pointerId: 7 });
   ok(!mod.naMao.some(m => m.arrastando),
     'um segundo dedo deixou a peça do primeiro congelada no ar');
+}
+
+console.log('\no mudo tem de durar');
+{
+  // O mudo é implementado suspendendo o AudioContext, e o listener de pointerdown que
+  // existe para destravar o áudio (navegador exige um gesto) retomava o contexto em
+  // QUALQUER toque, sem perguntar se o jogador tinha pedido silêncio. Resultado: clicar em
+  // ♪ calava, e o toque seguinte religava tudo — com o botão ainda mostrando ✕. O silêncio
+  // durava exatamente um clique.
+  //
+  // A asserção olha o CONTEXTO e não o botão: o botão mostrar ✕ é justamente o que fazia
+  // o defeito passar despercebido.
+  const som = els.get('btSom');
+  const tocarNaMesa = () => fire('pointerdown', { target: mod.renderer.domElement, pointerType: 'touch', pointerId: 90, clientX: 5, clientY: 5 });
+
+  tocarNaMesa();                                    // liga o áudio, como o navegador exige
+  ok(mod.ac && mod.ac.state === 'running', 'montagem: o áudio devia estar ligado depois do primeiro toque');
+
+  som.onclick();                                    // clica no ♪
+  ok(mod.ac.state === 'suspended', 'clicar no botão de som não calou o áudio');
+  ok(som.textContent === '✕', 'o botão de som não virou ✕');
+
+  tocarNaMesa();                                    // ...e agora o toque seguinte
+  ok(mod.ac.state === 'suspended',
+    'o toque seguinte religou o som sozinho — o mudo durou um clique, e o botão continua mentindo ✕');
+
+  som.onclick();                                    // desliga o mudo
+  ok(mod.ac.state === 'running', 'clicar de novo no botão não devolveu o som');
+  fire('pointerup', { pointerId: 90, pointerType: 'touch' });
+}
+
+console.log('\na revanche não pode congelar a mesa');
+{
+  // Cadeira online sem ninguém vivo nela tem de virar bot ao começar a partida. A conversão
+  // existia condicionada a `modo === 'local'`, o que cobria a revanche depois de SAIR de uma
+  // mesa e deixava passar a revanche DENTRO de uma: o anfitrião com um convidado que fechou
+  // a aba montava uma partida com uma cadeira que ninguém joga. `seguirOTurno` não faz nada
+  // quando chega a vez dela e a mesa para para sempre, sem mensagem e sem botão.
+  mod.MESA.modo = 'classico'; mod.MESA.n = 3;
+  mod.MESA.cadeiras[1].tipo = 'online'; mod.MESA.cadeiras[1].nome = 'Quem caiu';
+  mod.MESA.cadeiras[2].tipo = 'bot'; mod.MESA.cadeiras[2].nivel = 'normal';
+
+  // ANFITRIÃO DE VERDADE, e é o que faz esta asserção valer: o ramo com defeito só existe
+  // quando `modo !== 'local'`. Com o jogo em modo local — que era o único alcançável em
+  // Node até o dublê de Peer existir — o código ANTIGO converte a cadeira do mesmo jeito e
+  // o teste passa sem ter tocado no defeito. Foi exatamente o que aconteceu na primeira
+  // tentativa desta asserção.
+  mod.abrirMesaOnline();
+  ok(mod.conexoes.size === 0, 'montagem: ninguém devia estar conectado nesta cadeira online');
+
+  els.get('btRevanche').onclick();
+  const tipos = mod.P.cadeiras.map(c => c.tipo);
+  ok(!tipos.includes('online'),
+    `sobrou cadeira online sem ninguém do outro lado (${tipos.join('/')}) — a mesa nasce travada`);
+
+  // E a prova de que ela ANDA: sem isto, "virou bot" poderia ser só um rótulo.
+  const vez = mod.P.vez;
+  for (let i = 0; i < 40 && mod.P.vez === vez && mod.P.fase === 'mao'; i++) {
+    const a = mod.vistaAtual.acoes;
+    if (a.jogadas.length) mod.pedirAcao({ acao: 'jogar', peca: a.jogadas[0].peca, ponta: a.jogadas[0].ponta });
+    else if (a.comprar) mod.pedirAcao({ acao: 'comprar' });
+    else if (a.passar) mod.pedirAcao({ acao: 'passar' });
+    else { mod.aplicarIntencao(mod.P.vez, mod.jogadaDoBot(mod.P, mod.P.vez)); }
+  }
+  ok(mod.P.vez !== vez || mod.P.fase !== 'mao', 'a vez nunca saiu do lugar: a mesa está congelada');
+
+  // DEVOLVE O JOGO AO MODO LOCAL. `modo` é global e os blocos seguintes deste arquivo
+  // contam com ele ('sair de um jogo local', 'sem rede não há com quem conversar') — três
+  // deles reprovaram na primeira vez que este bloco existiu, e não por defeito do jogo.
+  // Cena que muda estado global limpa o que sujou, igual às cenas do test-telas.
+  mod.encerrarRede();
 }
 
 console.log('\no toque no celular');
