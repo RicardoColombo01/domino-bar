@@ -17,6 +17,7 @@ npm run telas     build + o jogo em cinco tamanhos de tela (retrato, paisagem, w
 npm run lembrar   build + o que sobrevive a RECARREGAR a página (preferências, retomar)
 npm run shots     build + screenshots no Chrome de verdade (tests/shots/)
 npm run online    testa o online abrindo duas abas e uma mesa real
+npm run fechamento  caça fechamento forçado jogando milhares de mãos (~3 min)
 npm run servir    servidor local (o online não fecha conexão em file://)
 
 node tests/test-online.mjs https://ricardocolombo01.github.io/domino-bar/
@@ -188,6 +189,12 @@ e por dupla, com a narração no mesmo fio, e conversa também no saguão), **vo
 mesma partida** depois de a página morrer, e a **legibilidade da mesa** (sRGB, pinta maior,
 marca da última jogada).
 
+A **v1.7.0** fecha a Fila 5 inteira. Ela leva as duas coisas que sobravam, e as duas são de
+fundo: o **fechamento forçado** deixa de ter janela cega (a regra valia só sem monte, e o monte
+seca no meio da mão), e o **anfitrião passa a reabrir a MESMA mesa** ao recarregar, com os
+convidados voltando sozinhos para a cadeira deles. Sem esta segunda, o "voltar para a mesma
+partida" era metade de um mecanismo.
+
 A **v1.6.0** é a primeira release cujos itens vieram quase todos de **jogo de verdade, no
 celular**, e não de leitura de código. Ela leva: o lá-e-lô com as pontas certas (1), a
 cadeira que passa a ser de quem é dono dela (4) — que era **vazamento de mão**, não só
@@ -353,28 +360,48 @@ onde o trabalho está: commitado ≠ enviado ≠ publicado. São três lugares d
 | **6 e 7** · toque | limiar por ponteiro + `foiMesmoArrasto` + `visibilitychange`/captura | **5 asserções novas**, todas vermelhas no código antigo |
 | **8** · deitado | `#topo` vira faixa entre as colunas; corte do nome na PALAVRA | **17 falhas → 0**; diagnóstico da fila estava INVERTIDO |
 
-#### A ressalva que não pode se perder
+#### A ressalva CAIU — e como se prova que caiu
 
-**Uma rodada verde do `npm run telas` NÃO é prova — rode duas.** Semear o `Math.random` matou
-a variação do embaralho, mas a espera de 350 ms das cenas ainda deixa passar um número variável
-de temporizadores de bot: a mesma cena dá `mesa 0.27` numa rodada e `0.31` na outra. Enquanto
-o item 11 não fechar, uma falha isolada do `telas` pode ser moeda, não regressão — **e o
-contrário também**.
+Durante toda a Fila 5 valeu: *"uma rodada verde do `telas` não é prova, rode duas"*. **O item 11
+fechou em 31/07/2026 e ela não vale mais** — uma rodada voltou a ser prova.
+
+O que a derrubou não foi a suíte ficar verde: foi ela ficar **igual**. Duas rodadas seguidas,
+49 linhas de números cada, idênticas linha a linha. Verde é o critério fraco — um teste
+intermitente também fica verde metade das vezes. **Determinismo se mede comparando rodadas, não
+contando aprovações**, e é assim que se confere se ele voltou a valer no futuro.
 
 #### O plano, em ordem
 
 1. ~~**PUBLICAR.**~~ ✔ **v1.6.0 publicada em 31/07/2026.** Nove itens, entre eles um conserto
    de regra de pontuação e um vazamento de mão pela cadeira errada.
-2. **Item 11 — fechar a intermitência.** Parar os temporizadores de bot durante a montagem da
-   cena. Vem antes de qualquer trabalho grande de tela, senão a suíte não serve para julgá-lo.
-3. **Item 3(c) — voltar como anfitrião.** O maior. Reivindicar o mesmo id do PeerJS, e para
-   isso **inverter** o `unavailable-id` do `tentarAbrir`, que hoje sorteia outro código.
-4. **Item 2 — o fechamento forçado.** **Bloqueado esperando o Ricardo:** a mesa, as mãos, o
-   lance, o modo, e se havia monte.
+2. ~~**Item 11 — fechar a intermitência.**~~ ✔ **feito em 31/07/2026.** A causa não era a
+   prevista (temporizador de bot), era a animação pega no meio por uma espera fixa.
+3. ~~**Item 3(c) — voltar como anfitrião.**~~ ✔ **feito em 31/07/2026.** O `unavailable-id` foi
+   mesmo onde doeu, e `donoDaCadeira` teve de virar dado guardado — isso não estava previsto.
+4. ~~**Item 2 — o fechamento forçado.**~~ ✔ **feito em 31/07/2026, sem o caso do Ricardo.** A
+   busca achou o caso sozinha, e ele não era o previsto: a janela cega era o `!temMonte`.
+
+**A FILA 5 ESTÁ VAZIA.** Todos os onze itens fechados. O que vier agora é fila nova — e a
+regra de sempre vale: ideia nova entra AQUI, não em memória de sessão.
+
+#### O que aprendemos sobre esta fila, olhando para trás
+
+**Três dos onze itens tinham o diagnóstico ERRADO escrito nesta fila**, e nos três a medição
+mandou em cima da leitura:
+
+| item | o que a fila dizia | o que era |
+|---|---|---|
+| 8 | falta `ellipsis` no deitado | o nome cabe deitado; quem corta é o RETRATO — deitado o `#topo` monta na lista |
+| 11 | temporizador de bot | animação pega no meio por uma espera fixa |
+| 2 | a regra tem um lance de profundidade | a regra nem rodava: `!temMonte` a desligava |
+
+Não é acaso: hipótese escrita de leitura de código é barata e por isso mesmo grudenta. **O
+antídoto foi sempre o mesmo — medir antes de consertar**, e em todos os três a medição custou
+menos que o conserto teria custado no lugar errado.
 
 #### Perguntas em aberto para o Ricardo
 
-- O **caso concreto** do item 2 (acima). É a única coisa que trava um item inteiro.
+- Nenhuma. O item 2 era a única, e a busca respondeu no lugar dele.
 
 ### 1. Lá-e-lô só existe com as pontas DIFERENTES ✔ feito
 
@@ -424,7 +451,68 @@ casa não é simétrica, e está tudo bem que não seja: a cruzada é a batida d
 o lá-e-lô é a das pontas diferentes. Registrado aqui porque nenhuma leitura de código chega
 a essa resposta — as duas saídas eram defensáveis.
 
-### 2. Ainda dá para FORÇAR o fechamento — BLOQUEADO, esperando o caso do Ricardo
+### 2. Ainda dá para FORÇAR o fechamento ✔ feito (31/07/2026)
+
+**NÃO PRECISOU DO CASO DO RICARDO, e é isso que vale registrar.** Esta seção pedia um caso
+concreto antes de mexer. A saída melhor foi *procurar* o caso: `03-regras.js` é puro, então dá
+para jogar milhares de mãos e caçar a posição — que é a mesma propriedade que permite medir a
+força do bot em 300 partidas. `tests/busca-fechamento.mjs` faz isso, e a chave do desenho é que
+a busca é **onisciente** (vê todas as mãos) enquanto a regra nunca pode ser. A diferença entre
+as duas visões é exatamente a fronteira entre "fechou" e "fechou de propósito", e ela separa
+três perguntas:
+
+| | |
+|---|---|
+| (A) o jogador podia ter escolhido não trancar? | visão de deus — sozinho, é fechamento NATURAL |
+| (B) …e dava para deduzir da mesa + da mão dele? | visão da regra — **isto é bug** |
+
+**O buraco era a guarda `!temMonte` em `acoesDe`.** Ela desligava a regra inteira enquanto
+houvesse monte, por "com monte ninguém trava, compra". Isso confunde **existir monte** com **o
+monte poder salvar alguém** — e o `morto[n]` de `fechamentosArmados` já responde a pergunta
+forte: ele só dá o número por morto quando toda peça dele está na mesa ou na sua mão, e
+portanto **não está no monte**. Ponta morta com monte de pé é ponta que o monte não resolve.
+A guarda não protegia nada e abria uma janela: bastava dar o lance **antes de o monte secar**.
+
+Era por isso que a hipótese registrada aqui (a regra ter "um lance de profundidade") não
+levava a lugar nenhum, e vale saber por quê: a busca deu **zero** em 750 mãos dos três modos
+**sem** monte. A um lance de profundidade a regra sempre esteve certa. O defeito estava onde
+ela nem rodava — e o Clássico de 2 e 3 são justamente as mesas de partida rápida.
+
+**O caso concreto que a busca achou** (clássico de 2, 4 peças no monte):
+
+```
+linha:  5|3 3|4 4|6 6|1 1|5 5|5 5|2 2|6 6|3 3|2 2|0 0|5 5|6 6|0 0|0 0|4 4|4
+mão:    2|2 1|1 0|1 1|2 4|5          adversário: 2|4 1|3
+```
+
+A `4|5` **na direita** deixa as duas pontas em `5` com os **sete** 5 já vistos: ninguém joga
+nunca mais, o adversário compra o monte inteiro e passa. A **mesma peça na esquerda** deixa as
+pontas em `4`, e o jogo segue. Escolher qual é literalmente "escolher o lance que faz não haver
+mais lance nenhum".
+
+**Números:** 313 casos em 1000 mãos (200 por modo, cinco mesas) antes; **0** depois.
+
+**O teste gravava a regra errada** — de novo, como no item 1. A asserção dizia *"com monte não
+há tranca para armar"*, e era ela que sustentava a janela. Virou um par, e o par é a regra
+inteira: monte com `0|1` não responde a 3 nenhum, comprar não adianta, o fechamento **continua
+barrado**; monte com o `3|3` responde à ponta, o 3 deixa de estar morto e nada é barrado.
+
+**A força do bot se mexeu**, como no item 1 — `05-bot.js` joga pelas ações que `acoesDe`
+oferece. Foi de 57,8% para **55,8% (2,9σ)**. A asserção é **limiar** (`> 2σ`), não número fixo,
+e foi escrita assim exatamente para sobreviver a mudanças de regra.
+
+**A guarda ficou em DOIS níveis, e a divisão é por custo.** A busca leva ~3 min, e o `npm test`
+roda em segundos — pôr uma dentro da outra faria ninguém rodar nenhuma:
+
+- **rápida, dentro do `npm test`:** o par `monteInutil` / `monteSalvador` em `test-regras.mjs`.
+  É instantâneo e cobre exatamente este defeito, nas duas direções.
+- **profunda, sob demanda:** `npm run fechamento` (`tests/test-fechamento.mjs`). Reprova só em
+  (B). Se um dia (A) aparecer sozinho, **isso é informação e não falha**: quer dizer que existe
+  posição em que o jogo trava sem ninguém poder saber — e isso é dominó, não bug.
+
+---
+
+#### O texto original do item, para contexto histórico
 
 O Ricardo consegue forçar o jogo a trancar. A regra do fechamento armado existe (ver "Regras
 da casa" abaixo) e não está fechando o buraco todo.
@@ -452,7 +540,7 @@ olhasse a mão dos outros, a jogada desaparecendo da tela contaria ao jogador qu
 aquele número — e isso é vazamento de informação, irmão do que a `visaoDe` existe para
 impedir.
 
-### 3. O código da sala tem de ficar visível, para dar de voltar — (a) e (b) ✔, falta o (c)
+### 3. O código da sala tem de ficar visível, para dar de voltar ✔ feito — (a), (b) e (c)
 
 Pedido do Ricardo em **30/07/2026**: deixar o código da mesa visível, para que quem sair tenha
 como voltar.
@@ -480,6 +568,49 @@ São **três pedaços**, e vale tratá-los separados porque a dificuldade é mui
   a assimetria com as 12 h da partida é o ponto: a partida é *sua* e não depende de ninguém,
   a sala depende de o anfitrião ainda estar de pé. **Sair de propósito esquece; cair não** —
   cair é exatamente o caso para o qual isto existe.
+- **(c) Voltar como ANFITRIÃO ✔ feito (31/07/2026).** Era o que faltava para o "voltar para a
+  mesma partida" valer no online, e o `unavailable-id` foi de fato onde doeu — a inversão é o
+  item inteiro. **Abrindo mesa nova o código é descartável:** sorteia outro e pronto.
+  **Reivindicando o código que era seu, sortear outro é exatamente o erro** — o código é o
+  ponto, é o que os convidados vão digitar. Hoje os dois caminhos fazem coisas opostas no
+  mesmo `catch`, e o que os separa é `codigoDesejado` ter sido passado ou não. A reivindicação
+  insiste **com espera** (6 tentativas de 1,5 s, em `setTimeout`): o peer velho pode ainda
+  estar morrendo no servidor de sinalização, que só larga o id quando o socket cai de fato.
+
+  **`donoDaCadeira` precisou VIRAR DADO GUARDADO, e isso não estava previsto.** Ele só existia
+  em memória — reabrir com o código certo devolveria as cadeiras **erradas**, que é o bug do
+  item 4 voltando pela porta dos fundos. É o mesmo raciocínio do `clienteId` um nível acima: de
+  nada adianta o convidado saber quem é se o anfitrião esqueceu. O mapa é restaurado **antes**
+  de o peer abrir, porque a primeira conexão pode chegar no mesmo instante do `open`.
+
+  **`retomarPartida` ganhou `{ mantendoOnline: true }`.** A conversão de cadeira online em bot
+  continua obrigatória no caso comum — fora daqui a mesa de antes não existe mais e o motor
+  esperaria para sempre por quem não vai responder. Aqui ela existe: é ela que está voltando. E
+  `MESA.cadeiras` precisa acompanhar `P.cadeiras`, porque é a MESA que o `sentar()` consulta
+  para achar vaga online, e ela ficou com o que o menu tinha na tela.
+
+  **O convidado volta sozinho** (decisão do Ricardo, 31/07): daqui de fora, anfitrião
+  recarregando e mesa fechando são o **mesmo evento** — o link cai igual. Desistir na primeira
+  queda desperdiçaria justamente o mecanismo acima. São 8 tentativas de 4 s, e cada uma derruba
+  o peer velho antes: `conectarNaMesa` não faz isso (quem fazia era o `entrarNumaMesa` da tela),
+  e sem esse cuidado cada tentativa deixaria um peer vivo — o vazamento do item 5 de volta.
+
+  **Prazos por papel:** a sua mesa dura 12 h, a dos outros 2 h. A assimetria antiga existia
+  porque a sala do convidado depende de o anfitrião estar de pé; sendo você o anfitrião, o que
+  a mesa acompanha é a partida guardada, que dura 12 h. Prazos iguais fariam o botão de reabrir
+  sumir com a partida ainda viva.
+
+  **No teste:** o mesmo código, a partida de volta com as cadeiras ainda `online`, e o convidado
+  sentando **sozinho** na cadeira dele com a mesma mão — as três juntas, porque qualquer uma
+  sem as outras não serve para nada.
+
+  **Armadilha do harness, não do jogo:** as abas do `test-online.mjs` vivem na mesma origem e
+  portanto no MESMO `localStorage`, então o `guardar('sala')` do convidado passa por cima do
+  registro do anfitrião. Por isso o teste confere o registro do anfitrião **antes** de a visita
+  sentar, e recompõe o valor na hora da recarga. Na vida real são navegadores diferentes.
+
+  <details><summary>o texto original, de quando ainda faltava</summary>
+
 - **(c) Voltar como ANFITRIÃO — o que FALTA.** O difícil, e é o que falta para o "voltar para a mesma
   partida" valer no online. `codigoNovo()` sorteia um código a cada `tentarAbrir`, então o
   anfitrião que recarrega abre uma mesa **outra** e os convidados tentando voltar batem numa
@@ -489,6 +620,8 @@ São **três pedaços**, e vale tratá-los separados porque a dificuldade é mui
   exatamente porque este pedaço não existe. **Detalhe descoberto ao fazer o resto:**
   `tentarAbrir` já trata `unavailable-id` **sorteando outro código** — reivindicar o mesmo id
   exige inverter esse comportamento, e é aí que o (c) vai doer.
+
+  </details>
 
 **Tensão de desenho, decidida em 30/07/2026:** código na tela é código em qualquer print,
 qualquer transmissão e qualquer tela compartilhada — inclusive na mesa mista, onde a tela passa
@@ -797,14 +930,42 @@ dentro da própria página (`semear()` no `AJUDA`, um mulberry32 de cinco linhas
 de nada no jogo, porque a página inteira usa `Math.random`. Isso matou a variação do
 **embaralho**: a mesma cena monta sempre as mesmas peças.
 
-**O que SOBROU:** as cenas esperam 350 ms para a tela assentar, e nessa janela um número
-**variável** de temporizadores de bot dispara. Duas rodadas seguidas ainda dão `mesa 0.27` e
-`mesa 0.31` para a mesma cena. É muito menos folga do que antes, e nenhuma das duas rodadas
-reprovou — mas um caso na beirada ainda pode virar a moeda.
+### 11. O `test-telas.mjs` era INTERMITENTE ✔ feito (31/07/2026)
 
-**O que falta:** parar os temporizadores de bot durante a montagem da cena, de modo que o
-tabuleiro seja função só do que a cena pediu. Enquanto isso não existe, **uma rodada verde do
-`telas` não é prova** — rode duas.
+**A segunda metade não era o que a fila dizia.** A previsão era "parar os temporizadores de
+bot durante a montagem". Isso foi feito (`pararBots()` na ponte, um `clearTimeout(timerBot)`;
+uma chamada basta, porque `seguirOTurno` só roda em `publicar()`) — **e não bastou.**
+
+Comparando duas rodadas **linha a linha** em vez de só olhar o verde, o desenho apontou
+sozinho: **só o `mesa` variava.** `outros`, `monte`, `fileiras`, `peças` e `fov` saíam
+idênticos. E algumas variações eram grandes — `mão de 7` dava `0.48` e `0.66`, `contando` dava
+`0.59` e `0.89`.
+
+A causa real: **as peças DESLIZAM até o lugar**, e a espera fixa de 350 ms pegava a animação no
+meio. Quem decidia onde a peça estava era o relógio de parede e o jitter do software
+rendering, não a cena. O `pararBots` tirou a variação de *quantas* jogadas aconteceram; faltava
+a de *onde elas pararam*.
+
+**O conserto: esperar a tela PARAR, e não contar tempo.** A cena tira uma foto das posições a
+cada quadro e segue quando oito quadros saem iguais, com teto de 240 quadros para uma cena que
+nunca assente não travar a suíte.
+
+**Veredito:** duas rodadas seguidas, 49 linhas cada, **idênticas**. Com isso a ressalva "rode
+duas" deixa de valer — uma rodada do `telas` voltou a ser prova.
+
+Três armadilhas pagas, e as três valem mais que o conserto:
+
+- **A posição do GRUPO conta, não só a das peças.** O `grupoMesa` faz o próprio easing em z
+  para manter o tabuleiro centrado (`09-tabuleiro.js`). Olhando só os filhos, a foto ficava
+  parada enquanto o mundo inteiro ainda deslizava — e a medida é em coordenadas de **mundo**.
+- **`throw` dentro de um callback de `requestAnimationFrame` NÃO rejeita a `Promise` que o
+  envolve.** O `reject` nunca é chamado, então o erro vira travamento silencioso: a suíte
+  parou 30 s e o puppeteer cuspiu um `ProtocolError` que não fala da causa. O erro era um
+  `j.grupoMao` inexistente — **a ponte nunca expôs esse grupo** (a mão sai do `naMao`).
+- **`diff` de dois arquivos VAZIOS passa.** A suíte travada não gerou saída, os dois arquivos
+  saíram com zero linhas, e a comparação declarou "idênticas". Um teste de igualdade tem de
+  exigir também que **haja o que comparar** — senão a ausência de dados vira prova de
+  consistência. Hoje a comparação reprova abaixo de 40 linhas.
 
 ## Regras da casa (implementadas)
 

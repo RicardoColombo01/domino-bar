@@ -234,9 +234,27 @@ secao('fechar o jogo de propósito');
       `só a direita deveria sobrar, e sobrou: ${chaves(j) || '(nada)'}`);
     ok(mod.jogar(P, 0, [3, 4], 'esq').erro, 'o motor tem de recusar o fechamento armado');
 
-    // Com monte ninguém trava — quem não pode jogar compra. A regra sai de cena.
-    const comMonte = armar({ monte: [[0, 1]] });
-    ok(mod.acoesDe(comMonte, 0).jogadas.length === 2, 'com monte não há tranca para armar');
+    // COM MONTE A REGRA CONTINUA VALENDO, e a pergunta é se o monte pode SALVAR alguém —
+    // não se ele existe. Era esta asserção que gravava a regra errada do item 2: ela dizia
+    // "com monte não há tranca para armar", e por causa dela bastava dar o lance antes de
+    // o monte secar. As duas metades, e a diferença entre elas é a regra inteira:
+    //
+    //   monte com 0|1 → não joga em 3 nenhum, comprar não adianta, e a tranca acontece
+    //                   igual: o fechamento continua barrado;
+    //   monte com 1|3 → responde à ponta, então o 3 deixa de estar morto e ninguém trava.
+    const monteInutil = armar({ monte: [[0, 1]] });
+    ok(mod.acoesDe(monteInutil, 0).jogadas.length === 1,
+      'monte que não responde à ponta não impede a tranca — o fechamento tinha de continuar barrado');
+
+    // Para o 3 deixar de estar morto tem de existir um 3 que ninguém viu — e nesta linha
+    // os seis 3 restantes estão todos nela, de propósito. Então o cenário salvador é a
+    // MESMA mesa com o 3|3 tirado da fileira e posto no monte. As pontas não mudam (o
+    // 3|3 é carroça e era a última peça), e é só isso que muda o veredito.
+    const semACarroca = linha.slice(0, -1);
+    ok(String(mod.pontas(semACarroca)) === '4,3', 'montagem: tirar o 3|3 não podia mudar as pontas');
+    const monteSalvador = armar({ linha: semACarroca, monte: [[3, 3]] });
+    ok(mod.acoesDe(monteSalvador, 0).jogadas.length === 2,
+      'com o 3|3 ainda no monte o jogo não trava, e nada devia ser barrado');
 
     // Na última peça você está BATENDO, não fechando.
     const ultima = armar({ maos: [[[3, 4]], []] });

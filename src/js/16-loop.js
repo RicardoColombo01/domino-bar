@@ -293,18 +293,30 @@ function atualizarBotaoRetomar() {
   }
 }
 
-function retomarPartida() {
+// `mantendoOnline` é o item 3(c): quem chama é o anfitrião REABRINDO a própria mesa, e
+// aí a mesa de antes não acabou — é ela que está voltando. Fora desse caso a conversão
+// para bot é obrigatória, e é a diferença entre as duas situações que a opção nomeia.
+function retomarPartida(opcoes) {
+  const reabrindo = !!(opcoes && opcoes.mantendoOnline);
   const g = partidaGuardada();
   if (!g) { avisar('A partida guardada expirou.'); atualizarBotaoRetomar(); return; }
-  encerrarRede();                      // pode ter sido mesa online; ela não existe mais
-  modo = 'local';
+  // Reabrindo, o peer JÁ ESTÁ de pé com o código reivindicado: `encerrarRede` o destruiria
+  // e com ele o mapa de donos que acabou de ser restaurado.
+  if (!reabrindo) { encerrarRede(); modo = 'local'; }
   P = partidaDeVolta(g.P);
 
   // A mesa de antes acabou junto com a página. Cadeira que era de gente online passa a
   // ser bot, senão o motor espera para sempre por quem não vai responder — é a mesma
   // conversão que `comecarLocal` faz, e pela mesma razão.
-  const viraramBot = P.cadeiras.filter(c => c.tipo === 'online');
+  const viraramBot = reabrindo ? [] : P.cadeiras.filter(c => c.tipo === 'online');
   viraramBot.forEach(c => { c.tipo = 'bot'; c.nivel = c.nivel || 'normal'; });
+
+  // A MESA acompanha a partida: é `MESA.cadeiras` que o `sentar()` consulta para achar
+  // vaga online, e ela ficou com o que o menu tinha na tela — não com quem estava jogando.
+  if (reabrindo) {
+    MESA.n = P.n;
+    P.cadeiras.forEach((c, i) => { if (MESA.cadeiras[i]) Object.assign(MESA.cadeiras[i], { tipo: c.tipo, nome: c.nome }); });
+  }
 
   euNaTela = Number.isInteger(g.euNaTela) && g.euNaTela >= 0 && g.euNaTela < P.n ? g.euNaTela : 0;
   travado = false;
@@ -463,6 +475,14 @@ window.__jogo = {
   // cargas da página, e é justamente aí que ninguém olha.
   retomarPartida, partidaGuardada, atualizarBotaoRetomar, lembrarMesa, mesaLembrada,
   pedirDica, dicaDaVista,
+  // CONGELA A MESA: cancela o lance de bot que estiver agendado. As cenas do
+  // tests/test-telas.mjs montam a mesa jogando de verdade e depois esperam a tela
+  // assentar — e nessa janela um número VARIÁVEL de temporizadores de bot disparava, com
+  // a mesma cena dando `mesa 0.27` numa rodada e `0.31` na outra. Semear o Math.random
+  // matou a variação do EMBARALHO; isto mata a do RELÓGIO, que era a outra metade.
+  // Uma chamada basta: nada reagenda sozinho, porque `seguirOTurno` só roda em
+  // `publicar()`, e depois da montagem a cena não publica mais nada.
+  pararBots: () => clearTimeout(timerBot),
   // Quantas conexões o anfitrião tem de pé. É como o teste do online prova que a mesma
   // pessoa em duas abas ocupa UMA cadeira, e não duas: sem isto, o take-over só daria
   // para conferir de fora pelo sintoma, que é a mesa lotar de fantasmas.

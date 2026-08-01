@@ -72,6 +72,23 @@ function erroOnline(txt) {
   el('onlineErro').textContent = txt;
 }
 
+// O ANFITRIÃO GUARDA A MESA — o código E o mapa de quem é dono de qual cadeira. Sem o
+// mapa, reabrir com o mesmo código devolveria o código certo e as cadeiras ERRADAS:
+// `donoDaCadeira` só existia em memória, e memória morre com a página. É o item 4 um
+// nível acima — de nada adianta o convidado saber quem é se o anfitrião esqueceu.
+//
+// PRAZO DE 12 h, e não as 2 h do convidado. A assimetria de antes existia porque a sala
+// do convidado depende de o anfitrião estar de pé; aqui o anfitrião é você, e o que a
+// mesa acompanha é a partida guardada — que dura 12 h. Prazos diferentes fariam o botão
+// de reabrir sumir com a partida ainda viva.
+function guardarMesaDoAnfitriao() {
+  if (modo !== 'anfitriao' || !codigoDaSala) return;
+  guardar('sala', {
+    quando: Date.now(), codigo: codigoDaSala, anfitriao: true,
+    donos: Array.from(donoDaCadeira.entries()),
+  });
+}
+
 function encerrarRede() {
   usarCodigo('');
   esperando.forEach(t => clearTimeout(t));
@@ -100,14 +117,20 @@ function abrirMesaOnline() {
   tentarAbrir(0);
 }
 
-function tentarAbrir(tentativa) {
-  const codigo = codigoNovo();
+// `codigoDesejado` é o item 3(c): reabrir A MESMA mesa em vez de uma outra. Sem ele o
+// anfitrião que recarregava abria uma mesa nova, e os convidados tentando voltar batiam
+// numa porta que não existe — o "voltar para a mesa" do convidado só valia enquanto o
+// anfitrião não tivesse caído, que é justamente quando ele é necessário.
+function tentarAbrir(tentativa, codigoDesejado) {
+  const codigo = codigoDesejado || codigoNovo();
   peer = new Peer(PREFIXO + codigo, OPCOES_PEER);
 
   peer.on('open', () => {
     el('onlineCodigo').textContent = codigo;
     usarCodigo(codigo);
+    guardarMesaDoAnfitriao();
     listarSala();
+    if (codigoDesejado) retomarComoAnfitriao();
   });
 
   peer.on('connection', conn => {
@@ -133,7 +156,7 @@ function tentarAbrir(tentativa) {
       // cadeira deixa de ser dele: quem desiste não volta com o mesmo clienteId.
       if (m.t === 'desisto' && P && P.fase !== 'fim') {
         clearTimeout(esperando.get(cadeira)); esperando.delete(cadeira);
-        donoDaCadeira.delete(cadeira);
+        donoDaCadeira.delete(cadeira); guardarMesaDoAnfitriao();
         abandonar(P, cadeira);
         narrar(`${P.cadeiras[cadeira].nome} saiu da mesa — a partida foi dada como perdida para ele.`);
         publicar();
@@ -143,10 +166,67 @@ function tentarAbrir(tentativa) {
   });
 
   peer.on('error', e => {
-    // Código sorteado já em uso: tenta outro. Qualquer outro erro, avisa em português.
-    if (e.type === 'unavailable-id' && tentativa < 4) { peer.destroy(); tentarAbrir(tentativa + 1); return; }
+    if (e.type === 'unavailable-id') {
+      // AQUI OS DOIS CAMINHOS SE INVERTEM, e é o que o item 3(c) custou. Abrindo mesa
+      // nova, o código é descartável: sorteia outro e pronto. REIVINDICANDO o código de
+      // uma mesa que era sua, sortear outro é exatamente o erro — o código é o ponto
+      // inteiro, é o que os convidados vão digitar. Então insiste no mesmo.
+      //
+      // E insistir com ESPERA, não em rajada: o peer velho pode ainda estar morrendo no
+      // servidor de sinalização, que só larga o id quando o socket cai de fato. Em
+      // setTimeout, nunca em requestAnimationFrame — a aba pode estar em segundo plano.
+      if (codigoDesejado) {
+        peer.destroy();
+        if (tentativa < 6) {
+          erroOnline(`Reservando o código ${codigo}… (${tentativa + 1}/6)`);
+          setTimeout(() => tentarAbrir(tentativa + 1, codigoDesejado), 1500);
+          return;
+        }
+        erroOnline(`O código ${codigo} ainda está ocupado. Se você acabou de fechar a mesa, ` +
+                   `espere alguns segundos e tente de novo — ou abra uma mesa nova.`);
+        return;
+      }
+      if (tentativa < 4) { peer.destroy(); tentarAbrir(tentativa + 1); return; }
+    }
     erroOnline(explicarErroDeRede(e));
   });
+}
+
+// Reabrir a mesa que era sua. O código volta pelo `tentarAbrir` acima; aqui volta o
+// RESTO — o mapa de donos e a partida —, e é a soma dos dois que faz o convidado sentar
+// na cadeira dele com a mão dele.
+function reabrirMesaOnline() {
+  const g = salaGuardada();
+  if (!g || !g.anfitriao) { avisar('Não há mesa sua para reabrir.'); atualizarBotaoVoltarMesa(); return; }
+  if (!temPeerJS()) { avisar('A biblioteca de rede não carregou — sem internet, só dá para jogar local.'); return; }
+  encerrarRede();
+  modo = 'anfitriao';
+  mostrarTela('telaOnline');
+  el('onlineTitulo').textContent = 'Reabrindo a sua mesa';
+  el('onlineSub').textContent = 'Quem estava na mesa volta com o mesmo código.';
+  el('onlineEntrada').classList.add('oculta');
+  el('btConectar').classList.add('oculta');
+  el('btIniciarOnline').classList.remove('oculta');
+  el('onlineCodigo').textContent = g.codigo;
+  erroOnline('Reservando o código…');
+  // O mapa ANTES de abrir: a primeira conexão pode chegar no mesmo instante do 'open', e
+  // um `sentar()` sem os donos daria a primeira vaga livre — o bug do item 4 de volta,
+  // pela porta dos fundos.
+  donoDaCadeira = new Map(Array.isArray(g.donos) ? g.donos.filter(
+    d => Array.isArray(d) && Number.isInteger(d[0]) && typeof d[1] === 'string') : []);
+  tentarAbrir(0, g.codigo);
+}
+
+// A partida de volta, com as cadeiras online CONTINUANDO online. O `retomarPartida`
+// comum as converte em bot, e tem de converter mesmo: fora daqui a mesa de antes não
+// existe mais e o motor esperaria para sempre por quem não vai responder. Aqui ela
+// existe — é esta que está sendo reaberta.
+function retomarComoAnfitriao() {
+  const g = partidaGuardada();
+  if (!g) { erroOnline('Mesa reaberta. Comece quando todos voltarem.'); return; }
+  retomarPartida({ mantendoOnline: true });
+  narrar(`Mesa ${codigoDaSala} reaberta — esperando quem estava jogando voltar.`);
+  publicar();
 }
 
 // Quem senta onde. Chamada no aperto de mão, e não na conexão, porque é aqui que pela
@@ -175,7 +255,7 @@ function sentar(conn, id, nome) {
   }
   if (cadeira < 0) { try { conn.send({ t: 'cheio' }); } catch (e) { void e; } setTimeout(() => conn.close(), 0); return -1; }
 
-  if (id) donoDaCadeira.set(cadeira, id);
+  if (id) { donoDaCadeira.set(cadeira, id); guardarMesaDoAnfitriao(); }
   conexoes.set(cadeira, conn);
   if (nome !== undefined) MESA.cadeiras[cadeira].nome = String(nome).slice(0, 14) || 'Visita';
 
@@ -319,6 +399,7 @@ function conectarNaMesa(codigo) {
       }
       if (m.t === 'sentou') {
         euNaTela = m.cadeira;
+        voltando = 0;                      // sentou: a próxima queda começa a contar do zero
         // Sentado NÃO é ocioso: `conectando` fica de pé e o botão fica travado. Solto,
         // ele reconectaria — e como o clienteId é o mesmo, o jogador faria take-over da
         // própria cadeira. O texto muda porque a tela não muda até o anfitrião começar, e
@@ -326,11 +407,11 @@ function conectarNaMesa(codigo) {
         el('btConectar').disabled = true;
         el('btConectar').textContent = 'Na mesa';
         erroOnline(`Você é a cadeira ${m.cadeira + 1}.`);
-        // Guardado só AQUI, e só no convidado: sentar de fato é o que prova que o código
-        // presta. O anfitrião não guarda porque `codigoNovo()` sorteia outro a cada
-        // abertura — oferecer "voltar" a ele o mandaria entrar como convidado na própria
-        // mesa morta. É o pedaço (c) da fila, e ele ainda não existe.
-        guardar('sala', { quando: Date.now(), codigo: codigoDaSala });
+        // Guardado no ponto do SENTOU, e não no do clique: sentar de fato é o que prova
+        // que o código presta. `anfitriao: false` é o que separa este guardado do que o
+        // `guardarMesaDoAnfitriao` escreve — a mesma chave serve aos dois papéis, e o
+        // botão do menu lê essa marca para saber se oferece "voltar" ou "reabrir".
+        guardar('sala', { quando: Date.now(), codigo: codigoDaSala, anfitriao: false });
         // A partir daqui há com quem conversar, e `modo` já é 'convidado': a conversa do
         // saguão liga. O tamanho da lista de nomes é o número de cadeiras, e é dele que
         // sai se a mesa é em duplas — o convidado não tem MESA.n do anfitrião.
@@ -343,6 +424,11 @@ function conectarNaMesa(codigo) {
     });
     linkAnfitriao.on('close', () => {
       pararDeConectar();
+      // A MESA FECHOU, OU O ANFITRIÃO ESTÁ RECARREGANDO — e daqui de fora as duas coisas
+      // são idênticas: o link cai igual. Como agora ele reabre com o MESMO código
+      // (item 3(c)), desistir na primeira queda desperdiçaria justamente o mecanismo que
+      // acabou de ser construído. Então tenta voltar sozinho, e só desiste depois.
+      if (voltarSozinho(codigoDaSala)) return;
       avisar('A mesa fechou.'); mostrarTela('telaMenu'); modo = 'local';
     });
   });
@@ -350,6 +436,34 @@ function conectarNaMesa(codigo) {
 }
 
 el('btConectar').onclick = () => conectarNaMesa(el('onlineEntrada').value.trim().toUpperCase());
+
+// ─── o convidado voltando sozinho ────────────────────────────────────────────
+// Quantas vezes e de quanto em quanto tempo. O anfitrião recarregando leva alguns
+// segundos para reivindicar o código de volta (o servidor de sinalização só larga o id
+// quando o socket cai de fato), então a janela tem de cobrir isso com folga — mas não
+// pode ser eterna: anfitrião que desistiu de vez não volta nunca, e ficar tentando de
+// graça é pior do que dizer que a mesa fechou.
+const VOLTAS = 8;
+const ESPERA_VOLTAR = 4000;
+let voltando = 0;
+
+function voltarSozinho(codigo) {
+  if (modo !== 'convidado' || !codigo || voltando >= VOLTAS) { voltando = 0; return false; }
+  voltando++;
+  mostrarTela('telaOnline');
+  el('onlineTitulo').textContent = 'A mesa caiu';
+  el('onlineSub').textContent = 'Tentando voltar — o anfitrião pode estar recarregando.';
+  erroOnline(`Tentando voltar para a mesa ${codigo}… (${voltando}/${VOLTAS})`);
+  setTimeout(() => {
+    if (modo !== 'convidado') return;      // desistiu no meio, ou entrou noutra mesa
+    // O peer VELHO tem de morrer antes: `conectarNaMesa` não o derruba (quem fazia isso
+    // era o `entrarNumaMesa` da tela), e sem isto cada tentativa deixaria um peer vivo —
+    // o mesmo vazamento que o item 5 consertou no botão de entrar.
+    encerrarRede();
+    conectarNaMesa(codigo);                // ele próprio devolve `modo` a 'convidado'
+  }, ESPERA_VOLTAR);
+  return true;
+}
 
 // ─── voltar para a mesa ──────────────────────────────────────────────────────
 // Prazo mais curto que as 12h da partida guardada, e por um motivo: a partida é SUA e não
@@ -360,20 +474,28 @@ const HORAS_SALA = 2;
 function salaGuardada() {
   const g = lido('sala', null);
   if (!g || typeof g.codigo !== 'string' || !/^[A-Z0-9]{3,8}$/.test(g.codigo)) return null;
-  if (!g.quando || Date.now() - g.quando > HORAS_SALA * 3600e3) return null;
+  // Prazos diferentes por papel, e a diferença é de quem a mesa depende. Ver o comentário
+  // de `guardarMesaDoAnfitriao`: a sua mesa acompanha a partida guardada (12 h); a mesa de
+  // outra pessoa depende de ela ainda estar de pé (2 h).
+  const horas = g.anfitriao ? 12 : HORAS_SALA;
+  if (!g.quando || Date.now() - g.quando > horas * 3600e3) return null;
   return g;
 }
 
 function atualizarBotaoVoltarMesa() {
   const g = salaGuardada();
   el('btVoltarMesa').classList.toggle('oculta', !g);
-  if (g) el('btVoltarMesa').textContent = `Voltar para a mesa ${g.codigo}`;
+  // REABRIR e VOLTAR são coisas diferentes, e o botão tem de dizer qual é: no anfitrião a
+  // mesa nasce de novo dele; no convidado ele vai bater na porta de alguém.
+  if (g) el('btVoltarMesa').textContent = g.anfitriao
+    ? `Reabrir a sua mesa ${g.codigo}` : `Voltar para a mesa ${g.codigo}`;
 }
 
 el('btVoltarMesa').onclick = () => {
   const g = salaGuardada();
   if (!g) { avisar('O código daquela mesa venceu.'); atualizarBotaoVoltarMesa(); return; }
   tocarClique();
+  if (g.anfitriao) { reabrirMesaOnline(); return; }
   entrarNumaMesa();                       // prepara a tela; ela já pré-preenche o campo
   conectarNaMesa(g.codigo);
 };
