@@ -435,12 +435,29 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
   #jogadores {
     top: calc(var(--seg-t) + 72px); left: calc(var(--seg-l) + 56px); right: var(--seg-r);
     height: 48px; align-content: center;
-    grid-auto-flow: column; grid-auto-columns: minmax(96px, 1fr);
-    gap: 5px; padding: 0 6px; overflow-x: auto; scrollbar-width: none;
+    /* `1fr` NUNCA encolhe abaixo do `min` do minmax, e era esse o defeito: com quatro
+       cadeiras a trilha pedia 4×96 + 3×5 = 399px numa caixa de conteúdo de 322 (tela de
+       390) ou 292 (tela de 360), e o QUARTO CARTÃO nascia inteiro fora da tela — 96px
+       dele em 390, 101px em 360.
+       O `overflow-x: auto` abaixo não salvava nada: #jogadores é `pointer-events: none`
+       (lá em cima, junto do #vez) e nunca deixa de ser em retrato, então a rolagem existe
+       no papel e não existe no dedo; e a barra escondida tirava até a pista de que havia
+       mais coisa. Com o piso em 0 a faixa reparte o que tem. */
+    grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
+    gap: 3px; padding: 0 3px; overflow-x: auto; scrollbar-width: none;
   }
   #jogadores::-webkit-scrollbar { display: none; }
-  .jog { min-width: 0; padding: 5px 8px; }
-  .jog .nome { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* `overflow: hidden` porque a régua de peças (▮▮▮▮▮▮▮ 7) não tem corte próprio: numa
+     trilha estreita ela é a única coisa que ainda podia espirrar para fora do cartão, e o
+     defeito voltaria um nível abaixo, onde a asserção nova não olha. */
+  /* CADA PIXEL AQUI É NOME. Encolher o cartão para caberem quatro custa o espaço do nome —
+     medido, ele caiu de 68px para 47px numa tela de 360 —, e a 47px o ellipsis começava a
+     comer nomes curtos como "Ricardo". Padding, gap e borda mais magros devolvem 9px, e a
+     fonte um ponto menor encurta o texto uns 4%: com os dois juntos nenhum primeiro nome
+     do pior caso é cortado. Não é enfeite: nome cortado deixa de identificar quem é, que
+     foi exatamente a razão de o item 8 cortar na PALAVRA em vez de no meio dela. */
+  .jog { min-width: 0; padding: 5px 5px; overflow: hidden; border-left-width: 2px; }
+  .jog .nome { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* Quatro cartões em 360px deixam 68px para um nome que pede 95: o ellipsis cortava no
      meio da palavra e "Maria Fernanda" virava "Maria Fer…", que não identifica ninguém.
      Escondendo o resto sobra "Maria", inteiro e legível de relance. O ellipsis continua
