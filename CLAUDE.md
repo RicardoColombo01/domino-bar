@@ -370,14 +370,32 @@ contando aprovações**, e é assim que se confere se ele voltou a valer no futu
    de regra de pontuação e um vazamento de mão pela cadeira errada.
 2. ~~**Item 11 — fechar a intermitência.**~~ ✔ **feito em 31/07/2026.** A causa não era a
    prevista (temporizador de bot), era a animação pega no meio por uma espera fixa.
-3. **Item 3(c) — voltar como anfitrião.** O maior. Reivindicar o mesmo id do PeerJS, e para
-   isso **inverter** o `unavailable-id` do `tentarAbrir`, que hoje sorteia outro código.
-4. **Item 2 — o fechamento forçado.** **Bloqueado esperando o Ricardo:** a mesa, as mãos, o
-   lance, o modo, e se havia monte.
+3. ~~**Item 3(c) — voltar como anfitrião.**~~ ✔ **feito em 31/07/2026.** O `unavailable-id` foi
+   mesmo onde doeu, e `donoDaCadeira` teve de virar dado guardado — isso não estava previsto.
+4. ~~**Item 2 — o fechamento forçado.**~~ ✔ **feito em 31/07/2026, sem o caso do Ricardo.** A
+   busca achou o caso sozinha, e ele não era o previsto: a janela cega era o `!temMonte`.
+
+**A FILA 5 ESTÁ VAZIA.** Todos os onze itens fechados. O que vier agora é fila nova — e a
+regra de sempre vale: ideia nova entra AQUI, não em memória de sessão.
+
+#### O que aprendemos sobre esta fila, olhando para trás
+
+**Três dos onze itens tinham o diagnóstico ERRADO escrito nesta fila**, e nos três a medição
+mandou em cima da leitura:
+
+| item | o que a fila dizia | o que era |
+|---|---|---|
+| 8 | falta `ellipsis` no deitado | o nome cabe deitado; quem corta é o RETRATO — deitado o `#topo` monta na lista |
+| 11 | temporizador de bot | animação pega no meio por uma espera fixa |
+| 2 | a regra tem um lance de profundidade | a regra nem rodava: `!temMonte` a desligava |
+
+Não é acaso: hipótese escrita de leitura de código é barata e por isso mesmo grudenta. **O
+antídoto foi sempre o mesmo — medir antes de consertar**, e em todos os três a medição custou
+menos que o conserto teria custado no lugar errado.
 
 #### Perguntas em aberto para o Ricardo
 
-- O **caso concreto** do item 2 (acima). É a única coisa que trava um item inteiro.
+- Nenhuma. O item 2 era a única, e a busca respondeu no lugar dele.
 
 ### 1. Lá-e-lô só existe com as pontas DIFERENTES ✔ feito
 
@@ -516,7 +534,7 @@ olhasse a mão dos outros, a jogada desaparecendo da tela contaria ao jogador qu
 aquele número — e isso é vazamento de informação, irmão do que a `visaoDe` existe para
 impedir.
 
-### 3. O código da sala tem de ficar visível, para dar de voltar — (a) e (b) ✔, falta o (c)
+### 3. O código da sala tem de ficar visível, para dar de voltar ✔ feito — (a), (b) e (c)
 
 Pedido do Ricardo em **30/07/2026**: deixar o código da mesa visível, para que quem sair tenha
 como voltar.
@@ -544,6 +562,49 @@ São **três pedaços**, e vale tratá-los separados porque a dificuldade é mui
   a assimetria com as 12 h da partida é o ponto: a partida é *sua* e não depende de ninguém,
   a sala depende de o anfitrião ainda estar de pé. **Sair de propósito esquece; cair não** —
   cair é exatamente o caso para o qual isto existe.
+- **(c) Voltar como ANFITRIÃO ✔ feito (31/07/2026).** Era o que faltava para o "voltar para a
+  mesma partida" valer no online, e o `unavailable-id` foi de fato onde doeu — a inversão é o
+  item inteiro. **Abrindo mesa nova o código é descartável:** sorteia outro e pronto.
+  **Reivindicando o código que era seu, sortear outro é exatamente o erro** — o código é o
+  ponto, é o que os convidados vão digitar. Hoje os dois caminhos fazem coisas opostas no
+  mesmo `catch`, e o que os separa é `codigoDesejado` ter sido passado ou não. A reivindicação
+  insiste **com espera** (6 tentativas de 1,5 s, em `setTimeout`): o peer velho pode ainda
+  estar morrendo no servidor de sinalização, que só larga o id quando o socket cai de fato.
+
+  **`donoDaCadeira` precisou VIRAR DADO GUARDADO, e isso não estava previsto.** Ele só existia
+  em memória — reabrir com o código certo devolveria as cadeiras **erradas**, que é o bug do
+  item 4 voltando pela porta dos fundos. É o mesmo raciocínio do `clienteId` um nível acima: de
+  nada adianta o convidado saber quem é se o anfitrião esqueceu. O mapa é restaurado **antes**
+  de o peer abrir, porque a primeira conexão pode chegar no mesmo instante do `open`.
+
+  **`retomarPartida` ganhou `{ mantendoOnline: true }`.** A conversão de cadeira online em bot
+  continua obrigatória no caso comum — fora daqui a mesa de antes não existe mais e o motor
+  esperaria para sempre por quem não vai responder. Aqui ela existe: é ela que está voltando. E
+  `MESA.cadeiras` precisa acompanhar `P.cadeiras`, porque é a MESA que o `sentar()` consulta
+  para achar vaga online, e ela ficou com o que o menu tinha na tela.
+
+  **O convidado volta sozinho** (decisão do Ricardo, 31/07): daqui de fora, anfitrião
+  recarregando e mesa fechando são o **mesmo evento** — o link cai igual. Desistir na primeira
+  queda desperdiçaria justamente o mecanismo acima. São 8 tentativas de 4 s, e cada uma derruba
+  o peer velho antes: `conectarNaMesa` não faz isso (quem fazia era o `entrarNumaMesa` da tela),
+  e sem esse cuidado cada tentativa deixaria um peer vivo — o vazamento do item 5 de volta.
+
+  **Prazos por papel:** a sua mesa dura 12 h, a dos outros 2 h. A assimetria antiga existia
+  porque a sala do convidado depende de o anfitrião estar de pé; sendo você o anfitrião, o que
+  a mesa acompanha é a partida guardada, que dura 12 h. Prazos iguais fariam o botão de reabrir
+  sumir com a partida ainda viva.
+
+  **No teste:** o mesmo código, a partida de volta com as cadeiras ainda `online`, e o convidado
+  sentando **sozinho** na cadeira dele com a mesma mão — as três juntas, porque qualquer uma
+  sem as outras não serve para nada.
+
+  **Armadilha do harness, não do jogo:** as abas do `test-online.mjs` vivem na mesma origem e
+  portanto no MESMO `localStorage`, então o `guardar('sala')` do convidado passa por cima do
+  registro do anfitrião. Por isso o teste confere o registro do anfitrião **antes** de a visita
+  sentar, e recompõe o valor na hora da recarga. Na vida real são navegadores diferentes.
+
+  <details><summary>o texto original, de quando ainda faltava</summary>
+
 - **(c) Voltar como ANFITRIÃO — o que FALTA.** O difícil, e é o que falta para o "voltar para a mesma
   partida" valer no online. `codigoNovo()` sorteia um código a cada `tentarAbrir`, então o
   anfitrião que recarrega abre uma mesa **outra** e os convidados tentando voltar batem numa
@@ -553,6 +614,8 @@ São **três pedaços**, e vale tratá-los separados porque a dificuldade é mui
   exatamente porque este pedaço não existe. **Detalhe descoberto ao fazer o resto:**
   `tentarAbrir` já trata `unavailable-id` **sorteando outro código** — reivindicar o mesmo id
   exige inverter esse comportamento, e é aí que o (c) vai doer.
+
+  </details>
 
 **Tensão de desenho, decidida em 30/07/2026:** código na tela é código em qualquer print,
 qualquer transmissão e qualquer tela compartilhada — inclusive na mesa mista, onde a tela passa
