@@ -88,6 +88,14 @@ try {
   const codigo = await anfitriao.evaluate(() => document.getElementById('onlineCodigo').textContent);
   console.log(`  código da mesa: ${codigo}`);
 
+  // O ANFITRIÃO GUARDA A MESA, e tem de ser conferido AGORA — as abas do teste vivem na
+  // mesma origem e portanto no MESMO localStorage, então o `guardar('sala')` do convidado
+  // vai passar por cima deste daqui a poucas linhas. Não é defeito do jogo: na vida real
+  // o anfitrião e a visita são navegadores diferentes.
+  const salaDoAnfitriao = await anfitriao.evaluate(() => window.__jogo.salaGuardada());
+  ok(salaDoAnfitriao && salaDoAnfitriao.anfitriao === true && salaDoAnfitriao.codigo === codigo,
+    `o anfitrião não guardou a própria mesa: ${JSON.stringify(salaDoAnfitriao)}`);
+
   console.log('\nconvidado entra pelo código');
   await convidado.evaluate(cod => {
     document.getElementById('btEntrar').click();
@@ -167,6 +175,59 @@ try {
   ok(volta.mao.map(norma).sort().join(' ') === maoDaVisita,
     'voltou com outra mão: sentou na cadeira de outra pessoa');
   console.log(`  voltou na cadeira ${volta.cadeira}, com as mesmas ${volta.mao.length} peças`);
+
+  // ─── o ANFITRIÃO cai e reabre a MESMA mesa ─────────────────────────────────
+  // O item 3(c), e é o que faz a reconexão do online valer de verdade: antes, o anfitrião
+  // que recarregava abria uma mesa OUTRA (`codigoNovo()` a cada `tentarAbrir`), e os
+  // convidados tentando voltar batiam numa porta que não existe. Metade do mecanismo sem
+  // a outra. A asserção cobre as três coisas que têm de acontecer juntas: o MESMO código,
+  // a partida de volta com as cadeiras ainda online, e o convidado sentando sozinho na
+  // cadeira dele COM A MESMA MÃO.
+  console.log('\no anfitrião cai e reabre a mesma mesa');
+  const antesDaQueda = await anfitriao.evaluate(() => ({
+    maoNum: window.__jogo.P.maoNum, naLinha: window.__jogo.P.linha.length }));
+  const maoAntesDaQueda = (await convidado.evaluate(() => window.__jogo.vista.mao.map(p => p.slice())))
+    .map(norma).sort().join(' ');
+
+  await anfitriao.reload({ waitUntil: 'networkidle2', timeout: 45000 });
+  await anfitriao.waitForFunction('window.__jogo && window.__jogo.pronto', { timeout: 30000, polling: 400 });
+  // Recompõe o registro que o convidado sobrescreveu — artefato do localStorage
+  // compartilhado explicado lá em cima, e não parte do que se está testando.
+  await anfitriao.evaluate(s => {
+    localStorage.setItem('dominobar.sala', JSON.stringify(s));
+    window.__jogo.atualizarBotaoVoltarMesa();
+  }, salaDoAnfitriao);
+
+  const rotulo = await anfitriao.evaluate(() => document.getElementById('btVoltarMesa').textContent);
+  ok(/Reabrir a sua mesa/.test(rotulo), `o menu ofereceu "${rotulo}" em vez de reabrir a mesa`);
+
+  await anfitriao.evaluate(() => document.getElementById('btVoltarMesa').click());
+  await anfitriao.waitForFunction(
+    cod => document.getElementById('onlineCodigo').textContent === cod,
+    { timeout: 40000, polling: 500 }, codigo)
+    .catch(() => ok(false, 'o anfitrião não conseguiu reivindicar o mesmo código'));
+  console.log(`  reabriu com o mesmo código: ${codigo}`);
+
+  await anfitriao.waitForFunction(
+    an => window.__jogo.P && window.__jogo.P.maoNum === an.maoNum && window.__jogo.P.linha.length === an.naLinha,
+    { timeout: 30000, polling: 500 }, antesDaQueda)
+    .catch(() => ok(false, 'a partida não voltou igual ao reabrir a mesa'));
+  const cadeirasDepois = await anfitriao.evaluate(() => window.__jogo.P.cadeiras.map(c => c.tipo));
+  ok(cadeirasDepois.includes('online'),
+    `ao reabrir, as cadeiras viraram ${cadeirasDepois.join('/')} — quem reabre a mesa não pode transformar a visita em bot`);
+  console.log(`  partida de volta na mão ${antesDaQueda.maoNum} com as cadeiras ${cadeirasDepois.join('/')}`);
+
+  // E o convidado volta SOZINHO: daqui de fora, anfitrião recarregando e mesa fechando são
+  // o mesmo evento (o link cai igual), então desistir na primeira queda desperdiçaria
+  // justamente o mecanismo acima.
+  await convidado.waitForFunction('window.__jogo.vista && window.__jogo.vista.mao.length',
+    { timeout: 60000, polling: 500 })
+    .catch(() => ok(false, 'o convidado não voltou sozinho depois de o anfitrião reabrir'));
+  const depois = await convidado.evaluate(() => JSON.parse(JSON.stringify(window.__jogo.vista)));
+  ok(depois.cadeira === 1, `o convidado voltou na cadeira ${depois.cadeira} em vez da 1`);
+  ok(depois.mao.map(norma).sort().join(' ') === maoAntesDaQueda,
+    'o convidado voltou com outra mão depois de o anfitrião reabrir a mesa');
+  console.log(`  o convidado voltou sozinho na cadeira ${depois.cadeira}, com as mesmas ${depois.mao.length} peças`);
 
   // ─── a mesma pessoa, noutra aba ────────────────────────────────────────────
   // Mesmo contexto = mesmo localStorage = mesmo clienteId. É fechar o notebook e abrir
