@@ -17,6 +17,7 @@ npm run telas     build + o jogo em cinco tamanhos de tela (retrato, paisagem, w
 npm run lembrar   build + o que sobrevive a RECARREGAR a página (preferências, retomar)
 npm run shots     build + screenshots no Chrome de verdade (tests/shots/)
 npm run online    testa o online abrindo duas abas e uma mesa real
+npm run fechamento  caça fechamento forçado jogando milhares de mãos (~3 min)
 npm run servir    servidor local (o online não fecha conexão em file://)
 
 node tests/test-online.mjs https://ricardocolombo01.github.io/domino-bar/
@@ -426,7 +427,68 @@ casa não é simétrica, e está tudo bem que não seja: a cruzada é a batida d
 o lá-e-lô é a das pontas diferentes. Registrado aqui porque nenhuma leitura de código chega
 a essa resposta — as duas saídas eram defensáveis.
 
-### 2. Ainda dá para FORÇAR o fechamento — BLOQUEADO, esperando o caso do Ricardo
+### 2. Ainda dá para FORÇAR o fechamento ✔ feito (31/07/2026)
+
+**NÃO PRECISOU DO CASO DO RICARDO, e é isso que vale registrar.** Esta seção pedia um caso
+concreto antes de mexer. A saída melhor foi *procurar* o caso: `03-regras.js` é puro, então dá
+para jogar milhares de mãos e caçar a posição — que é a mesma propriedade que permite medir a
+força do bot em 300 partidas. `tests/busca-fechamento.mjs` faz isso, e a chave do desenho é que
+a busca é **onisciente** (vê todas as mãos) enquanto a regra nunca pode ser. A diferença entre
+as duas visões é exatamente a fronteira entre "fechou" e "fechou de propósito", e ela separa
+três perguntas:
+
+| | |
+|---|---|
+| (A) o jogador podia ter escolhido não trancar? | visão de deus — sozinho, é fechamento NATURAL |
+| (B) …e dava para deduzir da mesa + da mão dele? | visão da regra — **isto é bug** |
+
+**O buraco era a guarda `!temMonte` em `acoesDe`.** Ela desligava a regra inteira enquanto
+houvesse monte, por "com monte ninguém trava, compra". Isso confunde **existir monte** com **o
+monte poder salvar alguém** — e o `morto[n]` de `fechamentosArmados` já responde a pergunta
+forte: ele só dá o número por morto quando toda peça dele está na mesa ou na sua mão, e
+portanto **não está no monte**. Ponta morta com monte de pé é ponta que o monte não resolve.
+A guarda não protegia nada e abria uma janela: bastava dar o lance **antes de o monte secar**.
+
+Era por isso que a hipótese registrada aqui (a regra ter "um lance de profundidade") não
+levava a lugar nenhum, e vale saber por quê: a busca deu **zero** em 750 mãos dos três modos
+**sem** monte. A um lance de profundidade a regra sempre esteve certa. O defeito estava onde
+ela nem rodava — e o Clássico de 2 e 3 são justamente as mesas de partida rápida.
+
+**O caso concreto que a busca achou** (clássico de 2, 4 peças no monte):
+
+```
+linha:  5|3 3|4 4|6 6|1 1|5 5|5 5|2 2|6 6|3 3|2 2|0 0|5 5|6 6|0 0|0 0|4 4|4
+mão:    2|2 1|1 0|1 1|2 4|5          adversário: 2|4 1|3
+```
+
+A `4|5` **na direita** deixa as duas pontas em `5` com os **sete** 5 já vistos: ninguém joga
+nunca mais, o adversário compra o monte inteiro e passa. A **mesma peça na esquerda** deixa as
+pontas em `4`, e o jogo segue. Escolher qual é literalmente "escolher o lance que faz não haver
+mais lance nenhum".
+
+**Números:** 313 casos em 1000 mãos (200 por modo, cinco mesas) antes; **0** depois.
+
+**O teste gravava a regra errada** — de novo, como no item 1. A asserção dizia *"com monte não
+há tranca para armar"*, e era ela que sustentava a janela. Virou um par, e o par é a regra
+inteira: monte com `0|1` não responde a 3 nenhum, comprar não adianta, o fechamento **continua
+barrado**; monte com o `3|3` responde à ponta, o 3 deixa de estar morto e nada é barrado.
+
+**A força do bot se mexeu**, como no item 1 — `05-bot.js` joga pelas ações que `acoesDe`
+oferece. Foi de 57,8% para **55,8% (2,9σ)**. A asserção é **limiar** (`> 2σ`), não número fixo,
+e foi escrita assim exatamente para sobreviver a mudanças de regra.
+
+**A guarda ficou em DOIS níveis, e a divisão é por custo.** A busca leva ~3 min, e o `npm test`
+roda em segundos — pôr uma dentro da outra faria ninguém rodar nenhuma:
+
+- **rápida, dentro do `npm test`:** o par `monteInutil` / `monteSalvador` em `test-regras.mjs`.
+  É instantâneo e cobre exatamente este defeito, nas duas direções.
+- **profunda, sob demanda:** `npm run fechamento` (`tests/test-fechamento.mjs`). Reprova só em
+  (B). Se um dia (A) aparecer sozinho, **isso é informação e não falha**: quer dizer que existe
+  posição em que o jogo trava sem ninguém poder saber — e isso é dominó, não bug.
+
+---
+
+#### O texto original do item, para contexto histórico
 
 O Ricardo consegue forçar o jogo a trancar. A regra do fechamento armado existe (ver "Regras
 da casa" abaixo) e não está fechando o buraco todo.

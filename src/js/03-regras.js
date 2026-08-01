@@ -70,10 +70,17 @@ function pontasDepois(linha, peca, ponta) {
 // que deixou, os outros passam, a vez volta e você joga de novo. Isso é jogar sozinho —
 // jogo bom, não manobra —, e não pode ser barrado.
 //
-// Quem chama decide o resto (é `acoesDe`, em 04-partida.js): a regra só vale sem monte,
-// não vale na sua última peça (jogar a última é bater), e só barra se sobrar jogada que
-// não seja também um fechamento — senão as duas se barrariam, você ficaria sem jogada, e
-// o motor te mandaria passar: a tranca aconteceria igual, pela porta dos fundos.
+// Quem chama decide o resto (é `acoesDe`, em 04-partida.js): a regra não vale na sua
+// última peça (jogar a última é bater), e só barra se sobrar jogada que não seja também
+// um fechamento — senão as duas se barrariam, você ficaria sem jogada, e o motor te
+// mandaria passar: a tranca aconteceria igual, pela porta dos fundos.
+//
+// E ela vale COM MONTE TAMBÉM, desde o item 2 da Fila 5. Antes `acoesDe` a desligava
+// enquanto houvesse monte, por "com monte ninguém trava, compra" — mas o `morto` daqui
+// de baixo já é uma pergunta mais forte que essa: ele só dá o número por morto quando
+// toda peça dele está na mesa ou na sua mão, e portanto NÃO está no monte. Ponta morta
+// com monte de pé é ponta que o monte não resolve. A guarda antiga não protegia nada e
+// abria uma janela: bastava dar o lance antes de o monte secar.
 function fechamentosArmados(linha, jogadas, mao, baralho) {
   // CHAVE CANÔNICA, e é o detalhe que fazia a regra quase não existir: `chave` é
   // sensível à ordem (p[0]|p[1]) e a linha guarda as peças JÁ ORIENTADAS — uma 2|5
