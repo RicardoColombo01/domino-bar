@@ -1,6 +1,6 @@
 {
   "name": "domino-bar",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "private": true,
   "description": "Dominó de bar em 3D: 2 a 4 jogadores, bots opcionais e online P2P sem servidor",
   "scripts": {
