@@ -5,7 +5,9 @@ bot, na mesma tela ou pela internet. No ar em
 **https://ricardocolombo01.github.io/domino-bar/** (repo público `RicardoColombo01/domino-bar`).
 
 Sem framework, sem bundler, sem asset: madeira, pintas e sons são gerados em canvas e
-WebAudio na hora. Three.js e PeerJS vêm de CDN. ~2.100 linhas no total.
+WebAudio na hora. Three.js e PeerJS vêm de CDN. ~4.500 linhas no total (`src/js` + `pagina.html`
++ `css/estilo.css`), conferido em 01/08/2026 — este número **envelhece**, e envelheceu: ficou
+dizendo 2.100 por três releases seguidas.
 
 ## Comandos
 
@@ -330,10 +332,25 @@ campo acha o que está escrito certo e mesmo assim não funciona.
 
 ---
 
-### ONDE PARAMOS — sessões de 30 e 31/07/2026
+### ONDE PARAMOS — sessões de 30/07 a 01/08/2026
 
-**Leia isto primeiro ao retomar.** É o estado real do trabalho, o que ele produziu, e o que
-fazer em seguida. Os detalhes de cada assunto estão nos itens numerados mais abaixo.
+**Leia isto primeiro ao retomar.** É o estado real do trabalho, o que ele produziu, o que
+fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numerados mais abaixo.
+
+#### ESTADO EM UMA OLHADA (01/08/2026)
+
+| | |
+|---|---|
+| publicado | **v1.7.1** — https://ricardocolombo01.github.io/domino-bar/ |
+| `main` ↔ `origin/main` | `0 ← \| 0 →` |
+| `develop` ↔ `origin/develop` | `0 ← \| 0 →` |
+| árvore de trabalho | limpa |
+| Fila 5 | **fechada** — 11 itens |
+| Fila 6 | **5 defeitos fechados**, o resto do escopo à espera (ver a seção da Fila 6) |
+| pendências bloqueadas | **nenhuma** — nada esperando resposta do Ricardo |
+
+**Não há defeito conhecido em aberto.** O que sobra é trabalho de qualidade, listado no fim
+desta seção em ordem de valor.
 
 #### O QUE CUSTOU UM DIA INTEIRO, e não pode se repetir
 
@@ -344,7 +361,8 @@ Ele testou o `github.io`, que serve da `main`, e a `main` era a v1.5.0.
 A lição não é "lembrar de publicar". É que **o projeto tem duas travas contra bundle velho
 (`merge=ours` no `.gitattributes` e `npm run check`) e nenhuma contra trabalho não enviado** —
 porque enviar é decisão de gente. Ao FIM de qualquer sessão, dizer em voz alta e por escrito
-onde o trabalho está: commitado ≠ enviado ≠ publicado. São três lugares diferentes.
+onde o trabalho está: **commitado ≠ enviado ≠ publicado.** São três lugares diferentes, e
+`git rev-list --left-right --count origin/main...main` responde os dois últimos em um segundo.
 
 #### O que mudou, e o que deu
 
@@ -359,6 +377,13 @@ onde o trabalho está: commitado ≠ enviado ≠ publicado. São três lugares d
 | 11 · intermitência | embaralho das cenas semeado | metade: ver ressalva |
 | **6 e 7** · toque | limiar por ponteiro + `foiMesmoArrasto` + `visibilitychange`/captura | **5 asserções novas**, todas vermelhas no código antigo |
 | **8** · deitado | `#topo` vira faixa entre as colunas; corte do nome na PALAVRA | **17 falhas → 0**; diagnóstico da fila estava INVERTIDO |
+| **11** · determinismo | espera a tela PARAR em vez de contar 350 ms | duas rodadas **idênticas**, 49 linhas cada |
+| **3(c)** · reabrir | reivindica o mesmo id do PeerJS; `donoDaCadeira` guardado | convidado volta **sozinho** na cadeira dele |
+| **2** · fechamento | cai o `!temMonte`; o `morto[]` já era a pergunta forte | **313 casos em 1000 mãos → 0** |
+| **F6** · cinco defeitos | mudo, escape do nome, revanche, CDN, chave de protótipo | todos com asserção **vermelha antes** |
+
+**As releases:** v1.6.0 (itens 1, 3a, 3b, 4, 5, 6, 7, 8, 9, 10) → v1.7.0 (itens 2, 3c, e o 11)
+→ v1.7.1 (os cinco defeitos da varredura).
 
 #### A ressalva CAIU — e como se prova que caiu
 
@@ -399,9 +424,115 @@ Não é acaso: hipótese escrita de leitura de código é barata e por isso mesm
 antídoto foi sempre o mesmo — medir antes de consertar**, e em todos os três a medição custou
 menos que o conserto teria custado no lugar errado.
 
+E aconteceu de novo na Fila 6, com dois dos cinco: o "vazamento de GPU" dos materiais clonados
+**não era vazamento** (mesma `cacheKey`, os materiais viram lixo coletável), e o `alvos`
+aliasado do `06-layout.js` **não é defeito** porque ninguém lê aquele campo. Nos dois casos
+meia hora de investigação evitou um conserto inútil. **Suspeita não confirmada tem de ser
+registrada COMO suspeita** — foi o que permitiu descartá-las sem refazer a leitura.
+
+#### As três armadilhas de TESTE que estas sessões pagaram
+
+Valem mais que os consertos, porque se repetem em qualquer projeto:
+
+1. **Asserção que não fica vermelha antes do conserto não prova nada.** Cinco asserções minhas
+   passaram no código antigo na primeira tentativa, ao longo destas sessões. Cada uma parecia
+   certa lendo o texto dela.
+2. **"Parece o mesmo ataque" não é o mesmo ataque.** A asserção do nome reusava o
+   `<img src=x>` que a suíte já tinha — e sem aspa aquele nome fica preso dentro do `value=`,
+   não vira elemento nem no código com defeito. Quem abre o atributo é a **aspa**.
+3. **Dublê que não deixa o código alcançar o estado interessante dá verde que não quer dizer
+   nada.** Foi a lição do `matchMedia`, depois da captura de ponteiro, depois do
+   `AudioContext`, depois do `Peer`. **Quatro vezes.** Quando um teste não consegue alcançar
+   um ramo, a pergunta certa é "o que falta no dublê", não "como contorno isto".
+
+E uma quarta, de fora do código: **`diff` de dois arquivos vazios passa.** A suíte travada não
+gerou saída, os dois arquivos saíram com zero linhas e a comparação declarou "idênticas". Teste
+de igualdade tem de exigir também que **haja o que comparar**.
+
+#### O QUE FAZER AMANHÃ — em ordem, e por quê
+
+Nada disto é defeito: são melhorias medidas, todas com arquivo e linha na seção da **Fila 6**
+lá embaixo. A ordem abaixo é uma recomendação com justificativa, não uma sentença — o escopo é
+do Ricardo, e ele já mostrou que prefere ondas pequenas com release no fim de cada uma.
+
+**1. Acessibilidade barata — meio dia, e é a maior alavanca por real gasto.**
+O projeto não tem **um único** `aria-*`, `role`, `alt`, `tabindex`, `:focus-visible` ou
+`prefers-*`. Comece por três coisas que somam poucas linhas:
+- `aria-live="polite"` em `#aviso`, `#vez` e `#conversaLista`. O `avisar()` é o canal de TODO
+  erro do motor e do porquê de a peça não dar; hoje nada disso existe para leitor de tela.
+- **Contraste do texto de erro.** `#onlineErro` usa `.nota` (`opacity: .5` em 12 px, ~4.3:1) —
+  é o texto de MENOR contraste da tela, e é justamente o que avisa que algo deu errado. Erro
+  não é decoração. Subir as opacidades de `.45–.58` para `~.72` resolve sem tocar no estilo
+  âmbar-sobre-marrom.
+- **O botão de mudo vira `✕`, o mesmo glifo do botão de sair, 22 px ao lado.** Trocar por 🔇.
+
+**2. Teclado — meio dia, e fecha um ciclo que já está quase pronto.**
+Hoje o teclado tem três teclas (`Esc`, `A`, `D`) e **não existe** como escolher uma peça. Mas
+os botões de confirmar já são `<button>` de verdade e já pegam Tab. Teclas `1..9` chamando
+`selecionarPeca(i-1)` — função que já existe e é a mesma que a dica usa — fecham o ciclo
+inteiro: selecionar → Tab → Enter. O custo real é o realce visual da peça focada no 3D.
+
+**3. As pintas da peça — a lacuna de teste mais perigosa que existe hoje.**
+`08-peca3d.js` não tem **nenhuma** asserção sobre o que a face desenha. Se `faceDaPinta(3)`
+passasse a desenhar 4 pintas, ou face e verso trocassem, **todas as suítes continuariam
+verdes** e o jogo estaria mostrando peças erradas. O jogo inteiro é ler número em madeira.
+
+**4. O argumento de linha de comando do `test-telas`.** Ver a ressalva logo acima: a rodada
+completa passou a estourar o tempo de uma sessão, e hoje o contorno é cortar a lista de `TELAS`
+à mão. Isso é barato de fazer e evita que alguém rode metade sem perceber.
+
+**5. Documentação — o README está duas releases atrás.** Não menciona a conversa da mesa, a
+dica de jogada, a gaveta do celular nem o reabrir a mesa; diz que o bot difícil ganha ~59% (é
+**55,8%** desde os itens 1 e 2); o diagrama de branches para na v1.1.0. E o cabeçalho DESTE
+arquivo dizia ~2.100 linhas (corrigido em 01/08). É a porta de entrada de um repositório
+público, e hoje ela descreve um jogo mais pobre do que o que está no ar.
+
+**6. As outras lacunas de teste**, em ordem de gravidade: o som e o mudo (hoje o dublê existe,
+então ficou barato), o fim de mão **em duplas** (só há asserção com `MESA.n = 2`, e mesa de 4 é
+o modo clássico de boteco), o **conteúdo** do painel de contagem (só se testa se ele cobre a
+mesa, nunca se conta certo — e é ferramenta de decisão), o `<select>` de cadeira do menu, o
+esgotamento do prazo de 30 s de quem cai, e os ramos de rede do sair da partida.
+
+#### O QUE PODERIA SER FEITO, mas não recomendo agora
+
+Registrado para não ser redescoberto do zero — e com o motivo de não ser prioridade:
+
+- **Fazer o 3D DESVIAR dos painéis** em vez de os painéis darem lugar. Combina com
+  `apertoDaMesa()` e `larguraVisivelEm()`, e é o caminho não escolhido do item 10. É o mais
+  caro, e a gaveta e as faixas já resolveram o problema real.
+- **`beforeunload` no meio de partida online.** As regras dizem em letras grandes que sair
+  conta como derrota, e um F5 acidental gasta o prazo de 30 s sem aviso. Barato — mas
+  `beforeunload` é incômodo e precisa de decisão do Ricardo, não de programador.
+- **Botão de copiar/compartilhar o código da sala.** `user-select: all` resolve o mouse; no
+  dedo, copiar de um `<div>` é sofrível, e o caso comum é mandar o código pelo WhatsApp.
+  `navigator.share` resolveria. Impacto real no online, custo pequeno.
+- **Compra voluntária desabilitada nos modos sem monte.** Hoje o botão fica aceso prometendo
+  uma regra que o motor descarta — `ajustarCadeirasAoModo` já faz exatamente isso, com
+  elegância, para o número de jogadores.
+- **`prefers-reduced-motion`.** A lâmpada respira para sempre e a câmera reenquadra; é o pior
+  conjunto para sensibilidade vestibular. Pequeno no CSS, médio no 3D.
+- **Dívidas que investiguei e concluí que NÃO são defeito hoje** — não refaça o trabalho:
+  o clone de material por peça sem `dispose()` (mesma `cacheKey`, os materiais viram lixo
+  coletável; é churn, não vazamento); o `alvos.esq === alvos.dir` do `06-layout.js` (aliasing
+  armado, mas `alvos` é **código morto** — remover é melhor que consertar); e o array `VAZIO`
+  compartilhado do `05-bot.js` (só é lido hoje; um `add` ali um dia envenenaria todos).
+
 #### Perguntas em aberto para o Ricardo
 
-- Nenhuma. O item 2 era a única, e a busca respondeu no lugar dele.
+- **Nenhuma bloqueia.** O item 2 era a única e a busca respondeu no lugar dele.
+- A única decisão que vale perguntar antes de agir é **o escopo da próxima onda** (a lista de
+  1 a 6 acima), porque ele já disse que prefere ondas pequenas com release no fim.
+
+#### Como retomar em cinco minutos
+
+```
+git fetch origin && git rev-list --left-right --count origin/develop...develop   # tem de dar 0 0
+npm run check          # o bundle está em dia com src/?
+npm test               # as três suítes de lógica, segundos
+```
+
+E antes de qualquer conserto: **medir**. Três dos onze itens da Fila 5 e dois dos cinco
+defeitos da Fila 6 tinham diagnóstico errado escrito antes de alguém olhar os números.
 
 ### 1. Lá-e-lô só existe com as pontas DIFERENTES ✔ feito
 
@@ -990,6 +1121,15 @@ experiência/acessibilidade. **Cada achado foi conferido à mão antes de entrar
 Saíram cinco defeitos, todos ✔ feitos na v1.7.1. **Dois deles são a mesma doença dos itens
 6 e 7: o jogo falhando em silêncio.**
 
+**A FILA 6 CONTINUA ABERTA.** Os cinco defeitos fecharam; o resto do que a varredura achou
+está na seção **"o que ficou de FORA do escopo"**, no fim desta fila — acessibilidade,
+cobertura de teste e documentação. Nada disso é defeito, tudo isso é medido, e a ordem
+recomendada está no **"O QUE FAZER AMANHÃ"** lá em cima.
+
+**Nenhum destes cinco foi relatado por ninguém.** Vieram de procurar, não de esperar — e é
+uma diferença que vale registrar, porque a Fila 5 inteira nasceu de relato. Os dois modos se
+complementam: o campo acha o que incomoda, a varredura acha o que ainda não incomodou.
+
 ### 1. O mudo durava exatamente um clique ✔ feito
 
 `12-audio.js` implementa o mudo suspendendo o AudioContext. O listener de `pointerdown`
@@ -1119,7 +1259,7 @@ o bot nunca compra tendo jogada.
 **Documentação, duas releases atrás.** O `README.md` não menciona a conversa da mesa, a dica
 de jogada, a gaveta do celular nem o reabrir a mesa; diz que o bot difícil ganha ~59% (é
 **55,8%** depois das mudanças de regra dos itens 1 e 2); e o diagrama de branches para na
-v1.1.0. Aqui no `CLAUDE.md`, o cabeçalho ainda diz **~2.100 linhas** — são **4.537**.
+v1.1.0. (O cabeçalho deste arquivo dizia o mesmo e já foi corrigido: são **4.537** linhas.)
 
 **Dívidas registradas e NÃO consertadas, com o porquê:**
 
