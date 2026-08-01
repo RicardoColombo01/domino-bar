@@ -11,6 +11,7 @@
     "lembrar": "node build.mjs && cd tests && npm run lembrar",
     "shots": "node build.mjs && cd tests && npm run shots",
     "online": "node build.mjs && cd tests && npm run online",
+    "fechamento": "node build.mjs && cd tests && npm run fechamento",
     "servir": "npx --yes serve ."
   }
 }

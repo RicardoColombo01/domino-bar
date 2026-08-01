@@ -70,11 +70,24 @@ function acoesDe(P, cadeira) {
   if (P.pecaObrigatoria) jogadas = jogadas.filter(j => mesmaPeca(j.peca, P.pecaObrigatoria));
   const temMonte = P.monte.length > 0;
 
-  // Não dá para armar a tranca. Com monte ninguém trava (compra), e na última peça você
-  // está batendo, não fechando — daí as duas guardas. E só some com o fechamento se
-  // sobrar outra jogada que não seja fechamento também: barrar todas te deixaria sem
-  // jogada, o motor te mandaria passar, e o jogo trancava do mesmo jeito.
-  if (!temMonte && jogadas.length > 1 && P.maos[cadeira].length > 1) {
+  // Não dá para armar a tranca. Na última peça você está batendo, não fechando — daí a
+  // guarda do tamanho da mão. E só some com o fechamento se sobrar outra jogada que não
+  // seja fechamento também: barrar todas te deixaria sem jogada, o motor te mandaria
+  // passar, e o jogo trancava do mesmo jeito.
+  //
+  // AQUI HAVIA UM `!temMonte`, e ele era a janela cega do item 2 da Fila 5. O raciocínio
+  // era "com monte ninguém trava, compra" — e isso confunde EXISTIR monte com o monte
+  // PODER salvar alguém. O `morto[n]` de `fechamentosArmados` já responde a pergunta
+  // certa: ele só marca o número como morto quando toda peça daquele número está na mesa
+  // ou na sua mão, o que inclui não estar no monte. Ou seja, ponta morta com monte de pé
+  // é ponta que o monte não resolve — os outros compram o monte inteiro e passam.
+  //
+  // Caso concreto que a busca achou (tests/busca-fechamento.mjs), clássico de 2 com 4
+  // peças no monte: linha terminando em 5 … 4, mão `2|2 1|1 0|1 1|2 4|5`. A `4|5` na
+  // direita deixa as duas pontas em 5 com os sete 5 já vistos — tranca na hora. A mesma
+  // peça na esquerda deixa as pontas em 4, e o jogo segue. Escolher qual é exatamente o
+  // "escolher o lance que faz não haver mais lance nenhum" que a regra da casa proíbe.
+  if (jogadas.length > 1 && P.maos[cadeira].length > 1) {
     const armadas = fechamentosArmados(P.linha, jogadas, P.maos[cadeira],
       P.baralho || baralhoDoModo(modoDe(P.regras)));
     if (armadas.length && armadas.length < jogadas.length) {
