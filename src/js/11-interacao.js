@@ -66,9 +66,28 @@ function alvoSob() {
   return null;
 }
 
+// O CURSOR DE TECLADO. É um índice na mão, irmão do `apontada` do raycast — e é de
+// propósito que ele alimenta a MESMA variável: o realce da peça focada, que a fila previa
+// como "o custo real" deste item, já existia inteiro. `animarMao(dt, apontada)` levanta a
+// peça apontada em 0.2 desde sempre, e ela nunca soube que aquilo vinha de um mouse.
+//
+// O dono do `apontada` passa a ser O ÚLTIMO DISPOSITIVO QUE FALOU. Sem essa regra os dois
+// brigam a 60 quadros por segundo: `atualizarPonteiro` roda em todo quadro e reescreve o
+// `apontada` a partir do raycast, então um cursor de teclado seria apagado no quadro
+// seguinte ao de ter sido posto. Mexer o ponteiro larga o teclado; teclar larga o ponteiro.
+let cursorTeclado = null;
+addEventListener('pointermove', () => { cursorTeclado = null; });
+
 function atualizarPonteiro() {
   // Durante o arrasto o realce de "passando por cima" briga com a peça erguida no dedo.
   if (emArrasto()) { apontada = null; renderer.domElement.style.cursor = 'grabbing'; return; }
+  // O teclado manda enquanto for ele o último a falar. Não mexe no `cursor` do CSS: quem
+  // não está usando o mouse não tem seta na tela para mudar de forma.
+  if (cursorTeclado !== null) {
+    if (cursorTeclado >= naMao.length) cursorTeclado = naMao.length ? naMao.length - 1 : null;
+    apontada = cursorTeclado;
+    return;
+  }
   const alvo = alvoSob();
   apontada = alvo && alvo.tipo === 'peca' ? alvo.i : null;
   const clicavel = alvo && (alvo.tipo === 'previa' || naMao[alvo.i].jogavel);
@@ -244,6 +263,90 @@ addEventListener('pointercancel', () => encerrarArrasto());
 function desistirDoGesto() { encerrarArrasto(); largarMira(); }
 document.addEventListener('visibilitychange', () => { if (document.hidden) desistirDoGesto(); });
 addEventListener('blur', desistirDoGesto);
+
+// ─── jogar sem apontador ─────────────────────────────────────────────────────
+// Até aqui não havia como ESCOLHER UMA PEÇA sem mouse ou dedo — o jogo tinha três teclas
+// (Esc, A, D) e nenhuma delas jogava. Os botões de confirmar sempre foram <button> de
+// verdade e sempre pegaram Tab; faltava a metade de cima do ciclo.
+//
+//   ← →            passeia pela mão (a peça levanta, igual ao passar o mouse)
+//   Enter / espaço  escolhe a que está sob o cursor
+//   1 … 9           pula direto para a n-ésima peça e escolhe
+//   Esc             cancela  (já existia)
+//
+// AS DUAS PORTAS EXISTEM DE PROPÓSITO, e não é redundância. O número é o caminho rápido
+// de quem já sabe onde a peça está, e é o que a fila pedia; mas ele para no 9, e o Duelo
+// dá CATORZE peças na mão. As setas não têm teto, então elas são as que fazem o modo
+// inteiro ser jogável — o número sozinho deixaria cinco peças inalcançáveis num dos três
+// modos da casa.
+function moverCursor(passo) {
+  if (!naMao.length) return;
+  // Começa de onde os olhos já estão: da peça levantada, se houver, senão da ponta que
+  // faz sentido para o sentido do passo. Começar sempre no zero faria a primeira seta
+  // saltar a mão inteira para quem estava olhando a última peça.
+  const de = cursorTeclado !== null ? cursorTeclado
+    : escolhida !== null ? naMao.findIndex(m => chave(m.peca) === escolhida)
+    : passo > 0 ? -1 : naMao.length;
+  // Não dá a volta: a mão tem duas beiradas de verdade, e bater nelas é como se sabe onde
+  // se está sem olhar. Circular, o cursor some do canto e reaparece no outro.
+  cursorTeclado = Math.max(0, Math.min(naMao.length - 1, de + passo));
+
+  // LARGA O BOTÃO DE CONFIRMAR, e esta linha vale um parágrafo porque o furo só aparece
+  // olhando o ciclo inteiro: escolher uma peça põe o foco no botão de confirmar (é o que
+  // faz `3`+`Enter` funcionar). Se daí o jogador aperta `→` para ver outra peça, o cursor
+  // anda mas o FOCO não — e o Enter seguinte é entregue ao navegador, que aciona o botão
+  // focado e joga a peça ANTIGA. Seta significa "voltei a passear pela mão", então o
+  // teclado tem de retomar a tecla.
+  const foco = document.activeElement;
+  if (foco && foco.blur && foco.closest && foco.closest('#confirmar')) foco.blur();
+}
+
+// Escolher pelo teclado é o MESMO caminho do toque, e é por isso que esta função repete a
+// ordem de `soltarArrasto`: mesma peça cancela, peça que não dá explica por quê, e só
+// então seleciona. Um segundo caminho com regras próprias é como as duas metades passam a
+// discordar — foi literalmente o defeito 3 da Fila 6 (duas cópias da regra da revanche).
+function escolherPeloTeclado(i) {
+  if (i < 0 || i >= naMao.length) return;
+  cursorTeclado = i;
+  if (!podeAgirAgora()) return;
+  const m = naMao[i];
+  if (chave(m.peca) === escolhida) { cancelarEscolha(); return; }
+  // O silêncio é o defeito, não a recusa. `selecionarPeca` desiste calada quando a peça
+  // não é jogável — no mouse quem diz o porquê é o `soltarArrasto`, e sem esta linha o
+  // teclado teria a doença que os itens 6, 7 e a Fila 6 inteira passaram consertando.
+  if (!m.jogavel) { avisar(porQueNaoDa(m.peca)); return; }
+  selecionarPeca(i);
+  // FECHA O CICLO. Sem isto o jogador escolhe a peça e fica sem saber para onde ir: o Tab
+  // teria de atravessar a barra de ações inteira (comprar, passar, dica, arrumar, contar)
+  // antes de chegar na confirmação. Com o foco aqui, jogar é `3` e `Enter`.
+  const b = el('confBotoes').querySelector('button');
+  if (b && b.focus) b.focus();
+}
+
+// Enter e espaço são as teclas que ATIVAM um botão focado. Se o foco já está num <button>
+// — e depois de escolher uma peça ele está, de propósito —, quem trata a tecla é o
+// navegador, e agir aqui também jogaria duas vezes com um toque só.
+const emControle = ev => /^(BUTTON|SELECT|A|SUMMARY|DETAILS)$/.test((ev.target || {}).tagName || '');
+
+addEventListener('keydown', ev => {
+  if (/^(INPUT|TEXTAREA)$/.test((ev.target || {}).tagName || '')) return;
+  if (!vistaAtual || !naMao.length) return;
+
+  if (ev.key === 'ArrowRight') { moverCursor(1); ev.preventDefault(); return; }
+  if (ev.key === 'ArrowLeft') { moverCursor(-1); ev.preventDefault(); return; }
+
+  if ((ev.key === 'Enter' || ev.key === ' ') && !emControle(ev)) {
+    if (cursorTeclado !== null) { escolherPeloTeclado(cursorTeclado); ev.preventDefault(); }
+    return;
+  }
+
+  // '1'…'9' e não '0': a mão é contada como as pessoas contam, do um. O 0 seria a décima
+  // peça só para quem já pensa em índice, e quem pensa em índice usa as setas.
+  if (ev.key >= '1' && ev.key <= '9' && !ev.ctrlKey && !ev.altKey && !ev.metaKey) {
+    escolherPeloTeclado(Number(ev.key) - 1);
+    ev.preventDefault();
+  }
+});
 
 // POR QUE esta peça não dá. São três motivos diferentes e o jogador merece o certo:
 // dizer "não encaixa em nenhuma ponta" com a mesa vazia — onde toda peça encaixa — é

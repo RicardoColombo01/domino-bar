@@ -99,7 +99,13 @@ function desenharHUD(vista) {
     </div>`).join('');
 
   const minhaVez = vista.vez === vista.cadeira && vista.fase === 'mao';
-  HUD.vez.textContent = minhaVez ? 'Sua vez' : `Vez de ${vista.cadeiras[vista.vez].nome}`;
+  // ESCREVER SÓ QUANDO MUDA, e isto não é economia: o #vez é `aria-live`, e `desenharHUD`
+  // roda em TODO `publicar()` — várias vezes por jogada, inclusive quando a vez não andou.
+  // Atribuir `textContent` troca o nó de texto mesmo que a frase seja idêntica, e o leitor
+  // de tela anuncia a troca, não a diferença: sem esta guarda ele repetiria "Vez de Tião"
+  // a cada compra do bot, e a região viva viraria a razão de desligar o leitor.
+  const frase = minhaVez ? 'Sua vez' : `Vez de ${vista.cadeiras[vista.vez].nome}`;
+  if (HUD.vez.textContent !== frase) HUD.vez.textContent = frase;
   HUD.vez.classList.toggle('minha', minhaVez);
 
   const a = vista.acoes;
@@ -268,6 +274,12 @@ function soltarFalasGuardadas(cadeira) {
 function atualizarBotaoConversa() {
   HUD.abrirConversa.textContent = naoLidas ? String(Math.min(naoLidas, 9)) : '💬';
   HUD.abrirConversa.classList.toggle('temNovidade', naoLidas > 0);
+  // O texto do botão é um NÚMERO quando há novidade, e "3" sozinho não quer dizer nada
+  // fora da tela. O rótulo diz o que o número conta — e o corte em 9 é da tela, não da
+  // contagem: quem tem 12 falas para ler merece ouvir 12.
+  HUD.abrirConversa.setAttribute('aria-label', naoLidas
+    ? `Conversa da mesa — ${naoLidas} ${naoLidas === 1 ? 'nova' : 'novas'}`
+    : 'Conversa da mesa');
 }
 
 function alternarConversa(abrir) {
@@ -433,9 +445,20 @@ function pintarSala(codigo) {
 // Quem desligou o som desligou por um motivo — trabalho, gente dormindo, ou simplesmente
 // não gostar. Perguntar de novo a cada visita é o jogo não escutar.
 let mudo = !!lido('mudo', false);
+// O glifo do mudo era `✕` — o MESMO do botão de sair da partida, 22px ao lado dele. Dois
+// botões com o mesmo desenho e consequências opostas (calar o jogo × perder a partida) é
+// convite a errar, e no celular o alvo tem 44px. 🔇 diz o que faz sozinho.
+//
+// `aria-pressed` porque isto é um interruptor, não um comando: o leitor de tela anuncia
+// "Som, ativado/desativado" em vez de só ler o glifo. E o rótulo muda junto, porque
+// `title` sozinho não diz o ESTADO — diz o assunto.
 function pintarBotaoSom() {
-  el('btSom').textContent = mudo ? '✕' : '♪';
-  el('btSom').classList.toggle('desligado', mudo);
+  const b = el('btSom');
+  b.textContent = mudo ? '🔇' : '♪';
+  b.classList.toggle('desligado', mudo);
+  b.setAttribute('aria-pressed', String(mudo));
+  b.setAttribute('aria-label', mudo ? 'Som desligado — ligar' : 'Som ligado — desligar');
+  b.title = mudo ? 'Ligar o som' : 'Desligar o som';
 }
 el('btSom').onclick = () => {
   mudo = !mudo;
