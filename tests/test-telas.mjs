@@ -54,7 +54,52 @@ const CASOS = [
   { nome: 'nomes longos', montar:
       `nomes('Ricardo Neves', 'Maria Fernanda', 'Sebastião Jr.', 'Ana Carolina');` +
       `mesa('classico', 4); contar(true); auto(11);` },
+  // MESA DE 4 RECÉM-DADA — o pior caso das mãos dos ADVERSÁRIOS, e nenhuma cena tinha.
+  // Toda cena de 4 aqui já jogou 11 peças, e aí cada montinho está com 4 e mede meia
+  // largura 1.07. Recém-dada são 7 peças, e a fileira vai a 1.91 — quase o dobro. Quem
+  // disputa espaço com o tabuleiro e com os copos é este tamanho, não o outro.
+  { nome: 'mão cheia de 4', montar: `mesa('classico', 4); contar(false);` },
 ];
+
+// ESCOLHER TELAS E CENAS PELA LINHA DE COMANDO.
+//
+//   node test-telas.mjs                       tudo — o padrão não muda
+//   node test-telas.mjs 360x640,390x844       só estas telas
+//   node test-telas.mjs 640x360 mao,cheia     estas telas, estas cenas
+//   node test-telas.mjs "" nomes              todas as telas, uma cena
+//
+// A rodada cheia são 6 telas × N cenas de Chrome, e passou de 5 para mais de 10 minutos
+// quando as cenas passaram a esperar a tela ASSENTAR em vez de contar 350 ms. Ela já foi
+// interrompida por limite de tempo quatro vezes, e o contorno era cortar a lista `TELAS`
+// à mão — que é editar o teste para rodar o teste, e deixa a metade cortada commitada se
+// alguém esquecer.
+//
+// Casa por SUBSTRING, sem acento e sem caixa: os nomes têm "mão", "paisagem" e "×"
+// (U+00D7, que ninguém digita), então exigir o nome exato faria ninguém usar. As telas
+// casam também por `LxA`, que é como se fala delas.
+// `\p{Diacritic}` e não o intervalo [U+0300-U+036F]: escrito com os acentos combinantes
+// literais o intervalo fica INVISÍVEL no editor — dois caracteres sem forma própria
+// dentro de um colchete —, e a primeira pessoa a "limpar" a linha os apaga sem saber que
+// apagou. A classe nomeada é ASCII no fonte e diz o que quer dizer.
+const semAcento = s => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+const filtrar = (lista, arg, oque) => {
+  const chaves = (arg || '').split(',').map(s => semAcento(s.trim())).filter(Boolean);
+  if (!chaves.length) return lista;
+  const achou = lista.filter(x => chaves.some(k =>
+    semAcento(x.nome).includes(k) || `${x.width}x${x.height}`.includes(k)));
+  // SELEÇÃO VAZIA É ERRO, e não "rodar tudo". Um argumento com erro de digitação daria ou
+  // a suíte inteira (10 min quando se queria 1) ou zero asserção — e as duas mentem, cada
+  // uma do seu jeito. É a mesma lição do `diff` de dois arquivos vazios: o teste tem de
+  // exigir que HAJA o que medir.
+  if (!achou.length) {
+    console.error(`nenhuma ${oque} casa com "${arg}" — havia: ${lista.map(x => x.nome).join(', ')}`);
+    process.exit(2);
+  }
+  return achou;
+};
+const TELAS_ESCOLHIDAS = filtrar(TELAS, process.argv[2], 'tela');
+const CASOS_ESCOLHIDOS = filtrar(CASOS, process.argv[3], 'cena');
+const PARCIAL = TELAS_ESCOLHIDAS.length < TELAS.length || CASOS_ESCOLHIDOS.length < CASOS.length;
 
 const AJUDA = `
   // SEMEAR O SORTEIO, e esta é a linha que transforma esta suíte de intermitente em
@@ -177,6 +222,51 @@ const MEDIR = `(() => {
     const r = vis(n);
     if (r) caixas.push({ id: n.id || n.className.split(' ')[0], ...r });
   }
+  // FILHO QUE VAZA DO PRÓPRIO PAINEL. O \`paineis\` lá em cima mede CONTÊINERES, e um
+  // contêiner com overflow MENTE sobre o que está dentro dele: ele cabe na tela sempre, e
+  // o filho que saiu é invisível para toda medida que esta suíte fazia. Foi assim que o
+  // quarto cartão de jogador nasceu inteiro fora da tela sem ninguém notar — três
+  // cegueiras somadas, e todas com a mesma raiz:
+  //   · os painéis eram coletados por ID, então os .jog nunca eram medidos;
+  //   · o transbordo saía de documentElement.scrollWidth, e transbordo dentro de um
+  //     position:fixed com overflow-x nunca chega ao documento (é a mesma cegueira que o
+  //     comentário do CSS já descrevia para o #topo, um nível acima);
+  //   · a varredura de "peça por baixo de painel" procura .painel, e .jog não tem a classe.
+  //
+  // O "A MENOS QUE" é o que torna a asserção honesta: um painel com overflow rolável TEM o
+  // direito de o filho passar da caixa — é o que rolar significa. Mas só se der para rolar.
+  // \`pointer-events: none\` faz a rolagem ser decoração, e a barra escondida tira até a
+  // pista visual de que há mais coisa. A pergunta certa não é "o filho saiu?", é "o filho
+  // saiu para onde não dá para alcançá-lo?" — e assim a asserção fica verde tanto se o
+  // cartão encolher quanto se a rolagem virar real, que é o requisito, não a implementação.
+  const rolavel = (el, eixo) => {
+    const s = getComputedStyle(el);
+    const ov = eixo === 'x' ? s.overflowX : s.overflowY;
+    return (ov === 'auto' || ov === 'scroll') && s.pointerEvents !== 'none';
+  };
+  const vazando = [];
+  for (const id of ['topo', 'jogadores', 'contagem', 'acoes', 'confirmar', 'conversa']) {
+    const pai = document.getElementById(id);
+    const rp = vis(pai);
+    if (!rp) continue;
+    const podeX = rolavel(pai, 'x'), podeY = rolavel(pai, 'y');
+    for (const f of pai.children) {          // DIRETOS: o #conversaLista rola por dentro e
+      const rf = vis(f);                     // é filho legítimo daqui
+      if (!rf) continue;
+      const foraX = Math.max(rp.x - rf.x, rf.r - rp.r);
+      const foraY = Math.max(rp.y - rf.y, rf.b - rp.b);
+      const sobra = Math.max(podeX ? 0 : foraX, podeY ? 0 : foraY);
+      if (sobra > 1) vazando.push({
+        pai: id, filho: (f.className || f.tagName).split(' ')[0],
+        // O textContent do cartão traz nome, etiqueta e a régua de peças em linhas
+        // separadas; sem colapsar o branco a mensagem de falha sai quebrada no meio.
+        texto: (f.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 16),
+        sobra, x: rf.x, r: rf.r,
+        foraDaTela: rf.r > window.innerWidth + 1 || rf.x < -1,
+      });
+    }
+  }
+
   const naTela = v => ({ x: (v.x + 1) / 2 * window.innerWidth, y: (1 - v.y) / 2 * window.innerHeight });
   const cobrindo = t => {
     for (const c of caixas) if (t.x >= c.x && t.x <= c.r && t.y >= c.y && t.y <= c.b) return c.id;
@@ -196,8 +286,60 @@ const MEDIR = `(() => {
     }
   }
 
+  // 3D CONTRA 3D. Até aqui a suíte fazia duas perguntas de TELA: "está dentro do quadro"
+  // (|ndc| <= 1) e "está por baixo de painel HTML". A linha da mesa atravessando a mão do
+  // vizinho passa nas duas — as duas coisas estão no quadro, nenhum painel as cobre — e
+  // mesmo assim ocupam o mesmo pedaço de tampo, no mesmo y = PECA_E/2.
+  //
+  // Compara CAIXAS, não centros: o tabuleiro e o assento ficam a ~2,7 um do outro e quem
+  // se encosta são as bordas. E ignora o Y de propósito, porque não há altura para
+  // ignorar — tabuleiro, mãos, monte e o pé dos copos nascem todos no tampo.
+  const B = j.THREE.Box3;
+  // A MARCA DA ÚLTIMA JOGADA fica de fora: é um disco de raio PECA_C*0.72 colado embaixo
+  // da peça (09-tabuleiro.js), e incluí-lo infla a caixa do tabuleiro em 0.22 — a medida
+  // passaria a ser do clarão, não da madeira.
+  const corpo = o => (o.userData && o.userData.corpo) || o;
+  const caixasDe = (filhos, nome, pular) => filhos
+    .filter(o => o !== pular && o.visible)
+    .map(o => ({ nome, b: new B().setFromObject(corpo(o)) }))
+    .filter(c => !c.b.isEmpty());
+
+  // Distância de SEPARAÇÃO no plano do tampo: positiva é vão, negativa é uma dentro da
+  // outra, e o módulo é o quanto — pelo eixo de menor penetração.
+  const folgaEntre = (a, b) => Math.max(
+    Math.max(a.min.x - b.max.x, b.min.x - a.max.x),
+    Math.max(a.min.z - b.max.z, b.min.z - a.max.z));
+
+  const grupos = [
+    // O fantasma da prévia não conta: ele pousa fora da linha por definição.
+    caixasDe(j.grupoMesa.children, 'o tabuleiro', j.grupoPrevia),
+    caixasDe(j.grupoOutros.children, 'a mão de um adversário'),
+    caixasDe(j.grupoMonte.children, 'o monte'),
+    caixasDe(j.tralhas || [], 'uma tralha da mesa'),
+  ];
+  // Peça contra peça do PRÓPRIO tabuleiro não entra: tests/test-mesa.mjs já faz isso, puro
+  // e em 53 mil tabuleiros. Aqui a pergunta é entre grupos diferentes.
+  let pior = { folga: 99, a: '—', b: '—' };
+  for (let i = 0; i < grupos.length; i++)
+    for (let k = i + 1; k < grupos.length; k++)
+      for (const A of grupos[i]) for (const C of grupos[k]) {
+        const f = folgaEntre(A.b, C.b);
+        if (f < pior.folga) pior = { folga: f, a: A.nome, b: C.nome };
+      }
+
+  // Quantos NOMES de jogador estão sendo cortados por ellipsis, e quanto sobra de largura
+  // para eles. Não é asserção: é o número que diz se encolher o cartão custou o nome. A
+  // decisão do item 8 foi cortar na PALAVRA (some o sobrenome inteiro) e deixar o ellipsis
+  // só para o primeiro nome que ainda assim não couber — se este número crescer, a decisão
+  // está sendo desfeita por baixo.
+  const nomes = [...document.querySelectorAll('.jog .nome')].map(n => ({
+    largura: Math.round(n.clientWidth),
+    cortado: n.scrollWidth > n.clientWidth + 1,
+  }));
+
   const cortina = document.getElementById('cortina');
   return {
+    pior, vazando, nomes,
     transbordo: document.documentElement.scrollWidth - window.innerWidth,
     largura: window.innerWidth, altura: window.innerHeight,
     // Gaveta aberta muda o que se exige da tela: cobrir o jogo passa a ser o PONTO.
@@ -215,6 +357,9 @@ const sobrepoem = (a, b) => Math.max(0, Math.min(a.r, b.r) - Math.max(a.x, b.x))
 
 let falhas = 0;
 const ok = (cond, msg) => { if (!cond) { console.error('    ✗ ' + msg); falhas++; } };
+// A pior folga de TODAS as células, impressa no fim. Uma linha, e é ela que responde
+// "o número virou positivo em todas as telas?" sem ninguém ler 60 linhas de log.
+let piorGlobal = { folga: 99, a: '—', b: '—', onde: '—' };
 
 const navegador = await puppeteer.launch({
   executablePath: CHROME,
@@ -223,9 +368,9 @@ const navegador = await puppeteer.launch({
     '--hide-scrollbars', '--mute-audio', '--allow-file-access-from-files'],
 });
 
-for (const tela of TELAS) {
+for (const tela of TELAS_ESCOLHIDAS) {
   console.log(`\n${tela.nome}`);
-  for (const caso of CASOS) {
+  for (const caso of CASOS_ESCOLHIDOS) {
     const pagina = await navegador.newPage();
     await pagina.setViewport({
       width: tela.width, height: tela.height,
@@ -325,6 +470,16 @@ for (const tela of TELAS) {
     ok(m.outros <= 1, `${onde}: a mão de um adversário saiu da tela (ndc.x ${m.outros.toFixed(2)})`);
     ok(m.monte <= 1, `${onde}: o monte saiu da tela (ndc.x ${m.monte.toFixed(2)})`);
 
+    // 5b. …e nada do que está no tampo pode ocupar o lugar de outra coisa. Esta é a
+    //     pergunta 3D CONTRA 3D, e ela não existia: as duas asserções acima são sobre a
+    //     MOLDURA, e a linha da mesa correndo por dentro da mão do vizinho passa nas duas.
+    //
+    //     O limiar não é zero de propósito. "Sete pixels de folga não são um conserto, são
+    //     sorte" (item 8), e 0.15 de mundo é um sexto de peça — vão de verdade, do tamanho
+    //     que um dedo precisa para pegar a peça sem esbarrar na do lado.
+    ok(m.pior.folga >= 0.15,
+      `${onde}: ${m.pior.a} e ${m.pior.b} ocupam o mesmo tampo (folga ${m.pior.folga.toFixed(2)})`);
+
     // 6. nada do jogo POR BAIXO de painel — a pergunta que faltava, e a família de defeito
     //    que já reincidiu (o comentário do 07-cena.js registra o copo movido à mão uma vez
     //    pelo mesmo motivo).
@@ -342,16 +497,46 @@ for (const tela of TELAS) {
       }
     }
 
+    // 7. NADA DO PAINEL PODE SAIR DO PAINEL. Os cartões de jogador são o caso de origem:
+    //    em retrato o #jogadores é uma faixa com `grid-auto-columns: minmax(96px, 1fr)`, e
+    //    `1fr` NUNCA encolhe abaixo do piso do minmax — com quatro cadeiras a trilha pede
+    //    399px numa caixa de 322 (tela de 390) ou 292 (tela de 360), e o quarto cartão
+    //    nasce INTEIRO fora da tela.
+    //
+    //    Roda com ou sem gaveta de propósito: a gaveta esconde #acoes, #vez e #confirmar,
+    //    mas não o #jogadores — e as cenas de mesa de 4 ligam a contagem, ou seja, abrem a
+    //    gaveta. Amarrar esta asserção ao `!m.gaveta` a mataria justamente nas cenas que
+    //    interessam.
+    for (const v of m.vazando) {
+      ok(false, `${onde}: .${v.filho}${v.texto ? ` ("${v.texto}")` : ''} saiu ${v.sobra.toFixed(0)}px ` +
+        `de #${v.pai}${v.foraDaTela ? ' e está FORA DA TELA' : ''} — ` +
+        `vai de x=${v.x.toFixed(0)} a ${v.r.toFixed(0)} numa tela de ${m.largura}px`);
+    }
+
     const larguraNaTela = m.pecas.length
       ? (Math.max(...m.pecas.map(p => p.x)) - Math.min(...m.pecas.map(p => p.x))) : 0;
-    console.log(`  ${caso.nome.padEnd(12)} fov ${m.fov.toFixed(0).padStart(2)}° · ` +
+    console.log(`  ${caso.nome.padEnd(13)} fov ${m.fov.toFixed(0).padStart(2)}° · ` +
       `${m.pecas.length} peças em ${m.fileiras} fileira(s) · ocupam ${(larguraNaTela * 50).toFixed(0)}% · ` +
-      `mesa ${m.mesa.toFixed(2)} outros ${m.outros.toFixed(2)} monte ${m.monte.toFixed(2)}`);
+      `mesa ${m.mesa.toFixed(2)} outros ${m.outros.toFixed(2)} monte ${m.monte.toFixed(2)} · ` +
+      // A FOLGA SAI SEMPRE, mesmo verde: é a margem que encolhe em silêncio, e foi
+      // exatamente uma folga de sete pixels que passou por conserto no item 8.
+      `folga ${m.pior.folga.toFixed(2)}` +
+      (m.nomes.length ? ` · nome ${Math.min(...m.nomes.map(n => n.largura))}px` +
+        `${m.nomes.some(n => n.cortado) ? ` (${m.nomes.filter(n => n.cortado).length} cortado)` : ''}` : ''));
+    if (m.pior.folga < piorGlobal.folga) piorGlobal = { ...m.pior, onde };
 
     await pagina.close();
   }
 }
 
 await navegador.close();
-console.log(falhas ? `\n${falhas} falha(s)` : '\ntudo certo');
+console.log(`\nfolga mínima ${piorGlobal.folga.toFixed(2)} — ${piorGlobal.a} × ${piorGlobal.b} (${piorGlobal.onde})`);
+// O RODAPÉ TEM DE GRITAR QUE A RODADA FOI PARCIAL. Sem isto, quem rodar duas telas para
+// iterar num defeito lê "tudo certo" e acha que a suíte passou inteira — que é
+// exatamente o que o contorno de cortar a lista à mão já fazia, só que agora sem deixar
+// rastro no diff. Um teste que não diz o que NÃO mediu mente por omissão.
+console.log(falhas ? `\n${falhas} falha(s)`
+  : PARCIAL ? `\ntudo certo — RODADA PARCIAL: ${TELAS_ESCOLHIDAS.length}/${TELAS.length} telas` +
+              ` × ${CASOS_ESCOLHIDOS.length}/${CASOS.length} cenas`
+            : '\ntudo certo');
 process.exit(falhas ? 1 : 0);

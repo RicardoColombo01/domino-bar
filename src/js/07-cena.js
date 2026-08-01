@@ -46,10 +46,33 @@ function profundidadeDe(y, z) {
 const larguraVisivelEm = (y, z) =>
   2 * profundidadeDe(y, z) * Math.tan(camera.fov * Math.PI / 360) * camera.aspect;
 
-function pintar(w, h, desenho) {
+// ─── as texturas, e por que elas sabem se repintar ───────────────────────────
+// Toda textura do jogo é um <canvas> 2D desenhado UMA vez, na carga, e isso valeu
+// enquanto a página era imortal. No Android, sair para outro aplicativo e voltar devolve
+// DUAS perdas somadas: o contexto WebGL (o navegador libera a GPU da aba de fundo) e o
+// BITMAP do canvas 2D (descartado por pressão de memória, volta em branco).
+//
+// Separadas, nenhuma das duas aparece, e isso foi MEDIDO antes de consertar
+// (tests/test-textura.mjs): só perder o contexto não muda nada, porque o three reenvia a
+// textura a partir de `texture.image` e o canvas está íntegro; só apagar o bitmap também
+// não, porque ninguém reenvia nada e a GPU segue com a cópia boa — o único `needsUpdate`
+// do projeto é de UV. JUNTAS, o restore sobe um bitmap em branco: a luz da peça na tela
+// cai de 166 para 3, e é a peça preta da foto.
+//
+// Repare no tampo, que cai só de 132 para 80 e continua parecendo madeira: com o albedo
+// zerado o `MeshStandardMaterial` ainda devolve o brilho ESPECULAR da lâmpada. Era por
+// isso que a foto mostrava mesa marrom e peça preta ao mesmo tempo — e é por isso que
+// "se as três caíssem juntas o tampo estaria preto" era um palpite errado. A medição
+// derrubou o palpite; é o terceiro diagnóstico de leitura que este projeto perde para um
+// número.
+//
+// O que faltava era guardar o `desenho`: ele era um arrow inline usado uma vez e jogado
+// fora, então não existia como repintar. É o conserto inteiro.
+const texturas = [];
+
+function pintar(nome, w, h, desenho) {
   const cv = document.createElement('canvas');
   cv.width = w; cv.height = h;
-  desenho(cv.getContext('2d'), w, h);
   const t = new THREE.CanvasTexture(cv);
   t.anisotropy = 4;
   // O canvas é pintado em sRGB, e o default do Three é tratar textura como dado LINEAR.
@@ -57,30 +80,59 @@ function pintar(w, h, desenho) {
   // peça e a madeira iluminada tendiam para o mesmo âmbar, e a pinta escura chegava
   // cinza. Uma linha, e é a maior alavanca de contraste que existe aqui.
   t.colorSpace = THREE.SRGBColorSpace;
+  // Repinta o MESMO canvas e a MESMA textura, nunca uma nova: `matPintas` e
+  // `matPreviaPinta` apontam para esta instância, e trocá-la consertaria uma e deixaria a
+  // outra preta. `needsUpdate` porque o bitmap mudou e a cópia na GPU é velha.
+  const repintar = () => { desenho(cv.getContext('2d'), w, h); t.needsUpdate = true; };
+  repintar();
+  texturas.push({ nome, canvas: cv, textura: t, repintar });
   return t;
 }
 
-const texMadeira = pintar(512, 512, (c, w, h) => {
+// O veio tem GERADOR PRÓPRIO, e não é preciosismo — são duas razões, nesta ordem:
+//
+// (1) Repintar tem de devolver a MESMA madeira. O tampo trocando de veio ao voltar do
+//     outro aplicativo seria o conserto virando um segundo defeito visível, menor e mais
+//     difícil de explicar. É também o que deixa o teste exigir que o bitmap volte
+//     idêntico, que é muito mais forte do que "não está em branco".
+// (2) `Math.random` é GLOBAL, e as suítes de tela semeiam esse gerador dentro da própria
+//     página (item 11 da Fila 5). Uma repintura consome ~1.000 sorteios e deslocaria a
+//     sequência semeada — a cena que hoje é reproduzível voltaria a ser moeda, e a
+//     intermitência que custou uma sessão inteira voltaria pela porta dos fundos.
+//
+// mulberry32, o mesmo do test-telas, reinstanciado a cada pintura.
+const veioDaMadeira = () => {
+  let a = 0x5b3a22;                                     // a própria cor da madeira, de semente
+  return () => {
+    a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+};
+
+const texMadeira = pintar('madeira', 512, 512, (c, w, h) => {
+  const rnd = veioDaMadeira();
   c.fillStyle = '#5b3a22'; c.fillRect(0, 0, w, h);
   for (let i = 0; i < 260; i++) {                       // veios: faixas horizontais tortas
-    c.strokeStyle = `rgba(${30 + Math.random() * 60},${15 + Math.random() * 30},0,${0.06 + Math.random() * 0.12})`;
-    c.lineWidth = 0.5 + Math.random() * 2.5;
+    c.strokeStyle = `rgba(${30 + rnd() * 60},${15 + rnd() * 30},0,${0.06 + rnd() * 0.12})`;
+    c.lineWidth = 0.5 + rnd() * 2.5;
     c.beginPath();
-    const y = Math.random() * h;
+    const y = rnd() * h;
     c.moveTo(0, y);
     for (let x = 0; x <= w; x += 32) c.lineTo(x, y + Math.sin(x / 40 + i) * 3);
     c.stroke();
   }
   for (let i = 0; i < 60; i++) {                        // marcas de copo e de uso
-    c.fillStyle = `rgba(0,0,0,${0.03 + Math.random() * 0.05})`;
+    c.fillStyle = `rgba(0,0,0,${0.03 + rnd() * 0.05})`;
     c.beginPath();
-    c.arc(Math.random() * w, Math.random() * h, 6 + Math.random() * 30, 0, 7);
+    c.arc(rnd() * w, rnd() * h, 6 + rnd() * 30, 0, 7);
     c.fill();
   }
 });
 texMadeira.wrapS = texMadeira.wrapT = THREE.RepeatWrapping;
 
-const texPiso = pintar(256, 256, (c, w, h) => {
+const texPiso = pintar('piso', 256, 256, (c, w, h) => {
   c.fillStyle = '#2a2320'; c.fillRect(0, 0, w, h);
   c.fillStyle = '#332a26';
   for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++)
@@ -93,6 +145,50 @@ const texPiso = pintar(256, 256, (c, w, h) => {
 });
 texPiso.wrapS = texPiso.wrapT = THREE.RepeatWrapping;
 texPiso.repeat.set(9, 9);
+
+// ─── e quem devolve a textura quando o sistema a leva ────────────────────────
+// O bitmap descartado volta como PRETO TRANSPARENTE, e toda receita daqui começa com um
+// fillRect opaco cobrindo o canvas — então alfa 0 no canto é a assinatura do descarte, e
+// custa um getImageData de 1×1 por textura. Quem escrever textura nova aqui herda essa
+// obrigação: começar opaca, ou a sonda mente.
+//
+// A sonda olha UM pixel. Um descarte parcial passaria batido; ninguém relatou nada assim,
+// o mecanismo conhecido joga fora o bitmap inteiro, e se um dia aparecer a resposta é
+// amostrar três pontos — não abandonar a sonda, que é o que torna o segundo gancho barato.
+const bitmapApagado = t => {
+  try { return t.canvas.getContext('2d').getImageData(0, 0, 1, 1).data[3] < 8; }
+  catch (e) { void e; return false; }      // canvas que não deixa ler não é canvas apagado
+};
+
+let perdasDeContexto = 0, restauracoes = 0, repinturas = 0;
+
+function conferirTexturas() {
+  let n = 0;
+  for (const t of texturas) if (bitmapApagado(t)) { t.repintar(); n++; }
+  repinturas += n;
+  return n;
+}
+
+// GANCHO 1 — o restore, que é o que o three NÃO pode fazer por nós. Ele reinicializa o
+// contexto e reenvia cada textura a partir de `texture.image`; se a imagem voltou em
+// branco, ele reenvia o branco com toda a diligência do mundo. Nosso listener nasce depois
+// do dele (o dele é do construtor do WebGLRenderer, lá em cima), então repintamos antes do
+// primeiro render — e mesmo que a ordem fosse outra, `repintar()` marca `needsUpdate`.
+renderer.domElement.addEventListener('webglcontextlost', () => { perdasDeContexto++; });
+renderer.domElement.addEventListener('webglcontextrestored', () => {
+  restauracoes++;
+  conferirTexturas();
+});
+
+// GANCHO 2 — a volta da aba. A perda de contexto NÃO é obrigatória: o bitmap pode ser
+// descartado sozinho, e aí nenhum evento avisa ninguém. Sem contexto perdido a tela
+// continua certa (a GPU tem a cópia velha), mas o bitmap em branco fica armado para o
+// próximo restore. O retorno da aba é o único momento em que dá para PERGUNTAR, e a
+// pergunta custa três pixels.
+//
+// O `visibilitychange` do 11-interacao.js trata a SAÍDA (document.hidden) e é sobre gesto
+// preso; este é o outro lado, e mora aqui, junto do assunto dele.
+document.addEventListener('visibilitychange', () => { if (!document.hidden) conferirTexturas(); });
 
 // ─── luz ─────────────────────────────────────────────────────────────────────
 // Uma lâmpada baixa em cima da mesa, e o resto na penumbra: é o contraste que faz
@@ -207,17 +303,78 @@ function copo(x, z, cheio) {
   scene.add(g);
   return g;
 }
-copo(-5.35, -0.3, 0.75);      // longe do monte: em (-5, 1.9) o copo nascia dentro da pilha
-copo(4.9, 2.2, 0.4);
-copo(5.2, -1.4, 0.95);
+// As tralhas ficam guardadas numa lista porque elas DISPUTAM O TAMPO com o tabuleiro, com
+// o monte e com as mãos dos adversários, e o comentário acima é a prova de que isso já
+// aconteceu uma vez e foi resolvido movendo um número à mão. Sem a lista, o teste de
+// sobreposição não tem como perguntar por elas.
+// AS TRALHAS FICAM NO ARCO DA FRENTE, e o arco é calculado, não escolhido a olho.
+// Os adversários sentam num anel de raio 4.88, e cada mão se abre TANGENCIALMENTE: com
+// sete peças ela cobre ±23° do anel, com as catorze do Duelo ±27°. As cadeiras possíveis
+// são 90°, 120°, 180°, 240° e 270° (mesa de 4, de 3 e de 2, com você sempre em 0°), então
+// o anel está ocupado de 63° a 297° passando pelo fundo — e sobra o arco da FRENTE, que é
+// seu. É por construção livre em qualquer tamanho de mesa, e é por isso que estas
+// posições podem continuar sendo literais.
+//
+// Antes elas estavam em 105°, 251° e 273°, ou seja dentro das cadeiras: medido, o copo
+// entrava 0.82 na mão do adversário — mais fundo do que a linha da mesa entrava (0.42), e
+// em paisagem, wide e tablet, isto é, no computador, sempre, desde o começo. Ninguém
+// relatou porque peça de costas dentro de copo de vidro lê como "coisa do boteco".
+//
+// O comentário abaixo é de quando um copo já tinha sido movido à mão pelo mesmo motivo. A
+// família reincidiu do outro lado, e é por isso que agora existe asserção 3D contra 3D no
+// test-telas em vez de mais um número escolhido a dedo.
+const tralhas = [
+  copo(-3.35, 4.05, 0.75),    // longe do monte: em (-5, 1.9) o copo nascia dentro da pilha
+  copo(3.35, 4.05, 0.4),
+  copo(4.75, 3.25, 0.95),
+];
 
 const cinzeiro = new THREE.Mesh(
   new THREE.CylinderGeometry(0.46, 0.4, 0.14, 20),
   new THREE.MeshStandardMaterial({ color: 0x4a4440, roughness: 0.5 })
 );
-cinzeiro.position.set(-5.1, 0.07, -1.7);
+cinzeiro.position.set(1.6, 0.07, 5.1);      // mesmo arco da frente que os copos
 cinzeiro.castShadow = true;
 scene.add(cinzeiro);
+tralhas.push(cinzeiro);
+
+// ─── quem senta onde ─────────────────────────────────────────────────────────
+// A conta ÚNICA do que está no tampo. Antes eram duas: 10-mao.js apertava o círculo dos
+// adversários por um lado e 09-tabuleiro.js media o orçamento do tabuleiro por outro, em
+// profundidades diferentes (z = -3.05 contra z = 0.4) e com divisores mágicos diferentes
+// (13.5 contra 0.86), sem uma saber da outra. Que os dois dessem quase o mesmo número era
+// coincidência aritmética — e a coincidência era justamente o que garantia a colisão.
+const RAIO_ASSENTO = MESA_R * 0.80;
+
+// O aperto continua sendo UM só (a roda continua uma roda), mas quem o decide passa a ser
+// o assento mais espremido, cada um medido na PROFUNDIDADE DELE. O 13.5 de antes media
+// sempre em z = -3.05, que é onde senta o adversário DE CIMA; quem estoura é o de LADO, em
+// z = 0, onde a tela é ~16% mais estreita. É a mesma lição que o monte já tinha ensinado
+// uma vez ("a posição dele sai da largura visível na profundidade dele mesmo"), cobrada
+// uma segunda vez, no assento.
+function assentosDaMesa(vista) {
+  const n = vista && vista.naMao ? vista.naMao.length : 0;
+  const crus = [];
+  for (let i = 0; i < n; i++) {
+    if (i === vista.cadeira) continue;
+    const a = anguloDaCadeira(i, vista.cadeira, n);
+    crus.push({ cadeira: i, a, x: Math.sin(a) * RAIO_ASSENTO, z: Math.cos(a) * RAIO_ASSENTO,
+      quantas: vista.naMao[i] });
+  }
+  let aperto = 1;
+  for (const s of crus) {
+    if (Math.abs(s.x) < 1e-6) continue;                 // sentado no eixo: nada a apertar
+    const cabe = larguraVisivelEm(PECA_E / 2, s.z) / 2 - PECA_C / 2;
+    aperto = Math.min(aperto, cabe / Math.abs(s.x));
+  }
+  aperto = Math.min(1, Math.max(0.25, aperto));
+  const lugares = crus.map(s => {
+    const x = s.x * aperto;
+    const espaco = Math.min(0.56, 4.2 * aperto / Math.max(s.quantas, 1));
+    return { ...s, x, espaco, monte: caixaDoMonte(s.a, x, s.z, s.quantas, espaco) };
+  });
+  return { aperto, lugares };
+}
 
 // Enquadrar é derivar o fov da largura que precisa caber, e não o contrário. Antes isto
 // só mexia em `camera.aspect`, o que em retrato deixava a mão duas vezes e meia maior

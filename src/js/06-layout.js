@@ -102,3 +102,50 @@ function escalaDoTabuleiro(caixa, larguraUtil = ESPALHA_X * 2.1) {
   if (!caixa.l) return 1;
   return Math.min(1, larguraUtil / caixa.l, (ESPALHA_Z * 2.4) / caixa.a);
 }
+
+// ─── quem mais está sentado à mesa ───────────────────────────────────────────
+// Onde cada cadeira fica, vista de quem joga: você em 0, o resto em volta no sentido
+// da vez. Mora aqui porque é trigonometria pura e porque o orçamento do tabuleiro,
+// logo abaixo, precisa dela — 10-mao.js só a consumia.
+const anguloDaCadeira = (i, eu, n) => ((i - eu + n) % n) * Math.PI * 2 / n;
+
+// A caixa que o monte de um adversário ocupa no tampo. Ele nasce girado -a e as peças
+// entram ATRAVESSADAS, então a fileira cresce pela LARGURA da peça e cada uma deita o
+// COMPRIMENTO de lado a lado — é o contrário do que a intuição diz. Mesmo formato de
+// `envolver()` ({x, z, l, a}), para comparar retângulo com retângulo.
+function caixaDoMonte(a, x, z, quantas, espaco) {
+  const aoLongo = (PECA_L + espaco * Math.max(0, quantas - 1)) / 2;
+  const atravessado = PECA_C / 2;
+  const c = Math.abs(Math.cos(a)), s = Math.abs(Math.sin(a));
+  return { x, z, l: 2 * (c * aoLongo + s * atravessado), a: 2 * (s * aoLongo + c * atravessado) };
+}
+
+// Quanta LARGURA o tabuleiro pode ocupar. Três tetos, e o menor manda: a madeira da mesa,
+// o que a TELA mostra, e o CORREDOR entre os montes dos adversários.
+//
+// O terceiro faltava, e é por isso que a linha atravessava a mão do vizinho: depois de
+// MAX_DOBRAS o braço corre reto para sempre em z = 0, e os laterais de uma mesa de 4 estão
+// sentados exatamente em z = 0, no mesmo y. Eram duas contas independentes — o orçamento
+// do tabuleiro medido numa profundidade, o aperto dos assentos medido noutra — e nenhuma
+// perguntava pela outra. Medido antes do conserto: folga de -0.42 em todo retrato, ou seja
+// a linha entrando 45% para dentro do montinho do vizinho.
+//
+// Só estorva quem está NA FAIXA por onde a linha corre: o adversário de cima fica a 4.9 de
+// distância e não tem por que apertar ninguém. A faixa sai da caixa já encolhida pelos dois
+// primeiros tetos — um passo só, sem laço, e o erro é sempre para o lado seguro (faixa
+// larga demais conta assentos demais e o orçamento sai menor, nunca maior).
+//
+// Continua PURA: recebe onde os assentos ficaram; quem mede a tela é 07-cena.js.
+function larguraUtilDoTabuleiro(caixa, tela = Infinity, montes = [], folga = FOLGA_VIZINHO) {
+  const semVizinhos = Math.min(ESPALHA_X * 2.1, tela);
+  if (!caixa.l) return semVizinhos;
+  const meiaFaixa = caixa.a * escalaDoTabuleiro(caixa, semVizinhos) / 2;
+  let corredor = Infinity;
+  for (const m of montes) {
+    if (Math.abs(m.z - TABULEIRO_Z) - m.a / 2 > meiaFaixa) continue;    // sentado longe da linha
+    corredor = Math.min(corredor, 2 * (Math.abs(m.x) - m.l / 2 - folga));
+  }
+  // Nunca abaixo de uma peça: um corredor impossível encolheria o tabuleiro até sumir, e
+  // tabuleiro invisível é pior que tabuleiro encostado.
+  return Math.max(PECA_C, Math.min(semVizinhos, corredor));
+}

@@ -7,7 +7,8 @@
     "lembrar": "node test-lembrar.mjs",
     "shots": "node shots.mjs",
     "online": "node test-online.mjs",
-    "fechamento": "node test-fechamento.mjs"
+    "fechamento": "node test-fechamento.mjs",
+    "textura": "node test-textura.mjs"
   },
   "dependencies": {
     "puppeteer-core": "^25.3.0",

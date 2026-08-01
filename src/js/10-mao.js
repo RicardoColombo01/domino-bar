@@ -70,7 +70,6 @@ let escolhida = null;                // CHAVE da peça levantada, ou null
 const ordemDaMao = new Map();        // cadeira → [chave, chave, ...]
 let maoDaOrdem = -1;                 // de qual vista.maoNum essas arrumações são
 
-const anguloDaCadeira = (i, eu, n) => ((i - eu + n) % n) * Math.PI * 2 / n;
 const naMaoPorChave = k => naMao.find(m => chave(m.peca) === k) || null;
 const esquecerArrumacao = () => { ordemDaMao.clear(); maoDaOrdem = -1; };
 
@@ -266,32 +265,27 @@ function esconderMao() {
   cancelarEscolha();
 }
 
-// Quanto o que está NA MESA precisa encolher para caber na tela. 1 é o computador, onde
-// tudo cabe; num celular em pé o círculo dos adversários e o monte ficavam do lado de
-// fora do quadro — o monte chegava a uma vez e meia a largura da tela. Aperta só o eixo
-// X: a profundidade continua a mesma, então os adversários continuam sentados em volta.
-const apertoDaMesa = () => Math.min(1, larguraVisivelEm(0, -MESA_R * 0.5) / 13.5);
-
+// Onde os adversários sentam e quanto a fileira deles mede sai inteiro de
+// `assentosDaMesa()` (07-cena.js) — aqui só se monta o que ele decidiu. O `apertoDaMesa`
+// que morava nesta linha media a tela na profundidade do assento DE CIMA e apertava todos
+// por ela, o que deixava o de lado (mais perto da câmera, onde a tela é mais estreita)
+// sobrando por fora e ainda por cima dentro da linha da mesa.
 function sincronizarOutros(vista) {
   grupoOutros.clear();
-  const raio = MESA_R * 0.80, aperto = apertoDaMesa();
-  vista.naMao.forEach((quantas, i) => {
-    if (i === vista.cadeira) return;
-    const a = anguloDaCadeira(i, vista.cadeira, vista.naMao.length);
+  for (const l of assentosDaMesa(vista).lugares) {
     const g = new THREE.Group();
-    g.position.set(Math.sin(a) * raio * aperto, PECA_E / 2, Math.cos(a) * raio);
-    g.rotation.y = -a;
+    g.position.set(l.x, PECA_E / 2, l.z);
+    g.rotation.y = -l.a;
     // Cada peça atravessada na fileira, lado a lado. Enfileiradas no comprimento elas
     // se sobrepõem e o que aparece na mesa é uma tábua preta, não uma mão de dominó.
-    const espaco = Math.min(0.56, 4.2 * aperto / Math.max(quantas, 1));
-    for (let k = 0; k < quantas; k++) {
+    for (let k = 0; k < l.quantas; k++) {
       const v = criarVerso();
-      v.position.set((k - (quantas - 1) / 2) * espaco, 0, 0);
+      v.position.set((k - (l.quantas - 1) / 2) * l.espaco, 0, 0);
       v.rotation.y = Math.PI / 2;
       g.add(v);
     }
     grupoOutros.add(g);
-  });
+  }
 }
 
 // O monte fica ao alcance da mão, na beirada esquerda: comprar é uma ação sua e o
@@ -303,7 +297,7 @@ function sincronizarMonte(vista) {
   // tela é bem mais estreita. Apertar pelo fator da mesa não bastava: ele continuava
   // meia largura para fora num celular. Aqui a posição sai da largura visível na
   // profundidade dele mesmo, então cabe por construção em qualquer tela.
-  const aperto = apertoDaMesa();
+  const aperto = assentosDaMesa(vista).aperto;
   const zMonte = 2.15 + (1 - aperto) * 1.6;
   const beirada = larguraVisivelEm(PECA_E / 2, zMonte) / 2;
   const xMonte = -Math.min(4.98, beirada * 0.78);

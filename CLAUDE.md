@@ -5,7 +5,9 @@ bot, na mesma tela ou pela internet. No ar em
 **https://ricardocolombo01.github.io/domino-bar/** (repo público `RicardoColombo01/domino-bar`).
 
 Sem framework, sem bundler, sem asset: madeira, pintas e sons são gerados em canvas e
-WebAudio na hora. Three.js e PeerJS vêm de CDN. ~2.100 linhas no total.
+WebAudio na hora. Three.js e PeerJS vêm de CDN. **4.880 linhas** no total (`src/js` +
+`pagina.html` + `css/estilo.css`), conferido em 02/08/2026 — este número **envelhece**, e
+envelheceu: ficou dizendo 2.100 por três releases seguidas.
 
 ## Comandos
 
@@ -13,10 +15,13 @@ WebAudio na hora. Three.js e PeerJS vêm de CDN. ~2.100 linhas no total.
 npm run build     junta src/ num index.html autossuficiente
 npm run check     avisa se o index.html está desatualizado
 npm test          build + as três suítes de lógica
-npm run telas     build + o jogo em cinco tamanhos de tela (retrato, paisagem, wide)
+npm run telas     build + o jogo em seis tamanhos de tela (retrato, paisagem, tablet, wide)
+                  aceita escolher: node tests/test-telas.mjs 360x640,390x844 nomes,cheia
+npm run textura   build + as texturas sobrevivem a sair do jogo e voltar (~40 s)
 npm run lembrar   build + o que sobrevive a RECARREGAR a página (preferências, retomar)
 npm run shots     build + screenshots no Chrome de verdade (tests/shots/)
 npm run online    testa o online abrindo duas abas e uma mesa real
+                  aceita escolher: node tests/test-online.mjs --so=saguao
 npm run fechamento  caça fechamento forçado jogando milhares de mãos (~3 min)
 npm run servir    servidor local (o online não fecha conexão em file://)
 
@@ -162,6 +167,28 @@ As pontas são o primeiro e o último número; jogar na esquerda é um `unshift`
   rebaixar three.js e PeerJS do CDN: a primeira levou 8 s e a segunda estourou os 45 s de
   navegação. Quando o que se quer é só separar o armazenamento, `evaluateOnNewDocument`
   injetando o valor custa zero.
+- **Textura de canvas é EMPRESTADA, não sua.** Num celular, sair para outro aplicativo pode
+  levar o contexto WebGL **e** o bitmap do `<canvas>` — e são coisas independentes. Nenhuma
+  das duas sozinha aparece; juntas, o three reenvia um bitmap em branco no restore e a peça
+  fica preta. Toda receita de `pintar()` fica guardada para poder ser repintada, começa com
+  um `fillRect` OPACO (é o que faz a sonda de alfa funcionar) e **não pode consumir
+  `Math.random` global** — as suítes de tela semeiam esse gerador dentro da página.
+- **Duas caixas que cabem sozinhas e não perguntam uma pela outra vão se encavalar** — o item
+  8 pagou isso em CSS e a Fila 7 pagou de novo em 3D, com o tabuleiro e os assentos medindo a
+  mesma tela em profundidades diferentes, com divisores mágicos diferentes. Quando o mesmo
+  espaço tem dois donos, a conta tem de ser UMA.
+- **Contêiner com `overflow` MENTE sobre o que está dentro dele.** Ele cabe na tela sempre, e
+  o filho que saiu é invisível para qualquer medida feita no contêiner — foi assim que o
+  quarto cartão de jogador nasceu inteiro fora da tela com a suíte verde. E o transbordo
+  dentro de um `position: fixed` nunca chega ao `documentElement.scrollWidth`.
+- **`restoreContext()` chamado de dentro do despacho do `webglcontextlost` é IGNORADO** pelo
+  Chrome, e aí o `restored` nunca vem. Toda espera de evento em teste precisa de PRAZO:
+  evento que não chega é informação, promessa que não resolve é `ProtocolError` três minutos
+  depois sem dizer a causa.
+- **O Chrome rasteriza um canvas novo e um canvas já usado como fonte de textura de formas
+  diferentes** — até um desenho sem um sorteio sequer muda ~0,6% ao ser repintado. Para
+  perguntar "o desenho é determinístico?", compare repintura contra repintura, nunca contra a
+  primeira pintura.
 - **`catch` que guarda só a `message` esconde ONDE.** O `test-online.mjs` engolia o stack e
   transformava "falhou em algum lugar dos 300 lances do teste" num palpite caro. Hoje
   `DOMINO_DEBUG=1` imprime. Vale para qualquer `catch` que exista para transformar falha de
@@ -330,10 +357,26 @@ campo acha o que está escrito certo e mesmo assim não funciona.
 
 ---
 
-### ONDE PARAMOS — sessões de 30 e 31/07/2026
+### ONDE PARAMOS — sessões de 30/07 a 02/08/2026
 
-**Leia isto primeiro ao retomar.** É o estado real do trabalho, o que ele produziu, e o que
-fazer em seguida. Os detalhes de cada assunto estão nos itens numerados mais abaixo.
+**Leia isto primeiro ao retomar.** É o estado real do trabalho, o que ele produziu, o que
+fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numerados mais abaixo.
+
+#### ESTADO EM UMA OLHADA (02/08/2026)
+
+| | |
+|---|---|
+| publicado | **v1.8.0** — https://ricardocolombo01.github.io/domino-bar/ |
+| `main` ↔ `origin/main` | `0 ← \| 0 →` |
+| `develop` ↔ `origin/develop` | `0 ← \| 0 →` |
+| árvore de trabalho | limpa |
+| Fila 5 | **fechada** — 11 itens |
+| Fila 6 | **5 defeitos fechados**, o resto do escopo à espera (ver a seção da Fila 6) |
+| **Fila 7** | **fechada** — as cinco fotos de campo de 31/07 (ver a seção da Fila 7) |
+| pendências bloqueadas | **nenhuma** — nada esperando resposta do Ricardo |
+
+**Não há defeito conhecido em aberto.** O que sobra é trabalho de qualidade, listado no fim
+desta seção em ordem de valor.
 
 #### O QUE CUSTOU UM DIA INTEIRO, e não pode se repetir
 
@@ -344,7 +387,8 @@ Ele testou o `github.io`, que serve da `main`, e a `main` era a v1.5.0.
 A lição não é "lembrar de publicar". É que **o projeto tem duas travas contra bundle velho
 (`merge=ours` no `.gitattributes` e `npm run check`) e nenhuma contra trabalho não enviado** —
 porque enviar é decisão de gente. Ao FIM de qualquer sessão, dizer em voz alta e por escrito
-onde o trabalho está: commitado ≠ enviado ≠ publicado. São três lugares diferentes.
+onde o trabalho está: **commitado ≠ enviado ≠ publicado.** São três lugares diferentes, e
+`git rev-list --left-right --count origin/main...main` responde os dois últimos em um segundo.
 
 #### O que mudou, e o que deu
 
@@ -359,6 +403,13 @@ onde o trabalho está: commitado ≠ enviado ≠ publicado. São três lugares d
 | 11 · intermitência | embaralho das cenas semeado | metade: ver ressalva |
 | **6 e 7** · toque | limiar por ponteiro + `foiMesmoArrasto` + `visibilitychange`/captura | **5 asserções novas**, todas vermelhas no código antigo |
 | **8** · deitado | `#topo` vira faixa entre as colunas; corte do nome na PALAVRA | **17 falhas → 0**; diagnóstico da fila estava INVERTIDO |
+| **11** · determinismo | espera a tela PARAR em vez de contar 350 ms | duas rodadas **idênticas**, 49 linhas cada |
+| **3(c)** · reabrir | reivindica o mesmo id do PeerJS; `donoDaCadeira` guardado | convidado volta **sozinho** na cadeira dele |
+| **2** · fechamento | cai o `!temMonte`; o `morto[]` já era a pergunta forte | **313 casos em 1000 mãos → 0** |
+| **F6** · cinco defeitos | mudo, escape do nome, revanche, CDN, chave de protótipo | todos com asserção **vermelha antes** |
+
+**As releases:** v1.6.0 (itens 1, 3a, 3b, 4, 5, 6, 7, 8, 9, 10) → v1.7.0 (itens 2, 3c, e o 11)
+→ v1.7.1 (os cinco defeitos da varredura).
 
 #### A ressalva CAIU — e como se prova que caiu
 
@@ -399,9 +450,115 @@ Não é acaso: hipótese escrita de leitura de código é barata e por isso mesm
 antídoto foi sempre o mesmo — medir antes de consertar**, e em todos os três a medição custou
 menos que o conserto teria custado no lugar errado.
 
+E aconteceu de novo na Fila 6, com dois dos cinco: o "vazamento de GPU" dos materiais clonados
+**não era vazamento** (mesma `cacheKey`, os materiais viram lixo coletável), e o `alvos`
+aliasado do `06-layout.js` **não é defeito** porque ninguém lê aquele campo. Nos dois casos
+meia hora de investigação evitou um conserto inútil. **Suspeita não confirmada tem de ser
+registrada COMO suspeita** — foi o que permitiu descartá-las sem refazer a leitura.
+
+#### As três armadilhas de TESTE que estas sessões pagaram
+
+Valem mais que os consertos, porque se repetem em qualquer projeto:
+
+1. **Asserção que não fica vermelha antes do conserto não prova nada.** Cinco asserções minhas
+   passaram no código antigo na primeira tentativa, ao longo destas sessões. Cada uma parecia
+   certa lendo o texto dela.
+2. **"Parece o mesmo ataque" não é o mesmo ataque.** A asserção do nome reusava o
+   `<img src=x>` que a suíte já tinha — e sem aspa aquele nome fica preso dentro do `value=`,
+   não vira elemento nem no código com defeito. Quem abre o atributo é a **aspa**.
+3. **Dublê que não deixa o código alcançar o estado interessante dá verde que não quer dizer
+   nada.** Foi a lição do `matchMedia`, depois da captura de ponteiro, depois do
+   `AudioContext`, depois do `Peer`. **Quatro vezes.** Quando um teste não consegue alcançar
+   um ramo, a pergunta certa é "o que falta no dublê", não "como contorno isto".
+
+E uma quarta, de fora do código: **`diff` de dois arquivos vazios passa.** A suíte travada não
+gerou saída, os dois arquivos saíram com zero linhas e a comparação declarou "idênticas". Teste
+de igualdade tem de exigir também que **haja o que comparar**.
+
+#### O QUE FAZER AMANHÃ — em ordem, e por quê
+
+Nada disto é defeito: são melhorias medidas, todas com arquivo e linha na seção da **Fila 6**
+lá embaixo. A ordem abaixo é uma recomendação com justificativa, não uma sentença — o escopo é
+do Ricardo, e ele já mostrou que prefere ondas pequenas com release no fim de cada uma.
+
+**1. Acessibilidade barata — meio dia, e é a maior alavanca por real gasto.**
+O projeto não tem **um único** `aria-*`, `role`, `alt`, `tabindex`, `:focus-visible` ou
+`prefers-*`. Comece por três coisas que somam poucas linhas:
+- `aria-live="polite"` em `#aviso`, `#vez` e `#conversaLista`. O `avisar()` é o canal de TODO
+  erro do motor e do porquê de a peça não dar; hoje nada disso existe para leitor de tela.
+- **Contraste do texto de erro.** `#onlineErro` usa `.nota` (`opacity: .5` em 12 px, ~4.3:1) —
+  é o texto de MENOR contraste da tela, e é justamente o que avisa que algo deu errado. Erro
+  não é decoração. Subir as opacidades de `.45–.58` para `~.72` resolve sem tocar no estilo
+  âmbar-sobre-marrom.
+- **O botão de mudo vira `✕`, o mesmo glifo do botão de sair, 22 px ao lado.** Trocar por 🔇.
+
+**2. Teclado — meio dia, e fecha um ciclo que já está quase pronto.**
+Hoje o teclado tem três teclas (`Esc`, `A`, `D`) e **não existe** como escolher uma peça. Mas
+os botões de confirmar já são `<button>` de verdade e já pegam Tab. Teclas `1..9` chamando
+`selecionarPeca(i-1)` — função que já existe e é a mesma que a dica usa — fecham o ciclo
+inteiro: selecionar → Tab → Enter. O custo real é o realce visual da peça focada no 3D.
+
+~~**3. As pintas da peça — a lacuna de teste mais perigosa que existe hoje.**~~ ✔ **feita na
+v1.8.0**, de carona na suíte de textura (Fila 7, item 1): cada célula do atlas é amostrada
+nos 9 pontos da grade contra uma tabela escrita no teste, e a UV de cada metade prova a
+convenção "o `[0]` à esquerda". Conferida por mutação.
+
+~~**4. O argumento de linha de comando do `test-telas`.**~~ ✔ **feito na v1.8.0**, e virou
+pré-requisito prático em vez de conforto — com ele, iterar num defeito de uma tela custa um
+minuto em vez de dez. O `test-online` ganhou o mesmo (`--so=`).
+
+**5. Documentação — o README está duas releases atrás.** Não menciona a conversa da mesa, a
+dica de jogada, a gaveta do celular nem o reabrir a mesa; diz que o bot difícil ganha ~59% (é
+**55,8%** desde os itens 1 e 2); o diagrama de branches para na v1.1.0. E o cabeçalho DESTE
+arquivo dizia ~2.100 linhas (corrigido em 01/08). É a porta de entrada de um repositório
+público, e hoje ela descreve um jogo mais pobre do que o que está no ar.
+
+**6. As outras lacunas de teste**, em ordem de gravidade: o som e o mudo (hoje o dublê existe,
+então ficou barato), o fim de mão **em duplas** (só há asserção com `MESA.n = 2`, e mesa de 4 é
+o modo clássico de boteco), o **conteúdo** do painel de contagem (só se testa se ele cobre a
+mesa, nunca se conta certo — e é ferramenta de decisão), o `<select>` de cadeira do menu, o
+esgotamento do prazo de 30 s de quem cai, e os ramos de rede do sair da partida.
+
+#### O QUE PODERIA SER FEITO, mas não recomendo agora
+
+Registrado para não ser redescoberto do zero — e com o motivo de não ser prioridade:
+
+- **Fazer o 3D DESVIAR dos painéis** em vez de os painéis darem lugar. Combina com
+  `apertoDaMesa()` e `larguraVisivelEm()`, e é o caminho não escolhido do item 10. É o mais
+  caro, e a gaveta e as faixas já resolveram o problema real.
+- **`beforeunload` no meio de partida online.** As regras dizem em letras grandes que sair
+  conta como derrota, e um F5 acidental gasta o prazo de 30 s sem aviso. Barato — mas
+  `beforeunload` é incômodo e precisa de decisão do Ricardo, não de programador.
+- **Botão de copiar/compartilhar o código da sala.** `user-select: all` resolve o mouse; no
+  dedo, copiar de um `<div>` é sofrível, e o caso comum é mandar o código pelo WhatsApp.
+  `navigator.share` resolveria. Impacto real no online, custo pequeno.
+- **Compra voluntária desabilitada nos modos sem monte.** Hoje o botão fica aceso prometendo
+  uma regra que o motor descarta — `ajustarCadeirasAoModo` já faz exatamente isso, com
+  elegância, para o número de jogadores.
+- **`prefers-reduced-motion`.** A lâmpada respira para sempre e a câmera reenquadra; é o pior
+  conjunto para sensibilidade vestibular. Pequeno no CSS, médio no 3D.
+- **Dívidas que investiguei e concluí que NÃO são defeito hoje** — não refaça o trabalho:
+  o clone de material por peça sem `dispose()` (mesma `cacheKey`, os materiais viram lixo
+  coletável; é churn, não vazamento); o `alvos.esq === alvos.dir` do `06-layout.js` (aliasing
+  armado, mas `alvos` é **código morto** — remover é melhor que consertar); e o array `VAZIO`
+  compartilhado do `05-bot.js` (só é lido hoje; um `add` ali um dia envenenaria todos).
+
 #### Perguntas em aberto para o Ricardo
 
-- Nenhuma. O item 2 era a única, e a busca respondeu no lugar dele.
+- **Nenhuma bloqueia.** O item 2 era a única e a busca respondeu no lugar dele.
+- A única decisão que vale perguntar antes de agir é **o escopo da próxima onda** (a lista de
+  1 a 6 acima), porque ele já disse que prefere ondas pequenas com release no fim.
+
+#### Como retomar em cinco minutos
+
+```
+git fetch origin && git rev-list --left-right --count origin/develop...develop   # tem de dar 0 0
+npm run check          # o bundle está em dia com src/?
+npm test               # as três suítes de lógica, segundos
+```
+
+E antes de qualquer conserto: **medir**. Três dos onze itens da Fila 5 e dois dos cinco
+defeitos da Fila 6 tinham diagnóstico errado escrito antes de alguém olhar os números.
 
 ### 1. Lá-e-lô só existe com as pontas DIFERENTES ✔ feito
 
@@ -990,6 +1147,15 @@ experiência/acessibilidade. **Cada achado foi conferido à mão antes de entrar
 Saíram cinco defeitos, todos ✔ feitos na v1.7.1. **Dois deles são a mesma doença dos itens
 6 e 7: o jogo falhando em silêncio.**
 
+**A FILA 6 CONTINUA ABERTA.** Os cinco defeitos fecharam; o resto do que a varredura achou
+está na seção **"o que ficou de FORA do escopo"**, no fim desta fila — acessibilidade,
+cobertura de teste e documentação. Nada disso é defeito, tudo isso é medido, e a ordem
+recomendada está no **"O QUE FAZER AMANHÃ"** lá em cima.
+
+**Nenhum destes cinco foi relatado por ninguém.** Vieram de procurar, não de esperar — e é
+uma diferença que vale registrar, porque a Fila 5 inteira nasceu de relato. Os dois modos se
+complementam: o campo acha o que incomoda, a varredura acha o que ainda não incomodou.
+
 ### 1. O mudo durava exatamente um clique ✔ feito
 
 `12-audio.js` implementa o mudo suspendendo o AudioContext. O listener de `pointerdown`
@@ -1119,7 +1285,7 @@ o bot nunca compra tendo jogada.
 **Documentação, duas releases atrás.** O `README.md` não menciona a conversa da mesa, a dica
 de jogada, a gaveta do celular nem o reabrir a mesa; diz que o bot difícil ganha ~59% (é
 **55,8%** depois das mudanças de regra dos itens 1 e 2); e o diagrama de branches para na
-v1.1.0. Aqui no `CLAUDE.md`, o cabeçalho ainda diz **~2.100 linhas** — são **4.537**.
+v1.1.0. (O cabeçalho deste arquivo dizia o mesmo e já foi corrigido: são **4.537** linhas.)
 
 **Dívidas registradas e NÃO consertadas, com o porquê:**
 
@@ -1132,6 +1298,183 @@ v1.1.0. Aqui no `CLAUDE.md`, o cabeçalho ainda diz **~2.100 linhas** — são *
   ou remover, e remover é provavelmente melhor.
 - `05-bot.js` entrega o mesmo array `VAZIO` de Sets a todos os bots fáceis. Hoje só é lido,
   então está correto; um `add` ali um dia envenenaria o esquecimento de todos.
+
+## Fila 7 — as cinco fotos de campo de 31/07/2026 ✔ fechada (v1.8.0)
+
+O Ricardo mandou cinco fotos de celular, tiradas entre 07:17 e 15:09 de **31/07/2026**, com
+cinco defeitos vistos jogando.
+
+**A PRIMEIRA COISA A FAZER FOI DATAR AS FOTOS, e é a lição de processo desta fila.** A
+v1.6.0 subiu às 20:40 daquele dia; as cinco fotos são anteriores, ou seja, **todas mostram a
+v1.5.0** — a versão que ficou no ar o dia inteiro por causa do "commitado ≠ enviado ≠
+publicado". Relato de campo tem data, e a data diz contra qual código ele vale. Sem essa
+conferência, dois defeitos já consertados teriam sido "consertados" de novo, e três abertos
+poderiam ter sido descartados como "já resolvido".
+
+| # | relato | veredito contra a v1.7.1 |
+|---|---|---|
+| 1 | bug ao sair para outro aplicativo | **ABERTO** — defeito novo, nunca esteve em fila |
+| 2 | layout cortando o nome lá em cima | **ABERTO** — o item 8 consertou o TEXTO, não a largura do cartão |
+| 3 | dominó atravessando na mesa | **ABERTO** — nunca diagnosticado |
+| 4 | deitado tampa uma peça | corrigido no item 8 (v1.6.0) — faltava a prova |
+| 5 | mesma pessoa várias vezes na mesa | corrigido no item 4 (v1.6.0) — faltava a prova |
+
+### 1. As peças ficavam PRETAS ao voltar de outro aplicativo ✔ feito
+
+São **duas perdas independentes**, e o defeito só existe com as duas juntas — o que a
+medição (`tests/test-textura.mjs`, escrito primeiro só imprimindo números) mostrou assim:
+
+| | | luz da peça na tela |
+|---|---|---|
+| E1 | só perder e restaurar o contexto WebGL | 166 → 166 |
+| E2 | só apagar os bitmaps dos canvas | 166 → 166 |
+| **E3** | **as duas juntas** | **166 → 3** ← a foto |
+| E4 | perder e restaurar três vezes | estável |
+
+Separadas não aparecem: o three reenvia a textura a partir de `texture.image` no restore, e
+canvas íntegro reenviado é igual; canvas apagado **sem** restore não é reenviado, porque o
+único `needsUpdate` do projeto é de UV. Juntas, o restore sobe um bitmap em branco.
+
+**O palpite escrito antes da medição estava errado, e vale registrar como ele era
+convincente:** "se as três texturas caíssem juntas, o TAMPO também estaria preto, e na foto
+ele está marrom — logo não é isso". O tampo cai de 132 para **80**, não para 0, porque com o
+albedo zerado o `MeshStandardMaterial` ainda devolve o brilho ESPECULAR da lâmpada. Mesa
+marrom e peça preta na mesma foto é exatamente o que a hipótese previa. **Quarto diagnóstico
+de leitura que este projeto perde para um número.**
+
+O conserto é guardar a receita: `desenho` era um arrow inline usado uma vez e jogado fora.
+`pintar()` registra `{nome, canvas, textura, repintar}`, e dois ganchos chamam uma sonda de
+1 pixel (`alfa < 8` é a assinatura do bitmap descartado, porque toda receita começa com
+`fillRect` opaco):
+
+- **`webglcontextrestored`** — o que o three não pode fazer por nós.
+- **`visibilitychange` na VOLTA** — o outro lado do gancho do `11-interacao.js`, que só trata
+  a saída. Sem contexto perdido a tela continua certa, mas o bitmap em branco fica **armado**
+  para o próximo restore.
+
+**O veio da madeira ganhou gerador próprio** (mulberry32 semeado). Duas razões: repintar tem
+de devolver a MESMA madeira, e os ~1.000 `Math.random()` do veio deslocariam a sequência que
+as suítes de tela semeiam dentro da página — a intermitência do item 11 voltando pela porta
+dos fundos. Medido: **0 sorteios globais por repintura**.
+
+**O dublê do harness ficou para trás pela QUINTA vez** (`matchMedia`, captura de ponteiro,
+`AudioContext`, `Peer`, e agora os eventos de contexto WebGL). A tentação era guardar no jogo
+com `if (domElement.addEventListener)`; está errado pelo mesmo motivo de sempre.
+
+**A suíte fecha de quebra a maior lacuna de teste do projeto:** `08-peca3d.js` não tinha
+NENHUMA asserção sobre o que a face desenha. Agora cada célula do atlas é amostrada nos 9
+pontos da grade contra uma tabela escrita **no teste** — ler `PINTAS` do jogo conferiria a
+tabela contra ela mesma —, e a UV de cada metade prova a convenção "o `[0]` à esquerda".
+Conferido por mutação.
+
+**Duas armadilhas de teste que esta suíte pagou:**
+
+- **`restoreContext()` chamado de dentro do despacho do `lost` é IGNORADO pelo Chrome**, e o
+  `restored` nunca vem: promessa que não resolve, e do lado de Node um `ProtocolError` três
+  minutos depois que não fala da causa. Precisa de folga, e de **prazo em toda espera de
+  evento** — evento que não chega é informação, travamento não é.
+- **Comparar a repintura com a PRIMEIRA pintura não mede o nosso desenho.** O Chrome
+  rasteriza um canvas novo e um canvas já usado como fonte de textura de formas levemente
+  diferentes: até o piso, que é `fillRect` e linhas retas sem um sorteio sequer, muda 0,6%.
+  Quem responde "é sempre a mesma madeira?" é **repintura contra repintura**.
+
+### 2. O quarto jogador nascia fora da tela ✔ feito
+
+`grid-auto-columns: minmax(96px, 1fr)`, e **`1fr` nunca encolhe abaixo do piso do minmax**:
+quatro cadeiras pedem `4×96 + 3×5 = 399px` numa caixa de 322 (tela de 390) ou 292 (tela de
+360). O bloco era **byte a byte** o mesmo desde a v1.5.0 — o item 8 consertou o corte do
+NOME e nunca tocou na largura do cartão.
+
+**A suíte era cega por três motivos somados, todos com a mesma raiz: ela media CONTÊINERES,
+e contêiner com `overflow` mente sobre o que está dentro dele.** Os painéis eram coletados
+por ID (os `.jog` nunca eram medidos); o `transbordo` saía de `documentElement.scrollWidth`,
+e transbordo dentro de um `position: fixed` com `overflow-x` nunca chega ao documento; e a
+varredura de "peça por baixo de painel" procura `.painel`, que o `.jog` não tem.
+
+A asserção nova **não é "medir `.jog`"**. É: *um filho pintado não pode sair da caixa do
+próprio painel — a menos que dê para rolar até ele.* O "a menos que" é o que a torna honesta,
+porque painel rolável TEM o direito de o filho passar da caixa; mas `pointer-events: none`
+faz a rolagem ser decoração. Assim ela codifica o **requisito**, não a implementação: fica
+verde tanto encolhendo o cartão quanto tornando a rolagem real. **10 falhas antes, 0 depois.**
+
+**A ressalva do Ricardo estava certa e foi medida:** encolher o cartão custa o nome — de 68px
+para 47px em 360, e a 47px o ellipsis começava a comer nomes CURTOS como "Ricardo", o que
+desfaz por baixo a decisão do item 8. **A emenda que eu tinha planejado não serviria, e a
+medição mostrou por quê antes de eu escrevê-la:** a régua de peças vive em
+`grid-column: 1/3`, ou seja na SEGUNDA linha do cartão, e não disputa largura com o nome.
+Quem devolve pixel é padding, gap e borda mais magros (9px) mais um ponto a menos de fonte
+(~4% de texto): 59px em 390, 51px em 360, **zero nomes cortados** no pior caso.
+
+### 3. A linha da mesa atravessando a mão do vizinho ✔ feito
+
+**Eram duas contas que não se falavam** — `09-tabuleiro.js` media o orçamento do tabuleiro em
+`z = 0.4` com divisor `0.86`; `10-mao.js` apertava os assentos em `z = −3.05` com divisor
+`13.5`. Que as duas dessem quase o mesmo número era coincidência aritmética, **e a
+coincidência era justamente o que garantia a colisão**: folga de −0,42 em todo retrato. É a
+mesma doença do item 8 ("cada caixa cabe sozinha e nenhuma pergunta pela outra"), agora em 3D.
+
+Hoje é uma conta só: `larguraUtilDoTabuleiro` (em `06-layout.js`, **puro**) tem três tetos e
+o menor manda — a madeira, a tela, e o **corredor** entre os montes dos adversários. E o
+aperto passou a ser decidido pelo assento que **binda**, cada um medido na profundidade dele:
+o `13.5` media sempre onde senta o adversário DE CIMA, e quem estoura é o de LADO, em `z = 0`,
+onde a tela é ~16% mais estreita. Mesma lição que o monte já tinha ensinado, cobrada uma
+segunda vez, no assento — e com ela o divisor mágico morreu.
+
+**A asserção 3D CONTRA 3D não existia**, e é a lacuna estrutural que esta fila fecha: o
+`test-telas` sabia perguntar "está dentro do quadro" e "está por baixo de painel HTML", e a
+linha correndo por dentro da mão do vizinho passa nas duas. Agora compara **caixas** em
+coordenadas de mundo (centros nunca acusariam: ficam a 2,7 um do outro e quem se toca são as
+bordas), ignora o Y de propósito (tudo nasce no tampo) e exclui a marca da última jogada, que
+inflaria a caixa em 0,22 e mediria o clarão em vez da madeira.
+
+**ELA ACHOU UM SEGUNDO DEFEITO, mais fundo e mais antigo que o da foto:** os copos e o
+cinzeiro estavam DENTRO das mãos dos adversários, **−0,82**, em paisagem, wide e tablet — ou
+seja, no computador, sempre, desde o começo. Ninguém relatou porque peça de costas dentro de
+copo de vidro lê como "coisa do boteco". As tralhas foram para o **arco da frente**, que é
+calculado e não escolhido a olho: as cadeiras possíveis são 90°, 120°, 180°, 240° e 270°,
+cada mão cobre ±23° do anel (±27° com as catorze do Duelo), então o anel está ocupado de 63°
+a 297° e sobra a frente — livre **por construção** em qualquer tamanho de mesa, e é por isso
+que estas posições podem seguir sendo literais.
+
+| tela | folga antes | depois |
+|---|---|---|
+| retrato 390×844 | −0,42 | +0,33 |
+| retrato 360×640 | −0,41 | +0,33 |
+| paisagem 844×390 | −0,82 | +1,11 |
+| paisagem 640×360 | −0,82 | +1,11 |
+| tablet 820×1180 | −0,21 | +0,33 |
+| wide 1600×900 | −0,82 | +1,11 |
+
+O limiar é **0,15 e não zero**: "sete pixels de folga não são um conserto, são sorte". E a
+folga vai para o log **sempre, mesmo verde** — é a margem que encolhe em silêncio.
+
+### 4 e 5. Os dois que já estavam corrigidos — a prova que faltava ✔ feito
+
+**Foto 4** (paisagem tampando peça, item 8) não precisou de teste novo: a asserção de "peça
+por baixo de painel" já cobria, e agora dá para rodá-la em um minuto em vez de dez.
+
+**Foto 5** (a mesma pessoa em três cadeiras, item 4) ganhou cena nova no `test-online.mjs`:
+saguão, mesa de 4, três abas com o MESMO `clienteId`. Ela cobre três eixos que a asserção
+existente não cobria — **saguão** (`P` nulo, o único lugar onde `largar()` apaga o dono da
+cadeira), **mesa de 4** (com três vagas o `findIndex` tem para onde errar) e **três** abas,
+que encadeiam dois take-overs.
+
+**Ela nasce VERDE, e isso está dito no próprio teste**, porque a casa trata asserção que
+nasce verde como coisa que não prova conserto nenhum. Foi conferida por mutação: desligando o
+`donoDaCadeira` em `sentar()`, ela reproduz a foto letra por letra — *"a mesma pessoa ocupou
+3 das 3 cadeiras online"*.
+
+### O que esta fila deixou de ferramenta
+
+- **`test-telas.mjs` e `test-online.mjs` aceitam escolher tela e cena** (`node
+  test-telas.mjs 360x640 nomes`, `node test-online.mjs --so=saguao`). Era o item 4 do "o que
+  fazer amanhã" e virou pré-requisito prático: a rodada cheia passa de 10 minutos e o
+  contorno era cortar a lista `TELAS` à mão, que é editar o teste para poder rodá-lo.
+  **Seleção vazia é ERRO** e o rodapé **grita "RODADA PARCIAL"** — sem as duas, o argumento
+  troca uma gambiarra por outra.
+- **`npm run textura`** — suíte nova, ~40 s, que também é a única asserção que existe sobre o
+  que as peças desenham.
+- **A folga 3D e a largura do nome no log do `telas`**, sempre.
 
 ## Regras da casa (implementadas)
 

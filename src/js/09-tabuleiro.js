@@ -47,11 +47,19 @@ function marcarUltima(obj) {
 function sincronizarTabuleiro(vista) {
   const { postas, caixa } = layoutDaMesa(vista.linha, vista.iAncora);
 
-  // O tabuleiro cabia na mesa e mesmo assim saía da TELA num celular em pé. O limite
-  // passa a ser o menor dos dois: a madeira e o quadro.
-  const e = escalaDoTabuleiro(caixa, Math.min(ESPALHA_X * 2.1, larguraVisivelEm(0, 0.4) * 0.86));
+  // O tabuleiro cabia na mesa e mesmo assim saía da TELA num celular em pé; hoje o limite
+  // é o menor de TRÊS — a madeira, o quadro, e o corredor entre os montes dos adversários.
+  // O terceiro é o item da foto: eles estão SENTADOS na mesa, no mesmo y das peças, e a
+  // fileira central corre exatamente na latitude dos laterais. Quem responde onde eles
+  // estão é `assentosDaMesa()` — a MESMA função que os põe lá, e não uma segunda conta.
+  const util = larguraUtilDoTabuleiro(
+    caixa,
+    larguraVisivelEm(0, TABULEIRO_Z) * 0.86,
+    assentosDaMesa(vista).lugares.map(l => l.monte),
+  );
+  const e = escalaDoTabuleiro(caixa, util);
   escalaAlvo = e;
-  posAlvo.set(-caixa.x * e, 0, -caixa.z * e + 0.4);
+  posAlvo.set(-caixa.x * e, 0, -caixa.z * e + TABULEIRO_Z);
 
   const vivas = new Set();
   postas.forEach(p => {
