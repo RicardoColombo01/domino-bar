@@ -83,9 +83,56 @@ export function installStubs() {
   // a vez do bot, que saiu do requestAnimationFrame por causa de aba em segundo plano.
   global.setTimeout = (fn, ms) => { timers.set(++proxTimer, { fn, ms }); return proxTimer; };
   global.clearTimeout = id => timers.delete(id);
-  global.AudioContext = undefined;
+  // AudioContext DE VERDADE no que importa: o `state` e o par suspend/resume, que é como
+  // o mudo é implementado. Antes isto era `undefined`, e com ele o áudio inteiro nunca
+  // ligava — o mudo ficava sem teste nenhum, e foi assim que passou despercebido que ele
+  // durava exatamente um clique. Mesma lição do matchMedia e da captura de ponteiro:
+  // quem estava incompleto era o dublê, não o jogo.
+  //
+  // O resto (filtros, ganhos, osciladores) é um Proxy que responde qualquer coisa sem
+  // fazer nada: o teste não mede som, mede a DECISÃO de tocar ou calar.
+  const nada = () => new Proxy(function () {}, {
+    get: (alvo, p) => {
+      if (p === 'value') return 0;
+      if (!(p in alvo)) alvo[p] = nada();
+      return alvo[p];
+    },
+    set: () => true,
+    apply: () => nada(),
+  });
+  global.AudioContext = class {
+    constructor() {
+      this.state = 'running';
+      this.sampleRate = 44100;
+      this.currentTime = 0;
+      this.destination = nada();
+    }
+    suspend() { this.state = 'suspended'; return Promise.resolve(); }
+    resume() { this.state = 'running'; return Promise.resolve(); }
+    createBuffer(_canais, n) { return { getChannelData: () => new Float32Array(n) }; }
+    createBufferSource() { return nada(); }
+    createGain() { return nada(); }
+    createBiquadFilter() { return nada(); }
+    createOscillator() { return nada(); }
+  };
   global.Image = class {};
-  global.Peer = undefined;                                // sem rede nos testes
+  // Peer que ABRE E NÃO FALA. Não serve para testar rede — o test-online.mjs faz isso no
+  // Chrome, com duas abas e uma mesa de verdade. Serve para o jogo poder ENTRAR em modo
+  // anfitrião aqui dentro, que é um estado com regras próprias e que até agora nenhum
+  // teste em Node conseguia alcançar: `temPeerJS()` era falso, `abrirMesaOnline` desistia
+  // na primeira linha, e `modo` ficava eternamente 'local'.
+  //
+  // Foi por isso que a revanche travada passou despercebida: o ramo com defeito só existe
+  // quando `modo !== 'local'`. Um dublê que nunca deixa o código chegar no estado
+  // interessante dá um verde que não quer dizer nada.
+  //
+  // Ele não dispara 'open' de propósito: o que se quer é o modo, não a sessão.
+  global.Peer = class {
+    constructor() { this.destruido = false; }
+    on() { return this; }
+    connect() { return { on() {}, send() {}, close() {} }; }
+    destroy() { this.destruido = true; }
+  };
   global.location = { protocol: 'file:', href: '' };
 }
 

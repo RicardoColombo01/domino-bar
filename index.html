@@ -208,6 +208,20 @@
   </div>
 </div>
 
+<!-- O RECADO DE QUANDO O JOGO NÃO CARREGA. Nasce escondido; quem o mostra é a sonda no
+     fim do arquivo. Fica FORA do módulo de propósito: se ele fosse parte do jogo, não
+     existiria justamente no caso em que é necessário. -->
+<div id="semCarga" class="tela oculta">
+  <div class="carta">
+    <h1>Não consegui carregar o jogo</h1>
+    <p class="nota">O 3D vem da internet na primeira vez. Confira a conexão e recarregue —
+      depois de carregar uma vez, o jogo abre offline.</p>
+    <div class="linha">
+      <button class="btn principal" onclick="location.reload()">Tentar de novo</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 
 <script type="importmap">
@@ -2223,7 +2237,17 @@ function ligarAudio() {
   return ac;
 }
 // Navegador só deixa tocar som depois de um gesto do usuário — este é o gesto.
-addEventListener('pointerdown', () => { ligarAudio(); if (ac && ac.state === 'suspended') ac.resume(); });
+//
+// O `!mudo` NÃO É DETALHE: sem ele o silêncio durava exatamente um clique. `silenciar()`
+// implementa o mudo suspendendo o contexto, e este listener retomava em QUALQUER
+// pointerdown — então clicar em ♪ calava, e o toque seguinte (escolher uma peça, abrir a
+// gaveta) via `state === 'suspended'` e religava tudo, com o botão ainda mostrando ✕ e
+// `mudo` ainda true. A preferência lembrada morria do mesmo jeito: `ligarMurmuro` aplica o
+// mudo no começo da partida e o primeiro toque na mesa desfazia.
+//
+// Ler `mudo` daqui é seguro pela mesma razão explicada em `ligarMurmuro`: ele mora no
+// 13-hud, concatenado DEPOIS, mas o corpo desta função só roda a um clique de distância.
+addEventListener('pointerdown', () => { ligarAudio(); if (ac && ac.state === 'suspended' && !mudo) ac.resume(); });
 
 function estalo({ dur = 0.09, freq = 1500, q = 1.1, vol = 0.3, tipo = 'bandpass' }) {
   if (!ligarAudio()) return;
@@ -2279,8 +2303,11 @@ function ligarMurmuro() {
   if (mudo) silenciar(true);
 }
 
-function silenciar(mudo) {
-  if (ac) ac[mudo ? 'suspend' : 'resume']();
+// O parâmetro chama-se `calado` e não `mudo` de propósito: `mudo` é uma global (13-hud) que
+// o listener de pointerdown lá em cima consulta, e um parâmetro de mesmo nome sombreando-a
+// aqui dentro é o tipo de coisa que faz o defeito de cima ser difícil de enxergar.
+function silenciar(calado) {
+  if (ac) ac[calado ? 'suspend' : 'resume']();
 }
 
 /* ····· 13-hud.js ····· */
@@ -2759,7 +2786,14 @@ const TIPOS_VALIDOS = new Set(['local', 'bot', 'online']);   // a cadeira 0 é s
 // quem só quer jogar, e o menu mostra na tela o que ficou valendo.
 function mesaLembrada() {
   const g = lido('mesa', null) || {};
-  const modo = MODOS[g.modo] ? g.modo : MODO_PADRAO;
+  // `Object.hasOwn` e não `MODOS[g.modo] ?`, e a diferença é uma TELA PRETA PERMANENTE.
+  // MODOS é objeto literal, então `MODOS['constructor']` é truthy e passava no teste — e
+  // `MODOS['constructor'].cadeiras` é undefined, logo a linha de baixo lançava TypeError.
+  // Como `mesaLembrada()` roda no TOPO do módulo, a exceção matava o script concatenado
+  // inteiro: tela preta que voltava a cada recarregamento, até alguém limpar o
+  // armazenamento à mão. É exatamente o "alguém mexendo no armazenamento" que o comentário
+  // acima promete cobrir — a validação existia e tinha um buraco do tamanho do protótipo.
+  const modo = Object.hasOwn(MODOS, g.modo) ? g.modo : MODO_PADRAO;
   const cabem = MODOS[modo].cadeiras;
   return {
     modo,
@@ -2774,8 +2808,12 @@ function mesaLembrada() {
         nome: (guardado || nome).slice(0, 14),
         tipo,
         // Nível válido é o que o BOT reconhece, conferido na tabela dele — uma segunda
-        // lista aqui apodreceria no dia em que aparecesse um nível novo.
-        nivel: tipo === 'bot' ? (NIVEIS[c.nivel] ? c.nivel : 'normal') : undefined,
+        // lista aqui apodreceria no dia em que aparecesse um nível novo. `hasOwn` pela
+        // mesma razão do modo, ali em cima: aqui o efeito era brando (nível 'constructor'
+        // passava e o bot jogava sem ruído e sem memória, degradação invisível), mas é o
+        // mesmo furo, e deixar dois padrões de validação no mesmo arquivo é como o
+        // primeiro volta.
+        nivel: tipo === 'bot' ? (Object.hasOwn(NIVEIS, c.nivel) ? c.nivel : 'normal') : undefined,
       };
     }),
   };
@@ -2792,12 +2830,23 @@ function lembrarMesa() {
   });
 }
 
+// O `escapar` no `value=` foi a TERCEIRA mordida da mesma classe. `listarSala` (15-rede)
+// punha `c.nome` direto em innerHTML e foi consertado; esta linha ficou para trás, e é pior
+// por ser dentro de um ATRIBUTO — basta uma aspa para sair dele.
+//
+// E `c.nome` vem de fora: o convidado manda o nome dele pela rede e `15-rede.js` escreve em
+// `MESA.cadeiras[cadeira].nome`; `lembrarMesa()` persiste as quatro cadeiras, então o valor
+// sobrevive à recarga. Sem escape, um convidado com nome `"><img src=x onerror=…>` roda
+// script na máquina do ANFITRIÃO assim que ele mexe no modo ou no número de jogadores.
+//
+// Sem risco de zona morta: 13-hud é concatenado ANTES de 14-menu, então `escapar` já está
+// de pé quando `montarCadeiras()` roda no fim deste arquivo.
 function montarCadeiras() {
   el('cadeiras').innerHTML = MESA.cadeiras.slice(0, MESA.n).map((c, i) => {
     const val = c.tipo === 'bot' ? 'bot:' + c.nivel : c.tipo;
     return `<div class="cadeira">
       <span class="num">${i === 0 ? 'Você' : 'Cadeira ' + (i + 1)}</span>
-      <input class="entrada nome" data-i="${i}" value="${c.nome}" maxlength="14" />
+      <input class="entrada nome" data-i="${i}" value="${escapar(c.nome)}" maxlength="14" />
       ${i === 0 ? '<span class="fixo">nesta tela</span>' :
         `<select data-i="${i}">${TIPOS.map(([v, t]) =>
           `<option value="${v}"${v === val ? ' selected' : ''}>${t}</option>`).join('')}</select>`}
@@ -3223,13 +3272,11 @@ function listarSala() {
   atualizarSaguao();
 }
 
-el('btIniciarOnline').onclick = () => {
-  // Cadeira online vazia na hora de começar vira bot: melhor jogar do que esperar.
-  MESA.cadeiras.slice(0, MESA.n).forEach((c, i) => {
-    if (c.tipo === 'online' && !conexoes.has(i)) { c.tipo = 'bot'; c.nivel = 'normal'; }
-  });
-  comecarLocal();
-};
+// Cadeira online vazia na hora de começar vira bot: melhor jogar do que esperar. A
+// conversão MUDOU DE CASA e agora mora no `comecarLocal` — ela era feita aqui, certa, e
+// lá era feita errada (condicionada a `modo === 'local'`), o que travava a revanche do
+// anfitrião. Duas cópias da mesma regra, uma delas com defeito, é como o defeito dura.
+el('btIniciarOnline').onclick = () => comecarLocal();
 
 el('btCancelarOnline').onclick = () => { encerrarRede(); mostrarTela('telaMenu'); };
 
@@ -3522,15 +3569,22 @@ const podeAgirAgora = () =>
   !!vistaAtual && !travado && vistaAtual.fase === 'mao' && vistaAtual.vez === vistaAtual.cadeira;
 
 function comecarLocal() {
-  // Sem rede não existe cadeira online: depois de sair de uma mesa, MESA.cadeiras ainda
-  // guarda o tipo 'online' e a revanche montava uma partida com uma cadeira que ninguém
-  // jogava — nem bot, nem troca de tela — e a mesa morria em silêncio. É a mesma
-  // conversão que o btIniciarOnline faz quando a vaga não é preenchida.
-  if (modo === 'local') {
-    MESA.cadeiras.slice(0, MESA.n).forEach(c => {
-      if (c.tipo === 'online') { c.tipo = 'bot'; c.nivel = c.nivel || 'normal'; }
-    });
-  }
+  // CADEIRA ONLINE SEM NINGUÉM VIVO NELA VIRA BOT. Senão a partida nasce com uma cadeira
+  // que ninguém joga — nem bot, nem troca de tela —, `seguirOTurno` não faz nada quando
+  // chega a vez dela, e a mesa morre em silêncio.
+  //
+  // A pergunta era `modo === 'local'` e estava condicionada ao lugar errado. Ela cobria a
+  // revanche depois de SAIR de uma mesa, e deixava passar a revanche DENTRO de uma: o
+  // anfitrião clicando "Revanche" com um convidado que já fechou a aba montava a mesma
+  // partida travada. A pergunta certa nunca foi "em que modo estou", é "esta cadeira tem
+  // alguém do outro lado" — e quem sabe isso é `conexoes`, que em mesa local está vazio e
+  // portanto converte tudo, como antes.
+  //
+  // É também a conversão que o `btIniciarOnline` fazia por conta própria; com ela aqui,
+  // aquele botão voltou a ser só `comecarLocal()`. Uma regra em vez de duas.
+  MESA.cadeiras.slice(0, MESA.n).forEach((c, i) => {
+    if (c.tipo === 'online' && !conexoes.has(i)) { c.tipo = 'bot'; c.nivel = c.nivel || 'normal'; }
+  });
   const cadeiras = MESA.cadeiras.slice(0, MESA.n)
     .map(c => ({ nome: c.nome, tipo: c.tipo, nivel: c.nivel }));
   P = novaPartida(cadeiras, {
@@ -3990,6 +4044,10 @@ window.__jogo = {
   // sem precisar de rede: ele chama a MESMA função que a rede chama, então o que a foto
   // mostra é o que o jogo faz.
   pintarSala, salaGuardada, atualizarBotaoVoltarMesa,
+  // O menu redesenha a lista de cadeiras com o nome que o convidado mandou pela REDE —
+  // e por isso o teste do online precisa poder forçar esse redesenho para conferir que
+  // o nome chega como texto, e não como elemento.
+  montarCadeiras,
   get P() { return P; },
   get vista() { return vistaAtual; },
   // A ORDEM DA TELA, que desde a arrumação não é mais a de vista.mao. Quem quiser
@@ -4000,6 +4058,38 @@ window.__jogo = {
   // era o único acoplamento do repositório que quebrava calado quando a mão reordenava.
   selecionar: peca => selecionarPeca(naMao.findIndex(m => mesmaPeca(m.peca, peca))),
 };
+</script>
+
+<!-- SONDA DE CARGA — script CLÁSSICO, não módulo, e é o ponto todo.
+     O jogo inteiro é aquele um `<script type="module">` acima, que começa importando o
+     three do CDN. Se esse import falhar — wifi de bar, WebGL desligado, aparelho velho —
+     NADA daquele módulo executa, e portanto nenhum handler de botão é registrado. Como o
+     #telaMenu nasce visível no HTML, a pessoa via o menu inteiro, digitava os nomes,
+     apertava "Sentar e jogar" e não acontecia nada. Para sempre, sem uma palavra.
+     (Havia tratamento cuidadoso para o PeerJS faltar, e nenhum para a biblioteca sem a
+     qual o jogo não existe.)
+
+     SONDA, e não um setTimeout único: com prazo fixo, uma máquina lenta mostraria o recado
+     com o jogo ainda a caminho — e a suíte test-telas reprovaria por painel a mais na
+     tela. Aqui ele só aparece se o jogo continuar ausente ao fim da janela, e some sozinho
+     se chegar depois (o `pointer-events: none` enquanto escondido não basta: a tela é
+     `z-index: 30` e cobriria o jogo). -->
+<script>
+(function () {
+  var prazo = 12000, passo = 500, gasto = 0;
+  var recado = document.getElementById('semCarga');
+  var pronto = function () { return !!(window.__jogo && window.__jogo.pronto); };
+  var olhar = setInterval(function () {
+    // Pronto: esconde e para de olhar. É o único jeito de sair deste laço, e é de propósito.
+    if (pronto()) { recado.classList.add('oculta'); clearInterval(olhar); return; }
+    gasto += passo;
+    // Vencido o prazo, MOSTRA E CONTINUA OLHANDO. Parar aqui deixaria o recado na tela para
+    // sempre numa máquina que só estava lenta — e num teste de tela isso é um painel a mais
+    // no quadro, que a suíte reprovaria com razão. Enquanto o jogo não vem, olhar a cada
+    // meio segundo não custa nada: a página está parada mesmo.
+    if (gasto >= prazo) recado.classList.remove('oculta');
+  }, passo);
+})();
 </script>
 </body>
 </html>

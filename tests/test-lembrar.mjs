@@ -145,6 +145,41 @@ try {
     console.log('  tudo caiu no padrão e a mesa ainda monta');
   }
 
+  // ─── 2b. a preferência estragada com CHAVE DE PROTÓTIPO ────────────────────
+  // O caso acima usa valores inventados ('xadrez', 'divino') e a validação os barrava.
+  // Mas ela perguntava `MODOS[g.modo] ?`, e MODOS é objeto literal: `MODOS['constructor']`
+  // é TRUTHY e passava. `MODOS['constructor'].cadeiras` é undefined, a linha seguinte
+  // lançava TypeError — e como `mesaLembrada()` roda no TOPO do módulo, a exceção matava o
+  // script concatenado inteiro. Tela preta, e que VOLTAVA a cada recarregamento, porque a
+  // causa estava guardada. O jogador não tinha como sair disso sem limpar o armazenamento.
+  //
+  // Vale como caso separado justamente porque o teste de cima já existia e passava: a
+  // validação estava lá, com um buraco do tamanho do protótipo do Object.
+  console.log('\nchave de protótipo no armazenamento não mata o jogo');
+  {
+    await pagina.evaluate(() => {
+      localStorage.setItem('dominobar.mesa', JSON.stringify({
+        modo: 'constructor', n: 4,
+        cadeiras: [{ nome: 'Eu', tipo: 'voce' }, { nome: 'Bot', tipo: 'bot', nivel: 'toString' }],
+      }));
+    });
+    await recarregar();
+    // Se o script tivesse morrido, `window.__jogo` nem existiria — é esta a asserção que
+    // separa "caiu no padrão" de "não abriu".
+    const vivo = await pagina.evaluate(() => !!(window.__jogo && window.__jogo.pronto));
+    ok(vivo, 'o jogo não carregou: a chave de protótipo derrubou o script inteiro');
+    if (vivo) {
+      const m = await pagina.evaluate(() => ({
+        modo: j.MESA.modo, nivel1: j.MESA.cadeiras[1].nivel,
+      }));
+      ok(m.modo === 'classico', `modo 'constructor' deveria cair no padrão, veio ${m.modo}`);
+      ok(m.nivel1 === 'normal', `nível 'toString' deveria cair em normal, veio ${m.nivel1}`);
+      const jogou = await pagina.evaluate(() => { soBots('classico', 3); return !!(j.P && j.P.fase === 'mao'); });
+      ok(jogou, 'depois da chave de protótipo a partida não começou');
+      console.log('  o jogo abriu no padrão em vez de morrer na carga');
+    }
+  }
+
   // ─── 3. voltar para a mesma partida ────────────────────────────────────────
   console.log('\na partida volta igual depois de recarregar');
   {
