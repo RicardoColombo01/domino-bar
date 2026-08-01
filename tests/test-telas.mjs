@@ -56,6 +56,46 @@ const CASOS = [
       `mesa('classico', 4); contar(true); auto(11);` },
 ];
 
+// ESCOLHER TELAS E CENAS PELA LINHA DE COMANDO.
+//
+//   node test-telas.mjs                       tudo — o padrão não muda
+//   node test-telas.mjs 360x640,390x844       só estas telas
+//   node test-telas.mjs 640x360 mao,cheia     estas telas, estas cenas
+//   node test-telas.mjs "" nomes              todas as telas, uma cena
+//
+// A rodada cheia são 6 telas × N cenas de Chrome, e passou de 5 para mais de 10 minutos
+// quando as cenas passaram a esperar a tela ASSENTAR em vez de contar 350 ms. Ela já foi
+// interrompida por limite de tempo quatro vezes, e o contorno era cortar a lista `TELAS`
+// à mão — que é editar o teste para rodar o teste, e deixa a metade cortada commitada se
+// alguém esquecer.
+//
+// Casa por SUBSTRING, sem acento e sem caixa: os nomes têm "mão", "paisagem" e "×"
+// (U+00D7, que ninguém digita), então exigir o nome exato faria ninguém usar. As telas
+// casam também por `LxA`, que é como se fala delas.
+// `\p{Diacritic}` e não o intervalo [U+0300-U+036F]: escrito com os acentos combinantes
+// literais o intervalo fica INVISÍVEL no editor — dois caracteres sem forma própria
+// dentro de um colchete —, e a primeira pessoa a "limpar" a linha os apaga sem saber que
+// apagou. A classe nomeada é ASCII no fonte e diz o que quer dizer.
+const semAcento = s => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+const filtrar = (lista, arg, oque) => {
+  const chaves = (arg || '').split(',').map(s => semAcento(s.trim())).filter(Boolean);
+  if (!chaves.length) return lista;
+  const achou = lista.filter(x => chaves.some(k =>
+    semAcento(x.nome).includes(k) || `${x.width}x${x.height}`.includes(k)));
+  // SELEÇÃO VAZIA É ERRO, e não "rodar tudo". Um argumento com erro de digitação daria ou
+  // a suíte inteira (10 min quando se queria 1) ou zero asserção — e as duas mentem, cada
+  // uma do seu jeito. É a mesma lição do `diff` de dois arquivos vazios: o teste tem de
+  // exigir que HAJA o que medir.
+  if (!achou.length) {
+    console.error(`nenhuma ${oque} casa com "${arg}" — havia: ${lista.map(x => x.nome).join(', ')}`);
+    process.exit(2);
+  }
+  return achou;
+};
+const TELAS_ESCOLHIDAS = filtrar(TELAS, process.argv[2], 'tela');
+const CASOS_ESCOLHIDOS = filtrar(CASOS, process.argv[3], 'cena');
+const PARCIAL = TELAS_ESCOLHIDAS.length < TELAS.length || CASOS_ESCOLHIDOS.length < CASOS.length;
+
 const AJUDA = `
   // SEMEAR O SORTEIO, e esta é a linha que transforma esta suíte de intermitente em
   // teste. As cenas montam a mesa JOGANDO de verdade, e o Math.random do navegador não é
@@ -223,9 +263,9 @@ const navegador = await puppeteer.launch({
     '--hide-scrollbars', '--mute-audio', '--allow-file-access-from-files'],
 });
 
-for (const tela of TELAS) {
+for (const tela of TELAS_ESCOLHIDAS) {
   console.log(`\n${tela.nome}`);
-  for (const caso of CASOS) {
+  for (const caso of CASOS_ESCOLHIDOS) {
     const pagina = await navegador.newPage();
     await pagina.setViewport({
       width: tela.width, height: tela.height,
@@ -353,5 +393,12 @@ for (const tela of TELAS) {
 }
 
 await navegador.close();
-console.log(falhas ? `\n${falhas} falha(s)` : '\ntudo certo');
+// O RODAPÉ TEM DE GRITAR QUE A RODADA FOI PARCIAL. Sem isto, quem rodar duas telas para
+// iterar num defeito lê "tudo certo" e acha que a suíte passou inteira — que é
+// exatamente o que o contorno de cortar a lista à mão já fazia, só que agora sem deixar
+// rastro no diff. Um teste que não diz o que NÃO mediu mente por omissão.
+console.log(falhas ? `\n${falhas} falha(s)`
+  : PARCIAL ? `\ntudo certo — RODADA PARCIAL: ${TELAS_ESCOLHIDAS.length}/${TELAS.length} telas` +
+              ` × ${CASOS_ESCOLHIDOS.length}/${CASOS.length} cenas`
+            : '\ntudo certo');
 process.exit(falhas ? 1 : 0);
