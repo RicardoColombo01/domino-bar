@@ -277,6 +277,15 @@ const FOLGA_L = 0.93;
 const ESPALHA_X = 4.0;
 const ESPALHA_Z = 2.2;
 
+// O tabuleiro é empurrado meio corpo para o fundo, para a mão caber embaixo dele. Era um
+// literal 0.4 escrito em dois pontos de 09-tabuleiro.js, e virou constante porque quem
+// confere sobreposição no tampo precisa saber onde a caixa do tabuleiro realmente está.
+const TABULEIRO_Z = 0.4;
+
+// O vão entre a ponta da linha e o monte do adversário. NÃO é folga de renderização: é o
+// espaço que a mão de quem joga precisa para pegar a peça sem esbarrar na do vizinho.
+const FOLGA_VIZINHO = 0.30;
+
 // Regra da casa: bater nas duas pontas com peça comum vale o mesmo que bater de
 // carroça. Só a cruzada — carroça servindo nas duas — paga mais.
 const PONTOS = { simples: 1, carroca: 2, laelo: 2, cruzada: 4, tranca: 1 };
@@ -1064,6 +1073,53 @@ function escalaDoTabuleiro(caixa, larguraUtil = ESPALHA_X * 2.1) {
   return Math.min(1, larguraUtil / caixa.l, (ESPALHA_Z * 2.4) / caixa.a);
 }
 
+// ─── quem mais está sentado à mesa ───────────────────────────────────────────
+// Onde cada cadeira fica, vista de quem joga: você em 0, o resto em volta no sentido
+// da vez. Mora aqui porque é trigonometria pura e porque o orçamento do tabuleiro,
+// logo abaixo, precisa dela — 10-mao.js só a consumia.
+const anguloDaCadeira = (i, eu, n) => ((i - eu + n) % n) * Math.PI * 2 / n;
+
+// A caixa que o monte de um adversário ocupa no tampo. Ele nasce girado -a e as peças
+// entram ATRAVESSADAS, então a fileira cresce pela LARGURA da peça e cada uma deita o
+// COMPRIMENTO de lado a lado — é o contrário do que a intuição diz. Mesmo formato de
+// `envolver()` ({x, z, l, a}), para comparar retângulo com retângulo.
+function caixaDoMonte(a, x, z, quantas, espaco) {
+  const aoLongo = (PECA_L + espaco * Math.max(0, quantas - 1)) / 2;
+  const atravessado = PECA_C / 2;
+  const c = Math.abs(Math.cos(a)), s = Math.abs(Math.sin(a));
+  return { x, z, l: 2 * (c * aoLongo + s * atravessado), a: 2 * (s * aoLongo + c * atravessado) };
+}
+
+// Quanta LARGURA o tabuleiro pode ocupar. Três tetos, e o menor manda: a madeira da mesa,
+// o que a TELA mostra, e o CORREDOR entre os montes dos adversários.
+//
+// O terceiro faltava, e é por isso que a linha atravessava a mão do vizinho: depois de
+// MAX_DOBRAS o braço corre reto para sempre em z = 0, e os laterais de uma mesa de 4 estão
+// sentados exatamente em z = 0, no mesmo y. Eram duas contas independentes — o orçamento
+// do tabuleiro medido numa profundidade, o aperto dos assentos medido noutra — e nenhuma
+// perguntava pela outra. Medido antes do conserto: folga de -0.42 em todo retrato, ou seja
+// a linha entrando 45% para dentro do montinho do vizinho.
+//
+// Só estorva quem está NA FAIXA por onde a linha corre: o adversário de cima fica a 4.9 de
+// distância e não tem por que apertar ninguém. A faixa sai da caixa já encolhida pelos dois
+// primeiros tetos — um passo só, sem laço, e o erro é sempre para o lado seguro (faixa
+// larga demais conta assentos demais e o orçamento sai menor, nunca maior).
+//
+// Continua PURA: recebe onde os assentos ficaram; quem mede a tela é 07-cena.js.
+function larguraUtilDoTabuleiro(caixa, tela = Infinity, montes = [], folga = FOLGA_VIZINHO) {
+  const semVizinhos = Math.min(ESPALHA_X * 2.1, tela);
+  if (!caixa.l) return semVizinhos;
+  const meiaFaixa = caixa.a * escalaDoTabuleiro(caixa, semVizinhos) / 2;
+  let corredor = Infinity;
+  for (const m of montes) {
+    if (Math.abs(m.z - TABULEIRO_Z) - m.a / 2 > meiaFaixa) continue;    // sentado longe da linha
+    corredor = Math.min(corredor, 2 * (Math.abs(m.x) - m.l / 2 - folga));
+  }
+  // Nunca abaixo de uma peça: um corredor impossível encolheria o tabuleiro até sumir, e
+  // tabuleiro invisível é pior que tabuleiro encostado.
+  return Math.max(PECA_C, Math.min(semVizinhos, corredor));
+}
+
 /* ····· 07-cena.js ····· */
 //
 // Nenhum arquivo de imagem no projeto: madeira, piso e as pintas das peças são
@@ -1368,17 +1424,78 @@ function copo(x, z, cheio) {
   scene.add(g);
   return g;
 }
-copo(-5.35, -0.3, 0.75);      // longe do monte: em (-5, 1.9) o copo nascia dentro da pilha
-copo(4.9, 2.2, 0.4);
-copo(5.2, -1.4, 0.95);
+// As tralhas ficam guardadas numa lista porque elas DISPUTAM O TAMPO com o tabuleiro, com
+// o monte e com as mãos dos adversários, e o comentário acima é a prova de que isso já
+// aconteceu uma vez e foi resolvido movendo um número à mão. Sem a lista, o teste de
+// sobreposição não tem como perguntar por elas.
+// AS TRALHAS FICAM NO ARCO DA FRENTE, e o arco é calculado, não escolhido a olho.
+// Os adversários sentam num anel de raio 4.88, e cada mão se abre TANGENCIALMENTE: com
+// sete peças ela cobre ±23° do anel, com as catorze do Duelo ±27°. As cadeiras possíveis
+// são 90°, 120°, 180°, 240° e 270° (mesa de 4, de 3 e de 2, com você sempre em 0°), então
+// o anel está ocupado de 63° a 297° passando pelo fundo — e sobra o arco da FRENTE, que é
+// seu. É por construção livre em qualquer tamanho de mesa, e é por isso que estas
+// posições podem continuar sendo literais.
+//
+// Antes elas estavam em 105°, 251° e 273°, ou seja dentro das cadeiras: medido, o copo
+// entrava 0.82 na mão do adversário — mais fundo do que a linha da mesa entrava (0.42), e
+// em paisagem, wide e tablet, isto é, no computador, sempre, desde o começo. Ninguém
+// relatou porque peça de costas dentro de copo de vidro lê como "coisa do boteco".
+//
+// O comentário abaixo é de quando um copo já tinha sido movido à mão pelo mesmo motivo. A
+// família reincidiu do outro lado, e é por isso que agora existe asserção 3D contra 3D no
+// test-telas em vez de mais um número escolhido a dedo.
+const tralhas = [
+  copo(-3.35, 4.05, 0.75),    // longe do monte: em (-5, 1.9) o copo nascia dentro da pilha
+  copo(3.35, 4.05, 0.4),
+  copo(4.75, 3.25, 0.95),
+];
 
 const cinzeiro = new THREE.Mesh(
   new THREE.CylinderGeometry(0.46, 0.4, 0.14, 20),
   new THREE.MeshStandardMaterial({ color: 0x4a4440, roughness: 0.5 })
 );
-cinzeiro.position.set(-5.1, 0.07, -1.7);
+cinzeiro.position.set(1.6, 0.07, 5.1);      // mesmo arco da frente que os copos
 cinzeiro.castShadow = true;
 scene.add(cinzeiro);
+tralhas.push(cinzeiro);
+
+// ─── quem senta onde ─────────────────────────────────────────────────────────
+// A conta ÚNICA do que está no tampo. Antes eram duas: 10-mao.js apertava o círculo dos
+// adversários por um lado e 09-tabuleiro.js media o orçamento do tabuleiro por outro, em
+// profundidades diferentes (z = -3.05 contra z = 0.4) e com divisores mágicos diferentes
+// (13.5 contra 0.86), sem uma saber da outra. Que os dois dessem quase o mesmo número era
+// coincidência aritmética — e a coincidência era justamente o que garantia a colisão.
+const RAIO_ASSENTO = MESA_R * 0.80;
+
+// O aperto continua sendo UM só (a roda continua uma roda), mas quem o decide passa a ser
+// o assento mais espremido, cada um medido na PROFUNDIDADE DELE. O 13.5 de antes media
+// sempre em z = -3.05, que é onde senta o adversário DE CIMA; quem estoura é o de LADO, em
+// z = 0, onde a tela é ~16% mais estreita. É a mesma lição que o monte já tinha ensinado
+// uma vez ("a posição dele sai da largura visível na profundidade dele mesmo"), cobrada
+// uma segunda vez, no assento.
+function assentosDaMesa(vista) {
+  const n = vista && vista.naMao ? vista.naMao.length : 0;
+  const crus = [];
+  for (let i = 0; i < n; i++) {
+    if (i === vista.cadeira) continue;
+    const a = anguloDaCadeira(i, vista.cadeira, n);
+    crus.push({ cadeira: i, a, x: Math.sin(a) * RAIO_ASSENTO, z: Math.cos(a) * RAIO_ASSENTO,
+      quantas: vista.naMao[i] });
+  }
+  let aperto = 1;
+  for (const s of crus) {
+    if (Math.abs(s.x) < 1e-6) continue;                 // sentado no eixo: nada a apertar
+    const cabe = larguraVisivelEm(PECA_E / 2, s.z) / 2 - PECA_C / 2;
+    aperto = Math.min(aperto, cabe / Math.abs(s.x));
+  }
+  aperto = Math.min(1, Math.max(0.25, aperto));
+  const lugares = crus.map(s => {
+    const x = s.x * aperto;
+    const espaco = Math.min(0.56, 4.2 * aperto / Math.max(s.quantas, 1));
+    return { ...s, x, espaco, monte: caixaDoMonte(s.a, x, s.z, s.quantas, espaco) };
+  });
+  return { aperto, lugares };
+}
 
 // Enquadrar é derivar o fov da largura que precisa caber, e não o contrário. Antes isto
 // só mexia em `camera.aspect`, o que em retrato deixava a mão duas vezes e meia maior
@@ -1604,11 +1721,19 @@ function marcarUltima(obj) {
 function sincronizarTabuleiro(vista) {
   const { postas, caixa } = layoutDaMesa(vista.linha, vista.iAncora);
 
-  // O tabuleiro cabia na mesa e mesmo assim saía da TELA num celular em pé. O limite
-  // passa a ser o menor dos dois: a madeira e o quadro.
-  const e = escalaDoTabuleiro(caixa, Math.min(ESPALHA_X * 2.1, larguraVisivelEm(0, 0.4) * 0.86));
+  // O tabuleiro cabia na mesa e mesmo assim saía da TELA num celular em pé; hoje o limite
+  // é o menor de TRÊS — a madeira, o quadro, e o corredor entre os montes dos adversários.
+  // O terceiro é o item da foto: eles estão SENTADOS na mesa, no mesmo y das peças, e a
+  // fileira central corre exatamente na latitude dos laterais. Quem responde onde eles
+  // estão é `assentosDaMesa()` — a MESMA função que os põe lá, e não uma segunda conta.
+  const util = larguraUtilDoTabuleiro(
+    caixa,
+    larguraVisivelEm(0, TABULEIRO_Z) * 0.86,
+    assentosDaMesa(vista).lugares.map(l => l.monte),
+  );
+  const e = escalaDoTabuleiro(caixa, util);
   escalaAlvo = e;
-  posAlvo.set(-caixa.x * e, 0, -caixa.z * e + 0.4);
+  posAlvo.set(-caixa.x * e, 0, -caixa.z * e + TABULEIRO_Z);
 
   const vivas = new Set();
   postas.forEach(p => {
@@ -1780,7 +1905,6 @@ let escolhida = null;                // CHAVE da peça levantada, ou null
 const ordemDaMao = new Map();        // cadeira → [chave, chave, ...]
 let maoDaOrdem = -1;                 // de qual vista.maoNum essas arrumações são
 
-const anguloDaCadeira = (i, eu, n) => ((i - eu + n) % n) * Math.PI * 2 / n;
 const naMaoPorChave = k => naMao.find(m => chave(m.peca) === k) || null;
 const esquecerArrumacao = () => { ordemDaMao.clear(); maoDaOrdem = -1; };
 
@@ -1976,32 +2100,27 @@ function esconderMao() {
   cancelarEscolha();
 }
 
-// Quanto o que está NA MESA precisa encolher para caber na tela. 1 é o computador, onde
-// tudo cabe; num celular em pé o círculo dos adversários e o monte ficavam do lado de
-// fora do quadro — o monte chegava a uma vez e meia a largura da tela. Aperta só o eixo
-// X: a profundidade continua a mesma, então os adversários continuam sentados em volta.
-const apertoDaMesa = () => Math.min(1, larguraVisivelEm(0, -MESA_R * 0.5) / 13.5);
-
+// Onde os adversários sentam e quanto a fileira deles mede sai inteiro de
+// `assentosDaMesa()` (07-cena.js) — aqui só se monta o que ele decidiu. O `apertoDaMesa`
+// que morava nesta linha media a tela na profundidade do assento DE CIMA e apertava todos
+// por ela, o que deixava o de lado (mais perto da câmera, onde a tela é mais estreita)
+// sobrando por fora e ainda por cima dentro da linha da mesa.
 function sincronizarOutros(vista) {
   grupoOutros.clear();
-  const raio = MESA_R * 0.80, aperto = apertoDaMesa();
-  vista.naMao.forEach((quantas, i) => {
-    if (i === vista.cadeira) return;
-    const a = anguloDaCadeira(i, vista.cadeira, vista.naMao.length);
+  for (const l of assentosDaMesa(vista).lugares) {
     const g = new THREE.Group();
-    g.position.set(Math.sin(a) * raio * aperto, PECA_E / 2, Math.cos(a) * raio);
-    g.rotation.y = -a;
+    g.position.set(l.x, PECA_E / 2, l.z);
+    g.rotation.y = -l.a;
     // Cada peça atravessada na fileira, lado a lado. Enfileiradas no comprimento elas
     // se sobrepõem e o que aparece na mesa é uma tábua preta, não uma mão de dominó.
-    const espaco = Math.min(0.56, 4.2 * aperto / Math.max(quantas, 1));
-    for (let k = 0; k < quantas; k++) {
+    for (let k = 0; k < l.quantas; k++) {
       const v = criarVerso();
-      v.position.set((k - (quantas - 1) / 2) * espaco, 0, 0);
+      v.position.set((k - (l.quantas - 1) / 2) * l.espaco, 0, 0);
       v.rotation.y = Math.PI / 2;
       g.add(v);
     }
     grupoOutros.add(g);
-  });
+  }
 }
 
 // O monte fica ao alcance da mão, na beirada esquerda: comprar é uma ação sua e o
@@ -2013,7 +2132,7 @@ function sincronizarMonte(vista) {
   // tela é bem mais estreita. Apertar pelo fator da mesa não bastava: ele continuava
   // meia largura para fora num celular. Aqui a posição sai da largura visível na
   // profundidade dele mesmo, então cabe por construção em qualquer tela.
-  const aperto = apertoDaMesa();
+  const aperto = assentosDaMesa(vista).aperto;
   const zMonte = 2.15 + (1 - aperto) * 1.6;
   const beirada = larguraVisivelEm(PECA_E / 2, zMonte) / 2;
   const xMonte = -Math.min(4.98, beirada * 0.78);
@@ -4119,6 +4238,11 @@ window.__jogo = {
   // coordenadas de tela e reprovar se alguma cair fora — que é o teste que prova "dá
   // para ver a mão" sem ninguém olhar screenshot.
   camera, naMao, enquadrar, grupoMesa, grupoOutros, grupoMonte,
+  // THREE e as tralhas existem aqui para a asserção 3D CONTRA 3D do test-telas medir
+  // CAIXAS em coordenadas de mundo. Sem o Box3 ela só saberia comparar centros, e centro
+  // contra centro nunca acusa nada: os centros ficam a 2,7 um do outro e quem se toca são
+  // as bordas.
+  THREE, tralhas,
   arrumarMao, moverNaMao, publicar, alternarConversa, falar, trocarCanal,
   // Retomar precisa ser dirigível pelos testes: o caminho inteiro só existe entre duas
   // cargas da página, e é justamente aí que ninguém olha.

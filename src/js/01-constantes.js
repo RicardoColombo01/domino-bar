@@ -42,6 +42,15 @@ const FOLGA_L = 0.93;
 const ESPALHA_X = 4.0;
 const ESPALHA_Z = 2.2;
 
+// O tabuleiro é empurrado meio corpo para o fundo, para a mão caber embaixo dele. Era um
+// literal 0.4 escrito em dois pontos de 09-tabuleiro.js, e virou constante porque quem
+// confere sobreposição no tampo precisa saber onde a caixa do tabuleiro realmente está.
+const TABULEIRO_Z = 0.4;
+
+// O vão entre a ponta da linha e o monte do adversário. NÃO é folga de renderização: é o
+// espaço que a mão de quem joga precisa para pegar a peça sem esbarrar na do vizinho.
+const FOLGA_VIZINHO = 0.30;
+
 // Regra da casa: bater nas duas pontas com peça comum vale o mesmo que bater de
 // carroça. Só a cruzada — carroça servindo nas duas — paga mais.
 const PONTOS = { simples: 1, carroca: 2, laelo: 2, cruzada: 4, tranca: 1 };

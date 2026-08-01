@@ -54,6 +54,11 @@ const CASOS = [
   { nome: 'nomes longos', montar:
       `nomes('Ricardo Neves', 'Maria Fernanda', 'Sebastião Jr.', 'Ana Carolina');` +
       `mesa('classico', 4); contar(true); auto(11);` },
+  // MESA DE 4 RECÉM-DADA — o pior caso das mãos dos ADVERSÁRIOS, e nenhuma cena tinha.
+  // Toda cena de 4 aqui já jogou 11 peças, e aí cada montinho está com 4 e mede meia
+  // largura 1.07. Recém-dada são 7 peças, e a fileira vai a 1.91 — quase o dobro. Quem
+  // disputa espaço com o tabuleiro e com os copos é este tamanho, não o outro.
+  { nome: 'mão cheia de 4', montar: `mesa('classico', 4); contar(false);` },
 ];
 
 // ESCOLHER TELAS E CENAS PELA LINHA DE COMANDO.
@@ -236,8 +241,50 @@ const MEDIR = `(() => {
     }
   }
 
+  // 3D CONTRA 3D. Até aqui a suíte fazia duas perguntas de TELA: "está dentro do quadro"
+  // (|ndc| <= 1) e "está por baixo de painel HTML". A linha da mesa atravessando a mão do
+  // vizinho passa nas duas — as duas coisas estão no quadro, nenhum painel as cobre — e
+  // mesmo assim ocupam o mesmo pedaço de tampo, no mesmo y = PECA_E/2.
+  //
+  // Compara CAIXAS, não centros: o tabuleiro e o assento ficam a ~2,7 um do outro e quem
+  // se encosta são as bordas. E ignora o Y de propósito, porque não há altura para
+  // ignorar — tabuleiro, mãos, monte e o pé dos copos nascem todos no tampo.
+  const B = j.THREE.Box3;
+  // A MARCA DA ÚLTIMA JOGADA fica de fora: é um disco de raio PECA_C*0.72 colado embaixo
+  // da peça (09-tabuleiro.js), e incluí-lo infla a caixa do tabuleiro em 0.22 — a medida
+  // passaria a ser do clarão, não da madeira.
+  const corpo = o => (o.userData && o.userData.corpo) || o;
+  const caixasDe = (filhos, nome, pular) => filhos
+    .filter(o => o !== pular && o.visible)
+    .map(o => ({ nome, b: new B().setFromObject(corpo(o)) }))
+    .filter(c => !c.b.isEmpty());
+
+  // Distância de SEPARAÇÃO no plano do tampo: positiva é vão, negativa é uma dentro da
+  // outra, e o módulo é o quanto — pelo eixo de menor penetração.
+  const folgaEntre = (a, b) => Math.max(
+    Math.max(a.min.x - b.max.x, b.min.x - a.max.x),
+    Math.max(a.min.z - b.max.z, b.min.z - a.max.z));
+
+  const grupos = [
+    // O fantasma da prévia não conta: ele pousa fora da linha por definição.
+    caixasDe(j.grupoMesa.children, 'o tabuleiro', j.grupoPrevia),
+    caixasDe(j.grupoOutros.children, 'a mão de um adversário'),
+    caixasDe(j.grupoMonte.children, 'o monte'),
+    caixasDe(j.tralhas || [], 'uma tralha da mesa'),
+  ];
+  // Peça contra peça do PRÓPRIO tabuleiro não entra: tests/test-mesa.mjs já faz isso, puro
+  // e em 53 mil tabuleiros. Aqui a pergunta é entre grupos diferentes.
+  let pior = { folga: 99, a: '—', b: '—' };
+  for (let i = 0; i < grupos.length; i++)
+    for (let k = i + 1; k < grupos.length; k++)
+      for (const A of grupos[i]) for (const C of grupos[k]) {
+        const f = folgaEntre(A.b, C.b);
+        if (f < pior.folga) pior = { folga: f, a: A.nome, b: C.nome };
+      }
+
   const cortina = document.getElementById('cortina');
   return {
+    pior,
     transbordo: document.documentElement.scrollWidth - window.innerWidth,
     largura: window.innerWidth, altura: window.innerHeight,
     // Gaveta aberta muda o que se exige da tela: cobrir o jogo passa a ser o PONTO.
@@ -255,6 +302,9 @@ const sobrepoem = (a, b) => Math.max(0, Math.min(a.r, b.r) - Math.max(a.x, b.x))
 
 let falhas = 0;
 const ok = (cond, msg) => { if (!cond) { console.error('    ✗ ' + msg); falhas++; } };
+// A pior folga de TODAS as células, impressa no fim. Uma linha, e é ela que responde
+// "o número virou positivo em todas as telas?" sem ninguém ler 60 linhas de log.
+let piorGlobal = { folga: 99, a: '—', b: '—', onde: '—' };
 
 const navegador = await puppeteer.launch({
   executablePath: CHROME,
@@ -365,6 +415,16 @@ for (const tela of TELAS_ESCOLHIDAS) {
     ok(m.outros <= 1, `${onde}: a mão de um adversário saiu da tela (ndc.x ${m.outros.toFixed(2)})`);
     ok(m.monte <= 1, `${onde}: o monte saiu da tela (ndc.x ${m.monte.toFixed(2)})`);
 
+    // 5b. …e nada do que está no tampo pode ocupar o lugar de outra coisa. Esta é a
+    //     pergunta 3D CONTRA 3D, e ela não existia: as duas asserções acima são sobre a
+    //     MOLDURA, e a linha da mesa correndo por dentro da mão do vizinho passa nas duas.
+    //
+    //     O limiar não é zero de propósito. "Sete pixels de folga não são um conserto, são
+    //     sorte" (item 8), e 0.15 de mundo é um sexto de peça — vão de verdade, do tamanho
+    //     que um dedo precisa para pegar a peça sem esbarrar na do lado.
+    ok(m.pior.folga >= 0.15,
+      `${onde}: ${m.pior.a} e ${m.pior.b} ocupam o mesmo tampo (folga ${m.pior.folga.toFixed(2)})`);
+
     // 6. nada do jogo POR BAIXO de painel — a pergunta que faltava, e a família de defeito
     //    que já reincidiu (o comentário do 07-cena.js registra o copo movido à mão uma vez
     //    pelo mesmo motivo).
@@ -384,15 +444,20 @@ for (const tela of TELAS_ESCOLHIDAS) {
 
     const larguraNaTela = m.pecas.length
       ? (Math.max(...m.pecas.map(p => p.x)) - Math.min(...m.pecas.map(p => p.x))) : 0;
-    console.log(`  ${caso.nome.padEnd(12)} fov ${m.fov.toFixed(0).padStart(2)}° · ` +
+    console.log(`  ${caso.nome.padEnd(13)} fov ${m.fov.toFixed(0).padStart(2)}° · ` +
       `${m.pecas.length} peças em ${m.fileiras} fileira(s) · ocupam ${(larguraNaTela * 50).toFixed(0)}% · ` +
-      `mesa ${m.mesa.toFixed(2)} outros ${m.outros.toFixed(2)} monte ${m.monte.toFixed(2)}`);
+      `mesa ${m.mesa.toFixed(2)} outros ${m.outros.toFixed(2)} monte ${m.monte.toFixed(2)} · ` +
+      // A FOLGA SAI SEMPRE, mesmo verde: é a margem que encolhe em silêncio, e foi
+      // exatamente uma folga de sete pixels que passou por conserto no item 8.
+      `folga ${m.pior.folga.toFixed(2)}`);
+    if (m.pior.folga < piorGlobal.folga) piorGlobal = { ...m.pior, onde };
 
     await pagina.close();
   }
 }
 
 await navegador.close();
+console.log(`\nfolga mínima ${piorGlobal.folga.toFixed(2)} — ${piorGlobal.a} × ${piorGlobal.b} (${piorGlobal.onde})`);
 // O RODAPÉ TEM DE GRITAR QUE A RODADA FOI PARCIAL. Sem isto, quem rodar duas telas para
 // iterar num defeito lê "tudo certo" e acha que a suíte passou inteira — que é
 // exatamente o que o contorno de cortar a lista à mão já fazia, só que agora sem deixar
