@@ -10,6 +10,9 @@ const mod = await import(buildModule([
   'jogadaDoBot', 'timeDe', 'valor', 'carroca', 'chave', 'somaMao', 'mesmaPeca', 'PONTOS',
   'MODOS', 'MODO_PADRAO', 'MAX_EMBARALHOS', 'baralhoDoModo', 'maoRuim',
   'fechamentosArmados', 'pontasDepois', 'abandonar',
+  // `fecharMao` é o que decide pontos, empate e quem abre a próxima — e em DUPLAS ele
+  // faz três contas que não existem na mesa de 2. Nenhuma tinha asserção.
+  'fecharMao',
 ]));
 
 let falhas = 0;
@@ -259,6 +262,92 @@ secao('fechar o jogo de propósito');
     // Na última peça você está BATENDO, não fechando.
     const ultima = armar({ maos: [[[3, 4]], []] });
     ok(mod.acoesDe(ultima, 0).jogadas.length === 2, 'jogar a última peça é bater, não trancar');
+  }
+}
+
+// ─── fim de mão EM DUPLAS ───────────────────────────────────────────────────
+// A mesa de 4 é o modo clássico de boteco, e até aqui toda asserção de fim de mão foi
+// escrita com `n = 2` — onde `timeDe` é a identidade e as três contas de duplas do
+// `fecharMao` (somar o time, decidir a tranca pelo time, e escolher quem abre DENTRO do
+// time) simplesmente não rodam. Testar a mesa de 2 é testar o caso em que a regra some.
+secao('fim de mão em duplas');
+{
+  const quatro = () => Array.from({ length: 4 }, (_, i) => ({ nome: 'p' + i, tipo: 'bot', nivel: 'normal' }));
+  // Uma mesa de 4 armada à mão, sem sorteio: partida semeada teria as mãos que o
+  // embaralho quiser, e o que importa aqui são somas escolhidas a dedo.
+  const mesa = maos => {
+    const P = mod.novaPartida(quatro(), { alvo: 6 });
+    P.maos = maos;
+    return P;
+  };
+  ok(mod.novaPartida(quatro(), { alvo: 6 }).duplas === true, 'montagem: mesa de 4 tinha de nascer em duplas');
+  ok(mod.timeDe({ duplas: true }, 2) === 0 && mod.timeDe({ duplas: true }, 3) === 1,
+    'montagem: as duplas são em cruz — 0&2 contra 1&3');
+
+  // BATIDA: o ponto é do TIME, não da cadeira. Numa mesa de 2 isto é indistinguível,
+  // porque o time É a cadeira; aqui, quem bate na cadeira 2 tem de marcar no placar 0.
+  {
+    const P = mesa([[[3, 3]], [[6, 6]], [], [[5, 4]]]);
+    mod.fecharMao(P, { motivo: 'batida', vencedor: 2, tipo: 'simples' });
+    ok(P.placar[0] === 1 && P.placar[1] === 0,
+      `a batida da cadeira 2 tinha de pontuar para o time 0, e o placar ficou ${P.placar}`);
+    ok(P.resultado.time === 0, `o resultado devia dizer time 0 e disse ${P.resultado.time}`);
+    // `somasPorTime` tem o MESMO índice do placar, e é o que a tela de fim de mão mostra:
+    // quatro números soltos não dizem quem pagou mais caro.
+    ok(String(P.resultado.somasPorTime) === '6,21',
+      `os subtotais por time deviam ser 6 e 21, e vieram ${P.resultado.somasPorTime}`);
+    ok(P.resultado.somas.length === 4, 'as somas individuais têm de continuar existindo, uma por cadeira');
+  }
+
+  // TRANCA: ganha o time de menor soma SOMADA, e não a cadeira de menor mão. Este cenário
+  // separa as duas leituras de propósito — a mão mais leve da mesa (a cadeira 1, com 2) é
+  // do time PERDEDOR, porque o parceiro dela carrega 24.
+  {
+    const P = mesa([[[4, 4]], [[1, 1]], [[3, 4]], [[6, 6], [6, 5]]]);
+    //            time 0: 8 + 7 = 15          time 1: 2 + 23 = 25
+    mod.fecharMao(P, { motivo: 'tranca' });
+    ok(P.resultado.time === 0,
+      `a tranca é do time de menor SOMA (0, com 15), e o motor deu ${P.resultado.time}`);
+    ok(P.placar[0] === 1, `o time 0 devia ter marcado 1 ponto e o placar ficou ${P.placar}`);
+    // E QUEM ABRE A PRÓXIMA é a mão mais leve DENTRO do time que ganhou — a cadeira 2,
+    // com 7, e não a cadeira 1, que tem a mão mais leve da mesa inteira.
+    ok(P.resultado.vencedor === 2 && P.abridor === 2,
+      `quem abre é a mão mais leve do time vencedor (cadeira 2), e o motor escolheu ${P.resultado.vencedor}`);
+  }
+
+  // EMPATE POR TIME, e é o caso que só existe em duplas: as quatro mãos são todas
+  // diferentes, nenhuma cadeira empata com nenhuma, e mesmo assim os dois times somam 14.
+  // A mão morre. Numa mesa de 2 o empate exige duas mãos idênticas em soma, e testar isso
+  // não exercita esta linha.
+  {
+    const P = mesa([[[6, 6]], [[5, 5]], [[1, 1]], [[2, 2]]]);
+    //            time 0: 12 + 2 = 14         time 1: 10 + 4 = 14
+    ok(mod.somaMao(P.maos[0]) + mod.somaMao(P.maos[2]) === mod.somaMao(P.maos[1]) + mod.somaMao(P.maos[3]),
+      'montagem: os dois times tinham de empatar na soma');
+    ok(new Set(P.maos.map(mod.somaMao)).size === 4,
+      'montagem: as quatro cadeiras tinham de ter somas DIFERENTES, senão o empate seria por cadeira');
+    mod.fecharMao(P, { motivo: 'tranca' });
+    ok(P.resultado.time === null, `empate por time devia matar a mão, e o motor deu time ${P.resultado.time}`);
+    ok(P.placar[0] === 0 && P.placar[1] === 0, `ninguém marca no empate, e o placar ficou ${P.placar}`);
+  }
+
+  // A CRUZADA VALE 4, e é a batida que só existe em mesa de 4 na prática. Aqui a
+  // pergunta é só se o valor chega ao placar do time certo — a regra de QUANDO ela
+  // acontece está testada em `tipoDaBatida`.
+  {
+    const P = mesa([[], [[0, 0]], [[1, 2]], [[3, 3]]]);
+    mod.fecharMao(P, { motivo: 'batida', vencedor: 0, tipo: 'cruzada' });
+    ok(P.placar[0] === mod.PONTOS.cruzada && mod.PONTOS.cruzada === 4,
+      `a cruzada devia levar 4 ao time 0, e o placar ficou ${P.placar}`);
+  }
+
+  // O FIM DA PARTIDA sai do placar do TIME, não da cadeira. Com o alvo em 6 e o time 0
+  // em 5, uma batida simples da cadeira 2 — a parceira de quem já pontuava — encerra.
+  {
+    const P = mesa([[[3, 3]], [[6, 6]], [], [[5, 4]]]);
+    P.placar[0] = 5;
+    mod.fecharMao(P, { motivo: 'batida', vencedor: 2, tipo: 'simples' });
+    ok(P.fase === 'fim', `o ponto do parceiro tinha de fechar a partida, e a fase ficou "${P.fase}"`);
   }
 }
 
