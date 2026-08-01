@@ -189,6 +189,12 @@ e por dupla, com a narração no mesmo fio, e conversa também no saguão), **vo
 mesma partida** depois de a página morrer, e a **legibilidade da mesa** (sRGB, pinta maior,
 marca da última jogada).
 
+A **v1.7.0** fecha a Fila 5 inteira. Ela leva as duas coisas que sobravam, e as duas são de
+fundo: o **fechamento forçado** deixa de ter janela cega (a regra valia só sem monte, e o monte
+seca no meio da mão), e o **anfitrião passa a reabrir a MESMA mesa** ao recarregar, com os
+convidados voltando sozinhos para a cadeira deles. Sem esta segunda, o "voltar para a mesma
+partida" era metade de um mecanismo.
+
 A **v1.6.0** é a primeira release cujos itens vieram quase todos de **jogo de verdade, no
 celular**, e não de leitura de código. Ela leva: o lá-e-lô com as pontas certas (1), a
 cadeira que passa a ser de quem é dono dela (4) — que era **vazamento de mão**, não só
