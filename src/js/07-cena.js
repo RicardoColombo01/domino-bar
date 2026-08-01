@@ -303,17 +303,78 @@ function copo(x, z, cheio) {
   scene.add(g);
   return g;
 }
-copo(-5.35, -0.3, 0.75);      // longe do monte: em (-5, 1.9) o copo nascia dentro da pilha
-copo(4.9, 2.2, 0.4);
-copo(5.2, -1.4, 0.95);
+// As tralhas ficam guardadas numa lista porque elas DISPUTAM O TAMPO com o tabuleiro, com
+// o monte e com as mãos dos adversários, e o comentário acima é a prova de que isso já
+// aconteceu uma vez e foi resolvido movendo um número à mão. Sem a lista, o teste de
+// sobreposição não tem como perguntar por elas.
+// AS TRALHAS FICAM NO ARCO DA FRENTE, e o arco é calculado, não escolhido a olho.
+// Os adversários sentam num anel de raio 4.88, e cada mão se abre TANGENCIALMENTE: com
+// sete peças ela cobre ±23° do anel, com as catorze do Duelo ±27°. As cadeiras possíveis
+// são 90°, 120°, 180°, 240° e 270° (mesa de 4, de 3 e de 2, com você sempre em 0°), então
+// o anel está ocupado de 63° a 297° passando pelo fundo — e sobra o arco da FRENTE, que é
+// seu. É por construção livre em qualquer tamanho de mesa, e é por isso que estas
+// posições podem continuar sendo literais.
+//
+// Antes elas estavam em 105°, 251° e 273°, ou seja dentro das cadeiras: medido, o copo
+// entrava 0.82 na mão do adversário — mais fundo do que a linha da mesa entrava (0.42), e
+// em paisagem, wide e tablet, isto é, no computador, sempre, desde o começo. Ninguém
+// relatou porque peça de costas dentro de copo de vidro lê como "coisa do boteco".
+//
+// O comentário abaixo é de quando um copo já tinha sido movido à mão pelo mesmo motivo. A
+// família reincidiu do outro lado, e é por isso que agora existe asserção 3D contra 3D no
+// test-telas em vez de mais um número escolhido a dedo.
+const tralhas = [
+  copo(-3.35, 4.05, 0.75),    // longe do monte: em (-5, 1.9) o copo nascia dentro da pilha
+  copo(3.35, 4.05, 0.4),
+  copo(4.75, 3.25, 0.95),
+];
 
 const cinzeiro = new THREE.Mesh(
   new THREE.CylinderGeometry(0.46, 0.4, 0.14, 20),
   new THREE.MeshStandardMaterial({ color: 0x4a4440, roughness: 0.5 })
 );
-cinzeiro.position.set(-5.1, 0.07, -1.7);
+cinzeiro.position.set(1.6, 0.07, 5.1);      // mesmo arco da frente que os copos
 cinzeiro.castShadow = true;
 scene.add(cinzeiro);
+tralhas.push(cinzeiro);
+
+// ─── quem senta onde ─────────────────────────────────────────────────────────
+// A conta ÚNICA do que está no tampo. Antes eram duas: 10-mao.js apertava o círculo dos
+// adversários por um lado e 09-tabuleiro.js media o orçamento do tabuleiro por outro, em
+// profundidades diferentes (z = -3.05 contra z = 0.4) e com divisores mágicos diferentes
+// (13.5 contra 0.86), sem uma saber da outra. Que os dois dessem quase o mesmo número era
+// coincidência aritmética — e a coincidência era justamente o que garantia a colisão.
+const RAIO_ASSENTO = MESA_R * 0.80;
+
+// O aperto continua sendo UM só (a roda continua uma roda), mas quem o decide passa a ser
+// o assento mais espremido, cada um medido na PROFUNDIDADE DELE. O 13.5 de antes media
+// sempre em z = -3.05, que é onde senta o adversário DE CIMA; quem estoura é o de LADO, em
+// z = 0, onde a tela é ~16% mais estreita. É a mesma lição que o monte já tinha ensinado
+// uma vez ("a posição dele sai da largura visível na profundidade dele mesmo"), cobrada
+// uma segunda vez, no assento.
+function assentosDaMesa(vista) {
+  const n = vista && vista.naMao ? vista.naMao.length : 0;
+  const crus = [];
+  for (let i = 0; i < n; i++) {
+    if (i === vista.cadeira) continue;
+    const a = anguloDaCadeira(i, vista.cadeira, n);
+    crus.push({ cadeira: i, a, x: Math.sin(a) * RAIO_ASSENTO, z: Math.cos(a) * RAIO_ASSENTO,
+      quantas: vista.naMao[i] });
+  }
+  let aperto = 1;
+  for (const s of crus) {
+    if (Math.abs(s.x) < 1e-6) continue;                 // sentado no eixo: nada a apertar
+    const cabe = larguraVisivelEm(PECA_E / 2, s.z) / 2 - PECA_C / 2;
+    aperto = Math.min(aperto, cabe / Math.abs(s.x));
+  }
+  aperto = Math.min(1, Math.max(0.25, aperto));
+  const lugares = crus.map(s => {
+    const x = s.x * aperto;
+    const espaco = Math.min(0.56, 4.2 * aperto / Math.max(s.quantas, 1));
+    return { ...s, x, espaco, monte: caixaDoMonte(s.a, x, s.z, s.quantas, espaco) };
+  });
+  return { aperto, lugares };
+}
 
 // Enquadrar é derivar o fov da largura que precisa caber, e não o contrário. Antes isto
 // só mexia em `camera.aspect`, o que em retrato deixava a mão duas vezes e meia maior

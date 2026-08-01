@@ -477,6 +477,11 @@ window.__jogo = {
   // coordenadas de tela e reprovar se alguma cair fora — que é o teste que prova "dá
   // para ver a mão" sem ninguém olhar screenshot.
   camera, naMao, enquadrar, grupoMesa, grupoOutros, grupoMonte,
+  // THREE e as tralhas existem aqui para a asserção 3D CONTRA 3D do test-telas medir
+  // CAIXAS em coordenadas de mundo. Sem o Box3 ela só saberia comparar centros, e centro
+  // contra centro nunca acusa nada: os centros ficam a 2,7 um do outro e quem se toca são
+  // as bordas.
+  THREE, tralhas,
   arrumarMao, moverNaMao, publicar, alternarConversa, falar, trocarCanal,
   // Retomar precisa ser dirigível pelos testes: o caminho inteiro só existe entre duas
   // cargas da página, e é justamente aí que ninguém olha.

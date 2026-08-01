@@ -9,6 +9,7 @@ installStubs();
 const mod = await import(buildModule([
   'layoutDaMesa', 'escalaDoTabuleiro', 'novaPartida', 'novaMao', 'jogar', 'comprar',
   'passar', 'jogadaDoBot', 'carroca', 'PECA_C', 'PECA_L',
+  'larguraUtilDoTabuleiro', 'caixaDoMonte', 'anguloDaCadeira', 'TABULEIRO_Z', 'FOLGA_VIZINHO',
 ], undefined, path.join(import.meta.dirname, 'built-mesa.mjs')));
 
 let falhas = 0;
@@ -84,6 +85,46 @@ console.log('\ntabuleiros de partidas de verdade');
   ok(comDobra > 0, 'nenhum tabuleiro chegou a dobrar — a borda nunca foi testada');
   ok(menorEscala > 0.3, `escala ficou em ${menorEscala.toFixed(2)}: as peças ficariam ilegíveis`);
   ok(maiorLinha >= 20, 'nenhuma linha longa apareceu para testar o serpenteio');
+}
+
+// ─── o corredor entre os adversários ─────────────────────────────────────────
+// A guarda RÁPIDA do defeito da linha atravessando a mão do vizinho. A profunda é a
+// asserção 3D contra 3D do test-telas, que abre o Chrome em seis telas e leva minutos;
+// esta roda em milissegundos, dentro do `npm test`, e é a que alguém realmente roda a cada
+// salvamento. Mesma divisão por custo que o fechamento forçado já usa.
+//
+// Os números de tela entram como DADO, não como medida: a função é pura, e quem mede o
+// Chrome é o test-telas. Estes são os de um retrato 390×844 com mesa de 4.
+console.log('\no corredor entre os adversários');
+{
+  const APERTO = 0.55, RAIO = 4.88, TELA = 5.32;
+  const montes = [1, 2, 3].map(i => {
+    const a = mod.anguloDaCadeira(i, 0, 4);
+    return mod.caixaDoMonte(a, Math.sin(a) * RAIO * APERTO, Math.cos(a) * RAIO, 4, 0.56);
+  });
+  const linha = Array.from({ length: 14 }, (_, i) => [i % 7, (i + 1) % 7]);
+  const { caixa } = mod.layoutDaMesa(linha, 0);
+
+  const util = mod.larguraUtilDoTabuleiro(caixa, TELA, montes);
+  const meia = caixa.l * mod.escalaDoTabuleiro(caixa, util) / 2;
+  const bordaDoVizinho = Math.min(...montes.filter(m => Math.abs(m.x) > 1e-6)
+    .map(m => Math.abs(m.x) - m.l / 2));
+  ok(meia <= bordaDoVizinho - mod.FOLGA_VIZINHO + EPS,
+    `a linha vai a ${meia.toFixed(2)} e o monte do vizinho começa em ${bordaDoVizinho.toFixed(2)}`);
+
+  // O adversário SENTADO LONGE da faixa da linha não pode apertar nada: sem esta, a conta
+  // ficaria "o mais próximo em x manda", e numa mesa de 2 (o de frente, a 4.88 de
+  // distância) o tabuleiro encolheria à toa.
+  const soDeFrente = [mod.caixaDoMonte(Math.PI, 0, -RAIO, 14, 0.3)];
+  ok(mod.larguraUtilDoTabuleiro(caixa, TELA, soDeFrente) === Math.min(4 * 2.1, TELA),
+    'o adversário sentado longe da linha apertou o tabuleiro sem precisar');
+
+  // E o caminho PURO não pode ter mudado: `escalaDoTabuleiro` continua com o mesmo
+  // default, que é o que test-mesa.mjs usa nas 53 mil comparações lá em cima.
+  ok(mod.escalaDoTabuleiro(caixa) === mod.escalaDoTabuleiro(caixa, 8.4),
+    'o default de escalaDoTabuleiro mudou, e com ele todo o teste de sobreposição acima');
+  console.log(`  linha até ${meia.toFixed(2)} · vizinho em ${bordaDoVizinho.toFixed(2)} · ` +
+    `folga ${(bordaDoVizinho - meia).toFixed(2)} (mínimo ${mod.FOLGA_VIZINHO})`);
 }
 
 console.log(falhas ? `\n${falhas} falha(s)` : '\ntudo certo');
