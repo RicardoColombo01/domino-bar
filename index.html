@@ -3820,6 +3820,14 @@ window.__jogo = {
   // cargas da página, e é justamente aí que ninguém olha.
   retomarPartida, partidaGuardada, atualizarBotaoRetomar, lembrarMesa, mesaLembrada,
   pedirDica, dicaDaVista,
+  // CONGELA A MESA: cancela o lance de bot que estiver agendado. As cenas do
+  // tests/test-telas.mjs montam a mesa jogando de verdade e depois esperam a tela
+  // assentar — e nessa janela um número VARIÁVEL de temporizadores de bot disparava, com
+  // a mesma cena dando `mesa 0.27` numa rodada e `0.31` na outra. Semear o Math.random
+  // matou a variação do EMBARALHO; isto mata a do RELÓGIO, que era a outra metade.
+  // Uma chamada basta: nada reagenda sozinho, porque `seguirOTurno` só roda em
+  // `publicar()`, e depois da montagem a cena não publica mais nada.
+  pararBots: () => clearTimeout(timerBot),
   // Quantas conexões o anfitrião tem de pé. É como o teste do online prova que a mesma
   // pessoa em duas abas ocupa UMA cadeira, e não duas: sem isto, o take-over só daria
   // para conferir de fora pelo sintoma, que é a mesa lotar de fantasmas.
