@@ -245,8 +245,11 @@ As pontas são o primeiro e o último número; jogar na esquerda é um `unshift`
   compartilham a MESMA aba viva. Uma cena que deixou a mesa no Trio fez a seguinte reprovar
   com "A FALA DA DUPLA VAZOU" — sem duplas, o canal da dupla é o canal geral. Teste novo
   derrubando teste velho lê exatamente como defeito no jogo.
-- **Duas suítes de Puppeteer ao mesmo tempo viram "erro de rede".** A contenção de CPU
-  estoura os 45 s de navegação do `test-online`, e a mensagem culpa o broker do PeerJS.
+- **Duas suítes pesadas ao mesmo tempo viram "erro de rede".** A contenção de CPU estoura os
+  45 s de navegação do `test-online`, e a mensagem culpa o broker do PeerJS. Vale também
+  para uma suíte de Node ao lado do `test-telas`: aquilo renderiza WebGL **por software**,
+  ou seja é CPU pura, e a espera dele é "oito quadros iguais" com teto de 240 — máquina
+  disputada chega ao teto antes de assentar. **Suíte pesada roda sozinha.**
 
 ---
 
