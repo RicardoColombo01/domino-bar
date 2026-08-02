@@ -24,6 +24,21 @@ const MODO_PADRAO = 'classico';
 // distribuição rodar para sempre; aqui ela desiste e entrega a última mão.
 const MAX_EMBARALHOS = 100;
 
+// ─── quem pediu menos movimento ──────────────────────────────────────────────
+// Sensibilidade vestibular não é preferência estética: para quem tem, movimento na tela
+// dá enjoo de verdade. Este jogo era o pior conjunto possível — a lâmpada respira PARA
+// SEMPRE, as peças deslizam até o lugar e a câmera reenquadra sozinha.
+//
+// A CONSULTA É FEITA UMA VEZ e o objeto guardado, em vez de chamar `matchMedia` a cada
+// quadro: a `MediaQueryList` é VIVA (o `.matches` acompanha o sistema), então guardá-la
+// custa uma alocação em vez de sessenta por segundo — e continua respondendo se a pessoa
+// mudar a preferência com o jogo aberto, sem listener nenhum.
+//
+// Mora em 01 porque quem pergunta são o 09 (a suavização) e o 16 (a lâmpada), e no escopo
+// concatenado o primeiro arquivo é o único lugar de onde todos enxergam.
+const MQ_MOVIMENTO = matchMedia('(prefers-reduced-motion: reduce)');
+const movimentoReduzido = () => MQ_MOVIMENTO.matches;
+
 // Medidas da peça em unidades de mundo. O comprimento é EXATAMENTE o dobro da
 // largura — é isso que faz uma carroça atravessada ocupar meia peça no braço e
 // o tabuleiro fechar sem sobra em 06-layout.js. Mexer num, mexer no outro.

@@ -344,6 +344,32 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
 .regras ul { margin: 10px 0 0; padding-left: 20px; line-height: 1.75; }
 .regras b { color: var(--ambar); }
 
+/* ── quem pediu menos movimento ───────────────────────────────────────────────
+   O outro lado do `movimentoReduzido()` do 01-constantes.js, que cuida do 3D — a lâmpada
+   que respira e as peças que deslizam. Aqui ficam os três movimentos de HTML que existem
+   no projeto: a barra de confirmar subindo, o aviso crescendo e o hover dos botões.
+
+   As transições NÃO viram `none`: viram `0.01ms`. A diferença importa porque código que
+   espera por `transitionend`/`animationend` nunca é avisado quando a transição deixa de
+   existir — aqui não há nenhum hoje, e é exatamente por isso que a hora de escrever assim
+   é agora, e não depois de alguém adicionar um e passar uma tarde procurando.
+
+   `transform` do `#confirmar` e do `#aviso` fica de FORA da anulação de propósito: aqueles
+   dois são centrados por `translate(-50%)`, e zerar o transform os joga meia largura para
+   fora da tela. É a mesma armadilha que a gaveta pagou no item 10 da Fila 5, e ela volta
+   sempre que alguém mexe em movimento sem olhar quem usava o transform para POSIÇÃO. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* O botão afundava 1px ao ser apertado. É pequeno, mas é movimento sob o dedo, e o
+     retorno de "apertei" já é dado pela cor. */
+  .btn:active { transform: none; }
+}
+
 /* ── o anel de foco ───────────────────────────────────────────────────────────
    Não existia UM indicador de foco no projeto inteiro, e os botões de confirmar sempre
    foram <button> de verdade que pegam Tab — ou seja, dava para chegar neles pelo teclado

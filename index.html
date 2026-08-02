@@ -120,6 +120,9 @@
         <button class="btn peq on" data-livre="0">não</button>
         <button class="btn peq" data-livre="1">sim</button>
       </div>
+      <!-- Escrito por ajustarCompraAoModo: o botão desligado diz que não dá, e esta nota
+           diz POR QUE não dá. Sem ela o jogador troca de modo e a regra some sem motivo. -->
+      <span class="nota" id="notaCompra"></span>
     </div>
 
     <div class="linha acoesMenu">
@@ -275,6 +278,21 @@ const MODO_PADRAO = 'classico';
 // distribuição rodar para sempre; aqui ela desiste e entrega a última mão.
 const MAX_EMBARALHOS = 100;
 
+// ─── quem pediu menos movimento ──────────────────────────────────────────────
+// Sensibilidade vestibular não é preferência estética: para quem tem, movimento na tela
+// dá enjoo de verdade. Este jogo era o pior conjunto possível — a lâmpada respira PARA
+// SEMPRE, as peças deslizam até o lugar e a câmera reenquadra sozinha.
+//
+// A CONSULTA É FEITA UMA VEZ e o objeto guardado, em vez de chamar `matchMedia` a cada
+// quadro: a `MediaQueryList` é VIVA (o `.matches` acompanha o sistema), então guardá-la
+// custa uma alocação em vez de sessenta por segundo — e continua respondendo se a pessoa
+// mudar a preferência com o jogo aberto, sem listener nenhum.
+//
+// Mora em 01 porque quem pergunta são o 09 (a suavização) e o 16 (a lâmpada), e no escopo
+// concatenado o primeiro arquivo é o único lugar de onde todos enxergam.
+const MQ_MOVIMENTO = matchMedia('(prefers-reduced-motion: reduce)');
+const movimentoReduzido = () => MQ_MOVIMENTO.matches;
+
 // Medidas da peça em unidades de mundo. O comprimento é EXATAMENTE o dobro da
 // largura — é isso que faz uma carroça atravessada ocupar meia peça no braço e
 // o tabuleiro fechar sem sobra em 06-layout.js. Mexer num, mexer no outro.
@@ -383,6 +401,19 @@ const modoDe = regras => {
 function baralhoDoModo(modo) {
   const pecas = baralhoCompleto();
   return modo.semZeroZero ? pecas.filter(p => !mesmaPeca(p, [0, 0])) : pecas;
+}
+
+// QUANTAS PEÇAS SOBRAM PARA O MONTE nesta combinação de modo e jogadores. Mora aqui, junto
+// do `baralhoDoModo`, porque aritmética de baralho fora do motor apodrece — o `14-menu.js`
+// já teve um `28 - 7 * MESA.n` escrito à mão, e foi a primeira linha a quebrar quando os
+// modos chegaram.
+//
+// Repare que a resposta NÃO é uma propriedade do modo: o Clássico tem monte com 2 ou 3
+// jogadores e nenhum com 4, e é a mesma tabela que faz o Duelo e o Trio esgotarem o baralho
+// na distribuição. Quem pergunta são o menu (para não prometer compra livre onde ela não
+// existe) e quem quiser saber antes de distribuir.
+function sobraDoBaralho(modo, n) {
+  return baralhoDoModo(modo).length - n * modo.pecasPorMao;
 }
 
 // A REGRA DA CASA: quando a mão saiu ruim demais e a mesa embaralha tudo de novo.
@@ -1815,7 +1846,14 @@ const esconderPrevia = () => grupoPrevia.clear();
 const temPrevia = () => grupoPrevia.children.length > 0;
 
 // Interpolação exponencial: independe do framerate e não precisa de biblioteca.
-const chegarPerto = (atual, alvo, k, dt) => atual + (alvo - atual) * (1 - Math.exp(-k * dt));
+//
+// É a ÚNICA função de suavização do projeto — treze chamadas, do tabuleiro e da mão —, e
+// é por isso que quem pediu menos movimento cabe aqui numa linha em vez de em treze. Com
+// a preferência ligada a peça não desliza: ela já está no lugar. Repare que ninguém perde
+// informação com isso — o deslizamento mostra o CAMINHO, e o que decide a jogada é o
+// destino, que continua exatamente onde estava.
+const chegarPerto = (atual, alvo, k, dt) =>
+  (movimentoReduzido() ? alvo : atual + (alvo - atual) * (1 - Math.exp(-k * dt)));
 
 function animarTabuleiro(dt) {
   grupoMesa.scale.setScalar(chegarPerto(grupoMesa.scale.x, escalaAlvo, 8, dt));
@@ -3253,6 +3291,26 @@ function ajustarCadeirasAoModo() {
     b.disabled = !cabem.includes(n);
     b.classList.toggle('on', !b.disabled && n === MESA.n);
   });
+  ajustarCompraAoModo();
+}
+
+// COMPRA LIVRE SÓ EXISTE ONDE EXISTE MONTE. O botão ficava aceso no Duelo, no Trio e no
+// Clássico de 4, prometendo uma regra que o motor descarta em silêncio — `acoesDe` exige
+// `temMonte` antes de qualquer coisa. É a mesma espécie de defeito que o
+// `refletirMesaNosBotoes` existe para impedir: o jogo está certo e a tela mente.
+//
+// A pergunta NÃO é "qual modo": o Clássico tem monte com 2 ou 3 jogadores e nenhum com 4.
+// Quem responde é `sobraDoBaralho`, em 02-baralho.js, pelo mesmo motivo de sempre —
+// aritmética de baralho escrita à mão no menu já quebrou uma vez.
+//
+// A preferência guardada NÃO é apagada quando o botão desliga: quem jogava Clássico de 2 com
+// compra livre e dá uma passada pelo Duelo esperava a marca de volta ao voltar. O motor
+// ignora o valor onde não há monte, então guardá-lo não custa nada — e é o `disabled` que
+// impede a promessa.
+function ajustarCompraAoModo() {
+  const temMonte = sobraDoBaralho(MODOS[MESA.modo], MESA.n) > 0;
+  el('compraLivre').querySelectorAll('button').forEach(b => { b.disabled = !temMonte; });
+  el('notaCompra').textContent = temMonte ? '' : 'sem monte nesta mesa';
 }
 
 const cadeirasOnline = () => MESA.cadeiras.slice(0, MESA.n).filter(c => c.tipo === 'online').length;
@@ -3276,7 +3334,9 @@ function grupo(id, attr, aplicar) {
   });
 }
 grupo('modoMesa', 'modo', v => { MESA.modo = v; ajustarCadeirasAoModo(); montarCadeiras(); lembrarMesa(); });
-grupo('qtdJogadores', 'n', v => { MESA.n = +v; montarCadeiras(); lembrarMesa(); });
+// `ajustarCompraAoModo` entra aqui também, e não só no modo: o Clássico tem monte com 2 ou
+// 3 jogadores e NENHUM com 4, então trocar só o número de jogadores muda a resposta.
+grupo('qtdJogadores', 'n', v => { MESA.n = +v; montarCadeiras(); ajustarCompraAoModo(); lembrarMesa(); });
 grupo('alvoPontos', 'alvo', v => { MESA.alvo = +v; lembrarMesa(); });
 grupo('compraLivre', 'livre', v => { MESA.compraVoluntaria = v === '1'; lembrarMesa(); });
 
@@ -4364,7 +4424,14 @@ function quadro(agora) {
   animarMao(dt, apontada);
 
   // A lâmpada respira de leve: mesa parada com luz parada parece render, não boteco.
-  const tremor = 0.86 + Math.sin(agora / 640) * 0.02 + Math.sin(agora / 197) * 0.012;
+  //
+  // E ela era o PIOR item do jogo para sensibilidade vestibular, porque é o único
+  // movimento que não acaba nunca — não depende de jogada, de vez nem de nada: enquanto a
+  // aba estiver aberta, a luz oscila. Com a preferência ligada ela para no valor médio, e
+  // repare que o boteco continua de pé: a luz fica quente e baixa, só não pulsa.
+  const tremor = movimentoReduzido()
+    ? 0.86
+    : 0.86 + Math.sin(agora / 640) * 0.02 + Math.sin(agora / 197) * 0.012;
   bulbo.material.color.setHSL(0.1, 0.5, tremor);
   lampada.intensity = 280 + tremor * 30;
 
@@ -4426,6 +4493,9 @@ window.__jogo = {
   // e por isso o teste do online precisa poder forçar esse redesenho para conferir que
   // o nome chega como texto, e não como elemento.
   montarCadeiras,
+  // A compra livre só é oferecida onde existe monte, e `disabled` num <button> só existe
+  // com DOM de verdade — daí a asserção morar no test-online e precisar chamar isto.
+  ajustarCompraAoModo,
   get P() { return P; },
   get vista() { return vistaAtual; },
   // A ORDEM DA TELA, que desde a arrumação não é mais a de vista.mao. Quem quiser

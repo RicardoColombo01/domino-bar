@@ -21,6 +21,20 @@ export function correrTimers() {
   return leva.length;
 }
 
+// As media queries que o teste declarou verdadeiras. Vazio por padrão, que é o mesmo que
+// dizer "tela de computador, sem preferência nenhuma" — o estado em que o harness sempre
+// viveu, então nenhuma suíte antiga muda de comportamento.
+const preferencias = new Set();
+
+// Liga/desliga uma media query para o jogo. A consulta tem de ser LITERALMENTE a mesma
+// string que o jogo passa para o matchMedia — é chato de propósito: se alguém trocar a
+// consulta no jogo, o teste para de casar e a asserção fica vermelha, em vez de continuar
+// verde testando um mundo que não existe mais.
+export function preferir(consulta, ligada = true) {
+  if (ligada) preferencias.add(consulta);
+  else preferencias.delete(consulta);
+}
+
 function makeEl(id) {
   const e = {
     id, textContent: '', innerHTML: '', className: '', value: '', title: '', offsetWidth: 1,
@@ -80,8 +94,21 @@ export function installStubs() {
   // tela se está em modo gaveta: guardar com `typeof matchMedia` no jogo seria peso morto
   // em qualquer navegador de verdade, já que quem não tem matchMedia também não tem WebGL.
   // Quem estava incompleto era o dublê, não o jogo.
-  global.matchMedia = consulta => ({ matches: false, media: consulta,
-    addEventListener: () => {}, removeEventListener: () => {} });
+  //
+  // OITAVA VEZ da série, e desta vez o buraco não era um método faltando: era o dublê
+  // responder SEMPRE a mesma coisa. `matches: false` fixo é o padrão certo para as media
+  // queries de celular (o harness roda em 1600×900), e vira um problema no instante em que
+  // o jogo passa a perguntar por uma PREFERÊNCIA — `prefers-reduced-motion` —, porque aí
+  // o ramo ligado fica inalcançável e um verde não quer dizer nada.
+  //
+  // A `MediaQueryList` devolvida é VIVA de propósito: o jogo guarda o objeto uma vez
+  // (01-constantes.js) e lê `.matches` a cada quadro, que é como o navegador funciona.
+  // Um dublê que congelasse o valor na primeira leitura faria `preferir()` não ter efeito
+  // e mentiria sobre o jogo.
+  global.matchMedia = consulta => ({
+    get matches() { return preferencias.has(consulta); },
+    media: consulta, addEventListener: () => {}, removeEventListener: () => {},
+  });
   global.performance = { now: () => (fakeTime += 1000 / 60) };
   global.addEventListener = (type, fn) => {
     if (!listeners.has(type)) listeners.set(type, []);
