@@ -125,7 +125,14 @@ const esconderPrevia = () => grupoPrevia.clear();
 const temPrevia = () => grupoPrevia.children.length > 0;
 
 // Interpolação exponencial: independe do framerate e não precisa de biblioteca.
-const chegarPerto = (atual, alvo, k, dt) => atual + (alvo - atual) * (1 - Math.exp(-k * dt));
+//
+// É a ÚNICA função de suavização do projeto — treze chamadas, do tabuleiro e da mão —, e
+// é por isso que quem pediu menos movimento cabe aqui numa linha em vez de em treze. Com
+// a preferência ligada a peça não desliza: ela já está no lugar. Repare que ninguém perde
+// informação com isso — o deslizamento mostra o CAMINHO, e o que decide a jogada é o
+// destino, que continua exatamente onde estava.
+const chegarPerto = (atual, alvo, k, dt) =>
+  (movimentoReduzido() ? alvo : atual + (alvo - atual) * (1 - Math.exp(-k * dt)));
 
 function animarTabuleiro(dt) {
   grupoMesa.scale.setScalar(chegarPerto(grupoMesa.scale.x, escalaAlvo, 8, dt));

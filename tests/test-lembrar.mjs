@@ -77,9 +77,18 @@ try {
       limpar();
       // Pelo caminho do jogador: clicar nos botões, não escrever no MESA. É o clique que
       // tem de gravar, e um teste que chama lembrarMesa() na mão não provaria isso.
+      // A ORDEM IMPORTA, e é ela que este bloco passou a provar de quebra: a compra livre
+      // só existe onde existe monte, e o Trio não tem — os botões dela ficam `disabled`
+      // lá, e `.click()` num botão desabilitado não dispara nada. Então liga-se a compra
+      // ENQUANTO a mesa ainda é Clássico, e só depois troca-se para Trio.
+      //
+      // Com isso a asserção lá embaixo passa a exigir mais do que antes: que a preferência
+      // SOBREVIVA a uma passada por um modo sem monte. Desligar o botão não pode apagar a
+      // escolha — quem joga Clássico de 2 com compra livre e espia o Trio espera a marca
+      // de volta ao voltar.
+      document.querySelector('#compraLivre button[data-livre="1"]').click();
       document.querySelector('#modoMesa button[data-modo="trio"]').click();
       document.querySelector('#alvoPontos button[data-alvo="10"]').click();
-      document.querySelector('#compraLivre button[data-livre="1"]').click();
       const nome = document.querySelector('#cadeiras input.nome[data-i="1"]');
       nome.value = 'Bigodinho';
       nome.oninput();

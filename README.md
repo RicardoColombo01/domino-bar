@@ -70,6 +70,12 @@ O placar, de quem é a vez, os avisos de erro e a conversa da mesa são **regiõ
 (`aria-live`), então um leitor de tela narra a partida sozinho. Todo texto do HUD passa no
 contraste AA — inclusive o de erro, que era o de menor contraste da tela.
 
+E quem pede **menos movimento** ao sistema (`prefers-reduced-motion`) recebe: a lâmpada para
+de respirar, as peças não deslizam até o lugar — já estão nele — e as animações de HTML
+somem. A mesa continua a mesma; nada de informação se perde, porque o deslizamento mostrava
+o caminho e quem decide a jogada é o destino. Vale nos dois sentidos e sem recarregar: mudar
+a preferência com o jogo aberto tem efeito no quadro seguinte.
+
 ### A conversa da mesa
 
 Narração e falas no **mesmo fio**, em ordem: a jogada em cinza, a fala em âmbar com o nome
@@ -118,8 +124,17 @@ na mesma regra da mesa de 4 sem precisar de regra nova.
   Carroça não conta, porque jogada numa ponta ela deixa a ponta no mesmo número.
 - **Sair no meio conta como derrota.** Partida até 6 pontos (ou 10, no menu).
 
+**Compra livre:** ligada, dá para comprar do monte **mesmo podendo jogar** — e comprar não
+passa a vez, então dá para comprar até o monte secar, se quiser. Desligada (o padrão), só
+compra quem não tem jogada.
+
+Ela só existe onde existe monte, e o menu a desliga sozinho onde não existe, dizendo por
+quê. Repare que **"modo com monte" não é uma coisa**: o Clássico tem monte com 2 ou 3
+jogadores e nenhum com 4, porque quatro mãos de sete esgotam as 28 peças — a mesma conta
+que faz o Duelo e o Trio nascerem sem monte.
+
 No menu dá para trocar a mesa (Clássico · Duelo · Trio) e mais duas regras que variam de
-bar para bar: **compra voluntária** (comprar mesmo podendo jogar) e o **alvo da partida**.
+bar para bar: a **compra livre** acima e o **alvo da partida**.
 
 ## Online
 
@@ -242,7 +257,9 @@ O que os testes cobrem:
 
 A regra da casa sobre teste: **asserção que não fica vermelha antes do conserto não prova
 nada.** Toda asserção nova é rodada contra o código com defeito primeiro, e as que nascem
-verdes ficam ditas como guarda, não como prova.
+verdes ficam ditas como guarda, não como prova. Quando a asserção cobre comportamento que
+já está certo — e portanto não pode nascer vermelha —, a prova equivalente é **mutação**:
+quebra-se de propósito a linha que ela deveria proteger e confere-se que ela cai.
 
 ### Branches
 

@@ -2,7 +2,7 @@
 // ao fim. Só o `import` já vale como teste — ele constrói a cena Three.js de verdade,
 // e geometria inválida ou variável indefinida estoura aqui em vez de virar tela preta.
 import path from 'path';
-import { installStubs, seedRandom, buildModule, frames, correrTimers, els, fire } from './harness.mjs';
+import { installStubs, seedRandom, buildModule, frames, correrTimers, els, fire, preferir } from './harness.mjs';
 
 installStubs();
 seedRandom(99);
@@ -26,6 +26,16 @@ const mod = await import(buildModule([
   // O painel de contagem só era testado por FORA (se cobre a mesa, nas suítes de tela).
   // Ele é ferramenta de decisão: contar errado é pior que não contar.
   'desenharContagem',
+  // `bulbo` é a lâmpada, e é a única maneira de perguntar se ela parou de respirar — a
+  // preferência não pode ser testada por uma variável de configuração, tem de ser pelo
+  // MOVIMENTO que ela promete tirar da tela.
+  'bulbo', 'movimentoReduzido',
+  // `sentar` e `largar` são a LÓGICA de quem ocupa qual cadeira; o encanamento de PeerJS
+  // à volta delas é do test-online, num Chrome com duas abas. Dirigi-las daqui com uma
+  // `conn` de mentira é o que torna o prazo de 30s testável sem esperar 30 segundos —
+  // o harness enfileira os setTimeout e o teste os drena quando quer.
+  'sentar', 'largar', 'esperando', 'donoDaCadeira', 'ESPERA_VOLTA',
+  'ajustarCompraAoModo', 'sobraDoBaralho',
 ], undefined, path.join(import.meta.dirname, 'built-jogo.mjs')));
 
 let falhas = 0;
@@ -631,6 +641,17 @@ console.log('\no select de cadeira mostra o que está valendo');
   ok(caixa.innerHTML.indexOf('<select data-i="0">') < 0,
     'a cadeira 0 é sempre você e não podia ter seletor de tipo');
 
+  // A COMPRA LIVRE onde não há monte é a mesma história do `onchange` logo acima: o
+  // `disabled` dos botões precisa de um DOM de verdade e mora no test-online. O que dá para
+  // exigir daqui é que a preferência SOBREVIVA a uma passada por um modo sem monte — quem
+  // joga Clássico de 2 com compra livre e espia o Duelo espera a marca de volta ao voltar.
+  {
+    mod.MESA.modo = 'classico'; mod.MESA.n = 2; mod.MESA.compraVoluntaria = true;
+    mod.MESA.modo = 'duelo'; mod.MESA.n = 2; mod.ajustarCompraAoModo();
+    ok(mod.MESA.compraVoluntaria === true,
+      'passar por um modo sem monte apagou a preferência de compra livre');
+  }
+
   // AS OPÇÕES SÃO AS MESMAS EM TODA CADEIRA, e o número delas é o que o menu promete.
   // Uma cadeira com menos opções que outra seria a mesma classe de mentira, por omissão.
   for (const i of [1, 2, 3]) {
@@ -638,6 +659,163 @@ console.log('\no select de cadeira mostra o que está valendo');
     ok(b && (b.split('</select>')[0].match(/<option /g) || []).length === 5,
       `a cadeira ${i} devia oferecer as 5 opções de sempre`);
   }
+}
+
+// Sensibilidade vestibular não é preferência estética: para quem tem, movimento na tela dá
+// enjoo de verdade. E a asserção NÃO pode ser "a variável virou true" — isso testaria o
+// interruptor, não a luz. O que se exige aqui é que o movimento PARE: a lâmpada segurando
+// o mesmo valor entre dois quadros, e a peça já estando no lugar em vez de deslizar.
+console.log('\nquem pediu menos movimento');
+{
+  const CONSULTA = '(prefers-reduced-motion: reduce)';
+  mod.MESA.modo = 'classico'; mod.MESA.n = 3;
+  mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[2].tipo = 'bot';
+  mod.comecarLocal();
+  frames(30);
+
+  const luz = () => mod.bulbo.material.color.getHSL({}).l;
+  // Duas leituras separadas por quadros: a lâmpada oscila por seno do relógio, e o
+  // `performance.now()` do harness AVANÇA a cada chamada, então quadros diferentes são
+  // instantes diferentes de verdade.
+  const oscila = () => { const a = luz(); frames(12); return Math.abs(luz() - a); };
+
+  preferir(CONSULTA, false);
+  ok(mod.movimentoReduzido() === false, 'montagem: a preferência devia começar desligada');
+  const balancoNormal = oscila();
+  ok(balancoNormal > 0, 'montagem: sem a preferência, a lâmpada tinha de estar respirando');
+
+  preferir(CONSULTA, true);
+  ok(mod.movimentoReduzido() === true,
+    'ligar a preferência não chegou ao jogo — a MediaQueryList guardada não é viva');
+  // UM QUADRO PARA ASSENTAR, e não é frescura: medir logo depois de ligar captura a
+  // PRÓPRIA TRANSIÇÃO do valor oscilante para o valor parado, que é uma diferença real e
+  // não é oscilação. A pergunta é "continua se mexendo?", e ela só faz sentido depois de
+  // o novo regime começar.
+  frames(2);
+  // Guardado numa variável em vez de chamado duas vezes: `oscila()` GASTA QUADROS, então
+  // chamá-lo de novo dentro da mensagem de erro mediria outro intervalo e a mensagem
+  // contaria uma história diferente da que reprovou.
+  const balancoParado = oscila();
+  ok(balancoParado === 0,
+    `com a preferência ligada a lâmpada tinha de PARAR, e ela varia ${balancoParado}`);
+
+  // E A PEÇA NÃO DESLIZA: ela já está no lugar. Tiro a mão do lugar à força e peço UM
+  // quadro — com suavização ela chegaria perto, sem suavização ela chega. A diferença
+  // entre "perto" e "no lugar" é o item inteiro.
+  {
+    const m = mod.naMao[0];
+    m.obj.position.x = m.xBase + 5;
+    frames(1);
+    ok(m.obj.position.x === m.xBase,
+      `sem movimento a peça tinha de estar no lugar já no primeiro quadro, e ficou a ${(m.obj.position.x - m.xBase).toFixed(3)}`);
+  }
+
+  // DESLIGAR VOLTA A ANIMAR, no mesmo processo e sem recarregar nada. É o que prova que a
+  // preferência é LIDA a cada quadro e não decidida uma vez na carga — quem muda a
+  // configuração do sistema com o jogo aberto não devia precisar recarregar.
+  preferir(CONSULTA, false);
+  {
+    const m = mod.naMao[0];
+    m.obj.position.x = m.xBase + 5;
+    frames(1);
+    ok(m.obj.position.x !== m.xBase, 'desligar a preferência não devolveu a suavização');
+  }
+  const balancoDeVolta = oscila();
+  ok(balancoDeVolta > 0, `desligar a preferência não fez a lâmpada voltar a respirar (varia ${balancoDeVolta})`);
+}
+
+// O PRAZO DE QUEM CAI, ESGOTANDO. Havia asserção de cair e VOLTAR (no test-online, com
+// abas de verdade) e nenhuma de cair e NÃO voltar — que é justamente o ramo que faz o
+// prazo significar alguma coisa. Sem ele, "a cadeira fica guardada por 30 s" seria uma
+// promessa sem consequência, e fechar a aba voltaria a ser a saída de emergência de
+// qualquer partida perdida.
+//
+// Não custa 30 segundos: o `setTimeout` do harness é uma fila que o teste drena com
+// `correrTimers()`. O relógio de parede nunca entra nisto, e é por isso que esta asserção
+// pode viver na suíte rápida em vez de na de navegador.
+console.log('\no prazo de quem cai, esgotando');
+{
+  // Uma conexão de mentira que ANOTA o que recebeu. O que ela manda de volta importa: é
+  // por `expulso`/`cheio` que o jogo conversa com quem está do outro lado.
+  const novaConn = () => { const c = { enviadas: [], fechada: false }; Object.assign(c, {
+    send: m => c.enviadas.push(m), close: () => { c.fechada = true; }, on: () => {} }); return c; };
+
+  const montar = () => {
+    mod.encerrarRede();
+    mod.MESA.modo = 'classico'; mod.MESA.n = 3;
+    mod.MESA.cadeiras[1].tipo = 'online'; mod.MESA.cadeiras[1].nome = 'Visita';
+    mod.MESA.cadeiras[2].tipo = 'bot'; mod.MESA.cadeiras[2].nivel = 'normal';
+    mod.abrirMesaOnline();
+    const conn = novaConn();
+    const cadeira = mod.sentar(conn, 'cliente-A', 'Visita');
+    // A partida SÓ nasce com a cadeira online de pé porque `conexoes` já tem alguém nela —
+    // `comecarLocal` converte em bot toda cadeira online sem ninguém vivo do outro lado.
+    mod.comecarLocal();
+    return { conn, cadeira };
+  };
+
+  {
+    const { conn, cadeira } = montar();
+    ok(cadeira === 1, `a visita devia sentar na cadeira 1 e sentou na ${cadeira}`);
+    ok(mod.P.cadeiras[1].tipo === 'online',
+      'montagem: a cadeira tinha de continuar online, senão não há queda para testar');
+
+    mod.largar(cadeira, conn);
+    // ENQUANTO O PRAZO CORRE, a cadeira é DELE e a partida continua de pé. A conexão saiu,
+    // a reserva não: era exatamente esta a diferença que faltava no item 4 da Fila 5, onde
+    // um estranho com o código sentava na cadeira de quem tinha acabado de cair.
+    ok(!mod.conexoes.has(1), 'a conexão devia ter saído na hora da queda');
+    ok(mod.donoDaCadeira.has(1), 'a cadeira devia continuar RESERVADA enquanto o prazo corre');
+    ok(mod.esperando.has(1), 'o relógio dos 30s não foi armado');
+    ok(mod.P.fase !== 'fim', 'a partida não podia acabar no instante da queda — há prazo para voltar');
+    ok(mod.P.desistiu === null, 'ninguém desistiu ainda: o prazo mal começou');
+
+    // ...E O PRAZO ESGOTA.
+    correrTimers();
+    ok(mod.P.fase === 'fim', `esgotado o prazo, a partida tinha de encerrar, e a fase é "${mod.P.fase}"`);
+    ok(mod.P.desistiu === 1, `quem não voltou tinha de constar como desistente, e consta ${mod.P.desistiu}`);
+    ok(!mod.donoDaCadeira.has(1), 'não voltou: a cadeira devia deixar de ser dele');
+    ok(!mod.esperando.has(1), 'o relógio devia ter se apagado ao disparar');
+  }
+
+  // O PAR, e é ele que separa "o prazo funciona" de "o prazo é um pavio que sempre
+  // queima": voltando ANTES, o relógio é desarmado e o disparo nunca acontece. Uma
+  // asserção sem a outra deixaria passar tanto o prazo que não encerra quanto o prazo que
+  // encerra mesmo com a pessoa de volta na cadeira.
+  {
+    const { conn, cadeira } = montar();
+    mod.largar(cadeira, conn);
+    ok(mod.esperando.has(1), 'montagem: o relógio tinha de estar armado');
+
+    const volta = novaConn();
+    const deVolta = mod.sentar(volta, 'cliente-A', 'Visita');
+    ok(deVolta === 1, `voltando com o mesmo id devia ser a MESMA cadeira, e veio ${deVolta}`);
+    ok(!mod.esperando.has(1), 'voltar dentro do prazo tinha de desarmar o relógio');
+
+    correrTimers();
+    // SÃO DOIS GUARDAS INDEPENDENTES, e a mutação mostrou isso: desligando o `clearTimeout`
+    // do `sentar`, só a asserção de cima reprova — estas duas continuam verdes, porque o
+    // próprio callback confere `conexoes.has(cadeira)` antes de encerrar a partida. Ou
+    // seja, o desfecho está protegido duas vezes e por isso não distingue qual guarda
+    // caiu; quem distingue é o `esperando` acima. As três juntas dizem a coisa toda, e é
+    // por isso que nenhuma delas sai.
+    ok(mod.P.fase !== 'fim', 'quem voltou dentro do prazo não podia perder a partida');
+    ok(mod.P.desistiu === null, `voltou a tempo e mesmo assim consta como desistente (${mod.P.desistiu})`);
+  }
+
+  // E A PARTIDA QUE JÁ ACABOU não pode ser encerrada de novo pelo relógio de alguém que
+  // caiu antes. `abandonar` recusa partida em `fim`, mas quem depende disso é este
+  // callback — e ele roda 30 s depois, quando a mesa pode ter mudado inteira.
+  {
+    const { conn, cadeira } = montar();
+    mod.largar(cadeira, conn);
+    mod.P.fase = 'fim';
+    correrTimers();
+    ok(mod.P.desistiu === null,
+      'o relógio de quem caiu marcou desistência numa partida que já tinha acabado');
+  }
+
+  mod.encerrarRede();
 }
 
 console.log('\no mudo tem de durar');

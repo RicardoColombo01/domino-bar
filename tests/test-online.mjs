@@ -366,6 +366,120 @@ try {
       `aspas no nome quebraram o atributo do campo: veio ${JSON.stringify(noMenu.valor)}`);
     console.log('  o nome hostil chegou como texto no saguão e no menu');
 
+    // O <select> DE CADEIRA, A METADE QUE GRAVA. Ele é como se escolhe contra quem jogar
+    // e nunca teve asserção. O `test-jogo.mjs` cobre o que o menu DESENHA (qual opção
+    // nasce marcada); o `onchange` fica de fora lá porque o harness de Node não constrói
+    // elementos a partir de innerHTML — `querySelectorAll` devolve vazio e o handler nunca
+    // chega a ser ligado. Aqui há um DOM de verdade, então este é o lugar da outra metade.
+    //
+    // O que se exige é a IDA E VOLTA: o valor que o menu escreveu na opção tem de ser o
+    // mesmo que o `onchange` sabe destrinchar. As duas pontas são strings montadas à mão
+    // ('bot:' + nivel de um lado, split(':') do outro), e strings montadas à mão em dois
+    // lugares é como duas metades passam a discordar em silêncio.
+    // O `antes`/`restaurar` NÃO é zelo: esta página CONTINUA VIVA nas cenas seguintes, e
+    // `MESA` é estado compartilhado. Sem devolver o que se pegou, a cena da mesa de 4 em
+    // duplas herdava a cadeira 1 virada em bot e o modo deixado no Trio — e aí `duplas` é
+    // falso, o canal da dupla vira canal geral, e a asserção de VAZAMENTO DE FALA reprova.
+    // Foi o que aconteceu ao escrever isto: um teste novo derrubou um teste antigo, e por
+    // um instante pareceu defeito no jogo. É a mesma lição do localStorage entre as cenas
+    // do test-telas, noutro meio: cada cena diz o que quer, e devolve como encontrou.
+    const doSelect = await dono.evaluate(async () => {
+      const j = window.__jogo;
+      const antes = { modo: j.MESA.modo, n: j.MESA.n,
+                      c1: { tipo: j.MESA.cadeiras[1].tipo, nivel: j.MESA.cadeiras[1].nivel } };
+      const restaurar = () => {
+        j.MESA.modo = antes.modo; j.MESA.n = antes.n;
+        j.MESA.cadeiras[1].tipo = antes.c1.tipo; j.MESA.cadeiras[1].nivel = antes.c1.nivel;
+        j.montarCadeiras(); j.ajustarCompraAoModo();
+      };
+      j.MESA.cadeiras[1].tipo = 'bot'; j.MESA.cadeiras[1].nivel = 'normal';
+      j.montarCadeiras();
+      const sel = document.querySelector('#cadeiras select[data-i="1"]');
+      if (!sel) return { erro: 'não achei o select da cadeira 1' };
+
+      const escolher = valor => {
+        sel.value = valor;
+        // `dispatchEvent` e não chamar `sel.onchange()` na mão: o que se quer saber é se o
+        // handler está LIGADO ao elemento, e não só se a função existe.
+        sel.dispatchEvent(new Event('change'));
+        const c = j.MESA.cadeiras[1];
+        return { tipo: c.tipo, nivel: c.nivel === undefined ? null : c.nivel };
+      };
+
+      const opcoes = [...sel.options].map(o => o.value);
+      const r = {
+        opcoes,
+        dificil: escolher('bot:dificil'),
+        online: escolher('online'),
+        local: escolher('local'),
+        facil: escolher('bot:facil'),
+        // Depois de mexer, o menu redesenhado tem de mostrar o que ficou valendo — é a ida
+        // e a volta fechando o círculo.
+        remarcado: (j.montarCadeiras(),
+          document.querySelector('#cadeiras select[data-i="1"]').value),
+      };
+      restaurar();
+      return r;
+    });
+    ok(!doSelect.erro, `o select de cadeira sumiu do menu: ${doSelect.erro}`);
+    if (!doSelect.erro) {
+      // Bot guarda tipo E nível; os outros dois não têm nível nenhum, e um nível
+      // sobrando de uma escolha anterior faria a cadeira virar um bot fantasma.
+      ok(doSelect.dificil.tipo === 'bot' && doSelect.dificil.nivel === 'dificil',
+        `escolher "bot:dificil" gravou ${JSON.stringify(doSelect.dificil)}`);
+      ok(doSelect.online.tipo === 'online' && doSelect.online.nivel === null,
+        `escolher "online" gravou ${JSON.stringify(doSelect.online)} — o nível do bot anterior ficou para trás`);
+      ok(doSelect.local.tipo === 'local' && doSelect.local.nivel === null,
+        `escolher "local" gravou ${JSON.stringify(doSelect.local)}`);
+      ok(doSelect.facil.tipo === 'bot' && doSelect.facil.nivel === 'facil',
+        `voltar para bot devia trazer o nível junto, e gravou ${JSON.stringify(doSelect.facil)}`);
+      ok(doSelect.remarcado === 'bot:facil',
+        `o menu redesenhado devia mostrar "bot:facil" e mostra "${doSelect.remarcado}"`);
+      ok(doSelect.opcoes.length === 5, `a cadeira devia oferecer 5 opções e oferece ${doSelect.opcoes.length}`);
+    }
+    console.log(`  o select grava e o menu confirma: ${doSelect.opcoes ? doSelect.opcoes.join(' ') : '—'}`);
+
+    // A COMPRA LIVRE NÃO PODE SER PROMETIDA ONDE NÃO HÁ MONTE. O botão ficava aceso no
+    // Duelo, no Trio e no Clássico de 4, e o motor descarta a regra em silêncio — `acoesDe`
+    // exige `temMonte` antes de qualquer coisa. É a espécie de defeito que o
+    // `refletirMesaNosBotoes` existe para impedir: o jogo está certo e a tela mente.
+    //
+    // Está aqui e não no test-jogo porque `disabled` precisa dos botões de verdade, e o
+    // harness de Node não lê a página. A CONTA em si (quantas peças sobram) é pura e está
+    // testada lá, com a mesma tabela.
+    const compra = await dono.evaluate(() => {
+      const j = window.__jogo;
+      // Mesmo cuidado do bloco acima: a página segue viva, e este teste percorre os cinco
+      // modos da casa. Deixar `MESA` no Trio quebraria a mesa de 4 da cena seguinte.
+      const antes = { modo: j.MESA.modo, n: j.MESA.n };
+      const estado = (modo, n) => {
+        j.MESA.modo = modo; j.MESA.n = n;
+        j.ajustarCompraAoModo();
+        const bts = [...document.querySelectorAll('#compraLivre button')];
+        return { botoes: bts.length, ligavel: bts.some(b => !b.disabled),
+                 nota: document.getElementById('notaCompra').textContent };
+      };
+      const r = {
+        c2: estado('classico', 2), c3: estado('classico', 3), c4: estado('classico', 4),
+        duelo: estado('duelo', 2), trio: estado('trio', 3),
+      };
+      j.MESA.modo = antes.modo; j.MESA.n = antes.n;
+      j.ajustarCompraAoModo();
+      return r;
+    });
+    ok(compra.c2.botoes === 2, `o grupo da compra livre devia ter 2 botões e tem ${compra.c2.botoes}`);
+    ok(compra.c2.ligavel && compra.c3.ligavel,
+      'o Clássico de 2 e de 3 têm monte e a compra livre tinha de estar disponível');
+    // O CASO QUE A LEITURA POR MODO ERRA: "modo com monte" não existe — o Clássico de 4
+    // esgota o baralho igualzinho ao Duelo e ao Trio.
+    ok(!compra.c4.ligavel, 'o Clássico de 4 não tem monte e a compra livre continuou prometida');
+    ok(!compra.duelo.ligavel && !compra.trio.ligavel,
+      'Duelo e Trio esgotam o baralho na distribuição e a compra livre continuou prometida');
+    // Botão apagado sem explicação é o jogo emudecendo: a nota diz POR QUE não dá.
+    ok(compra.duelo.nota && !compra.c2.nota,
+      `a nota devia aparecer só onde não há monte (duelo="${compra.duelo.nota}", clássico de 2="${compra.c2.nota}")`);
+    console.log('  a compra livre só é oferecida onde existe monte');
+
     // ─── o saguão ──────────────────────────────────────────────────────────────
     // Falar ANTES de a partida começar. É quando as pessoas mais querem falar ("cadê você?",
     // "entra aí") e era o único momento em que não havia conversa: a visibilidade dela saía
@@ -524,7 +638,25 @@ try {
   }
 } catch (e) {
   if (process.env.DOMINO_DEBUG) console.error(e.stack);
-  avisos.push(e.message);
+  // DEFEITO NÃO É PROBLEMA DE REDE, e esta separação existe porque a alternativa já
+  // enganou: um `j.ajustarCompraAoModo is not a function` — nome novo que a ponte do
+  // 16-loop.js não expunha — saiu daqui com o recado "o broker gratuito do PeerJS ou a
+  // sua rede não deixaram a conexão fechar", e a rede estava ótima.
+  //
+  // É a mesma lição que este arquivo já registrou de outro jeito (o `catch` que guardava
+  // só a `message` escondia ONDE), cobrada de novo num degrau acima: o `catch` que existe
+  // para transformar falha de rede em AVISO também engole os defeitos de verdade, e o
+  // recado tranquilizador é justamente o que faz ninguém olhar.
+  //
+  // A regra é simples e não depende de adivinhar: TypeError e ReferenceError são erro de
+  // PROGRAMA. Rede não produz nenhum dos dois.
+  if (e instanceof TypeError || e instanceof ReferenceError) {
+    console.error('\n✗ ISTO NÃO É A REDE — é defeito no jogo ou no teste:');
+    console.error('  ' + e.stack);
+    falhas++;
+  } else {
+    avisos.push(e.message);
+  }
 }
 
 await navegador.close();

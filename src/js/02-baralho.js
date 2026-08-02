@@ -28,6 +28,19 @@ function baralhoDoModo(modo) {
   return modo.semZeroZero ? pecas.filter(p => !mesmaPeca(p, [0, 0])) : pecas;
 }
 
+// QUANTAS PEÇAS SOBRAM PARA O MONTE nesta combinação de modo e jogadores. Mora aqui, junto
+// do `baralhoDoModo`, porque aritmética de baralho fora do motor apodrece — o `14-menu.js`
+// já teve um `28 - 7 * MESA.n` escrito à mão, e foi a primeira linha a quebrar quando os
+// modos chegaram.
+//
+// Repare que a resposta NÃO é uma propriedade do modo: o Clássico tem monte com 2 ou 3
+// jogadores e nenhum com 4, e é a mesma tabela que faz o Duelo e o Trio esgotarem o baralho
+// na distribuição. Quem pergunta são o menu (para não prometer compra livre onde ela não
+// existe) e quem quiser saber antes de distribuir.
+function sobraDoBaralho(modo, n) {
+  return baralhoDoModo(modo).length - n * modo.pecasPorMao;
+}
+
 // A REGRA DA CASA: quando a mão saiu ruim demais e a mesa embaralha tudo de novo.
 //
 // Devolver true joga a distribuição INTEIRA fora — não só esta mão — e redistribui, até
