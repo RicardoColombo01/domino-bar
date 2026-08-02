@@ -566,9 +566,9 @@ Registrado para não ser redescoberto do zero — e com o motivo de não ser pri
 - **Botão de copiar/compartilhar o código da sala.** `user-select: all` resolve o mouse; no
   dedo, copiar de um `<div>` é sofrível, e o caso comum é mandar o código pelo WhatsApp.
   `navigator.share` resolveria. Impacto real no online, custo pequeno.
-- **`prefers-reduced-motion`.** A lâmpada respira para sempre e a câmera reenquadra; é o pior
-  conjunto para sensibilidade vestibular. Pequeno no CSS, médio no 3D.
-- ~~**`prefers-reduced-motion`.**~~ ✔ **feito na v1.10.0** (Fila 9), CSS e 3D.
+- ~~**`prefers-reduced-motion`.**~~ ✔ **feito na v1.10.0** (Fila 9), CSS **e** 3D. A previsão
+  aqui era "pequeno no CSS, médio no 3D" e o 3D saiu em **duas linhas**: `chegarPerto` é a
+  única função de suavização do projeto, e a lâmpada é o único movimento que não acaba nunca.
 - **Dívidas que investiguei e concluí que NÃO são defeito hoje** — não refaça o trabalho:
   o clone de material por peça sem `dispose()` (mesma `cacheKey`, os materiais viram lixo
   coletável; é churn, não vazamento); o `alvos.esq === alvos.dir` do `06-layout.js` (aliasing
@@ -578,10 +578,17 @@ Registrado para não ser redescoberto do zero — e com o motivo de não ser pri
 #### Perguntas em aberto para o Ricardo
 
 - **Nenhuma bloqueia.**
-- A única decisão que vale perguntar antes de agir é **o escopo da próxima onda** (a lista de
-  1 a 3 acima), porque ele já disse que prefere ondas pequenas com release no fim. E a do
-  `prefers-reduced-motion` tem uma pergunta dentro: **só o CSS, ou o 3D junto?** — só o CSS
-  para a lâmpada de respirar e deixa a câmera reenquadrando, que é meia promessa.
+- **A fila de trabalho esvaziou na v1.10.0.** Não há defeito conhecido nem melhoria medida em
+  aberto. O que existe é a lista de "poderia ser feito, mas não recomendo agora", logo acima,
+  e dela só uma coisa depende de decisão dele e não de programador: o **`beforeunload` no
+  meio de partida online** (um F5 acidental gasta o prazo de 30 s sem aviso, mas
+  `beforeunload` é incômodo). As outras duas são escolha de escopo, não de gosto: o botão de
+  **compartilhar o código da sala** (impacto real no online, custo pequeno) e fazer o **3D
+  desviar dos painéis** (o mais caro, e a gaveta já resolveu o problema real).
+- Vale lembrar como este projeto encheu a fila as duas últimas vezes: **campo** (o Ricardo
+  jogando no celular, que deu a Fila 5 e a Fila 7) e **varredura** (procurar o que ainda não
+  incomodou, que deu a Fila 6). Com a fila vazia, o próximo passo natural é uma das duas —
+  e a mais barata é jogar.
 
 #### Como retomar em cinco minutos
 
