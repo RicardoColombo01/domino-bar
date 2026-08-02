@@ -126,7 +126,12 @@ na mesma regra da mesa de 4 sem precisar de regra nova.
 
 **Compra livre:** ligada, dá para comprar do monte **mesmo podendo jogar** — e comprar não
 passa a vez, então dá para comprar até o monte secar, se quiser. Desligada (o padrão), só
-compra quem não tem jogada. Só existe onde existe monte: no Clássico de 2 ou 3.
+compra quem não tem jogada.
+
+Ela só existe onde existe monte, e o menu a desliga sozinho onde não existe, dizendo por
+quê. Repare que **"modo com monte" não é uma coisa**: o Clássico tem monte com 2 ou 3
+jogadores e nenhum com 4, porque quatro mãos de sete esgotam as 28 peças — a mesma conta
+que faz o Duelo e o Trio nascerem sem monte.
 
 No menu dá para trocar a mesa (Clássico · Duelo · Trio) e mais duas regras que variam de
 bar para bar: a **compra livre** acima e o **alvo da partida**.
