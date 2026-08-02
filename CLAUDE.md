@@ -43,14 +43,44 @@ Primeira vez:  cd tests && npm install
 
 ## Branches
 
-GitFlow. `main` é **exatamente o que está publicado** (o Pages serve dela): só recebe
-merge `--no-ff` de `release/*` ou `hotfix/*`, sempre com tag `vX.Y.Z`. O trabalho sai de
-`develop` em `feature/*`.
+**`main` é a única branch permanente, e é exatamente o que está publicado** — o Pages serve
+dela. Desde 02/08/2026 não há mais `develop`.
 
-`index.html` é gerado e commitado, então está marcado `merge=ours` no `.gitattributes` —
-**todo merge que tocou `src/` termina com `npm run build && git add index.html`**, e
-`npm run check` reprova bundle desatualizado. O driver exige `git config
-merge.ours.driver true` uma vez por clone.
+O trabalho vai numa branch com o **nome da versão que ela vai lançar**: `v2` para a 2.0.0,
+`v3` para a 3.0.0. Ela nasce de `main`, recebe os commits da onda, e volta com merge
+`--no-ff` mais a tag `vX.Y.Z`. Depois é apagada — **branch de trabalho é temporária, e a
+tag é o que fica.** Correção urgente do que está no ar continua em `hotfix/*`, com o mesmo
+caminho de volta.
+
+```
+main   v1.9.0 ── v1.10.0 ─────────────── v2.0.0 ─────────────── v3.0.0
+                        ╲               ╱      ╲               ╱
+                         ●──●──●──●──●──         ●──●──●──●──●
+                              v2                      v3
+```
+
+**Por que mudou:** `develop` existia para separar "pronto" de "publicado", e neste projeto
+essa separação nunca teve consequência — quem publica é uma pessoa, na mesma tarde, e o
+tempo em que `main` e `develop` tinham conteúdo diferente foi sempre medido em minutos. O
+que a separação custava era real: **dois merges e dois rebuilds do bundle por release**, e
+o `merge=ours` do `index.html` disparando nos dois. Foi de lá que veio o dia perdido de
+31/07 — `develop` commitada, `main` três releases atrás, e o Ricardo testando o `github.io`.
+Com uma branch permanente só, "commitado" e "publicado" ficam a um `git push` de distância,
+não a dois merges.
+
+**O que NÃO mudou, e não pode mudar:**
+
+- `main` é o que está no ar. Ela **só recebe merge `--no-ff`**, sempre com tag — nunca
+  commit direto de trabalho. (A exceção é o commit que mudou este próprio modelo: ele não
+  tinha de onde sair.)
+- `index.html` é gerado e commitado, então está marcado `merge=ours` no `.gitattributes` —
+  **todo merge que tocou `src/` termina com `npm run build && git add index.html`**, e
+  `npm run check` reprova bundle desatualizado. O driver exige `git config
+  merge.ours.driver true` uma vez por clone. Isto fica **mais** importante sem a `develop`,
+  não menos: some o segundo merge, que era onde um bundle velho ainda tinha chance de
+  aparecer antes de chegar ao ar.
+- **Commitado ≠ enviado ≠ publicado** continua valendo, com um lugar a menos para errar:
+  `git rev-list --left-right --count origin/main...main` responde tudo agora.
 
 ---
 
@@ -425,17 +455,15 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 |---|---|
 | publicado | **v1.10.0** — https://ricardocolombo01.github.io/domino-bar/ |
 | `main` ↔ `origin/main` | `0 ← \| 0 →` |
-| `develop` ↔ `origin/develop` | `0 ← \| 0 →` |
+| branches | **só `main`** — a `develop` foi apagada em 02/08/2026 (ver "Branches") |
 | árvore de trabalho | limpa |
-| Fila 5 | **fechada** — 11 itens |
-| Fila 6 | **fechada** — os 5 defeitos, e o resto do escopo na v1.9.0 (ver a Fila 8) |
-| Fila 7 | **fechada** — as cinco fotos de campo de 31/07 |
-| Fila 8 | **fechada** — acessibilidade, teclado, README e três lacunas de teste |
-| **Fila 9** | **fechada** — `prefers-reduced-motion`, o prazo de 30 s, a compra voluntária, o `<select>`, e a compra livre onde não há monte |
+| Filas 5 a 9 | **todas fechadas** |
+| fila de trabalho | **VAZIA** — nenhum defeito conhecido, nenhuma melhoria medida em aberto |
 | pendências bloqueadas | **nenhuma** — nada esperando resposta do Ricardo |
 
-**Não há defeito conhecido em aberto.** O que sobra é trabalho de qualidade, listado no fim
-desta seção em ordem de valor.
+**A fila esvaziou na v1.10.0, e é a primeira vez que isso acontece.** A próxima onda abre
+uma branch `v2` e precisa de trabalho NOVO — as duas fontes que já encheram esta fila estão
+descritas no fim desta seção, e a mais barata é jogar.
 
 #### O QUE CUSTOU UM DIA INTEIRO, e não pode se repetir
 
@@ -593,10 +621,15 @@ Registrado para não ser redescoberto do zero — e com o motivo de não ser pri
 #### Como retomar em cinco minutos
 
 ```
-git fetch origin && git rev-list --left-right --count origin/develop...develop   # tem de dar 0 0
+git fetch origin && git rev-list --left-right --count origin/main...main   # tem de dar 0 0
+git branch -a          # tem de haver SÓ main (e a branch da onda, se houver uma aberta)
 npm run check          # o bundle está em dia com src/?
 npm test               # as três suítes de lógica, segundos
 ```
+
+**Suíte pesada roda sozinha** — o `test-telas` renderiza WebGL por software e o `test-online`
+tem prazo de navegação de 45 s; duas ao mesmo tempo viram falha que parece da rede. E o
+`telas` passa de 10 min: rode em duas metades (ver os Comandos, lá em cima).
 
 E antes de qualquer conserto: **medir**. Três dos onze itens da Fila 5 e dois dos cinco
 defeitos da Fila 6 tinham diagnóstico errado escrito antes de alguém olhar os números.

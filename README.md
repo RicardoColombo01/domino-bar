@@ -263,27 +263,36 @@ quebra-se de propósito a linha que ela deveria proteger e confere-se que ela ca
 
 ### Branches
 
-GitFlow, com uma regra local: **`main` é literalmente o que está no ar.** O GitHub Pages
-publica dessa branch, então ela só recebe merge `--no-ff` de `release/*` ou `hotfix/*`, e
-sempre com tag.
+Uma regra local acima de tudo: **`main` é literalmente o que está no ar.** O GitHub Pages
+publica dessa branch, então ela só recebe merge `--no-ff`, e sempre com tag.
+
+**`main` é a única branch permanente.** Cada onda de trabalho vai numa branch com o nome da
+versão que ela vai lançar — `v2`, `v3` —, que nasce de `main`, volta para `main` e é
+apagada. A tag é o que fica.
 
 ```
-main    v1.0.0 ── v1.0.1 ── v1.1.0 ── … ── v1.6.0 ── v1.7.0 ── v1.7.1 ── v1.8.0
-             ╲        ╱          ╱             ╱         ╱         ╱        ╱
-develop       ●──●───●──────●───●─────────●───●──────●──●──────●──●─────●──●
-               ╲    ╱        ╲   ╱             ╲    ╱            ╲      ╱
-feature   fim-de-mao      modos-de-jogo    mesa-nao-atravessa   faixa-dos-jogadores
+main   v1.0.0 ── v1.0.1 ── … ── v1.9.0 ── v1.10.0 ─────────── v2.0.0 ─────────── v3.0.0
+                                                  ╲          ╱      ╲          ╱
+                                                   ●──●──●──●         ●──●──●──●
+                                                       v2                  v3
 ```
 
-Onze releases até aqui. As duas últimas dizem bem o que este repositório é: a **v1.6.0**
-foi a primeira cujos itens vieram quase todos de **jogo de verdade, no celular**, e não de
-leitura de código; a **v1.7.1** veio do contrário — uma varredura em busca do que ainda
-não tinha incomodado ninguém. Os dois modos se complementam: o campo acha o que incomoda,
-a varredura acha o que ainda não incomodou.
+Até a v1.10.0 o projeto usava GitFlow, com uma `develop` entre as features e a `main`.
+Aquela separação existe para dividir "pronto" de "publicado" — e aqui ela nunca teve
+consequência, porque quem publica é uma pessoa, na mesma tarde. O que ela custava era real:
+dois merges e dois rebuilds do bundle por release. **Um dia inteiro se perdeu por causa
+disso**, com a `develop` em dia e a `main` três releases atrás. Hoje há um lugar a menos
+para o trabalho ficar preso.
 
-O dia a dia sai de `develop`: `feature/x` nasce dela e volta com `--no-ff`. Quando
-`develop` está redonda, `release/x.y.z` sobe a `version` do `package.json`, roda
-`npm test`, e é mergeada em `main` (com a tag) e de volta em `develop`.
+Doze releases até aqui, e três delas dizem bem o que este repositório é: a **v1.6.0** foi a
+primeira cujos itens vieram quase todos de **jogo de verdade, no celular**, e não de leitura
+de código; a **v1.7.1** veio do contrário — uma varredura atrás do que ainda não tinha
+incomodado ninguém; e a **v1.10.0** fechou os ramos que **existiam e nunca tinham rodado**.
+São três jeitos diferentes de achar trabalho, e nenhum substitui os outros.
+
+O dia a dia: `git switch -c v2` a partir de `main`, commits normais na branch, e no fim ela
+sobe a `version` do `package.json`, roda `npm test`, e volta para `main` com `--no-ff` e a
+tag. Correção urgente do que está no ar vai em `hotfix/x.y.z`, pelo mesmo caminho.
 
 **O `index.html` é gerado e mesmo assim commitado** — não tem como não ser, é o arquivo
 que o Pages serve e o que abre no duplo-clique. Para não gastar tempo resolvendo conflito
