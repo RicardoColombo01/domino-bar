@@ -80,7 +80,7 @@ As pontas são o primeiro e o último número; jogar na esquerda é um `unshift`
 
 ```
 01-constantes  peças, medidas, pontuação, folgas visuais, tabela MODOS, guardar/lido
-02-baralho     embaralhar, distribuir (com re-embaralho), quem abre
+02-baralho     embaralhar, distribuir (com re-embaralho), quem abre, sobraDoBaralho
 03-regras      encaixes, pontas, jogadas válidas, tipo de batida     ← puro
 04-partida     turnos, compra, passe, placar, visaoDe()
 05-bot         níveis = quanta informação o bot recebe
@@ -200,10 +200,21 @@ As pontas são o primeiro e o último número; jogar na esquerda é um `unshift`
   perguntar "o desenho é determinístico?", compare repintura contra repintura, nunca contra a
   primeira pintura.
 - **Ao acrescentar uma API de navegador ao jogo, o primeiro lugar a olhar é o `harness.mjs`.**
-  O dublê já ficou para trás **sete vezes** (`matchMedia`, captura de ponteiro,
-  `AudioContext`, `Peer`, eventos de contexto WebGL, `setAttribute`, `preventDefault`). Sete
-  não é acaso. E a tentação, todas as vezes, é guardar no JOGO (`if (el.setAttribute)`) —
-  isso troca um defeito por um ramo que o teste nunca alcança.
+  O dublê já ficou para trás **oito vezes** (`matchMedia`, captura de ponteiro,
+  `AudioContext`, `Peer`, eventos de contexto WebGL, `setAttribute`, `preventDefault`, e o
+  `matchMedia` de novo — desta vez por responder SEMPRE a mesma coisa). Oito não é acaso. E
+  a tentação, todas as vezes, é guardar no JOGO (`if (el.setAttribute)`) — isso troca um
+  defeito por um ramo que o teste nunca alcança. **Dublê que responde um valor fixo é tão
+  incompleto quanto dublê sem método**, e o sintoma é o mesmo: um ramo verde que nunca rodou.
+- **Asserção que LANÇA em vez de reprovar mata o processo e trunca a suíte.** O efeito
+  perverso aparece na conferência por MUTAÇÃO: ela passa a sub-relatar, e parece que a
+  asserção não cobria o ramo quando na verdade a suíte morreu antes de chegar lá. Quando
+  uma mutação reprovar MENOS do que devia, suspeite disso antes de suspeitar da asserção.
+- **Medir "parou de se mexer" logo depois de mandar parar mede a própria parada** — a
+  transição para o valor fixo é uma diferença real que não é oscilação. Precisa de um quadro
+  para o regime novo começar. E função de teste que GASTA quadros não pode ser chamada
+  dentro da mensagem de erro: as duas chamadas medem intervalos diferentes, e a mensagem
+  passa a contar uma história diferente da que reprovou.
 - **`opacity` não escurece a cor, ela MISTURA o texto com o fundo.** Então contraste de
   texto desbotado depende de onde ele está, e o piso do projeto tem nome: `--fraco: .58`
   (medido, `.52` é o mínimo do AA e folga zero não é conserto). Opacidade de texto abaixo
@@ -226,7 +237,16 @@ As pontas são o primeiro e o último número; jogar na esquerda é um `unshift`
 - **`catch` que guarda só a `message` esconde ONDE.** O `test-online.mjs` engolia o stack e
   transformava "falhou em algum lugar dos 300 lances do teste" num palpite caro. Hoje
   `DOMINO_DEBUG=1` imprime. Vale para qualquer `catch` que exista para transformar falha de
-  rede em aviso: ele também engole os defeitos de verdade.
+  rede em aviso: ele também engole os defeitos de verdade — e o recado tranquilizador é
+  justamente o que faz ninguém olhar. Hoje `TypeError` e `ReferenceError` ali reprovam com
+  stack em vez de virar aviso, porque **rede não produz nenhum dos dois**.
+- **Cena de teste que mexe em estado compartilhado tem de devolver como encontrou.** Vale
+  para o `localStorage` das suítes de tela e para o `MESA` das cenas do online, que
+  compartilham a MESMA aba viva. Uma cena que deixou a mesa no Trio fez a seguinte reprovar
+  com "A FALA DA DUPLA VAZOU" — sem duplas, o canal da dupla é o canal geral. Teste novo
+  derrubando teste velho lê exatamente como defeito no jogo.
+- **Duas suítes de Puppeteer ao mesmo tempo viram "erro de rede".** A contenção de CPU
+  estoura os 45 s de navegação do `test-online`, e a mensagem culpa o broker do PeerJS.
 
 ---
 
@@ -400,14 +420,15 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 
 | | |
 |---|---|
-| publicado | **v1.9.0** — https://ricardocolombo01.github.io/domino-bar/ |
+| publicado | **v1.10.0** — https://ricardocolombo01.github.io/domino-bar/ |
 | `main` ↔ `origin/main` | `0 ← \| 0 →` |
 | `develop` ↔ `origin/develop` | `0 ← \| 0 →` |
 | árvore de trabalho | limpa |
 | Fila 5 | **fechada** — 11 itens |
 | Fila 6 | **fechada** — os 5 defeitos, e o resto do escopo na v1.9.0 (ver a Fila 8) |
 | Fila 7 | **fechada** — as cinco fotos de campo de 31/07 |
-| **Fila 8** | **fechada** — acessibilidade, teclado, README e três lacunas de teste |
+| Fila 8 | **fechada** — acessibilidade, teclado, README e três lacunas de teste |
+| **Fila 9** | **fechada** — `prefers-reduced-motion`, o prazo de 30 s, a compra voluntária, o `<select>`, e a compra livre onde não há monte |
 | pendências bloqueadas | **nenhuma** — nada esperando resposta do Ricardo |
 
 **Não há defeito conhecido em aberto.** O que sobra é trabalho de qualidade, listado no fim
@@ -447,8 +468,9 @@ onde o trabalho está: **commitado ≠ enviado ≠ publicado.** São três lugar
 | **F8** · lacunas | duplas, painel de contagem, `<select>` | provadas por **mutação**, não por vermelho |
 
 **As releases:** v1.6.0 (itens 1, 3a, 3b, 4, 5, 6, 7, 8, 9, 10) → v1.7.0 (itens 2, 3c, e o 11)
-→ v1.7.1 (os cinco defeitos da varredura) → v1.8.0 (as cinco fotos da Fila 7) → **v1.9.0** (a
-Fila 8: acessibilidade, teclado, README e três lacunas de teste).
+→ v1.7.1 (os cinco defeitos da varredura) → v1.8.0 (as cinco fotos da Fila 7) → v1.9.0 (a
+Fila 8: acessibilidade, teclado, README e três lacunas de teste) → **v1.10.0** (a Fila 9: os
+três ramos que nunca tinham rodado).
 
 #### A ressalva CAIU — e como se prova que caiu
 
@@ -516,28 +538,17 @@ de igualdade tem de exigir também que **haja o que comparar**.
 
 #### O QUE FAZER AMANHÃ — em ordem, e por quê
 
-**Os seis itens que moravam aqui foram todos feitos** — os 3 e 4 na v1.8.0, os outros quatro
-na **v1.9.0** (Fila 8, lá embaixo). O que sobra é a lista curta abaixo, e nenhum deles é
-defeito.
+**A lista esvaziou.** Os seis itens originais saíram na v1.8.0 e na v1.9.0 (Fila 8); os três
+que sobravam saíram na **v1.10.0** (Fila 9). Não há defeito conhecido nem melhoria medida em
+aberto.
 
-**1. As lacunas de teste que a Fila 8 NÃO fechou**, e as duas são de rede — precisam de um
-Chrome de verdade, no `test-online.mjs`:
-- **O esgotamento do prazo de 30 s** de quem cai. Hoje há asserção de cair e VOLTAR; não há
-  de cair e não voltar, que é o ramo que transforma a queda em derrota.
-- **Os ramos de rede do sair da partida**, e a metade do `<select>` de cadeira que grava
-  (o `onchange`): o harness de Node não constrói elementos a partir de `innerHTML`, então o
-  handler nunca é ligado. Está dito no próprio teste em vez de contornado.
+O que sobra são coisas que **não recomendo agora** e estão registradas com o motivo, logo
+abaixo, e um trabalho de fundo que só vale quando doer:
 
-**2. `prefers-reduced-motion`.** Deixou de ser hipotético agora que o resto da acessibilidade
-existe — é a única linha do checklist que ficou de fora. A lâmpada respira para sempre e a
-câmera reenquadra; é o pior conjunto para sensibilidade vestibular. **Pequeno no CSS
-(três animações), médio no 3D**, e é essa segunda metade que faz valer a pena decidir o
-escopo antes de começar: só o CSS entrega meia promessa.
-
-**3. A compra voluntária, que existe no menu e cujo ramo NUNCA RODA.** É persistida,
-validada, aparece na tela — e o bot nunca compra tendo jogada, então nenhuma linha do
-caminho é exercitada. É a lacuna mais curiosa do projeto: uma regra da casa que talvez não
-funcione, e ninguém saberia.
+**O `test-telas` passa de 10 minutos e é preciso rodá-lo em duas metades.** Funciona (o
+argumento existe, e o rodapé grita "RODADA PARCIAL"), mas é manual e fácil de esquecer
+metade. Quem for mexer nisso deve olhar o **número de quadros parados exigidos** (hoje 8),
+que é de onde o tempo vem — e **não** voltar ao prazo fixo, que foi o defeito do item 11.
 
 #### O QUE PODERIA SER FEITO, mas não recomendo agora
 
@@ -552,13 +563,9 @@ Registrado para não ser redescoberto do zero — e com o motivo de não ser pri
 - **Botão de copiar/compartilhar o código da sala.** `user-select: all` resolve o mouse; no
   dedo, copiar de um `<div>` é sofrível, e o caso comum é mandar o código pelo WhatsApp.
   `navigator.share` resolveria. Impacto real no online, custo pequeno.
-- **Compra voluntária desabilitada nos modos sem monte.** Hoje o botão fica aceso prometendo
-  uma regra que o motor descarta — `ajustarCadeirasAoModo` já faz exatamente isso, com
-  elegância, para o número de jogadores.
 - **`prefers-reduced-motion`.** A lâmpada respira para sempre e a câmera reenquadra; é o pior
   conjunto para sensibilidade vestibular. Pequeno no CSS, médio no 3D.
-- ~~**`prefers-reduced-motion`.**~~ subiu para o "O QUE FAZER AMANHÃ": era o único item do
-  checklist de acessibilidade que a Fila 8 não fechou, e agora é o que sobra dele.
+- ~~**`prefers-reduced-motion`.**~~ ✔ **feito na v1.10.0** (Fila 9), CSS e 3D.
 - **Dívidas que investiguei e concluí que NÃO são defeito hoje** — não refaça o trabalho:
   o clone de material por peça sem `dispose()` (mesma `cacheKey`, os materiais viram lixo
   coletável; é churn, não vazamento); o `alvos.esq === alvos.dir` do `06-layout.js` (aliasing
@@ -1650,6 +1657,144 @@ nova não estiver consertando nada.
 - **`Measure-Object -Line` do PowerShell não conta linha em branco** e devolve ~450 a menos que
   o `wc -l`. Foi por isso que a contagem de linhas pareceu ter *encolhido* depois de eu
   acrescentar código.
+
+## Fila 9 — o que sobrava ✔ fechada (v1.10.0)
+
+Os três itens que a Fila 8 deixou para trás. Nenhum é defeito; os três são ramos que
+**nunca tinham rodado**, que é uma categoria própria: código que existe, que a tela promete,
+e que nenhuma linha de teste jamais executou.
+
+### 1. `prefers-reduced-motion` ✔ feito — CSS **e** 3D
+
+A metade do CSS sozinha seria meia promessa, e meia promessa em acessibilidade é pior que
+nenhuma: quem liga a preferência confia nela. Então foram os dois lados.
+
+**O 3D custou DUAS LINHAS, e a razão é estrutural:** `chegarPerto` (`09-tabuleiro.js`) é a
+**única** função de suavização do projeto — treze chamadas, do tabuleiro e da mão. Com a
+preferência ligada ela devolve o alvo direto. E ninguém perde informação: o deslizamento
+mostra o CAMINHO, e o que decide a jogada é o destino, que continua onde estava.
+
+A outra linha é a lâmpada (`16-loop.js`), e ela era o pior item do jogo para sensibilidade
+vestibular — o único movimento que **não acaba nunca**: não depende de jogada nem de vez,
+enquanto a aba estiver aberta a luz oscila. Parada, o boteco continua de pé; a luz fica
+quente e baixa, só não pulsa.
+
+**A `MediaQueryList` é consultada UMA VEZ e guardada** (`01-constantes.js`). Ela é viva — o
+`.matches` acompanha o sistema —, então guardá-la custa uma alocação em vez de sessenta por
+segundo, e continua respondendo se a pessoa mudar a preferência com o jogo aberto, sem
+listener nenhum.
+
+**No CSS as transições viram `0.01ms`, não `none`.** Código que espera por
+`transitionend`/`animationend` nunca é avisado quando a transição deixa de existir. Não há
+nenhum hoje — e é exatamente por isso que a hora de escrever assim é agora. E o `transform`
+do `#confirmar` e do `#aviso` fica de FORA da anulação: aqueles dois são centrados por
+`translate(-50%)`, e zerar o transform os joga meia largura para fora da tela. Mesma
+armadilha do item 10 da Fila 5, e ela volta sempre que alguém mexe em movimento sem olhar
+quem usava o transform para POSIÇÃO.
+
+### 2. O prazo de 30 s, esgotando ✔ feito
+
+Havia asserção de cair e **voltar**; não havia de cair e **não voltar** — que é o ramo que
+faz o prazo significar alguma coisa. Sem ele, "a cadeira fica guardada por 30 s" seria
+promessa sem consequência, e fechar a aba voltaria a ser a saída de emergência de qualquer
+partida perdida.
+
+**E não custou 30 segundos.** `sentar` e `largar` são funções comuns no escopo concatenado:
+dá para dirigi-las com uma `conn` de mentira, em Node, onde o `setTimeout` do harness é uma
+fila que o teste drena com `correrTimers()`. O relógio de parede nunca entra. O encanamento
+de PeerJS à volta delas continua sendo do `test-online`, com abas de verdade — a divisão é
+*lógica no Node, sessão no Chrome*.
+
+**A mutação revelou que o jogo tem DOIS guardas independentes** para "voltou a tempo": o
+`clearTimeout` no `sentar` e um `conexoes.has(cadeira)` dentro do próprio callback.
+Desligando o primeiro, só a asserção do `esperando` reprova — o desfecho continua certo.
+Isso está escrito no teste, porque uma asserção que **não** distingue precisa dizer por quê,
+senão o próximo a ler acha que ela é fraca.
+
+### 3. A compra voluntária ✔ feito
+
+A lacuna mais curiosa do projeto: a regra existe no menu, é persistida, é validada, aparece
+na tela — e o ramo **nunca rodava**, porque o bot não compra tendo jogada e todas as
+partidas de teste são bot×bot. Uma regra da casa que talvez não funcionasse, e ninguém
+saberia. Hoje está exercitada: a oferta com e sem a regra, a compra que **não passa a vez**
+(comprar e perder a vez seria castigo, não opção), o monte esgotando, e o fato de que o bot
+não compra — afirmado de propósito, porque se um dia ele passar a comprar, as milhares de
+mãos bot×bot mudam de comprimento e a força medida anda junto.
+
+### 4. O `<select>` de cadeira, a metade que grava ✔ feito
+
+A Fila 8 cobriu o que o menu **desenha** e disse de frente que o `onchange` ficava de fora
+(o harness de Node não constrói elementos a partir de `innerHTML`). Foi para o
+`test-online.mjs`, onde há DOM de verdade, e o que se exige é a **ida e volta**: o valor que
+o menu escreveu na opção tem de ser o mesmo que o `onchange` sabe destrinchar. As duas
+pontas são strings montadas à mão (`'bot:' + nivel` de um lado, `split(':')` do outro), e
+string montada à mão em dois lugares é como duas metades passam a discordar em silêncio.
+`dispatchEvent` e não `sel.onchange()` na mão: o que se quer saber é se o handler está
+**ligado ao elemento**.
+
+### 5. A compra livre deixou de ser prometida onde não há monte ✔ feito
+
+Veio da lista de "poderia ser feito, mas não recomendo agora" — e ficou barato justamente
+por ter testado a regra no item 3: com a compra voluntária exercitada, ficou evidente que o
+botão continuava aceso no Duelo, no Trio e no Clássico de 4, prometendo o que `acoesDe`
+descarta em silêncio. A espécie de defeito que o `refletirMesaNosBotoes` existe para
+impedir: **o jogo está certo e a tela mente.**
+
+**"Modo com monte" NÃO EXISTE, e é o que a leitura apressada erra:** o Clássico tem monte
+com 2 ou 3 jogadores e **nenhum** com 4 — a mesa de 4 esgota o baralho igualzinho ao Duelo
+e ao Trio. Por isso a pergunta leva o `n` junto e por isso ela **não** é uma propriedade da
+tabela `MODOS`. Quem responde é `sobraDoBaralho(modo, n)`, em `02-baralho.js`, pelo motivo
+de sempre: aritmética de baralho escrita à mão no menu já quebrou uma vez (`28 - 7 * MESA.n`).
+
+O botão desabilitado ganhou uma nota ao lado dizendo **por que** não dá — botão apagado sem
+explicação é o jogo emudecendo. E a preferência guardada **não** é apagada: quem joga
+Clássico de 2 com compra livre e espia o Duelo espera a marca de volta ao voltar; o motor
+ignora o valor onde não há monte, então guardá-lo não custa nada.
+
+### O que esta fila deixou de lição
+
+- **Teste novo que MEXE no estado da página derruba o teste velho, e parece defeito no
+  jogo.** As cenas do `test-online.mjs` compartilham a mesma aba viva, e `MESA` é global:
+  as asserções novas do `<select>` e da compra livre percorriam os cinco modos e deixavam a
+  mesa no Trio com a cadeira 1 virada em bot. A cena seguinte monta uma **mesa de 4 em
+  duplas** — sem duplas, o canal da dupla vira canal geral, e reprovou com *"A FALA DA
+  DUPLA VAZOU"*, que é a asserção mais assustadora do arquivo. É a mesma lição do
+  `localStorage` entre as cenas do `test-telas`, noutro meio: **cada cena diz o que quer, e
+  devolve como encontrou.**
+- **`catch` que transforma falha de rede em aviso engole defeito de verdade — e o recado
+  tranquilizador é o que faz ninguém olhar.** Um `j.ajustarCompraAoModo is not a function`
+  (nome novo que a ponte do `16-loop.js` não expunha) saiu do `test-online` com o texto "o
+  broker gratuito do PeerJS ou a sua rede não deixaram a conexão fechar", com a rede ótima.
+  Hoje `TypeError` e `ReferenceError` são reprovação com stack, não aviso: **rede não
+  produz nenhum dos dois.**
+- **Não rode duas suítes de Puppeteer ao mesmo tempo.** Um `Navigation timeout of 45000 ms`
+  no `test-online` foi contenção de CPU criada por uma rodada do `test-telas` em paralelo, e
+  o recado de erro apontou para o broker do PeerJS. Antes de culpar a rede, elimine a
+  disputa que você mesmo criou.
+- **Asserção-guarda de "o dublê entregou alguma coisa?" vale o seu peso.** A tabela da compra
+  livre foi escrita primeiro no `test-jogo`, onde `querySelectorAll` devolve `[]` — e sem a
+  guarda, `[].some(...)` é `false`, então os três casos que esperavam `false` PASSARIAM e só
+  os dois de `true` falhariam. Meio-verde confuso em vez de "o dublê não entregou os botões".
+  Toda asserção sobre uma COLEÇÃO deve primeiro exigir que a coleção não esteja vazia.
+- **Asserção que LANÇA em vez de reprovar trunca a suíte, e a checagem por mutação passa a
+  sub-relatar.** `chave(undefined)` matou o processo no meio da conferência da compra
+  voluntária: apareceram 4 vermelhas onde havia 7, e por um momento pareceu que as
+  asserções não cobriam o ramo. Quando uma mutação reprovar *menos* do que devia, a
+  primeira suspeita é que a suíte morreu antes do fim.
+- **Medir "parou de se mexer" logo depois de mandar parar mede a PRÓPRIA parada.** A
+  primeira asserção da lâmpada comparava o brilho antes e depois de ligar a preferência, e
+  pegava a transição do valor oscilante para o valor fixo — uma diferença real que não é
+  oscilação. Precisa de um quadro para o novo regime começar.
+- **Função de teste que GASTA quadros não pode ser chamada dentro da mensagem de erro.** O
+  `oscila()` aparecia na condição e no texto, e as duas chamadas mediam intervalos
+  diferentes: a mensagem contava uma história e a reprovação, outra.
+- **Dublê que responde SEMPRE a mesma coisa é tão incompleto quanto dublê sem método.**
+  Oitava vez da série. O `matchMedia` do harness devolvia `matches: false` fixo, o que é o
+  padrão certo para as media queries de tela — e vira buraco no instante em que o jogo
+  pergunta por uma **preferência**, porque aí o ramo ligado fica inalcançável. Hoje há
+  `preferir(consulta, ligada)`, e a consulta tem de bater LITERALMENTE com a do jogo: se
+  alguém trocá-la, o teste fica vermelho em vez de continuar verde testando um mundo que
+  não existe mais.
 
 ## Regras da casa (implementadas)
 

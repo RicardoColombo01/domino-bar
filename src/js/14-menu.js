@@ -136,6 +136,26 @@ function ajustarCadeirasAoModo() {
     b.disabled = !cabem.includes(n);
     b.classList.toggle('on', !b.disabled && n === MESA.n);
   });
+  ajustarCompraAoModo();
+}
+
+// COMPRA LIVRE SÓ EXISTE ONDE EXISTE MONTE. O botão ficava aceso no Duelo, no Trio e no
+// Clássico de 4, prometendo uma regra que o motor descarta em silêncio — `acoesDe` exige
+// `temMonte` antes de qualquer coisa. É a mesma espécie de defeito que o
+// `refletirMesaNosBotoes` existe para impedir: o jogo está certo e a tela mente.
+//
+// A pergunta NÃO é "qual modo": o Clássico tem monte com 2 ou 3 jogadores e nenhum com 4.
+// Quem responde é `sobraDoBaralho`, em 02-baralho.js, pelo mesmo motivo de sempre —
+// aritmética de baralho escrita à mão no menu já quebrou uma vez.
+//
+// A preferência guardada NÃO é apagada quando o botão desliga: quem jogava Clássico de 2 com
+// compra livre e dá uma passada pelo Duelo esperava a marca de volta ao voltar. O motor
+// ignora o valor onde não há monte, então guardá-lo não custa nada — e é o `disabled` que
+// impede a promessa.
+function ajustarCompraAoModo() {
+  const temMonte = sobraDoBaralho(MODOS[MESA.modo], MESA.n) > 0;
+  el('compraLivre').querySelectorAll('button').forEach(b => { b.disabled = !temMonte; });
+  el('notaCompra').textContent = temMonte ? '' : 'sem monte nesta mesa';
 }
 
 const cadeirasOnline = () => MESA.cadeiras.slice(0, MESA.n).filter(c => c.tipo === 'online').length;
@@ -159,7 +179,9 @@ function grupo(id, attr, aplicar) {
   });
 }
 grupo('modoMesa', 'modo', v => { MESA.modo = v; ajustarCadeirasAoModo(); montarCadeiras(); lembrarMesa(); });
-grupo('qtdJogadores', 'n', v => { MESA.n = +v; montarCadeiras(); lembrarMesa(); });
+// `ajustarCompraAoModo` entra aqui também, e não só no modo: o Clássico tem monte com 2 ou
+// 3 jogadores e NENHUM com 4, então trocar só o número de jogadores muda a resposta.
+grupo('qtdJogadores', 'n', v => { MESA.n = +v; montarCadeiras(); ajustarCompraAoModo(); lembrarMesa(); });
 grupo('alvoPontos', 'alvo', v => { MESA.alvo = +v; lembrarMesa(); });
 grupo('compraLivre', 'livre', v => { MESA.compraVoluntaria = v === '1'; lembrarMesa(); });
 

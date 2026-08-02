@@ -12,7 +12,7 @@ const mod = await import(buildModule([
   'fechamentosArmados', 'pontasDepois', 'abandonar',
   // `fecharMao` é o que decide pontos, empate e quem abre a próxima — e em DUPLAS ele
   // faz três contas que não existem na mesa de 2. Nenhuma tinha asserção.
-  'fecharMao',
+  'fecharMao', 'sobraDoBaralho',
 ]));
 
 let falhas = 0;
@@ -348,6 +348,114 @@ secao('fim de mão em duplas');
     P.placar[0] = 5;
     mod.fecharMao(P, { motivo: 'batida', vencedor: 2, tipo: 'simples' });
     ok(P.fase === 'fim', `o ponto do parceiro tinha de fechar a partida, e a fase ficou "${P.fase}"`);
+  }
+}
+
+// ─── compra voluntária ──────────────────────────────────────────────────────
+// A LACUNA MAIS CURIOSA DO PROJETO: a regra existe no menu, é persistida, é validada,
+// aparece na tela — e o ramo NUNCA RODAVA, porque o bot não compra tendo jogada e todas
+// as partidas de teste são bot×bot. Uma regra da casa que talvez não funcionasse, e
+// ninguém saberia. Estas asserções são a primeira vez que ela é exercitada.
+secao('compra voluntária');
+{
+  // Mesa de 2 no clássico, que é onde existe monte. Armada à mão: o que importa aqui é
+  // haver jogada possível E monte ao mesmo tempo, e sorteio não garante isso.
+  const armar = extra => Object.assign({
+    fase: 'mao', vez: 0, n: 2, duplas: false,
+    regras: { alvo: 6, compraVoluntaria: false, modo: 'classico' },
+    baralho: mod.baralhoCompleto(),
+    linha: [[3, 4]], monte: [[6, 6], [5, 1]], pecaObrigatoria: null,
+    maos: [[[4, 5], [0, 0]], [[2, 2]]],
+    faltaNo: [new Set(), new Set()], passesSeguidos: 0, log: [],
+    placar: [0, 0], abridor: null, iAncora: 0, maoNum: 1, cadeiras: [{}, {}],
+  }, extra || {});
+
+  // ONDE EXISTE MONTE, no papel. A tabela é escrita À MÃO de propósito: derivá-la de
+  // `sobraDoBaralho` seria conferir a função contra ela mesma. E o caso que a leitura
+  // apressada erra é o terceiro — "modo com monte" não existe: o CLÁSSICO tem monte com 2
+  // ou 3 jogadores e nenhum com 4. É por isso que a pergunta leva o `n` junto, e é por isso
+  // que ela mora em 02-baralho.js e não numa propriedade da tabela MODOS.
+  for (const [modo, n, sobra] of [
+    ['classico', 2, 14],    // 28 − 2×7
+    ['classico', 3, 7],     // 28 − 3×7
+    ['classico', 4, 0],     // 28 − 4×7   ← mesa de 4 NÃO tem monte
+    ['duelo', 2, 0],        // 28 − 2×14
+    ['trio', 3, 0],         // 27 − 3×9
+  ]) {
+    const deu = mod.sobraDoBaralho(mod.MODOS[modo], n);
+    ok(deu === sobra, `${modo} de ${n} devia sobrar ${sobra} para o monte e sobrou ${deu}`);
+  }
+
+  // Montagem: a 4|5 encaixa na ponta 4. Se não houvesse jogada, o "voluntária" não teria
+  // o que provar — a compra seria a obrigatória de sempre.
+  ok(mod.acoesDe(armar(), 0).jogadas.length > 0,
+    'montagem: precisava haver jogada possível, senão a compra seria a obrigatória');
+
+  // DESLIGADA: podendo jogar, não dá para comprar. É a regra padrão, e ela também nunca
+  // tinha sido afirmada — só acontecia.
+  ok(mod.acoesDe(armar(), 0).comprar === false,
+    'com a compra voluntária desligada e jogada na mão, comprar não podia ser oferecido');
+
+  // LIGADA: podendo jogar, dá para comprar mesmo assim. É o ramo inteiro.
+  const livre = () => armar({ regras: { alvo: 6, compraVoluntaria: true, modo: 'classico' } });
+  ok(mod.acoesDe(livre(), 0).comprar === true,
+    'com a compra voluntária ligada, comprar tinha de ser oferecido mesmo havendo jogada');
+
+  // E COMPRAR DE VERDADE FUNCIONA: a peça sai do monte, entra na mão, e A VEZ NÃO ANDA.
+  // Esta última é o coração da regra — comprar e perder a vez seria um castigo, não uma
+  // opção, e ninguém usaria. `comprar` não mexe em P.vez de propósito.
+  {
+    const P = livre();
+    const antesMao = P.maos[0].length, antesMonte = P.monte.length;
+    const r = mod.comprar(P, 0);
+    ok(r.ok, `a compra voluntária foi recusada: ${r.erro}`);
+    ok(P.maos[0].length === antesMao + 1, 'a peça comprada não entrou na mão');
+    ok(P.monte.length === antesMonte - 1, 'a peça comprada não saiu do monte');
+    ok(P.vez === 0, `comprar não pode passar a vez, e a vez foi para ${P.vez}`);
+    // O `r.peca &&` não é decoração defensiva: sem ele, uma compra RECUSADA faz
+    // `chave(undefined)` LANÇAR, o processo morre no meio da suíte e as asserções
+    // seguintes nunca rodam — foi o que aconteceu ao conferir isto por mutação, e
+    // escondeu metade do resultado. Asserção tem de FALHAR, não explodir.
+    ok(!!r.peca && mod.chave(r.peca) === mod.chave(P.maos[0][P.maos[0].length - 1]),
+      'a peça devolvida pela compra não é a que entrou na mão');
+  }
+
+  // DÁ PARA COMPRAR O MONTE INTEIRO, e depois disso a oferta ACABA. É o limite natural da
+  // regra — não há teto de compras, o teto é o monte. A pergunta que isto responde de
+  // verdade é se o motor para a tempo: `P.monte.pop()` num monte vazio empurraria
+  // `undefined` para dentro da mão, e a partida quebraria uma jogada depois, longe daqui.
+  {
+    const P = livre();
+    let compras = 0;
+    while (mod.acoesDe(P, 0).comprar && compras < 20) { mod.comprar(P, 0); compras++; }
+    ok(compras === 2, `o monte tinha 2 peças e foram compradas ${compras}`);
+    ok(P.monte.length === 0, 'o monte devia ter secado');
+    ok(P.maos[0].every(p => Array.isArray(p) && p.length === 2),
+      'entrou coisa que não é peça na mão — o motor comprou de um monte vazio');
+    ok(mod.comprar(P, 0).erro, 'comprar de monte vazio tinha de ser recusado');
+    // Com o monte seco e jogada na mão, ele joga: `passar` continua exigindo não haver
+    // jogada. Comprar até o fim não pode deixar o jogador sem saída nenhuma.
+    const a = mod.acoesDe(P, 0);
+    ok(a.jogadas.length > 0 && a.passar === false,
+      'depois de secar o monte, quem ainda tem jogada não pode ser mandado passar');
+  }
+
+  // SEM MONTE A REGRA NÃO EXISTE, e é o que impede o botão de prometer o que o motor
+  // descarta: no Duelo e no Trio o baralho acaba na distribuição.
+  ok(mod.acoesDe(armar({
+    monte: [], regras: { alvo: 6, compraVoluntaria: true, modo: 'classico' },
+  }), 0).comprar === false,
+    'sem monte não há compra voluntária, por mais ligada que a regra esteja');
+
+  // O BOT NÃO COMPRA TENDO JOGADA — e é exatamente por isso que este ramo nunca rodou.
+  // Fica afirmado: se um dia ele passar a comprar por conta própria, as milhares de mãos
+  // bot×bot mudariam de comprimento e a força medida do bot andaria junto, sem que nada
+  // do que aquelas suítes testam tivesse mudado.
+  {
+    const P = livre();
+    const escolha = mod.jogadaDoBot(P, 0);
+    ok(escolha && escolha.acao === 'jogar',
+      `o bot com jogada na mão devia jogar, e escolheu "${escolha && escolha.acao}"`);
   }
 }
 

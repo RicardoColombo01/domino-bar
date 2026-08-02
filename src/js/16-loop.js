@@ -461,7 +461,14 @@ function quadro(agora) {
   animarMao(dt, apontada);
 
   // A lâmpada respira de leve: mesa parada com luz parada parece render, não boteco.
-  const tremor = 0.86 + Math.sin(agora / 640) * 0.02 + Math.sin(agora / 197) * 0.012;
+  //
+  // E ela era o PIOR item do jogo para sensibilidade vestibular, porque é o único
+  // movimento que não acaba nunca — não depende de jogada, de vez nem de nada: enquanto a
+  // aba estiver aberta, a luz oscila. Com a preferência ligada ela para no valor médio, e
+  // repare que o boteco continua de pé: a luz fica quente e baixa, só não pulsa.
+  const tremor = movimentoReduzido()
+    ? 0.86
+    : 0.86 + Math.sin(agora / 640) * 0.02 + Math.sin(agora / 197) * 0.012;
   bulbo.material.color.setHSL(0.1, 0.5, tremor);
   lampada.intensity = 280 + tremor * 30;
 
@@ -523,6 +530,9 @@ window.__jogo = {
   // e por isso o teste do online precisa poder forçar esse redesenho para conferir que
   // o nome chega como texto, e não como elemento.
   montarCadeiras,
+  // A compra livre só é oferecida onde existe monte, e `disabled` num <button> só existe
+  // com DOM de verdade — daí a asserção morar no test-online e precisar chamar isto.
+  ajustarCompraAoModo,
   get P() { return P; },
   get vista() { return vistaAtual; },
   // A ORDEM DA TELA, que desde a arrumação não é mais a de vista.mao. Quem quiser
