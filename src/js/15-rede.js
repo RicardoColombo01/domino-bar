@@ -285,14 +285,76 @@ function desistiuDaMesa(cadeira) {
 //
 // Comparação por CHAVE e não por igualdade crua: "ricardo" e "Ricardo " são a mesma pessoa
 // para quem lê a mesa. E a mesa tem quatro cadeiras, então não há por que ir longe.
+//
+// O contrato, que é o que o teste cobra (test-jogo.mjs, em milissegundos — a função é pura):
+//   nomeUnico('Zé', ['Tião'])                 → 'Zé'           (não colide: não muda)
+//   nomeUnico('Zé', ['Zé'])                   → 'Zé2'
+//   nomeUnico('Zé', ['Zé', 'Zé2'])            → 'Zé3'          (pula o que já existe)
+//   nomeUnico('Ana Paula', ['Ana Paula'])     → 'Ana2 Paula'   (não 'Ana Paula 2')
+//   nomeUnico('Maria Fernanda', [idem])       → 'Maria2'       (ver o encolhimento, abaixo)
+//   nomeUnico('Sebastiãozinho', [idem])       → 'Sebastiãozinh2'
 function nomeUnico(nome, ocupados) {
-  // TODO(Ricardo): o corpo é seu. Contrato, para o teste do online:
-  //   nomeUnico('Zé', ['Tião'])                 → 'Zé'
-  //   nomeUnico('Zé', ['Zé'])                   → 'Zé2'
-  //   nomeUnico('Zé', ['Zé', 'Zé2'])            → 'Zé3'
-  //   nomeUnico('Ana Paula', ['Ana Paula'])     → 'Ana2 Paula'   (não 'Ana Paula 2')
-  //   nomeUnico('Sebastiãozinho J', ['Sebastiãozinho J'])        → cabe em 14
-  return String(nome).slice(0, 14);
+  // 14 é o `maxlength` dos DOIS campos de nome (o do menu e o do saguão) e o corte que o
+  // `btConectar` já aplica do outro lado do fio. Fica local: neste escopo concatenado todo
+  // nome no topo é mais um para colidir, e esta conta não é lida em outro lugar.
+  const TETO = 14;
+
+  // A CHAVE é o nome como a mesa o LÊ. `NFC` porque o mesmo "Zé" chega composto no Windows
+  // e decomposto no iPhone: dois códigos para a MESMA letra passam batidos por uma
+  // comparação crua, e a mesa fica com dois "Zé" — que é justamente o que esta função
+  // existe para impedir. Espaço repetido no meio também não faz duas pessoas, e o `\s`
+  // pega o espaço-duro que vem colado quando se copia um nome de aplicativo de conversa.
+  const chaveDoNome = s => String(s == null ? '' : s)
+    .normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase();
+
+  // Vizinho sem nome não ocupa nada: cadeira em branco não pode ser o motivo de renumerar
+  // alguém. E o `Array.isArray` é porque isto roda dentro do `conn.on('data')`, onde uma
+  // exceção não estraga um nome — derruba a conexão inteira.
+  const tomados = new Set(
+    (Array.isArray(ocupados) ? ocupados : []).map(chaveDoNome).filter(Boolean));
+
+  // O nome vai NORMALIZADO para a mesa, e não só para a comparação: quem o fatia depois é
+  // o `nomeEmPartes` (13-hud.js), no primeiro espaço, e os dois têm de achar o mesmo.
+  const base = String(nome == null ? '' : nome).normalize('NFC').replace(/\s+/g, ' ').trim();
+  const corte = base.indexOf(' ');
+  const primeiro = corte < 0 ? base : base.slice(0, corte);
+  const resto    = corte < 0 ? ''   : base.slice(corte);   // o espaço vai junto, como no HUD
+
+  // Cortar por unidade UTF-16 parte emoji ao meio e deixa meio par substituto solto — e
+  // este nome ainda vira JSON no fio e texto na tela. O `Math.max` não é enfeite: tamanho
+  // negativo faz o `slice` contar do FIM e devolver outra string, plausível e errada.
+  const cortar = (s, n) => {
+    const t = s.slice(0, Math.max(0, n));
+    return /[\uD800-\uDBFF]$/.test(t) ? t.slice(0, -1) : t;
+  };
+
+  // Um candidato, já cortado. O número entra no PRIMEIRO nome, e QUEM ENCOLHE É A BASE,
+  // nesta ordem: primeiro o sobrenome sai INTEIRO — nada de palavra cortada pela metade,
+  // que é o que faria "Maria2 Fernand" —, e só quando o primeiro nome sozinho ainda não
+  // cabe é que ele cede, porque aí não há mais nada para ceder. O `i === 1` é o nome
+  // pedido sem número, e passa por aqui como os outros: também precisa caber nos 14.
+  const montar = i => {
+    const sufixo = i === 1 ? '' : String(i);
+    const inteiro = primeiro + sufixo + resto;
+    if (inteiro.length <= TETO) return inteiro;
+    const semSobrenome = primeiro + sufixo;
+    if (semSobrenome.length <= TETO) return semSobrenome;
+    return cortar(primeiro, TETO - sufixo.length) + sufixo;
+  };
+
+  // A CONFERÊNCIA VEM DEPOIS DO CORTE, e é o ponto todo. Perguntar por `nome + número`
+  // antes de encolher deixa passar a colisão que o próprio encolhimento cria: com
+  // "Sebastiãozinh2" já sentado, o "Sebastiãozinho" que chega viraria "Sebastiãozinho2",
+  // que cortado em 14 é "Sebastiãozinh2" outra vez — dois nomes iguais, e em silêncio.
+  //
+  // O laço acaba por conta, e não por sorte: cada volta produz uma string diferente das
+  // anteriores (o número muda de valor numa posição fixa), e n+1 nomes distintos não
+  // cabem em n chaves ocupadas.
+  for (let i = 1; i <= tomados.size + 1; i++) {
+    const candidato = montar(i);
+    if (!tomados.has(chaveDoNome(candidato))) return candidato;
+  }
+  return montar(tomados.size + 2);   // não se alcança; existe para o laço ter fim visível
 }
 
 // UMA CADEIRA É VAGA DE VISITANTE se está marcada `online`, ou se virou bot por falta de
@@ -301,7 +363,16 @@ function nomeUnico(nome, ocupados) {
 // menu continua fechado a quem tem o código, e a cadeira de quem saiu volta a ser dele.
 const vagaDeVisita = c => c.tipo === 'online' || c.vagaOnline === true;
 
-// As outras cadeiras da mesa — é contra elas que o nome que chega tem de ser único.
+// As outras cadeiras da mesa — é contra elas que o nome que chega tem de ser único. Exclui
+// a PRÓPRIA cadeira, e não é detalhe: `nomeUnico` roda de novo a cada `{t:'nome'}`, então
+// um vizinho que se incluísse veria o próprio nome e escalaria "Ricardo2" → "Ricardo22" a
+// cada troca.
+//
+// O que sustenta a comparação de `nomeUnico` é o invariante "TODO NOME NA MESA CABE EM 14":
+// o candidato dele nunca passa de 14, então um ocupado mais comprido jamais seria igual a
+// candidato nenhum e escaparia do desempate. Hoje os cinco lugares que escrevem nome cortam
+// em 14 (os dois `maxlength`, o `mesaLembrada`, o `btConectar` e o próprio `nomeUnico`).
+// Quem acrescentar um sexto sem cortar reabre isso.
 const nomesVizinhos = cadeira =>
   MESA.cadeiras.slice(0, MESA.n).filter((c, i) => i !== cadeira).map(c => c.nome);
 

@@ -992,6 +992,28 @@ console.log('\ndois jogadores com o mesmo nome');
   const dois = u('Sebastião Jr', 'Sebastião Jr');
   ok(dois.length <= 14 && dois !== 'Sebastião Jr' && /\d/.test(dois),
     `nome longo com sobrenome não desempatou direito: "${dois}"`);
+
+  // O SOBRENOME SAI INTEIRO quando não cabe — nada de palavra cortada pela metade
+  // ("Maria2 Fernand"). É decisão do Ricardo, 04/08/2026, e nenhuma leitura de código
+  // chega a ela: o primeiro nome é a única parte que o cartão mostra em tela estreita,
+  // então o pedaço que sobra tem de ser um nome de gente, não um toco.
+  const maria = u('Maria Fernanda', 'Maria Fernanda');       // 14 na bala; com o número, 15
+  ok(maria === 'Maria2', `o sobrenome tinha de sair inteiro, e veio "${maria}"`);
+
+  // ESTÁVEL ENTRE CHAMADAS, e é o que faz o `{t:'nome'}` (15-rede.js) ser seguro: ele
+  // reentra aqui a cada troca de nome em partida, e não só ao sentar. Funciona porque
+  // `nomesVizinhos` exclui a própria cadeira — quem passar a mesa TODA cria um ratchet
+  // "Ricardo2" → "Ricardo22" → "Ricardo222" que só aparece na segunda troca.
+  let quemSou = u('Ricardo', 'Dona da mesa', 'Ricardo');
+  for (let i = 0; i < 4; i++) quemSou = u('Ricardo', 'Dona da mesa', 'Ricardo');
+  ok(quemSou === 'Ricardo2', `renomear repetido acumulou número: "${quemSou}"`);
+
+  // A colisão que o PRÓPRIO ENCOLHIMENTO cria. Sem conferir o candidato já cortado, o
+  // "Sebastiãozinho" que chega vira "Sebastiãozinho2", que cortado em 14 é
+  // "Sebastiãozinh2" — o outro vizinho, de novo e em silêncio.
+  const terceiro = u('Sebastiãozinho', 'Sebastiãozinho', 'Sebastiãozinh2');
+  ok(terceiro !== 'Sebastiãozinh2' && terceiro.length <= 14,
+    `o corte em 14 fabricou uma colisão nova: "${terceiro}"`);
 }
 
 console.log('\no mudo tem de durar');

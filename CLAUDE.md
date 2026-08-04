@@ -5,8 +5,8 @@ bot, na mesma tela ou pela internet. No ar em
 **https://ricardocolombo01.github.io/domino-bar/** (repo público `RicardoColombo01/domino-bar`).
 
 Sem framework, sem bundler, sem asset: madeira, pintas e sons são gerados em canvas e
-WebAudio na hora. Three.js e PeerJS vêm de CDN. **~5.470 linhas** no total (`src/js` +
-`pagina.html` + `css/estilo.css`), conferido em 03/08/2026 — este número **envelhece**, e
+WebAudio na hora. Three.js e PeerJS vêm de CDN. **5.544 linhas** no total (`src/js` +
+`pagina.html` + `css/estilo.css`), conferido em 04/08/2026 — este número **envelhece**, e
 envelheceu: ficou dizendo 2.100 por três releases seguidas.
 
 **Conte com `node`, não com o PowerShell.** `Measure-Object -Line` **não conta linha em
@@ -248,6 +248,10 @@ As pontas são o primeiro e o último número; jogar na esquerda é um `unshift`
   perverso aparece na conferência por MUTAÇÃO: ela passa a sub-relatar, e parece que a
   asserção não cobria o ramo quando na verdade a suíte morreu antes de chegar lá. Quando
   uma mutação reprovar MENOS do que devia, suspeite disso antes de suspeitar da asserção.
+  **A outra causa é a mutação não ter sido aplicada:** os arquivos aqui são CRLF, e um
+  `replace` com `\n` no texto de busca não casa, não estoura e deixa o arquivo intacto —
+  "tudo certo" fica indistinguível de "não mexi em nada". Mutação por script tem de exigir
+  que o casamento aconteceu antes de rodar a suíte.
 - **Medir "parou de se mexer" logo depois de mandar parar mede a própria parada** — a
   transição para o valor fixo é uma diferença real que não é oscilação. Precisa de um quadro
   para o regime novo começar. E função de teste que GASTA quadros não pode ser chamada
@@ -457,20 +461,18 @@ campo acha o que está escrito certo e mesmo assim não funciona.
 **Leia isto primeiro ao retomar.** É o estado real do trabalho, o que ele produziu, o que
 fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numerados mais abaixo.
 
-#### ESTADO EM UMA OLHADA (03/08/2026)
+#### ESTADO EM UMA OLHADA (04/08/2026)
 
 | | |
 |---|---|
-| publicado | **v1.10.0** — https://ricardocolombo01.github.io/domino-bar/ |
-| em trabalho | branch **`v2`**, a caminho da tag `v2.0.0` |
+| publicado | **v2.0.0** — https://ricardocolombo01.github.io/domino-bar/ |
+| em trabalho | **nada** — a `v2` foi fechada e apagada; a próxima onda nasce em `v3` |
 | `main` ↔ `origin/main` | `0 ← \| 0 →` |
-| Filas 5 a 9 | **todas fechadas** |
-| **Fila 10** | **ABERTA** — três defeitos de campo de 03/08, os três com conserto e teste |
-| onde o trabalho está | **commitado na `v2`, NÃO enviado, NÃO publicado** (`fa56fbd`) — `main` continua na v1.10.0, que é o que está no ar |
-| falta | **só o corpo de `nomeUnico`** (`15-rede.js`) — 8 asserções vermelhas esperam por ele (6 no `test-jogo`, 2 no `test-online`). O Ricardo tinha pegado essa parte e devolveu em 03/08: **fica comigo, na próxima sessão** |
+| Filas 5 a 10 | **todas fechadas** |
+| falta | **nada em aberto.** O que sobra é a lista de "poderia ser feito, mas não recomendo agora", logo abaixo |
 
-**A fila esvaziou na v1.10.0 e voltou a encher pela fonte mais barata: jogar.** O Ricardo
-mandou uma foto e três relatos em 03/08 — ver a Fila 10.
+**A fila esvaziou na v1.10.0, encheu de novo em 03/08 pela fonte mais barata (jogar) e
+esvaziou outra vez na v2.0.0.** Os três defeitos da foto e dos relatos estão fechados.
 
 #### O QUE CUSTOU UM DIA INTEIRO, e não pode se repetir
 
@@ -574,27 +576,16 @@ E uma quarta, de fora do código: **`diff` de dois arquivos vazios passa.** A su
 gerou saída, os dois arquivos saíram com zero linhas e a comparação declarou "idênticas". Teste
 de igualdade tem de exigir também que **haja o que comparar**.
 
-#### O QUE FAZER AMANHÃ — em ordem, e por quê
+#### O QUE FAZER AMANHÃ — nada obrigatório
 
-**Combinado com o Ricardo em 03/08: eu termino o que falta.** São cinco passos, nesta ordem,
-e o primeiro é o único que envolve escrever jogo:
+**Os cinco passos que moravam aqui foram executados em 04/08/2026** e viraram a `v2.0.0`: o
+corpo de `nomeUnico`, as suítes (as rápidas e as quatro pesadas, uma de cada vez), o bundle
+recommitado, este arquivo, e o merge `--no-ff` com tag e push. **A fila está vazia.**
 
-1. **O corpo de `nomeUnico()`** (`src/js/15-rede.js`, marcado `TODO(Ricardo)`). O contrato
-   está no comentário da própria função e na Fila 10. As duas armadilhas a respeitar: o
-   número vai no PRIMEIRO nome (o corte na palavra do `nomeEmPartes` come o resto em tela
-   estreita) e quem encolhe para caber nos 14 é a base, nunca o sufixo (sufixo cortado
-   devolve dois nomes iguais — o defeito de volta em silêncio). Tirar o `TODO` junto.
-2. **`npm test`** → as 6 vermelhas do `test-jogo` viram verdes. Depois
-   **`node tests/test-online.mjs --so=nomes`** → as 2 do Chrome.
-3. **`npm run build && git add index.html && npm run check`** — o bundle é gerado e
-   commitado, e o `merge=ours` do `.gitattributes` não perdoa esquecimento.
-4. **As suítes pesadas, uma de cada vez**, antes de fechar: `npm run online` inteiro,
-   `npm run lembrar`, `npm run textura` e o `telas` nas duas metades. Nenhuma delas foi
-   tocada depois da última rodada verde, mas o passo 1 mexe em `15-rede.js`.
-5. **Fechar a onda:** merge `--no-ff` da `v2` em `main` com tag **`v2.0.0`**, apagar a `v2`,
-   e **`git push origin main --tags`** — que é o passo que publica, porque o Pages serve da
-   `main`. Só depois disso dizer que está no ar: **commitado ≠ enviado ≠ publicado**, e um
-   dia inteiro já se perdeu por essa distinção (ver o começo desta seção).
+A próxima onda nasce numa branch `v3`, de `main`, pelo modelo de sempre. E vale lembrar como
+esta fila enche: **campo** (jogar — deu as Filas 5, 7 e 10) e **varredura** (procurar o que
+ainda não incomodou — deu a Fila 6). Três das quatro últimas vieram de jogar, e a Fila 10
+saiu de UMA foto e três frases.
 
 **A lista abaixo esvaziou na v1.10.0.** Os seis itens originais saíram na v1.8.0 e na v1.9.0
 (Fila 8); os três que sobravam saíram na **v1.10.0** (Fila 9).
@@ -631,15 +622,18 @@ Registrado para não ser redescoberto do zero — e com o motivo de não ser pri
 
 #### Perguntas em aberto para o Ricardo
 
-- **Nenhuma bloqueia.** O corpo de `nomeUnico()` chegou a ser dele — foi escolha dele quando
+- **Nenhuma em aberto.** O corpo de `nomeUnico()` chegou a ser dele — foi escolha dele quando
   perguntado em 03/08 —, e no fim do mesmo dia ele devolveu: *"amanhã você termina o resto
-  que falta"*. Voltou a ser meu, e está como passo 1 do "O QUE FAZER AMANHÃ".
-- As três decisões da Fila 10 já foram respondidas em 03/08/2026: os **três** consertos de
+  que falta"*. Voltou a ser meu e **saiu na v2.0.0**.
+- As três decisões da Fila 10 foram respondidas em 03/08/2026: os **três** consertos de
   nome juntos; o convidado que volta **assume a cadeira mesmo virada em bot**; e a onda sai
-  em branch `v2`, tag `v2.0.0` (e não em `hotfix`/`v1.10.1`).
-- **A fila esvaziou na v1.10.0 e a Fila 10 a encheu de novo em 03/08** — os três defeitos
-  estão consertados e testados; o que sobra é o passo 1 acima. Depois dela, o que resta em
-  aberto continua sendo a lista de "poderia ser feito, mas não recomendo agora", logo acima,
+  em branch `v2`, tag `v2.0.0` (e não em `hotfix`/`v1.10.1`). A quarta veio em **04/08**, e é
+  a única que a implementação não podia responder sozinha: quando o nome desempatado não cabe
+  nos 14, **o sobrenome sai inteiro** (`"Maria Fernanda"` → `"Maria2"`, e não
+  `"Maria2 Fernand"`) — as duas saídas eram defensáveis, como a cruzada da Fila 5.
+- **A fila esvaziou na v1.10.0, a Fila 10 a encheu em 03/08 e a v2.0.0 a esvaziou de novo** —
+  os três defeitos estão consertados, testados e no ar. O que resta em
+  aberto é a lista de "poderia ser feito, mas não recomendo agora", logo acima,
   e dela só uma coisa depende de decisão dele e não de programador: o **`beforeunload` no
   meio de partida online** (um F5 acidental gasta o prazo de 30 s sem aviso, mas
   `beforeunload` é incômodo). As outras duas são escolha de escopo, não de gosto: o botão de
@@ -654,15 +648,13 @@ Registrado para não ser redescoberto do zero — e com o motivo de não ser pri
 
 ```
 git fetch origin && git rev-list --left-right --count origin/main...main   # tem de dar 0 0
-git branch -a          # hoje há a v2 aberta, com a Fila 10 dentro
-git checkout v2        # o trabalho de 03/08 está AQUI, não na main
+git branch -a          # hoje só main; a próxima onda nasce numa v3
 npm run check          # o bundle está em dia com src/?
 npm test               # as três suítes de lógica, segundos
 ```
 
-**Hoje `npm test` reprova 6 asserções, e isso é ESPERADO:** são as de `nomeUnico`, cujo corpo
-ainda não existe. Mais 2 no `node tests/test-online.mjs --so=nomes`. Se reprovar qualquer
-outra coisa, aí sim é regressão.
+**Hoje `npm test` tem de passar inteiro** — a fila está vazia e não há vermelha esperada.
+Qualquer reprovação é regressão.
 
 **Suíte pesada roda sozinha** — o `test-telas` renderiza WebGL por software e o `test-online`
 tem prazo de navegação de 45 s; duas ao mesmo tempo viram falha que parece da rede. E o
@@ -1876,7 +1868,7 @@ ignora o valor onde não há monte, então guardá-lo não custa nada.
   alguém trocá-la, o teste fica vermelho em vez de continuar verde testando um mundo que
   não existe mais.
 
-## Fila 10 — os três defeitos de campo de 03/08/2026 (branch `v2`)
+## Fila 10 — os três defeitos de campo de 03/08/2026 ✔ fechada (v2.0.0)
 
 Uma foto de celular (mesa de Duelo online, 19:37) e três relatos, todos de jogo de verdade.
 A fila tinha esvaziado na v1.10.0; encheu de novo pela fonte que o próprio arquivo aponta
@@ -1894,17 +1886,18 @@ nomes"*. O defeito e o pedido estão na mesma imagem.
 | `css/estilo.css` | `.carta { margin: auto }` e as safe-areas no `.tela` (dois blocos: o normal e o de tela pequena) |
 | `src/pagina.html` | o campo `#onlineNome` no saguão |
 | `src/js/14-menu.js` | `NOMES` sem "Você"; a migração do "Você" gravado; `vagaOnline` zerada no `<select>` e no literal do `mesaLembrada` |
-| `src/js/15-rede.js` | `nomeUnico`/`nomesVizinhos` (**corpo pendente**), `vagaDeVisita`, `porQueNaoSentou`, `RECUSA`, `largarAMesa`, `deixandoAMesa`, `desistiuDaMesa` (extraída), o `sentar` reconvertendo a vaga, o campo de nome revelado/escondido nas três telas |
+| `src/js/15-rede.js` | `nomeUnico`/`nomesVizinhos`, `vagaDeVisita`, `porQueNaoSentou`, `RECUSA`, `largarAMesa`, `deixandoAMesa`, `desistiuDaMesa` (extraída), o `sentar` reconvertendo a vaga, o campo de nome revelado/escondido nas três telas |
 | `src/js/16-loop.js` | `c.vagaOnline = true` na conversão do `comecarLocal`; o ramo convidado do `sairDaPartida` virou `largarAMesa()` |
 | `tests/test-jogo.mjs` | `novaConn` com `open`, `montarMesaOnline` içada e partindo de partida viva, 12 asserções do voltar e 6 do desempate |
 | `tests/test-telas.mjs` | cena `menu` (`soTela`), `semGuardado`/`menuCheio`, a medida de topo alcançável, o `V` vindo do `THREE` |
 | `tests/test-online.mjs` | cenas `nomes` e `voltar`; o `exit(0)` do aviso de rede deixou de engolir falha |
 | `tests/test-lembrar.mjs` | a migração do "Você" gravado, provada por mutação |
 
-**O que ainda vai mudar:** só o corpo de `nomeUnico()` — ver o "O QUE FAZER AMANHÃ", que tem
-os cinco passos até a `v2.0.0` no ar.
+**Fechou em 04/08/2026** com o corpo de `nomeUnico()`, que era a última peça. A onda saiu na
+tag `v2.0.0`, e o `tests/test-jogo.mjs` ganhou mais 4 asserções junto do conserto (o
+sobrenome que sai inteiro, a estabilidade entre chamadas, e a colisão que o corte fabrica).
 
-### 1. Todo mundo se chama "Você" ✔ feito (menos o desempate)
+### 1. Todo mundo se chama "Você" ✔ feito
 
 `NOMES[0]` era literalmente `'Você'` (`14-menu.js`), e é dele que sai o nome que o convidado
 manda ao anfitrião (`{t:'ola'}`). Os dois lados liam o mesmo literal.
@@ -1938,25 +1931,50 @@ sumiria justamente no retrato de quatro cartões, que é onde a confusão dói. 
 para caber nos 14 é a base, nunca o desempate** — sufixo comido pelo corte devolve dois
 nomes iguais, que é o defeito de volta em silêncio.
 
-> **PENDENTE — É O ÚNICO ITEM ABERTO DESTA FILA.** O corpo de `nomeUnico()`
-> (`src/js/15-rede.js`) ainda é um `return String(nome).slice(0, 14)` marcado
-> `TODO(Ricardo)`. Ele tinha ficado para o Ricardo escrever, por escolha dele quando
-> perguntado em 03/08; no fim do mesmo dia ele devolveu a tarefa — **quem escreve sou eu, na
-> próxima sessão.** O `TODO` no código ainda diz o nome dele e sai junto com o conserto.
->
-> A assinatura, o comentário com as duas armadilhas e os dois pontos de chamada já estão de
-> pé, e **8 asserções esperam por ele**: 6 no `test-jogo.mjs` (o contrato inteiro, em
-> milissegundos) e 2 no `test-online.mjs` (dois "Ricardo" de verdade, em duas abas). O
-> contrato está escrito no próprio comentário da função, e é este:
->
-> ```
-> nomeUnico('Zé', ['Tião'])              → 'Zé'          (não colide: não muda)
-> nomeUnico('Zé', ['Zé'])                → 'Zé2'
-> nomeUnico('Zé', ['Zé', 'Zé2'])         → 'Zé3'         (pula o que já existe)
-> nomeUnico('Ana Paula', ['Ana Paula'])  → 'Ana2 Paula'  (no PRIMEIRO nome)
-> 'ricardo' colide com 'Ricardo '                        (caixa e espaço não fazem duas pessoas)
-> 'Sebastiãozinho' (14) duplicado ainda cabe em 14 e sai diferente do original
-> ```
+**O corpo de `nomeUnico()` ✔ feito (04/08/2026)** — era o último item aberto da fila, e o
+`TODO(Ricardo)` saiu junto. O contrato de sempre está no comentário da função; o que a
+implementação acrescentou, e que a fila não previa, foi isto:
+
+- **A DECISÃO QUE FALTAVA, e nenhuma leitura de código chega a ela** (escolha do Ricardo,
+  04/08): quando `primeiro + número + sobrenome` estoura os 14, **o sobrenome sai INTEIRO**
+  — nada de palavra cortada pela metade. `"Maria Fernanda"` duplicado vira **`"Maria2"`**,
+  não `"Maria2 Fernand"`. O primeiro nome só cede quando ele sozinho, com o número, ainda
+  não cabe (`"Sebastiãozinho"` → `"Sebastiãozinh2"`) — aí não há mais nada para ceder. O
+  motivo é o mesmo do número ir no primeiro nome: em tela estreita o cartão mostra **só** o
+  primeiro nome, então o pedaço que sobra tem de ser um nome de gente, e não um toco.
+- **A CONFERÊNCIA VEM DEPOIS DO CORTE, e é o ponto todo.** O desenho ingênuo — escolher o
+  número olhando o nome inteiro e só então cortar em 14 — deixa passar a colisão que o
+  **próprio encolhimento** cria: com `"Sebastiãozinh2"` já sentado, o `"Sebastiãozinho"` que
+  chega vira `"Sebastiãozinho2"`, que cortado em 14 é `"Sebastiãozinh2"` de novo. Dois nomes
+  iguais, e em silêncio. É a mesma família do "sufixo comido pelo corte", por outra porta:
+  ali morria o sufixo, aqui é a BASE encurtada que bate num terceiro. **Qualquer variante que
+  separe "escolher o número" de "cortar em 14" reabre isto.**
+- **A chave normaliza `NFC` e colapsa espaço**, e não é preciosismo: o mesmo "Zé" chega
+  composto no Windows e decomposto no iPhone — dois códigos para a MESMA letra passam batidos
+  por comparação crua, e a mesa fica com dois "Zé". O `\s` pega de quebra o espaço-duro que
+  vem colado quando se copia um nome de aplicativo de conversa.
+- **O laço acaba por conta, e não por sorte:** vai até `tomados.size + 1`, e n+1 nomes
+  distintos não cabem em n chaves ocupadas. Nada de teto mágico.
+- **É estável entre chamadas**, o que importa porque `nomeUnico` reentra a cada `{t:'nome'}`
+  e não só ao sentar. Funciona porque `nomesVizinhos` exclui a própria cadeira — quem a
+  "simplificar" para passar a mesa toda cria um ratchet `Ricardo2 → Ricardo22 → Ricardo222`
+  que só aparece na **segunda** troca de nome. Há asserção.
+- **Dívida registrada e NÃO consertada:** o que sustenta a comparação é o invariante "todo
+  nome na mesa cabe em 14" — um ocupado mais comprido nunca seria igual a candidato nenhum e
+  escaparia do desempate. Os cinco lugares que escrevem nome cortam em 14, então hoje é
+  teórico. O bilhete está no comentário do `nomesVizinhos`, para quem acrescentar um sexto.
+
+O contrato, que é o que as asserções cobram:
+
+```
+nomeUnico('Zé', ['Tião'])              → 'Zé'          (não colide: não muda)
+nomeUnico('Zé', ['Zé'])                → 'Zé2'
+nomeUnico('Zé', ['Zé', 'Zé2'])         → 'Zé3'         (pula o que já existe)
+nomeUnico('Ana Paula', ['Ana Paula'])  → 'Ana2 Paula'  (no PRIMEIRO nome)
+nomeUnico('Maria Fernanda', [idem])    → 'Maria2'      (o sobrenome sai inteiro)
+'ricardo' colide com 'Ricardo '                        (caixa e espaço não fazem duas pessoas)
+'Sebastiãozinho' (14) duplicado ainda cabe em 14 e sai diferente do original
+```
 
 ### 2. A tela inicial não voltava ao topo ✔ feito
 
@@ -2062,10 +2080,23 @@ entrada de fora com validação própria. Custo maior que o caso.
   já registrava essa doença para `TypeError`/`ReferenceError`; faltava o degrau final —
   **o caminho que existe para perdoar a REDE estava perdoando o JOGO.** Hoje falha anterior
   a um aviso reprova a rodada.
-- **Mutação que reprova MENOS do que devia é sintoma, não sorte.** Duas vezes nesta fila: a
-  do `conn.open` acima, e uma em que a mutação MATOU o processo (`mostrarFimDeMao` com
-  `resultado` nulo) e a suíte inteira saiu sem contar asserção nenhuma. As duas confirmam a
-  regra que a Fila 9 escreveu.
+- **Mutação que reprova MENOS do que devia é sintoma, não sorte.** TRÊS vezes nesta fila: a
+  do `conn.open` acima; uma em que a mutação MATOU o processo (`mostrarFimDeMao` com
+  `resultado` nulo) e a suíte inteira saiu sem contar asserção nenhuma; e a terceira, em
+  04/08 — ver abaixo. As três confirmam a regra que a Fila 9 escreveu.
+- **MUTAÇÃO QUE NÃO CHEGA A SER APLICADA SAI VERDE, e verde é exatamente a resposta errada.**
+  Ao conferir o `nomeUnico`, duas mutações de várias linhas foram "aplicadas" por um
+  `String.replace` cujo texto de busca tinha `\n` — e **os arquivos deste repositório são
+  CRLF**. O casamento falhou, o arquivo ficou intacto, a suíte passou, e por um momento
+  pareceu que a asserção não cobria o ramo. É a doença do "reprova menos do que devia" com
+  uma causa nova: não é a suíte que morre, é a mutação que nunca nasce. **Toda mutação por
+  script tem de EXIGIR que o casamento aconteceu** (contar as ocorrências e estourar se não
+  for exatamente uma) antes de rodar coisa nenhuma — sem isso, "tudo certo" é indistinguível
+  de "não mexi em nada". Refeitas com essa guarda, as cinco mutações mataram uma asserção
+  cada, e cada uma a sua.
+- **Heredoc de script com acento no literal chega corrompido.** Um `python - <<'PY'` com
+  strings em português foi lido como latin-1 e as buscas nunca casaram. Para editar texto
+  acentuado, a ferramenta de edição direta; para script, o arquivo em disco.
 - **Cena de teste que mexe em estado compartilhado derruba a seguinte — de novo, e num
   arranjo novo.** O bloco do prazo deixava `P.fase = 'fim'` posto à mão (um estado que o jogo
   não produz: fim sem resultado e sem desistente), e a montagem do bloco seguinte estourava
