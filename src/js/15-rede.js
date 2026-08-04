@@ -72,6 +72,13 @@ function erroOnline(txt) {
   el('onlineErro').textContent = txt;
 }
 
+// SAIR DE PROPÓSITO É UM ESTADO, e ele dura os 400 ms entre o `desisto` sair e o peer
+// morrer. Nessa janela o anfitrião ainda publica — a vista do abandono, justamente —, o
+// peer ainda dispara o próprio `close`, e o jogador já está no menu. Sem esta marca a vista
+// o arrancaria de volta para a derrota que ele acabou de aceitar, e o `close` avisaria "A
+// mesa fechou", que é mentira: quem fechou foi ele.
+let deixandoAMesa = false;
+
 // O ANFITRIÃO GUARDA A MESA — o código E o mapa de quem é dono de qual cadeira. Sem o
 // mapa, reabrir com o mesmo código devolveria o código certo e as cadeiras ERRADAS:
 // `donoDaCadeira` só existia em memória, e memória morre com a página. É o item 4 um
@@ -90,6 +97,10 @@ function guardarMesaDoAnfitriao() {
 }
 
 function encerrarRede() {
+  // Desarma a saída em curso: qualquer outro caminho de rede (entrar noutra mesa, abrir uma,
+  // cancelar) tem de cancelar o temporizador pendente de `largarAMesa`, senão ele acorda 400
+  // ms depois e destrói o peer NOVO.
+  deixandoAMesa = false;
   usarCodigo('');
   esperando.forEach(t => clearTimeout(t));
   esperando.clear();
@@ -110,6 +121,7 @@ function abrirMesaOnline() {
   el('onlineTitulo').textContent = 'Mesa aberta';
   el('onlineSub').textContent = 'Passe este código para quem vai jogar.';
   el('onlineEntrada').classList.add('oculta');
+  el('onlineNome').classList.add('oculta');     // quem abre a mesa nomeia as cadeiras no menu
   el('btConectar').classList.add('oculta');
   el('btIniciarOnline').classList.remove('oculta');
   el('onlineCodigo').textContent = '····';
@@ -149,18 +161,13 @@ function tentarAbrir(tentativa, codigoDesejado) {
         cadeira = sentar(conn, m.t === 'ola' ? String(m.id || '') : '', m.nome);
         return;
       }
-      if (m.t === 'nome') { MESA.cadeiras[cadeira].nome = String(m.nome).slice(0, 14) || 'Visita'; listarSala(); if (P) publicar(); }
+      if (m.t === 'nome') {
+        MESA.cadeiras[cadeira].nome = nomeUnico(String(m.nome).trim() || 'Visita', nomesVizinhos(cadeira));
+        listarSala(); if (P) publicar();
+      }
       if (m.t === 'acao' && P) aplicarIntencao(cadeira, m);
       if (m.t === 'chat') receberChat(cadeira, m);
-      // Saiu de propósito: não há prazo de volta, a partida acaba perdida para ele. E a
-      // cadeira deixa de ser dele: quem desiste não volta com o mesmo clienteId.
-      if (m.t === 'desisto' && P && P.fase !== 'fim') {
-        clearTimeout(esperando.get(cadeira)); esperando.delete(cadeira);
-        donoDaCadeira.delete(cadeira); guardarMesaDoAnfitriao();
-        abandonar(P, cadeira);
-        narrar(`${P.cadeiras[cadeira].nome} saiu da mesa — a partida foi dada como perdida para ele.`);
-        publicar();
-      }
+      if (m.t === 'desisto') desistiuDaMesa(cadeira);
     });
     conn.on('close', () => { if (cadeira >= 0) largar(cadeira, conn); });
   });
@@ -205,6 +212,7 @@ function reabrirMesaOnline() {
   el('onlineTitulo').textContent = 'Reabrindo a sua mesa';
   el('onlineSub').textContent = 'Quem estava na mesa volta com o mesmo código.';
   el('onlineEntrada').classList.add('oculta');
+  el('onlineNome').classList.add('oculta');
   el('btConectar').classList.add('oculta');
   el('btIniciarOnline').classList.remove('oculta');
   el('onlineCodigo').textContent = g.codigo;
@@ -229,6 +237,145 @@ function retomarComoAnfitriao() {
   publicar();
 }
 
+// SAIU DE PROPÓSITO: não há prazo de volta, a partida acaba perdida para ele. E a cadeira
+// deixa de ser dele — quem desiste não volta com o mesmo clienteId, ao contrário de quem
+// cai, cuja cadeira fica reservada pelo ESPERA_VOLTA.
+//
+// Mora FORA do `peer.on('connection')`, e a extração não é cosmética: lá dentro ela é
+// inalcançável para o harness de Node, e é justamente esta função que põe o defeito
+// relatado — sair e não conseguir voltar — dentro da suíte que roda em segundos.
+function desistiuDaMesa(cadeira) {
+  if (!P || P.fase === 'fim') return;
+  clearTimeout(esperando.get(cadeira)); esperando.delete(cadeira);
+  donoDaCadeira.delete(cadeira); guardarMesaDoAnfitriao();
+  // A CONEXÃO SAI JUNTO, e não só quando o `close` chegar. `desisto` é sinal mais forte que
+  // o `close`: ele DIZ que a pessoa foi embora, enquanto o outro é o link caindo — e entre
+  // um e outro há o tempo de o peer do convidado morrer. Nessa janela `conexoes` ainda
+  // apontava para alguém que não existe mais, e o anfitrião que clicasse Revanche depressa
+  // montava a partida com a cadeira ainda `online`: a mesa nasce esperando quem não vai
+  // responder, que é exatamente o defeito 3 da Fila 6 entrando por outra porta.
+  const conn = conexoes.get(cadeira);
+  conexoes.delete(cadeira);
+  if (conn) { try { conn.close(); } catch (e) { void e; } }
+  abandonar(P, cadeira);
+  narrar(`${P.cadeiras[cadeira].nome} saiu da mesa — a partida foi dada como perdida para ele.`);
+  publicar();
+}
+
+// DOIS JOGADORES COM O MESMO NOME. Duas pessoas podem legitimamente digitar "Ricardo", e
+// duas que não digitaram nada chegam com o MESMO padrão: a mesa fica com dois nomes iguais
+// no placar, na lista da sala e no começo de toda linha da conversa, e não há como saber
+// quem é quem. Quem desempata é o ANFITRIÃO, porque ele é o único que vê os dois — o
+// convidado não conhece a lista de cadeiras alheia. E é por isso que o desempate NÃO se
+// estende às cadeiras locais do menu: lá a pessoa digitou os dois nomes e vê os dois na
+// mesma tela, e renomear o que ela escreveu seria surpresa. Aqui a colisão é invisível para
+// quem a causou, que é a definição da fronteira da rede.
+//
+// Devolve `nome` se ele já for único entre `ocupados`, ou uma variação numerada que não
+// colida. Duas armadilhas que o corpo tem de respeitar, e as duas já custaram caro nesta
+// casa:
+//
+//   · O NÚMERO VAI NO PRIMEIRO NOME — "Ricardo2 Neves", nunca "Ricardo Neves 2".
+//     `nomeEmPartes` (13-hud.js) corta na PALAVRA em tela estreita: some tudo depois do
+//     primeiro espaço. Um sufixo no fim desapareceria justamente no retrato de quatro
+//     cartões, que é onde a confusão dói.
+//   · QUEM ENCOLHE PARA CABER É A BASE, NUNCA O DESEMPATE. O nome é cortado em 14 (é o
+//     `maxlength` do menu e o corte que `sentar` aplica do outro lado do fio); um sufixo
+//     comido pelo corte devolve dois nomes iguais, que é o defeito de volta em silêncio.
+//
+// Comparação por CHAVE e não por igualdade crua: "ricardo" e "Ricardo " são a mesma pessoa
+// para quem lê a mesa. E a mesa tem quatro cadeiras, então não há por que ir longe.
+//
+// O contrato, que é o que o teste cobra (test-jogo.mjs, em milissegundos — a função é pura):
+//   nomeUnico('Zé', ['Tião'])                 → 'Zé'           (não colide: não muda)
+//   nomeUnico('Zé', ['Zé'])                   → 'Zé2'
+//   nomeUnico('Zé', ['Zé', 'Zé2'])            → 'Zé3'          (pula o que já existe)
+//   nomeUnico('Ana Paula', ['Ana Paula'])     → 'Ana2 Paula'   (não 'Ana Paula 2')
+//   nomeUnico('Maria Fernanda', [idem])       → 'Maria2'       (ver o encolhimento, abaixo)
+//   nomeUnico('Sebastiãozinho', [idem])       → 'Sebastiãozinh2'
+function nomeUnico(nome, ocupados) {
+  // 14 é o `maxlength` dos DOIS campos de nome (o do menu e o do saguão) e o corte que o
+  // `btConectar` já aplica do outro lado do fio. Fica local: neste escopo concatenado todo
+  // nome no topo é mais um para colidir, e esta conta não é lida em outro lugar.
+  const TETO = 14;
+
+  // A CHAVE é o nome como a mesa o LÊ. `NFC` porque o mesmo "Zé" chega composto no Windows
+  // e decomposto no iPhone: dois códigos para a MESMA letra passam batidos por uma
+  // comparação crua, e a mesa fica com dois "Zé" — que é justamente o que esta função
+  // existe para impedir. Espaço repetido no meio também não faz duas pessoas, e o `\s`
+  // pega o espaço-duro que vem colado quando se copia um nome de aplicativo de conversa.
+  const chaveDoNome = s => String(s == null ? '' : s)
+    .normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase();
+
+  // Vizinho sem nome não ocupa nada: cadeira em branco não pode ser o motivo de renumerar
+  // alguém. E o `Array.isArray` é porque isto roda dentro do `conn.on('data')`, onde uma
+  // exceção não estraga um nome — derruba a conexão inteira.
+  const tomados = new Set(
+    (Array.isArray(ocupados) ? ocupados : []).map(chaveDoNome).filter(Boolean));
+
+  // O nome vai NORMALIZADO para a mesa, e não só para a comparação: quem o fatia depois é
+  // o `nomeEmPartes` (13-hud.js), no primeiro espaço, e os dois têm de achar o mesmo.
+  const base = String(nome == null ? '' : nome).normalize('NFC').replace(/\s+/g, ' ').trim();
+  const corte = base.indexOf(' ');
+  const primeiro = corte < 0 ? base : base.slice(0, corte);
+  const resto    = corte < 0 ? ''   : base.slice(corte);   // o espaço vai junto, como no HUD
+
+  // Cortar por unidade UTF-16 parte emoji ao meio e deixa meio par substituto solto — e
+  // este nome ainda vira JSON no fio e texto na tela. O `Math.max` não é enfeite: tamanho
+  // negativo faz o `slice` contar do FIM e devolver outra string, plausível e errada.
+  const cortar = (s, n) => {
+    const t = s.slice(0, Math.max(0, n));
+    return /[\uD800-\uDBFF]$/.test(t) ? t.slice(0, -1) : t;
+  };
+
+  // Um candidato, já cortado. O número entra no PRIMEIRO nome, e QUEM ENCOLHE É A BASE,
+  // nesta ordem: primeiro o sobrenome sai INTEIRO — nada de palavra cortada pela metade,
+  // que é o que faria "Maria2 Fernand" —, e só quando o primeiro nome sozinho ainda não
+  // cabe é que ele cede, porque aí não há mais nada para ceder. O `i === 1` é o nome
+  // pedido sem número, e passa por aqui como os outros: também precisa caber nos 14.
+  const montar = i => {
+    const sufixo = i === 1 ? '' : String(i);
+    const inteiro = primeiro + sufixo + resto;
+    if (inteiro.length <= TETO) return inteiro;
+    const semSobrenome = primeiro + sufixo;
+    if (semSobrenome.length <= TETO) return semSobrenome;
+    return cortar(primeiro, TETO - sufixo.length) + sufixo;
+  };
+
+  // A CONFERÊNCIA VEM DEPOIS DO CORTE, e é o ponto todo. Perguntar por `nome + número`
+  // antes de encolher deixa passar a colisão que o próprio encolhimento cria: com
+  // "Sebastiãozinh2" já sentado, o "Sebastiãozinho" que chega viraria "Sebastiãozinho2",
+  // que cortado em 14 é "Sebastiãozinh2" outra vez — dois nomes iguais, e em silêncio.
+  //
+  // O laço acaba por conta, e não por sorte: cada volta produz uma string diferente das
+  // anteriores (o número muda de valor numa posição fixa), e n+1 nomes distintos não
+  // cabem em n chaves ocupadas.
+  for (let i = 1; i <= tomados.size + 1; i++) {
+    const candidato = montar(i);
+    if (!tomados.has(chaveDoNome(candidato))) return candidato;
+  }
+  return montar(tomados.size + 2);   // não se alcança; existe para o laço ter fim visível
+}
+
+// UMA CADEIRA É VAGA DE VISITANTE se está marcada `online`, ou se virou bot por falta de
+// gente e guardou a marca (`comecarLocal`, 16-loop.js). A marca é o que separa "bot que a
+// mesa escolheu" de "bot que a mesa improvisou": um "Bot · difícil" posto de propósito no
+// menu continua fechado a quem tem o código, e a cadeira de quem saiu volta a ser dele.
+const vagaDeVisita = c => c.tipo === 'online' || c.vagaOnline === true;
+
+// As outras cadeiras da mesa — é contra elas que o nome que chega tem de ser único. Exclui
+// a PRÓPRIA cadeira, e não é detalhe: `nomeUnico` roda de novo a cada `{t:'nome'}`, então
+// um vizinho que se incluísse veria o próprio nome e escalaria "Ricardo2" → "Ricardo22" a
+// cada troca.
+//
+// O que sustenta a comparação de `nomeUnico` é o invariante "TODO NOME NA MESA CABE EM 14":
+// o candidato dele nunca passa de 14, então um ocupado mais comprido jamais seria igual a
+// candidato nenhum e escaparia do desempate. Hoje os cinco lugares que escrevem nome cortam
+// em 14 (os dois `maxlength`, o `mesaLembrada`, o `btConectar` e o próprio `nomeUnico`).
+// Quem acrescentar um sexto sem cortar reabre isso.
+const nomesVizinhos = cadeira =>
+  MESA.cadeiras.slice(0, MESA.n).filter((c, i) => i !== cadeira).map(c => c.nome);
+
 // Quem senta onde. Chamada no aperto de mão, e não na conexão, porque é aqui que pela
 // primeira vez se sabe QUEM chegou. Devolve a cadeira, ou -1 se a mesa estiver cheia.
 function sentar(conn, id, nome) {
@@ -247,17 +394,45 @@ function sentar(conn, id, nome) {
     try { velha.send({ t: 'expulso' }); velha.close(); } catch (e) { void e; }
   }
 
-  // 2. Senão, a primeira vaga que não tem dono esperando por ela. `donoDaCadeira` é o que
-  //    RESERVA o assento durante o ESPERA_VOLTA: antes o prazo só adiava o abandonar(),
-  //    e um estranho com o código sentava na cadeira de quem tinha caído.
+  // 2. Senão, a primeira VAGA livre — e vaga é a cadeira online E também a que virou bot
+  //    por falta dela. `comecarLocal` converte a cadeira online sem ninguém vivo do outro
+  //    lado para a mesa não nascer esperando quem não responde (é o defeito 3 da Fila 6, e
+  //    a conversão fica), mas ela deixa a marca: sem reconverter, sair da mesa uma vez
+  //    custava a cadeira PARA SEMPRE e a mesa respondia "cheia" com um bot improvisado
+  //    sentado nela. `donoDaCadeira` continua sendo o que RESERVA o assento durante o
+  //    ESPERA_VOLTA de quem caiu.
   if (cadeira < 0) {
-    cadeira = cadeiras.findIndex((c, i) => c.tipo === 'online' && !conexoes.has(i) && !donoDaCadeira.has(i));
+    cadeira = cadeiras.findIndex((c, i) => vagaDeVisita(c) && !conexoes.has(i) && !donoDaCadeira.has(i));
   }
-  if (cadeira < 0) { try { conn.send({ t: 'cheio' }); } catch (e) { void e; } setTimeout(() => conn.close(), 0); return -1; }
+  if (cadeira < 0) {
+    try { conn.send({ t: 'cheio', porque: porQueNaoSentou(cadeiras) }); } catch (e) { void e; }
+    setTimeout(() => conn.close(), 0);
+    return -1;
+  }
 
   if (id) { donoDaCadeira.set(cadeira, id); guardarMesaDoAnfitriao(); }
   conexoes.set(cadeira, conn);
-  if (nome !== undefined) MESA.cadeiras[cadeira].nome = String(nome).slice(0, 14) || 'Visita';
+
+  // A CADEIRA VOLTA A SER DE GENTE, e nos DOIS lugares. `MESA.cadeiras` é o que o próximo
+  // `sentar` e o `comecarLocal` consultam; `P.cadeiras` é o que `seguirOTurno` lê — e
+  // enquanto ele disser 'bot', o relógio do bot continua jogando por cima da pessoa que
+  // acabou de sentar. Dois donos para a mesma vez.
+  //
+  // Vale para o ramo 1 também, e não só para o 2: se o `desisto` se perdeu no caminho, a
+  // cadeira ainda é dele E já pode ter virado bot pela revanche.
+  const reconvertida = MESA.cadeiras[cadeira].tipo !== 'online';
+  if (reconvertida) {
+    MESA.cadeiras[cadeira].tipo = 'online';
+    MESA.cadeiras[cadeira].vagaOnline = false;
+    if (P && P.cadeiras[cadeira]) P.cadeiras[cadeira].tipo = 'online';
+  }
+  // O nome passa pelo desempate: sem ele, dois convidados que não trocaram o padrão sentam
+  // com o MESMO nome e a mesa não sabe dizer quem é quem. O `|| 'Visita'` vem ANTES do corte
+  // agora — ele é a guarda de um cliente de outra versão, ou escrito à mão, mandando string
+  // vazia; `nomeUnico` já corta em 14.
+  if (nome !== undefined) {
+    MESA.cadeiras[cadeira].nome = nomeUnico(String(nome).trim() || 'Visita', nomesVizinhos(cadeira));
+  }
 
   // Voltou dentro do prazo: cancela o relógio. Funciona porque a cadeira continua marcada
   // como 'online' — é justamente por isso que ela não vira bot na hora da queda.
@@ -266,10 +441,38 @@ function sentar(conn, id, nome) {
     esperando.delete(cadeira);
     if (P && P.fase !== 'fim') narrar(`${MESA.cadeiras[cadeira].nome} voltou para a mesa.`);
   }
-  conn.send({ t: 'sentou', cadeira, cadeiras: cadeiras.map(c => c.nome) });
+  conn.send({ t: 'sentou', cadeira, cadeiras: cadeiras.map(c => c.nome),
+              esperando: !!(P && P.fase === 'fim') });
   listarSala();
-  if (P) publicar();                                    // entrou no meio da partida: já recebe a mesa
+  // PARTIDA ACABADA NÃO É PARTIDA PARA MOSTRAR A QUEM CHEGA. Quem senta agora não jogou
+  // esta — e se ele for justamente o `desistiu`, a vista o levaria direto de volta à tela
+  // da derrota que ele já aceitou, sobrando "Trocar a mesa" (a Revanche é botão de
+  // anfitrião). O lugar de quem chega entre duas partidas é o saguão, e é onde ele já está:
+  // quem o tira da telaOnline é o `t:'vista'`, então não mandar vista nenhuma o deixa lá.
+  if (P && P.fase !== 'fim') {
+    if (reconvertida) {
+      narrar(`${MESA.cadeiras[cadeira].nome} voltou e assumiu a cadeira — o bot jogava por ele.`);
+      // avancar() e não publicar(): `seguirOTurno` tem de rodar de novo para o relógio do
+      // bot largar a vez. O temporizador já agendado vira no-op sozinho (ele confere o tipo
+      // da cadeira na hora de disparar), e este é o segundo guarda.
+      avancar();
+    } else publicar();                                  // entrou no meio da partida: já recebe a mesa
+  }
   return cadeira;
+}
+
+// POR QUE NÃO SENTOU. Um `t:'cheio'` para três situações diferentes fazia a mesa dizer "já
+// está cheia" com uma cadeira VAZIA à espera de quem caiu e — depois da revanche — com um
+// bot de mentira sentado na vaga de quem tentava voltar. Recusar está certo nos três casos;
+// mentir o motivo é o que faz quem tentou desistir de tentar de novo.
+//
+// O motivo vai num campo NOVO da mensagem de sempre: convidado de versão antiga ignora o
+// campo e mostra o texto de antes, e anfitrião antigo faz o convidado novo cair no padrão.
+// É a mesma tolerância que o aperto de mão legado já pratica ali em cima.
+function porQueNaoSentou(cadeiras) {
+  if (!cadeiras.some(vagaDeVisita)) return 'semvaga';
+  if (cadeiras.some((c, i) => vagaDeVisita(c) && !conexoes.has(i) && donoDaCadeira.has(i))) return 'guardadas';
+  return 'cheio';
 }
 
 // Alguém largou a cadeira. Recebe a `conn` junto porque uma conexão VELHA, trocada por
@@ -336,6 +539,12 @@ function entrarNumaMesa() {
   el('onlineSub').textContent = 'Digite o código que o anfitrião passou.';
   el('onlineCodigo').textContent = '';
   el('onlineEntrada').classList.remove('oculta');
+  // O NOME, que só o convidado precisa dizer. Pré-preenchido com o do menu — que é
+  // exatamente o que ele já mandava calado —, então o campo não inventa caminho novo: ele
+  // torna visível e editável o que sempre viajou. Era esta ausência que fazia a mesa de
+  // dois virar "Você × Você" sem que ninguém soubesse onde mudar.
+  el('onlineNome').classList.remove('oculta');
+  el('onlineNome').value = MESA.cadeiras[0].nome;
   // Pré-preenchido com a última mesa em que você sentou: quem volta quase sempre volta
   // para a mesma, e antes o campo era zerado justamente aqui.
   const guardada = salaGuardada();
@@ -348,6 +557,36 @@ function entrarNumaMesa() {
   // Aqui e não no `encerrarRede`, que roda em pontos do carregamento onde `conectando`
   // ainda estaria na zona morta — e `typeof` sobre `let` na zona morta LANÇA.
   pararDeConectar('');
+}
+
+// O QUE A MESA RESPONDE QUANDO NÃO DÁ PARA SENTAR. Era uma frase só para os três casos, e
+// ela mentia em dois deles: "já está cheia" com uma cadeira vazia guardada para quem caiu,
+// e "já está cheia" com um bot improvisado sentado na vaga de quem tinha acabado de sair.
+// Recusar estava certo; o motivo é que não.
+const RECUSA = {
+  cheio: 'Essa mesa já está cheia — todas as cadeiras têm gente jogando.',
+  guardadas: 'A cadeira desta mesa está guardada para quem caiu. Tente de novo em alguns segundos.',
+  semvaga: 'Essa mesa não tem cadeira de visitante agora — quem abriu a mesa precisa deixar uma vaga.',
+};
+
+// LARGAR A MESA, do lado de quem é convidado. Mora aqui e não no 16-loop porque conhece o
+// `codigoDaSala` e o `linkAnfitriao`.
+//
+// O CÓDIGO FICA GUARDADO, e é a mudança de fundo: sair entrega a PARTIDA, não a MESA. A
+// cadeira deixa de ser sua na hora (quem apaga a reserva é o `desistiuDaMesa`, do outro
+// lado), e a derrota fica registrada — mas o caminho de volta continua de pé para a
+// próxima. Era um `esquecer('sala')` aqui, e com ele sumiam as TRÊS portas de volta de uma
+// vez: o painel "Mesa" do HUD, o botão do menu e o campo pré-preenchido do saguão. Quem não
+// tinha decorado as quatro letras ficava de fora com a sala ainda aberta.
+function largarAMesa() {
+  if (linkAnfitriao && linkAnfitriao.open) linkAnfitriao.send({ t: 'desisto' });
+  if (codigoDaSala) guardar('sala', { quando: Date.now(), codigo: codigoDaSala, anfitriao: false });
+  deixandoAMesa = true;
+  // A MESMA FOLGA DO RAMO DO ANFITRIÃO, e pelo mesmo motivo escrito lá: `peer.destroy()`
+  // aborta o que ainda não saiu do SCTP, e o que ainda não saiu é justamente o `desisto` —
+  // a mensagem que registra a derrota e devolve a cadeira à mesa. Perdida, o anfitrião só
+  // descobre pelo `close`, e aí a cadeira fica RESERVADA 30 s para quem já foi embora.
+  setTimeout(() => { if (deixandoAMesa) encerrarRede(); }, 400);
 }
 
 // UMA TENTATIVA DE CADA VEZ. Sem esta guarda, cada clique fazia um `new Peer`, abandonava
@@ -385,7 +624,10 @@ function conectarNaMesa(codigo) {
       linkAnfitriao.send({ t: 'ola', id: meuId(), nome: MESA.cadeiras[0].nome });
     });
     linkAnfitriao.on('data', m => {
-      if (m.t === 'cheio') { pararDeConectar('Essa mesa já está cheia.'); return; }
+      // Já saiu: o que chegar nos 400 ms de folga é da mesa que ele acabou de deixar, e a
+      // vista do abandono o levaria do menu de volta para a tela da derrota.
+      if (deixandoAMesa) return;
+      if (m.t === 'cheio') { pararDeConectar(RECUSA[m.porque] || RECUSA.cheio); return; }
       // A sua cadeira foi assumida por você mesmo, noutra aba ou noutro aparelho. Não é
       // erro nem queda: é o take-over do anfitrião, e dizer "a mesa fechou" seria mentira.
       if (m.t === 'expulso') {
@@ -404,7 +646,13 @@ function conectarNaMesa(codigo) {
         // era essa espera muda que convidava ao segundo clique.
         el('btConectar').disabled = true;
         el('btConectar').textContent = 'Na mesa';
-        erroOnline(`Você é a cadeira ${m.cadeira + 1}.`);
+        // A ESPERA TEM DE TER NOME. Sentar entre duas partidas é o caso de quem sai e
+        // volta: o anfitrião de propósito não manda vista de partida acabada (ela levaria
+        // o convidado direto para a tela da derrota que ele já aceitou), então a tela fica
+        // parada — e tela parada sem explicação é o que faz clicar de novo.
+        erroOnline(m.esperando
+          ? `Você é a cadeira ${m.cadeira + 1} — a partida anterior acabou. Esperando o anfitrião começar a próxima.`
+          : `Você é a cadeira ${m.cadeira + 1}.`);
         // Guardado no ponto do SENTOU, e não no do clique: sentar de fato é o que prova
         // que o código presta. `anfitriao: false` é o que separa este guardado do que o
         // `guardarMesaDoAnfitriao` escreve — a mesma chave serve aos dois papéis, e o
@@ -421,6 +669,9 @@ function conectarNaMesa(codigo) {
       if (m.t === 'chat') dizer(vistaAtual, m.de, m.canal, m.txt, m.nome);
     });
     linkAnfitriao.on('close', () => {
+      // Quem fechou foi você. Sem esta linha, sair de propósito ainda levava um "A mesa
+      // fechou" na cara — e, pior, tentava VOLTAR SOZINHO para a mesa que acabou de largar.
+      if (deixandoAMesa) { pararDeConectar(''); return; }
       pararDeConectar();
       // A MESA FECHOU, OU O ANFITRIÃO ESTÁ RECARREGANDO — e daqui de fora as duas coisas
       // são idênticas: o link cai igual. Como agora ele reabre com o MESMO código
@@ -433,7 +684,19 @@ function conectarNaMesa(codigo) {
   peer.on('error', e => pararDeConectar(explicarErroDeRede(e)));
 }
 
-el('btConectar').onclick = () => conectarNaMesa(el('onlineEntrada').value.trim().toUpperCase());
+// O NOME VALE PARA A MESA E PARA O MENU. Quem se apresentou como "Lia" aqui não quer voltar
+// a ser "Careca" na próxima partida local — e é `lembrarMesa()` que faz isso durar, o mesmo
+// caminho do campo do menu. Um segundo lugar que gravasse nome é como as duas telas passam
+// a discordar. Campo vazio não apaga nada: fica o que o menu já dizia.
+el('btConectar').onclick = () => {
+  const nome = el('onlineNome').value.trim().slice(0, 14);
+  if (nome && nome !== MESA.cadeiras[0].nome) {
+    MESA.cadeiras[0].nome = nome;
+    lembrarMesa();
+    montarCadeiras();                     // o menu atrás desta tela mostra o nome novo
+  }
+  conectarNaMesa(el('onlineEntrada').value.trim().toUpperCase());
+};
 
 // ─── o convidado voltando sozinho ────────────────────────────────────────────
 // Quantas vezes e de quanto em quanto tempo. O anfitrião recarregando leva alguns

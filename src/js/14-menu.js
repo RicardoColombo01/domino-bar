@@ -6,7 +6,19 @@
 // bots; hotseat é uma mesa de gente na mesma tela; online é uma mesa com vaga aberta.
 // Misturar (2 online + 1 bot) não é um caso especial — é só outro preenchimento.
 
-const NOMES = ['Você', 'Zé', 'Dona Cida', 'Tião', 'Careca', 'Bigode'];
+// A CADEIRA 0 É SUA E POR ISSO NÃO SE CHAMA "VOCÊ". Quem é você já está dito em dois
+// lugares que não dependem do nome: o rótulo da cadeira, no `montarCadeiras()` aqui
+// embaixo, e a etiqueta "você" do cartão do HUD (`ETIQUETA`, 13-hud.js). O campo guarda um
+// NOME, e nome existe para os OUTROS — no online ele viaja para o anfitrião e vira o
+// placar, a lista da sala e o começo de toda linha da conversa.
+//
+// Com "Você" ali, uma mesa de dois pela internet ficava literalmente "Você × Você", com as
+// duas falas da conversa começando igual: ninguém sabia quem era quem. E repare que trocar
+// só este literal NÃO consertaria o online — os dois lados leem o mesmo NOMES[0], então
+// viraria "Careca × Careca". Quem conserta a colisão é o campo de nome do saguão
+// (pagina.html) e o desempate do anfitrião (`nomeUnico`, 15-rede.js); este literal conserta
+// a semântica, que é o campo guardar um nome em vez de um pronome.
+const NOMES = ['Careca', 'Zé', 'Dona Cida', 'Tião', 'Bigode'];
 const TIPOS = [
   ['bot:facil', 'Bot · fácil'],
   ['bot:normal', 'Bot · normal'],
@@ -44,8 +56,18 @@ function mesaLembrada() {
       const c = (Array.isArray(g.cadeiras) && g.cadeiras[i]) || {};
       const tipo = i === 0 ? 'voce' : (TIPOS_VALIDOS.has(c.tipo) ? c.tipo : 'bot');
       const guardado = typeof c.nome === 'string' ? c.nome.trim() : '';
+      // "VOCÊ" GRAVADO É LIXO DE VERSÃO ANTIGA, não escolha de ninguém. Ele foi o padrão da
+      // cadeira 0 até a v2, e `lembrarMesa()` persiste as quatro cadeiras assim que alguém
+      // encosta no menu — ou seja, quem já jogou uma vez tem "Você" no armazenamento e não
+      // veria a troca nunca. Sem esta linha o conserto é invisível justamente para quem
+      // jogou o bastante para se incomodar com ele.
+      //
+      // Quem tiver digitado "Você" de propósito perde o nome: é o defeito que está sendo
+      // desfeito, não o dado. E só na cadeira 0 — nas outras "Você" nunca foi padrão, então
+      // ali ele só pode ter sido escolhido.
+      const nomeVale = i === 0 && guardado === 'Você' ? '' : guardado;
       return {
-        nome: (guardado || nome).slice(0, 14),
+        nome: (nomeVale || nome).slice(0, 14),
         tipo,
         // Nível válido é o que o BOT reconhece, conferido na tabela dele — uma segunda
         // lista aqui apodreceria no dia em que aparecesse um nível novo. `hasOwn` pela
@@ -54,6 +76,13 @@ function mesaLembrada() {
         // mesmo furo, e deixar dois padrões de validação no mesmo arquivo é como o
         // primeiro volta.
         nivel: tipo === 'bot' ? (Object.hasOwn(NIVEIS, c.nivel) ? c.nivel : 'normal') : undefined,
+        // DE SESSÃO, nunca do armazenamento — e por isso escrita como literal, e não
+        // copiada de `c`. A marca diz "esta cadeira virou bot por falta de gente, NESTA
+        // mesa que está de pé agora"; vinda de fora ela abriria ao primeiro estranho com o
+        // código uma cadeira que o dono da mesa fechou de propósito. O objeto já é
+        // construído campo a campo e portanto imune; a linha existe para continuar imune no
+        // dia em que alguém achar que copiar `c` inteiro é mais curto.
+        vagaOnline: false,
       };
     }),
   };
@@ -62,7 +91,7 @@ function mesaLembrada() {
 const MESA = mesaLembrada();
 
 // Guarda as quatro cadeiras, e não só as `n` em uso: quem joga em três e volta para
-// quatro esperava o nome do quarto de volta, não "Careca" outra vez.
+// quatro esperava o nome do quarto de volta, não "Tião" outra vez.
 function lembrarMesa() {
   guardar('mesa', {
     n: MESA.n, modo: MESA.modo, alvo: MESA.alvo, compraVoluntaria: MESA.compraVoluntaria,
@@ -105,6 +134,11 @@ function montarCadeiras() {
       const [tipo, nivel] = sel.value.split(':');
       c.tipo = tipo;
       c.nivel = nivel || undefined;
+      // Tipo escolhido à mão FECHA a vaga: a marca do `comecarLocal` diz "esta cadeira
+      // virou bot por falta de gente", e quem acabou de escolher o bot no menu não está
+      // sem gente — está decidindo. Sem esta linha, um "Bot · difícil" posto de propósito
+      // continuaria reivindicável por qualquer um com o código da mesa.
+      c.vagaOnline = false;
       atualizarBotaoComecar();
       lembrarMesa();
     };

@@ -253,7 +253,14 @@ html, body {
   position: fixed; inset: 0; z-index: 30;
   display: flex; align-items: center; justify-content: center;
   background: radial-gradient(ellipse at 50% 40%, rgba(60, 38, 20, .74), rgba(8, 5, 4, .95));
-  backdrop-filter: blur(4px); padding: 20px; overflow: auto;
+  backdrop-filter: blur(4px);
+  /* O RECUO DO APARELHO, como em todo o resto do HUD. Esta era a única família de painel do
+     projeto sem `--seg-*`, e ela é `position: fixed; inset: 0` com viewport-fit=cover: o
+     título ficava debaixo do entalhe. Em celular DEITADO o entalhe está na lateral, que é
+     justamente onde a carta é mais larga. */
+  padding: calc(20px + var(--seg-t)) calc(20px + var(--seg-r))
+           calc(20px + var(--seg-b)) calc(20px + var(--seg-l));
+  overflow: auto;
 }
 /* A CONVERSA DO SAGUÃO. A tela de espera é um overlay de z-index 30 e cobria a conversa
    por completo — nenhuma classe de visibilidade resolveria isso, porque o problema era
@@ -263,7 +270,31 @@ html, body {
    O canto de baixo à direita fica livre porque a carta é centrada e tem 620px de teto. */
 body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
 
+/* O TOPO TEM DE SER ALCANÇÁVEL. A `.tela` é um scroller (`overflow: auto`) que centra pelo
+   `align-items: center` — e conteúdo mais alto que o contêiner, num flex centrado,
+   transborda para os DOIS lados. Só que a área rolável de um scroller se estende para o
+   FIM e não para o começo: `scrollTop: 0` já é o mais alto que a rolagem vai, e o que ficou
+   acima fica fora do curso para sempre. Rolar as regras para baixo e não conseguir subir de
+   volta ao título era isto, e valia para as SETE telas que compartilham esta classe.
+
+   `margin: auto` resolve porque as duas pontas do flexbox se comportam diferente conforme o
+   sinal da folga: sobrando espaço, as margens automáticas o dividem e o resultado é o mesmo
+   centro de sempre; faltando espaço, elas resolvem para ZERO (é o que a spec manda) e a
+   carta encosta no começo do scroller, onde a rolagem alcança.
+
+   Não `align-items: safe center`, que faz exatamente isto e é a ferramenta desenhada para
+   isto: declaração não suportada é descartada INTEIRA, então num navegador sem ela o
+   `align-items` cairia para `stretch` e a carta ficaria com a altura da tela — precisaria de
+   duas linhas em cascata e ainda assim com suporte pior (Safari 16.4). Margem automática em
+   item flex é universal, e este jogo abre por duplo-clique em file:// e roda em celular.
+
+   Não `flex-start`, que sempre alcança o topo e perde o centro vertical num monitor grande:
+   regressão visual em troca de nada.
+
+   De brinde, o `padding` do scroller volta a valer: hoje ele não protegia nada, porque a
+   carta transbordava ACIMA dele. */
 .carta {
+  margin: auto;
   background: linear-gradient(180deg, rgba(38, 25, 16, .97), rgba(22, 14, 9, .97));
   border: 1px solid var(--borda); border-radius: 16px;
   padding: 26px 30px; max-width: 620px; width: 100%;
@@ -402,7 +433,12 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
 @media (max-width: 720px) {
   .cadeira { grid-template-columns: 1fr; gap: 6px; }
   .carta { padding: 20px; }
-  .tela { padding: 12px; }
+  /* O recuo do aparelho acompanha, senão a tela pequena — que é onde há entalhe — perde
+     justamente o que a regra de cima foi acrescentar. */
+  .tela {
+    padding: calc(12px + var(--seg-t)) calc(12px + var(--seg-r))
+             calc(12px + var(--seg-b)) calc(12px + var(--seg-l));
+  }
 }
 
 /* Alvo de toque: 36px é o que o dedo erra. 44 é o mínimo que a Apple e o Google

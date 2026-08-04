@@ -5,8 +5,8 @@ bot, na mesma tela ou pela internet. No ar em
 **https://ricardocolombo01.github.io/domino-bar/** (repo público `RicardoColombo01/domino-bar`).
 
 Sem framework, sem bundler, sem asset: madeira, pintas e sons são gerados em canvas e
-WebAudio na hora. Three.js e PeerJS vêm de CDN. **~5.100 linhas** no total (`src/js` +
-`pagina.html` + `css/estilo.css`), conferido em 02/08/2026 — este número **envelhece**, e
+WebAudio na hora. Three.js e PeerJS vêm de CDN. **5.544 linhas** no total (`src/js` +
+`pagina.html` + `css/estilo.css`), conferido em 04/08/2026 — este número **envelhece**, e
 envelheceu: ficou dizendo 2.100 por três releases seguidas.
 
 **Conte com `node`, não com o PowerShell.** `Measure-Object -Line` **não conta linha em
@@ -229,10 +229,18 @@ As pontas são o primeiro e o último número; jogar na esquerda é um `unshift`
   diferentes** — até um desenho sem um sorteio sequer muda ~0,6% ao ser repintado. Para
   perguntar "o desenho é determinístico?", compare repintura contra repintura, nunca contra a
   primeira pintura.
-- **Ao acrescentar uma API de navegador ao jogo, o primeiro lugar a olhar é o `harness.mjs`.**
-  O dublê já ficou para trás **oito vezes** (`matchMedia`, captura de ponteiro,
-  `AudioContext`, `Peer`, eventos de contexto WebGL, `setAttribute`, `preventDefault`, e o
-  `matchMedia` de novo — desta vez por responder SEMPRE a mesma coisa). Oito não é acaso. E
+- **Contêiner flex CENTRADO que também rola tem o topo inalcançável.** `align-items: center`
+  faz o conteúdo mais alto transbordar para os DOIS lados, e a área rolável só se estende
+  para o FIM: `scrollTop: 0` já é o fim do curso e o que ficou acima não volta nunca. Quem
+  resolve é `margin: auto` no filho — faltando espaço as margens automáticas resolvem para
+  zero, sobrando espaço dividem a folga. E `overflow: hidden` **continua rolável por
+  script**: um teste que só mexe em `scrollTop` aprova uma tela que o dedo não move.
+- **Ao acrescentar uma API de navegador ao jogo, o primeiro lugar a olhar é o `harness.mjs`
+  — e o dublê do PRÓPRIO teste conta junto.** Ele já ficou para trás **nove vezes**
+  (`matchMedia`, captura de ponteiro, `AudioContext`, `Peer`, eventos de contexto WebGL,
+  `setAttribute`, `preventDefault`, o `matchMedia` de novo — por responder SEMPRE a mesma
+  coisa — e a `conn` de mentira sem `open`, que fazia `espalharVistas` nunca mandar nada).
+  Nove não é acaso. E
   a tentação, todas as vezes, é guardar no JOGO (`if (el.setAttribute)`) — isso troca um
   defeito por um ramo que o teste nunca alcança. **Dublê que responde um valor fixo é tão
   incompleto quanto dublê sem método**, e o sintoma é o mesmo: um ramo verde que nunca rodou.
@@ -240,6 +248,10 @@ As pontas são o primeiro e o último número; jogar na esquerda é um `unshift`
   perverso aparece na conferência por MUTAÇÃO: ela passa a sub-relatar, e parece que a
   asserção não cobria o ramo quando na verdade a suíte morreu antes de chegar lá. Quando
   uma mutação reprovar MENOS do que devia, suspeite disso antes de suspeitar da asserção.
+  **A outra causa é a mutação não ter sido aplicada:** os arquivos aqui são CRLF, e um
+  `replace` com `\n` no texto de busca não casa, não estoura e deixa o arquivo intacto —
+  "tudo certo" fica indistinguível de "não mexi em nada". Mutação por script tem de exigir
+  que o casamento aconteceu antes de rodar a suíte.
 - **Medir "parou de se mexer" logo depois de mandar parar mede a própria parada** — a
   transição para o valor fixo é uma diferença real que não é oscilação. Precisa de um quadro
   para o regime novo começar. E função de teste que GASTA quadros não pode ser chamada
@@ -449,21 +461,18 @@ campo acha o que está escrito certo e mesmo assim não funciona.
 **Leia isto primeiro ao retomar.** É o estado real do trabalho, o que ele produziu, o que
 fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numerados mais abaixo.
 
-#### ESTADO EM UMA OLHADA (02/08/2026)
+#### ESTADO EM UMA OLHADA (04/08/2026)
 
 | | |
 |---|---|
-| publicado | **v1.10.0** — https://ricardocolombo01.github.io/domino-bar/ |
+| publicado | **v2.0.0** — https://ricardocolombo01.github.io/domino-bar/ |
+| em trabalho | **nada** — a `v2` foi fechada e apagada; a próxima onda nasce em `v3` |
 | `main` ↔ `origin/main` | `0 ← \| 0 →` |
-| branches | **só `main`** — a `develop` foi apagada em 02/08/2026 (ver "Branches") |
-| árvore de trabalho | limpa |
-| Filas 5 a 9 | **todas fechadas** |
-| fila de trabalho | **VAZIA** — nenhum defeito conhecido, nenhuma melhoria medida em aberto |
-| pendências bloqueadas | **nenhuma** — nada esperando resposta do Ricardo |
+| Filas 5 a 10 | **todas fechadas** |
+| falta | **nada em aberto.** O que sobra é a lista de "poderia ser feito, mas não recomendo agora", logo abaixo |
 
-**A fila esvaziou na v1.10.0, e é a primeira vez que isso acontece.** A próxima onda abre
-uma branch `v2` e precisa de trabalho NOVO — as duas fontes que já encheram esta fila estão
-descritas no fim desta seção, e a mais barata é jogar.
+**A fila esvaziou na v1.10.0, encheu de novo em 03/08 pela fonte mais barata (jogar) e
+esvaziou outra vez na v2.0.0.** Os três defeitos da foto e dos relatos estão fechados.
 
 #### O QUE CUSTOU UM DIA INTEIRO, e não pode se repetir
 
@@ -567,11 +576,19 @@ E uma quarta, de fora do código: **`diff` de dois arquivos vazios passa.** A su
 gerou saída, os dois arquivos saíram com zero linhas e a comparação declarou "idênticas". Teste
 de igualdade tem de exigir também que **haja o que comparar**.
 
-#### O QUE FAZER AMANHÃ — em ordem, e por quê
+#### O QUE FAZER AMANHÃ — nada obrigatório
 
-**A lista esvaziou.** Os seis itens originais saíram na v1.8.0 e na v1.9.0 (Fila 8); os três
-que sobravam saíram na **v1.10.0** (Fila 9). Não há defeito conhecido nem melhoria medida em
-aberto.
+**Os cinco passos que moravam aqui foram executados em 04/08/2026** e viraram a `v2.0.0`: o
+corpo de `nomeUnico`, as suítes (as rápidas e as quatro pesadas, uma de cada vez), o bundle
+recommitado, este arquivo, e o merge `--no-ff` com tag e push. **A fila está vazia.**
+
+A próxima onda nasce numa branch `v3`, de `main`, pelo modelo de sempre. E vale lembrar como
+esta fila enche: **campo** (jogar — deu as Filas 5, 7 e 10) e **varredura** (procurar o que
+ainda não incomodou — deu a Fila 6). Três das quatro últimas vieram de jogar, e a Fila 10
+saiu de UMA foto e três frases.
+
+**A lista abaixo esvaziou na v1.10.0.** Os seis itens originais saíram na v1.8.0 e na v1.9.0
+(Fila 8); os três que sobravam saíram na **v1.10.0** (Fila 9).
 
 O que sobra são coisas que **não recomendo agora** e estão registradas com o motivo, logo
 abaixo, e um trabalho de fundo que só vale quando doer:
@@ -605,27 +622,39 @@ Registrado para não ser redescoberto do zero — e com o motivo de não ser pri
 
 #### Perguntas em aberto para o Ricardo
 
-- **Nenhuma bloqueia.**
-- **A fila de trabalho esvaziou na v1.10.0.** Não há defeito conhecido nem melhoria medida em
-  aberto. O que existe é a lista de "poderia ser feito, mas não recomendo agora", logo acima,
+- **Nenhuma em aberto.** O corpo de `nomeUnico()` chegou a ser dele — foi escolha dele quando
+  perguntado em 03/08 —, e no fim do mesmo dia ele devolveu: *"amanhã você termina o resto
+  que falta"*. Voltou a ser meu e **saiu na v2.0.0**.
+- As três decisões da Fila 10 foram respondidas em 03/08/2026: os **três** consertos de
+  nome juntos; o convidado que volta **assume a cadeira mesmo virada em bot**; e a onda sai
+  em branch `v2`, tag `v2.0.0` (e não em `hotfix`/`v1.10.1`). A quarta veio em **04/08**, e é
+  a única que a implementação não podia responder sozinha: quando o nome desempatado não cabe
+  nos 14, **o sobrenome sai inteiro** (`"Maria Fernanda"` → `"Maria2"`, e não
+  `"Maria2 Fernand"`) — as duas saídas eram defensáveis, como a cruzada da Fila 5.
+- **A fila esvaziou na v1.10.0, a Fila 10 a encheu em 03/08 e a v2.0.0 a esvaziou de novo** —
+  os três defeitos estão consertados, testados e no ar. O que resta em
+  aberto é a lista de "poderia ser feito, mas não recomendo agora", logo acima,
   e dela só uma coisa depende de decisão dele e não de programador: o **`beforeunload` no
   meio de partida online** (um F5 acidental gasta o prazo de 30 s sem aviso, mas
   `beforeunload` é incômodo). As outras duas são escolha de escopo, não de gosto: o botão de
   **compartilhar o código da sala** (impacto real no online, custo pequeno) e fazer o **3D
   desviar dos painéis** (o mais caro, e a gaveta já resolveu o problema real).
-- Vale lembrar como este projeto encheu a fila as duas últimas vezes: **campo** (o Ricardo
-  jogando no celular, que deu a Fila 5 e a Fila 7) e **varredura** (procurar o que ainda não
-  incomodou, que deu a Fila 6). Com a fila vazia, o próximo passo natural é uma das duas —
-  e a mais barata é jogar.
+- Vale lembrar como este projeto enche a fila: **campo** (o Ricardo jogando no celular, que
+  deu a Fila 5, a Fila 7 e agora a **Fila 10**) e **varredura** (procurar o que ainda não
+  incomodou, que deu a Fila 6). Três das quatro últimas vieram de jogar — é a fonte mais
+  barata que este projeto tem, e a Fila 10 saiu de UMA foto e três frases.
 
 #### Como retomar em cinco minutos
 
 ```
 git fetch origin && git rev-list --left-right --count origin/main...main   # tem de dar 0 0
-git branch -a          # tem de haver SÓ main (e a branch da onda, se houver uma aberta)
+git branch -a          # hoje só main; a próxima onda nasce numa v3
 npm run check          # o bundle está em dia com src/?
 npm test               # as três suítes de lógica, segundos
 ```
+
+**Hoje `npm test` tem de passar inteiro** — a fila está vazia e não há vermelha esperada.
+Qualquer reprovação é regressão.
 
 **Suíte pesada roda sozinha** — o `test-telas` renderiza WebGL por software e o `test-online`
 tem prazo de navegação de 45 s; duas ao mesmo tempo viram falha que parece da rede. E o
@@ -1838,6 +1867,256 @@ ignora o valor onde não há monte, então guardá-lo não custa nada.
   `preferir(consulta, ligada)`, e a consulta tem de bater LITERALMENTE com a do jogo: se
   alguém trocá-la, o teste fica vermelho em vez de continuar verde testando um mundo que
   não existe mais.
+
+## Fila 10 — os três defeitos de campo de 03/08/2026 ✔ fechada (v2.0.0)
+
+Uma foto de celular (mesa de Duelo online, 19:37) e três relatos, todos de jogo de verdade.
+A fila tinha esvaziado na v1.10.0; encheu de novo pela fonte que o próprio arquivo aponta
+como a mais barata — **jogar**.
+
+**A foto é a prova mais direta que este projeto já teve de um defeito:** o placar diz
+`Você × Você`, os dois cartões dizem "Você", e as cinco linhas da conversa começam com
+"Você" — incluindo a linha em que o Ricardo escreve *"uma coisa q preciso é mudar esses
+nomes"*. O defeito e o pedido estão na mesma imagem.
+
+#### O que mudou, por arquivo
+
+| arquivo | o que entrou |
+|---|---|
+| `css/estilo.css` | `.carta { margin: auto }` e as safe-areas no `.tela` (dois blocos: o normal e o de tela pequena) |
+| `src/pagina.html` | o campo `#onlineNome` no saguão |
+| `src/js/14-menu.js` | `NOMES` sem "Você"; a migração do "Você" gravado; `vagaOnline` zerada no `<select>` e no literal do `mesaLembrada` |
+| `src/js/15-rede.js` | `nomeUnico`/`nomesVizinhos`, `vagaDeVisita`, `porQueNaoSentou`, `RECUSA`, `largarAMesa`, `deixandoAMesa`, `desistiuDaMesa` (extraída), o `sentar` reconvertendo a vaga, o campo de nome revelado/escondido nas três telas |
+| `src/js/16-loop.js` | `c.vagaOnline = true` na conversão do `comecarLocal`; o ramo convidado do `sairDaPartida` virou `largarAMesa()` |
+| `tests/test-jogo.mjs` | `novaConn` com `open`, `montarMesaOnline` içada e partindo de partida viva, 12 asserções do voltar e 6 do desempate |
+| `tests/test-telas.mjs` | cena `menu` (`soTela`), `semGuardado`/`menuCheio`, a medida de topo alcançável, o `V` vindo do `THREE` |
+| `tests/test-online.mjs` | cenas `nomes` e `voltar`; o `exit(0)` do aviso de rede deixou de engolir falha |
+| `tests/test-lembrar.mjs` | a migração do "Você" gravado, provada por mutação |
+
+**Fechou em 04/08/2026** com o corpo de `nomeUnico()`, que era a última peça. A onda saiu na
+tag `v2.0.0`, e o `tests/test-jogo.mjs` ganhou mais 4 asserções junto do conserto (o
+sobrenome que sai inteiro, a estabilidade entre chamadas, e a colisão que o corte fabrica).
+
+### 1. Todo mundo se chama "Você" ✔ feito
+
+`NOMES[0]` era literalmente `'Você'` (`14-menu.js`), e é dele que sai o nome que o convidado
+manda ao anfitrião (`{t:'ola'}`). Os dois lados liam o mesmo literal.
+
+**São TRÊS medidas, e nenhuma sozinha resolve** — o que só ficou claro ao medir:
+
+- **Trocar `NOMES[0]` não conserta o online.** Os dois lados leem o mesmo literal, então
+  `Você × Você` viraria `Careca × Careca`. Ela conserta a SEMÂNTICA: o campo guarda um nome,
+  e nome existe para os outros. Quem é você já está dito em dois lugares que não dependem do
+  nome — o rótulo da cadeira no menu e a etiqueta "você" do cartão.
+- **A migração é obrigatória, não acessório.** `lembrarMesa()` persiste as quatro cadeiras
+  assim que alguém encosta no menu, então quem já jogou uma vez tem `'Você'` gravado e o
+  padrão novo nunca chegaria até ele: o conserto seria invisível **justamente para quem
+  jogou o bastante para se incomodar**. `mesaLembrada()` migra só a cadeira 0 — nas outras
+  "Você" nunca foi padrão, logo ali ele só pode ter sido escolhido.
+- **O campo `#onlineNome`** é a única das três que deixa a pessoa DIZER quem é. Não inventa
+  caminho: torna visível e editável o nome que já viajava calado.
+- **O desempate no anfitrião** é a rede embaixo das outras duas: duas pessoas podem
+  legitimamente digitar "Ricardo", e duas que não digitaram nada chegam com o mesmo padrão.
+  Ele mora no anfitrião porque ele é o único que vê as duas — e **não** se estende às
+  cadeiras locais do menu, onde a pessoa digitou os dois nomes e vê os dois na mesma tela.
+  A colisão que se desempata é a **invisível para quem a causou**.
+
+**Sem sorteio de nome, e o motivo é de teste:** `Math.random()` no topo do `14-menu.js` roda
+antes de qualquer `semear()` e desloca o embaralho de todas as cenas de tela. É a armadilha
+que este arquivo já registra duas vezes (a receita do `pintar()`, o `performance.now()`).
+
+**O número do desempate vai no PRIMEIRO nome** — `"Ricardo2 Neves"`, nunca
+`"Ricardo Neves 2"`: `nomeEmPartes` corta na PALAVRA em tela estreita, e o sufixo no fim
+sumiria justamente no retrato de quatro cartões, que é onde a confusão dói. E **quem encolhe
+para caber nos 14 é a base, nunca o desempate** — sufixo comido pelo corte devolve dois
+nomes iguais, que é o defeito de volta em silêncio.
+
+**O corpo de `nomeUnico()` ✔ feito (04/08/2026)** — era o último item aberto da fila, e o
+`TODO(Ricardo)` saiu junto. O contrato de sempre está no comentário da função; o que a
+implementação acrescentou, e que a fila não previa, foi isto:
+
+- **A DECISÃO QUE FALTAVA, e nenhuma leitura de código chega a ela** (escolha do Ricardo,
+  04/08): quando `primeiro + número + sobrenome` estoura os 14, **o sobrenome sai INTEIRO**
+  — nada de palavra cortada pela metade. `"Maria Fernanda"` duplicado vira **`"Maria2"`**,
+  não `"Maria2 Fernand"`. O primeiro nome só cede quando ele sozinho, com o número, ainda
+  não cabe (`"Sebastiãozinho"` → `"Sebastiãozinh2"`) — aí não há mais nada para ceder. O
+  motivo é o mesmo do número ir no primeiro nome: em tela estreita o cartão mostra **só** o
+  primeiro nome, então o pedaço que sobra tem de ser um nome de gente, e não um toco.
+- **A CONFERÊNCIA VEM DEPOIS DO CORTE, e é o ponto todo.** O desenho ingênuo — escolher o
+  número olhando o nome inteiro e só então cortar em 14 — deixa passar a colisão que o
+  **próprio encolhimento** cria: com `"Sebastiãozinh2"` já sentado, o `"Sebastiãozinho"` que
+  chega vira `"Sebastiãozinho2"`, que cortado em 14 é `"Sebastiãozinh2"` de novo. Dois nomes
+  iguais, e em silêncio. É a mesma família do "sufixo comido pelo corte", por outra porta:
+  ali morria o sufixo, aqui é a BASE encurtada que bate num terceiro. **Qualquer variante que
+  separe "escolher o número" de "cortar em 14" reabre isto.**
+- **A chave normaliza `NFC` e colapsa espaço**, e não é preciosismo: o mesmo "Zé" chega
+  composto no Windows e decomposto no iPhone — dois códigos para a MESMA letra passam batidos
+  por comparação crua, e a mesa fica com dois "Zé". O `\s` pega de quebra o espaço-duro que
+  vem colado quando se copia um nome de aplicativo de conversa.
+- **O laço acaba por conta, e não por sorte:** vai até `tomados.size + 1`, e n+1 nomes
+  distintos não cabem em n chaves ocupadas. Nada de teto mágico.
+- **É estável entre chamadas**, o que importa porque `nomeUnico` reentra a cada `{t:'nome'}`
+  e não só ao sentar. Funciona porque `nomesVizinhos` exclui a própria cadeira — quem a
+  "simplificar" para passar a mesa toda cria um ratchet `Ricardo2 → Ricardo22 → Ricardo222`
+  que só aparece na **segunda** troca de nome. Há asserção.
+- **Dívida registrada e NÃO consertada:** o que sustenta a comparação é o invariante "todo
+  nome na mesa cabe em 14" — um ocupado mais comprido nunca seria igual a candidato nenhum e
+  escaparia do desempate. Os cinco lugares que escrevem nome cortam em 14, então hoje é
+  teórico. O bilhete está no comentário do `nomesVizinhos`, para quem acrescentar um sexto.
+
+O contrato, que é o que as asserções cobram:
+
+```
+nomeUnico('Zé', ['Tião'])              → 'Zé'          (não colide: não muda)
+nomeUnico('Zé', ['Zé'])                → 'Zé2'
+nomeUnico('Zé', ['Zé', 'Zé2'])         → 'Zé3'         (pula o que já existe)
+nomeUnico('Ana Paula', ['Ana Paula'])  → 'Ana2 Paula'  (no PRIMEIRO nome)
+nomeUnico('Maria Fernanda', [idem])    → 'Maria2'      (o sobrenome sai inteiro)
+'ricardo' colide com 'Ricardo '                        (caixa e espaço não fazem duas pessoas)
+'Sebastiãozinho' (14) duplicado ainda cabe em 14 e sai diferente do original
+```
+
+### 2. A tela inicial não voltava ao topo ✔ feito
+
+Rolar as regras para baixo e não conseguir subir de volta. **Uma linha de CSS, e o
+diagnóstico não precisou de hipótese:** `.tela` é um scroller (`overflow: auto`) que centra
+pelo `align-items: center`, e `.carta` não tinha `margin: auto`. Conteúdo mais alto que o
+contêiner, num flex centrado, transborda para os DOIS lados — e a área rolável de um
+scroller se estende para o FIM, não para o começo: `scrollTop: 0` já é o mais alto que a
+rolagem vai. Medido em 640×360: **489 px de carta acima do alcance**.
+
+`margin: auto` resolve porque as duas pontas do flexbox se comportam diferente conforme o
+sinal da folga — sobrando espaço as margens o dividem (o centro de sempre), faltando espaço
+elas resolvem para zero e a carta encosta no começo do scroller. **Não `align-items: safe
+center`**, que faz o mesmo e é a ferramenta desenhada para isto: declaração não suportada é
+descartada INTEIRA, então onde ela não existe o `align-items` cai para `stretch` — precisaria
+de duas linhas em cascata e ainda assim com suporte pior. **Não `flex-start`**, que perde o
+centro vertical no monitor grande.
+
+**Vale para as SETE telas** que compartilham `.tela`/`.carta`, e as safe-areas entraram
+junto: era a única família de painel do projeto sem `--seg-*`, com `viewport-fit=cover`.
+
+**A suíte era cega por três motivos somados:** nenhuma das dez cenas mostrava tela (todas
+começam com `mesa()`), a lista de painéis medidos não inclui `.tela`/`.carta`, e a única
+medida de transbordo é horizontal e sai do `documentElement` — cega para `position: fixed`,
+que é a cegueira que o próprio arquivo já documentava duas vezes.
+
+### 3. O convidado saía e não conseguia voltar ✔ feito
+
+**Eram DOIS defeitos somados num sintoma só**, e é o que a investigação corrigiu no
+diagnóstico — os dois reprovam em caminhos diferentes:
+
+| caminho | o que quebrava |
+|---|---|
+| o anfitrião **não** deu revanche | ele não tinha mais o CÓDIGO; e se digitasse de memória, caía na tela da derrota que já tinha aceitado |
+| o anfitrião **deu** revanche | a cadeira dele virou bot **para sempre**, e a mesa respondia *"Essa mesa já está cheia"* — mentira, com um bot improvisado sentado na vaga |
+
+**A mudança de fundo: guardar o CÓDIGO ≠ guardar a CADEIRA.** Sair entrega a *partida*, não
+a *mesa*. A cadeira deixa de ser sua na hora (é o que impede sair de virar saída de
+emergência barata, e a derrota continua registrada); o código continua guardado, para a
+próxima. O `esquecer('sala')` fechava as **três** portas de volta de uma vez — painel do
+HUD, botão do menu e campo pré-preenchido —, e as três voltaram de graça ao parar de apagar:
+**três sintomas, uma causa, uma linha.**
+
+**A cadeira que virou bot volta a ser de gente.** A conversão do `comecarLocal` **fica** —
+ela conserta o defeito 3 da Fila 6, e sem ela a revanche nasce esperando quem não responde.
+O que faltava era MEMÓRIA: `c.vagaOnline = true` no instante da conversão, e o `sentar()`
+reconverte. A marca separa "bot que a mesa escolheu" de "bot que a mesa improvisou por falta
+de gente" — um "Bot · difícil" posto de propósito continua fechado a quem tem o código.
+
+**Reconverter nos DOIS lugares.** `MESA.cadeiras` é o que o próximo `sentar` e o
+`comecarLocal` consultam; `P.cadeiras` é o que `seguirOTurno` lê — e enquanto ele disser
+'bot', o relógio continua jogando por cima da pessoa que acabou de sentar. Dois donos para a
+mesma vez. Vale para o ramo 1 do `sentar` também, e não só para o 2: se o `desisto` se
+perdeu, a cadeira ainda é dele **e** já virou bot pela revanche.
+
+**Assumir a cadeira no meio da mão é legítimo por desenho** — invariante 2, "o motor não sabe
+a diferença". A cadeira nunca parou de jogar, só trocou de quem responde: ele recebe a mão
+que o bot deixou e a vez onde ela estiver, e a mesa é avisada por narração.
+
+**A folga de 400 ms antes do `encerrarRede`**, igual à do ramo do anfitrião e pelo mesmo
+motivo escrito lá: `peer.destroy()` aborta o que ainda não saiu do SCTP, e o que não saiu é
+justamente o `desisto`. Ela vem com `deixandoAMesa`, que resolve três coisas de uma vez —
+ignora a vista do abandono que chegaria na janela (senão ela arranca o jogador do menu de
+volta para a derrota), cala o "A mesa fechou" (falso: quem fechou foi ele) e impede o
+temporizador atrasado de matar um peer NOVO.
+
+**O `desisto` derruba a conexão junto, e isto não estava previsto.** Ele é sinal mais forte
+que o `close`: DIZ que a pessoa saiu, enquanto o outro é o link caindo — e entre um e outro
+há o tempo de o peer morrer. Nessa janela `conexoes` ainda apontava para quem não existe
+mais, e o anfitrião que clicasse Revanche depressa montava a partida com a cadeira ainda
+`online`: **a mesa nasce esperando quem não vai responder**, que é o defeito 3 da Fila 6
+entrando por outra porta. Foi a cena de navegador que achou isso, não a leitura.
+
+**Partida acabada não é publicada para quem acaba de sentar.** Sem vista o convidado não sai
+da `telaOnline` (é o `t:'vista'` que chama `esconderTelas()`), e o saguão é exatamente o
+lugar de quem chega entre duas partidas. Correção de diagnóstico: ele **não** ficava sem
+botão na tela de fim — o "Trocar a mesa" está lá; o defeito era reoferecer a derrota que ele
+já tinha aceitado.
+
+**Três motivos de recusa em vez de um.** `cheio`, `guardadas` e `semvaga` — o campo é novo
+dentro da mensagem de sempre, então convidado antigo cai no texto padrão. Recusar estava
+certo nos três casos; mentir o motivo é o que faz quem tentou desistir de tentar de novo.
+
+**Limite conhecido, registrado de propósito:** a marca `vagaOnline` é de sessão e **não** é
+persistida (vinda do armazenamento ela abriria ao primeiro estranho com o código uma cadeira
+que o dono fechou). Logo, o anfitrião que RECARREGA e reabre uma mesa cuja cadeira já virara
+bot não a oferece mais a quem **desistiu** — quem apenas **caiu** continua coberto, porque
+`donoDaCadeira` é guardado e o ramo 1 do `sentar` acha a cadeira independente do tipo.
+Fechar esse canto exigiria a marca dentro de `P.cadeiras`, que é dado guardado e portanto
+entrada de fora com validação própria. Custo maior que o caso.
+
+### O que esta fila deixou de lição
+
+- **O DUBLÊ FICOU PARA TRÁS PELA NONA VEZ**, e desta vez foi o dublê do PRÓPRIO teste, não o
+  do harness: a `conn` de mentira do `test-jogo` não tinha `open`, e `espalharVistas`
+  confere `conn.open` antes de mandar. A asserção "não mandaram a partida acabada para quem
+  acabou de sentar" era **verde por trivialidade** — o dublê recebia o `sentou` (mandado
+  direto na conn) e nunca uma vista. Quem contou foi a conferência por mutação, que reprovou
+  MENOS do que devia. A série continua: `matchMedia`, captura de ponteiro, `AudioContext`,
+  `Peer`, contexto WebGL, `setAttribute`, `preventDefault`, `matchMedia` de novo, `conn.open`.
+- **O `exit(0)` do aviso de rede engolia asserção já reprovada.** Uma rodada do `test-online`
+  que imprimiu quatro `✗` saía com código ZERO porque uma espera estourou depois. O arquivo
+  já registrava essa doença para `TypeError`/`ReferenceError`; faltava o degrau final —
+  **o caminho que existe para perdoar a REDE estava perdoando o JOGO.** Hoje falha anterior
+  a um aviso reprova a rodada.
+- **Mutação que reprova MENOS do que devia é sintoma, não sorte.** TRÊS vezes nesta fila: a
+  do `conn.open` acima; uma em que a mutação MATOU o processo (`mostrarFimDeMao` com
+  `resultado` nulo) e a suíte inteira saiu sem contar asserção nenhuma; e a terceira, em
+  04/08 — ver abaixo. As três confirmam a regra que a Fila 9 escreveu.
+- **MUTAÇÃO QUE NÃO CHEGA A SER APLICADA SAI VERDE, e verde é exatamente a resposta errada.**
+  Ao conferir o `nomeUnico`, duas mutações de várias linhas foram "aplicadas" por um
+  `String.replace` cujo texto de busca tinha `\n` — e **os arquivos deste repositório são
+  CRLF**. O casamento falhou, o arquivo ficou intacto, a suíte passou, e por um momento
+  pareceu que a asserção não cobria o ramo. É a doença do "reprova menos do que devia" com
+  uma causa nova: não é a suíte que morre, é a mutação que nunca nasce. **Toda mutação por
+  script tem de EXIGIR que o casamento aconteceu** (contar as ocorrências e estourar se não
+  for exatamente uma) antes de rodar coisa nenhuma — sem isso, "tudo certo" é indistinguível
+  de "não mexi em nada". Refeitas com essa guarda, as cinco mutações mataram uma asserção
+  cada, e cada uma a sua.
+- **Heredoc de script com acento no literal chega corrompido.** Um `python - <<'PY'` com
+  strings em português foi lido como latin-1 e as buscas nunca casaram. Para editar texto
+  acentuado, a ferramenta de edição direta; para script, o arquivo em disco.
+- **Cena de teste que mexe em estado compartilhado derruba a seguinte — de novo, e num
+  arranjo novo.** O bloco do prazo deixava `P.fase = 'fim'` posto à mão (um estado que o jogo
+  não produz: fim sem resultado e sem desistente), e a montagem do bloco seguinte estourava
+  dentro do HUD, longe de onde a causa estava. A montagem passou a começar de uma partida
+  viva. Terceira vez desta lição, em três meios diferentes: `localStorage` das telas, `MESA`
+  do online, `P` do harness.
+- **Pegar o tipo de um objeto que pode não existir é armadilha.** O `test-telas` tirava o
+  `Vector3` de `naMao[0].obj.position.constructor` — e a primeira cena SEM partida derrubou a
+  medida inteira com um "V is not a constructor" que não fala de mão nenhuma. A ponte já
+  expõe o `THREE`.
+- **Asserção que não pode falhar é decoração com cara de cobertura.** A primeira versão da
+  asserção da rolagem media se o FIM da carta era alcançável — e ela passa nos dois mundos,
+  porque o defeito clássico é só na ponta de cima. Trocada por "a tela transborda e não
+  rola", que pega o caso real (`overflow: hidden` continua rolável **por script**: um
+  `scrollTop = n` funciona nele, e por isso as medidas de alcance passavam numa tela que o
+  dedo não move um pixel).
+- **Exigir que a cena tenha O QUE MEDIR é asserção, e ela é global aqui.** A carta com as
+  regras abertas cabe inteira no tablet de 1180 px de altura — exigir transbordo tela a tela
+  reprovaria o tablet por um defeito que não existe; exigir zero deixaria a asserção virar
+  decoração no dia em que a carta encolher. O rodapé cobra `mediu > 0` no conjunto.
 
 ## Regras da casa (implementadas)
 

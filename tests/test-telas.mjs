@@ -59,6 +59,14 @@ const CASOS = [
   // largura 1.07. Recém-dada são 7 peças, e a fileira vai a 1.91 — quase o dobro. Quem
   // disputa espaço com o tabuleiro e com os copos é este tamanho, não o outro.
   { nome: 'mão cheia de 4', montar: `mesa('classico', 4); contar(false);` },
+  // A TELA DE MENU, que nenhuma cena mostrava — as dez de cima começam todas com `mesa()`,
+  // ou seja com o menu já escondido. E ela não é "a tela antes do jogo": é um SCROLLER, e o
+  // defeito de campo foi rolar as regras e não conseguir subir de volta.
+  //
+  // As regras abrem de propósito: é o que faz a carta ficar mais alta que a viewport em
+  // TODAS as seis telas, inclusive a de 1600×900. Sem isso a asserção seria verde por
+  // trivialidade nas telas grandes, que é o pior tipo de verde — o que parece cobertura.
+  { nome: 'menu', soTela: true, exigeTransbordo: true, montar: `semGuardado(); menuCheio();` },
 ];
 
 // ESCOLHER TELAS E CENAS PELA LINHA DE COMANDO.
@@ -164,6 +172,24 @@ const AJUDA = `
       if (!j.P || j.P.fase !== 'mao') mesa('classico', 3);
     }
   };
+  // A PARTIDA GUARDADA POR OUTRA CENA MUDA A ALTURA DESTA CARTA. É a mesma lição do
+  // contar(): o localStorage é do file:// inteiro, e uma cena que jogou deixa o botão
+  // "Continuar a partida de antes" aceso na cena seguinte — mais uma linha de carta, na
+  // única cena que mede altura de carta. Cada cena diz o que quer.
+  const semGuardado = () => {
+    try { localStorage.removeItem('dominobar.partida'); } catch (e) { void e; }
+    window.__jogo.atualizarBotaoRetomar();
+  };
+  // A carta mais alta que o menu sabe ficar, e toda ela DECLARADA — quatro cadeiras (a
+  // preferência guardada por outra cena não pode decidir isto) e as regras abertas, que é
+  // o que a torna mais alta que qualquer uma das seis telas.
+  const menuCheio = () => {
+    const j = window.__jogo;
+    j.MESA.modo = 'classico'; j.MESA.n = 4;
+    j.montarCadeiras();
+    document.querySelector('details.regras').open = true;
+    j.mostrarTela('telaMenu');
+  };
   const ateALinha = (quantas) => {
     const j = window.__jogo;
     for (let i = 0; i < 400 && j.P.linha.length < quantas; i++) {
@@ -191,7 +217,13 @@ const MEDIR = `(() => {
 
   // Cada peça da mão projetada com a câmera que desenha o quadro. Fora de |1| é fora
   // da tela — literalmente, é a definição de frustum em coordenadas normalizadas.
-  const V = j.naMao.length ? j.naMao[0].obj.position.constructor : null;
+  //
+  // O Vector3 sai do THREE da ponte, e não mais do \`naMao[0].obj.position.constructor\`:
+  // aquela linha tirava o construtor de uma PEÇA, então numa cena sem partida ela dava
+  // null e o primeiro \`new V()\` lá embaixo derrubava a medida inteira com um "V is not a
+  // constructor" que não fala de mão nenhuma. Pegar o tipo de um objeto que pode não
+  // existir é armadilha; a ponte já expõe a biblioteca.
+  const V = j.THREE.Vector3;
   const pecas = j.naMao.map(m => {
     const v = new V(m.xBase, m.yBase, m.zBase);
     v.project(j.camera);
@@ -337,9 +369,46 @@ const MEDIR = `(() => {
     cortado: n.scrollWidth > n.clientWidth + 1,
   }));
 
+  // A TELA CHEIA É UM SCROLLER, e a pergunta dela não é "cabe?" — é "DÁ PARA CHEGAR NO
+  // TOPO?". Com \`align-items: center\`, conteúdo mais alto que o contêiner transborda para
+  // os DOIS lados, e a área rolável de um scroller só se estende para o FIM: scrollTop=0 já
+  // é o mais alto que a rolagem vai, e o que ficou acima é inalcançável para sempre.
+  //
+  // Nenhuma das medidas que esta suíte já fazia enxerga isso: \`documentElement.scrollWidth\`
+  // é horizontal E é cego para \`position: fixed\` (o comentário do #topo, lá em cima, já
+  // descreve essa cegueira), e a varredura de painéis mede o HUD, não as telas.
+  //
+  // Então força scrollTop=0 e mede a distância entre a borda de cima da CARTA e a primeira
+  // linha rolável do scroller — a borda de cima do padding. Negativa = há carta acima do
+  // alcance. Depois o mesmo pelo fim, e devolve a rolagem onde estava.
+  const aberta = [...document.querySelectorAll('.tela')].find(t => vis(t));
+  let carta = null;
+  if (aberta) {
+    const alvo = aberta.querySelector('.carta');
+    const cs = getComputedStyle(aberta);
+    const padT = parseFloat(cs.paddingTop) || 0, padB = parseFloat(cs.paddingBottom) || 0;
+    const estava = aberta.scrollTop;
+    const rt = aberta.getBoundingClientRect();
+    aberta.scrollTop = 0;
+    const topo = alvo.getBoundingClientRect().top - (rt.top + padT);
+    aberta.scrollTop = aberta.scrollHeight;
+    const base = (rt.bottom - padB) - alvo.getBoundingClientRect().bottom;
+    aberta.scrollTop = estava;
+    const h = alvo.getBoundingClientRect().height;
+    carta = { tela: aberta.id, topo, base, altura: Math.round(h),
+      transborda: Math.round(h + padT + padB - aberta.clientHeight),
+      // E DÁ PARA ROLAR COM O DEDO? Não é a mesma pergunta que a de cima, e a diferença
+      // pegou este teste de surpresa: um contêiner \`overflow: hidden\` continua sendo
+      // rolável POR SCRIPT — \`scrollTop = n\` funciona nele —, então as duas medidas de
+      // alcance acima passam numa tela que o usuário não consegue mexer um pixel. Quem
+      // responde pelo dedo é o overflow computado, e é o mesmo \`rolavel\` que a asserção 7
+      // já usa para decidir se um filho que vazou está de fato inalcançável.
+      rola: rolavel(aberta, 'y') };
+  }
+
   const cortina = document.getElementById('cortina');
   return {
-    pior, vazando, nomes,
+    pior, vazando, nomes, carta,
     transbordo: document.documentElement.scrollWidth - window.innerWidth,
     largura: window.innerWidth, altura: window.innerHeight,
     // Gaveta aberta muda o que se exige da tela: cobrir o jogo passa a ser o PONTO.
@@ -360,6 +429,10 @@ const ok = (cond, msg) => { if (!cond) { console.error('    ✗ ' + msg); falhas
 // A pior folga de TODAS as células, impressa no fim. Uma linha, e é ela que responde
 // "o número virou positivo em todas as telas?" sem ninguém ler 60 linhas de log.
 let piorGlobal = { folga: 99, a: '—', b: '—', onde: '—' };
+// Quantas telas a cena de carta rodou, e em quantas ela realmente TRANSBORDOU. Sem a
+// segunda, "o topo está alcançável" é verdade de graça — e uma asserção que não pode
+// falhar em nenhuma tela é decoração com cara de cobertura.
+const medindoTopo = { rodou: 0, mediu: 0 };
 
 const navegador = await puppeteer.launch({
   executablePath: CHROME,
@@ -435,6 +508,45 @@ for (const tela of TELAS_ESCOLHIDAS) {
 
     ok(!erros.length, `${onde}: erro no console — ${erros[0]}`);
     ok(m.transbordo <= 0, `${onde}: a página transbordou ${m.transbordo}px na horizontal`);
+
+    // 8. O TOPO DA TELA CHEIA TEM DE SER ALCANÇÁVEL. Roda sempre que houver tela aberta, e
+    //    não só na cena `soTela`: se um dia uma cena de partida abrir a telaPasse ou a de
+    //    fim de mão, a pergunta vale igual — sete telas compartilham .tela/.carta.
+    if (m.carta) {
+      // A cena tem de ter o que medir em ALGUMA tela, e a conta é global de propósito: a
+      // carta com as regras abertas tem 1109px e o tablet tem 1180 de altura, ou seja lá
+      // ela CABE — e onde cabe, "o topo está alcançável" é verdade por trivialidade, que é
+      // o tipo de verde que faz uma suíte parecer cobertura. Exigir transbordo tela a tela
+      // reprovaria o tablet por um defeito que não existe; exigir zero deixaria a asserção
+      // virar decoração no dia em que a carta encolher. O rodapé cobra o global.
+      if (caso.exigeTransbordo) { medindoTopo.rodou++; if (m.carta.transborda > 0) medindoTopo.mediu++; }
+      ok(m.carta.topo >= -1,
+        `${onde}: o topo da carta de #${m.carta.tela} está ${(-m.carta.topo).toFixed(0)}px ACIMA do ` +
+        `alcance da rolagem — com scrollTop=0 já no fim do curso`);
+      // …E TEM DE ROLAR COM O DEDO. A de cima mede alcance com `scrollTop = 0`, e isso é
+      // rolagem POR SCRIPT: um `overflow: hidden` aqui passaria nela com nota máxima e
+      // deixaria a tela imóvel na mão de quem joga. Foi o que a conferência por mutação
+      // mostrou — a asserção que estava escrita aqui antes (o fim da carta alcançável)
+      // passava nos DOIS mundos, ou seja não podia falhar, e asserção que não pode falhar é
+      // decoração com cara de cobertura. O número do fim continua no log.
+      ok(m.carta.transborda <= 0 || m.carta.rola,
+        `${onde}: a carta de #${m.carta.tela} é ${m.carta.transborda}px mais alta que a tela e ` +
+        `#${m.carta.tela} não rola — o que passa da dobra é inalcançável com o dedo`);
+    }
+
+    // CENA DE TELA TERMINA AQUI. O que vem abaixo é sobre o 3D e sobre o HUD, e numa cena
+    // de menu não há partida: `naMao` está vazia, os grupos da mesa também, e o #topo/#acoes
+    // estão no DOM sem `oculta` (quem os esconde é o desenharHUD) — atrás do véu da tela,
+    // invisíveis na prática e mesmo assim medidos. Sujeitar esta cena a elas produziria
+    // falha alheia ao defeito, do tipo "a mão não foi desenhada" sobre uma cena que nunca
+    // desenhou mão nenhuma.
+    if (caso.soTela) {
+      console.log(`  ${caso.nome.padEnd(13)} carta ${m.carta.altura}px numa tela de ${m.altura}px · ` +
+        `transborda ${m.carta.transborda}px · topo ${m.carta.topo.toFixed(0)} base ${m.carta.base.toFixed(0)}` +
+        (m.carta.transborda > 0 ? '' : ' · coube, não mede'));
+      await pagina.close();
+      continue;
+    }
 
     // 1. nenhum painel do HUD pode sair da viewport
     for (const [id, r] of Object.entries(m.paineis)) {
@@ -531,6 +643,11 @@ for (const tela of TELAS_ESCOLHIDAS) {
 
 await navegador.close();
 console.log(`\nfolga mínima ${piorGlobal.folga.toFixed(2)} — ${piorGlobal.a} × ${piorGlobal.b} (${piorGlobal.onde})`);
+if (medindoTopo.rodou) {
+  console.log(`carta mais alta que a tela em ${medindoTopo.mediu}/${medindoTopo.rodou} telas`);
+  ok(medindoTopo.mediu > 0, 'a carta coube inteira em TODAS as telas rodadas — a asserção do ' +
+    'topo alcançável passou por trivialidade, sem nunca ter tido o que medir');
+}
 // O RODAPÉ TEM DE GRITAR QUE A RODADA FOI PARCIAL. Sem isto, quem rodar duas telas para
 // iterar num defeito lê "tudo certo" e acha que a suíte passou inteira — que é
 // exatamente o que o contorno de cortar a lista à mão já fazia, só que agora sem deixar

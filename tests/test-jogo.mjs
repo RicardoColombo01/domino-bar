@@ -35,6 +35,14 @@ const mod = await import(buildModule([
   // `conn` de mentira é o que torna o prazo de 30s testável sem esperar 30 segundos —
   // o harness enfileira os setTimeout e o teste os drena quando quer.
   'sentar', 'largar', 'esperando', 'donoDaCadeira', 'ESPERA_VOLTA',
+  // `nomeUnico` é pura e por isso a prova fina dela mora aqui e não no Chrome: o desempate
+  // de nomes tem regras (onde entra o número, o que cede para caber nos 14) que não
+  // precisam de rede nenhuma para serem exigidas.
+  'nomeUnico',
+  // `desistiuDaMesa` é o corpo do `{t:'desisto'}`, extraído de dentro do
+  // `peer.on('connection')` — lá dentro ele é inalcançável no harness, e é justamente ele
+  // que põe o defeito relatado (sair e não conseguir voltar) dentro da suíte rápida.
+  'desistiuDaMesa',
   'ajustarCompraAoModo', 'sobraDoBaralho',
 ], undefined, path.join(import.meta.dirname, 'built-jogo.mjs')));
 
@@ -733,27 +741,50 @@ console.log('\nquem pediu menos movimento');
 // Não custa 30 segundos: o `setTimeout` do harness é uma fila que o teste drena com
 // `correrTimers()`. O relógio de parede nunca entra nisto, e é por isso que esta asserção
 // pode viver na suíte rápida em vez de na de navegador.
+// Uma conexão de mentira que ANOTA o que recebeu. O que ela manda de volta importa: é
+// por `expulso`/`cheio` que o jogo conversa com quem está do outro lado.
+//
+// Ela e o `montar()` abaixo moram FORA dos blocos que os usam porque três assuntos
+// diferentes precisam da mesma mesa online de mentira: o prazo de quem cai, o desempate de
+// nomes e o voltar depois de sair. Copiar a montagem em cada bloco é como duas cópias
+// passam a discordar — foi literalmente o defeito 3 da Fila 6.
+// `open: true` NÃO É ENFEITE, e a falta dele já valeu uma asserção que não podia falhar:
+// `espalharVistas` e `espalharLog` conferem `conn.open` antes de mandar, então um dublê sem
+// esse campo recebe o `sentou` e o `cheio` (mandados direto na conn) e NUNCA recebe vista
+// nenhuma. A asserção "não mandaram a partida acabada para quem acabou de sentar" ficava
+// verde por trivialidade, e a conferência por mutação foi quem contou. É a mesma lição que
+// esta casa já pagou com o matchMedia, a captura de ponteiro, o AudioContext, o Peer, os
+// eventos de contexto WebGL, o setAttribute, o preventDefault e o matchMedia de novo: quem
+// estava incompleto era o dublê, não o jogo.
+const novaConn = () => { const c = { enviadas: [], fechada: false, open: true }; Object.assign(c, {
+  send: m => c.enviadas.push(m), close: () => { c.fechada = true; c.open = false; }, on: () => {} }); return c; };
+
+const montarMesaOnline = () => {
+  mod.encerrarRede();
+  mod.MESA.modo = 'classico'; mod.MESA.n = 3;
+  // COMEÇA DE UMA PARTIDA VIVA. `sentar()` publica, e publicar lê o `P` que estiver de pé —
+  // inclusive um deixado por outro bloco. O bloco do prazo põe `P.fase = 'fim'` na mão para
+  // testar o relógio disparando tarde, e aquilo é um estado que o jogo não produz (fim sem
+  // resultado e sem desistente): a montagem seguinte estourava dentro do HUD, longe daqui.
+  // É a mesma regra que as cenas do test-online já seguem — cada uma diz o que quer.
+  mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[1].nivel = 'normal';
+  mod.MESA.cadeiras[2].tipo = 'bot'; mod.MESA.cadeiras[2].nivel = 'normal';
+  mod.comecarLocal();
+  mod.MESA.cadeiras[1].tipo = 'online'; mod.MESA.cadeiras[1].nome = 'Visita';
+  mod.MESA.cadeiras[1].vagaOnline = false;
+  mod.MESA.cadeiras[2].tipo = 'bot'; mod.MESA.cadeiras[2].nivel = 'normal';
+  mod.abrirMesaOnline();
+  const conn = novaConn();
+  const cadeira = mod.sentar(conn, 'cliente-A', 'Visita');
+  // A partida SÓ nasce com a cadeira online de pé porque `conexoes` já tem alguém nela —
+  // `comecarLocal` converte em bot toda cadeira online sem ninguém vivo do outro lado.
+  mod.comecarLocal();
+  return { conn, cadeira };
+};
+
 console.log('\no prazo de quem cai, esgotando');
 {
-  // Uma conexão de mentira que ANOTA o que recebeu. O que ela manda de volta importa: é
-  // por `expulso`/`cheio` que o jogo conversa com quem está do outro lado.
-  const novaConn = () => { const c = { enviadas: [], fechada: false }; Object.assign(c, {
-    send: m => c.enviadas.push(m), close: () => { c.fechada = true; }, on: () => {} }); return c; };
-
-  const montar = () => {
-    mod.encerrarRede();
-    mod.MESA.modo = 'classico'; mod.MESA.n = 3;
-    mod.MESA.cadeiras[1].tipo = 'online'; mod.MESA.cadeiras[1].nome = 'Visita';
-    mod.MESA.cadeiras[2].tipo = 'bot'; mod.MESA.cadeiras[2].nivel = 'normal';
-    mod.abrirMesaOnline();
-    const conn = novaConn();
-    const cadeira = mod.sentar(conn, 'cliente-A', 'Visita');
-    // A partida SÓ nasce com a cadeira online de pé porque `conexoes` já tem alguém nela —
-    // `comecarLocal` converte em bot toda cadeira online sem ninguém vivo do outro lado.
-    mod.comecarLocal();
-    return { conn, cadeira };
-  };
-
+  const montar = montarMesaOnline;
   {
     const { conn, cadeira } = montar();
     ok(cadeira === 1, `a visita devia sentar na cadeira 1 e sentou na ${cadeira}`);
@@ -816,6 +847,173 @@ console.log('\no prazo de quem cai, esgotando');
   }
 
   mod.encerrarRede();
+}
+
+// DOIS JOGADORES COM O MESMO NOME. O caso de campo é o mais simples que existe: ninguém
+// trocou o nome, os dois chegaram com o padrão, e a mesa ficou com o mesmo nome nos dois
+// lados do placar, nos dois cartões e no começo de toda linha da conversa.
+//
+// A função é PURA e mora no escopo concatenado, então a prova fina cabe aqui, em
+// milissegundos — o Chrome do test-online fica só com a ida e volta pelo fio, que é o que
+// só dá para provar com duas abas de verdade. Lógica no Node, sessão no Chrome.
+// QUEM SAIU DE PROPÓSITO CONSEGUE VOLTAR. Relato de campo: o convidado saiu da sala e não
+// conseguiu voltar, com a sala ainda aberta. São dois defeitos somados num sintoma só, e
+// este bloco cobre o segundo — o pior: o anfitrião clica Revanche, a cadeira do que saiu
+// vira bot (e tem de virar mesmo, senão a mesa nasce esperando quem não responde: é o
+// defeito 3 da Fila 6), e a partir daí ela nunca mais volta a ser de gente. Quem tenta
+// voltar ouve "essa mesa já está cheia" com um bot improvisado sentado na vaga dele.
+console.log('\nquem saiu de propósito consegue voltar');
+{
+  // Sair é `desisto` E o link caindo logo atrás — o convidado manda a mensagem e o peer
+  // dele morre. Uma coisa sem a outra não é o que acontece na vida real: sem o `largar`, a
+  // conexão continua em `conexoes` e a revanche nem chega a converter a cadeira.
+  const montar = () => {
+    const r = montarMesaOnline();
+    mod.desistiuDaMesa(r.cadeira);
+    mod.largar(r.cadeira, r.conn);
+    return r;
+  };
+
+  // SEM REVANCHE: a cadeira ainda é `online`, ele volta, e a derrota que ele entregou FICA.
+  // Sair entrega a partida, não a mesa — voltar é para a próxima.
+  {
+    const { cadeira } = montar();
+    ok(mod.P.desistiu === cadeira, 'montagem: sair de propósito tinha de contar como derrota');
+    ok(!mod.donoDaCadeira.has(1), 'montagem: quem sai de propósito perde a RESERVA da cadeira');
+
+    const volta = novaConn();
+    ok(mod.sentar(volta, 'cliente-A', 'Visita') === cadeira,
+      'a mesa ainda estava aberta e mesmo assim não deixou voltar');
+    ok(mod.P.desistiu === cadeira, 'voltar para a mesa desfez a derrota de quem tinha saído');
+    // E ELE NÃO LEVA A VISTA DA DERROTA NA CARA. Quem chega entre duas partidas fica no
+    // saguão: a partida acabada não é publicada, e o `sentou` diz que a espera é essa.
+    ok(volta.enviadas.some(m => m.t === 'sentou' && m.esperando === true),
+      'quem sentou depois do fim não foi avisado de que está esperando a próxima');
+    ok(!volta.enviadas.some(m => m.t === 'vista'),
+      'a mesa mandou a partida ACABADA para quem acabou de sentar — ele cai na tela da derrota dele');
+  }
+
+  // COM REVANCHE: a cadeira virou bot, e é aqui que o beco sem saída morava.
+  {
+    const { cadeira } = montar();
+    els.get('btRevanche').onclick();
+    ok(mod.P.cadeiras[1].tipo === 'bot',
+      'montagem: sem ninguém vivo a cadeira tinha de virar bot, senão a mesa congela (Fila 6)');
+    ok(mod.MESA.cadeiras[1].vagaOnline === true,
+      'a cadeira virou bot sem lembrar que era uma VAGA de gente — e vaga esquecida não volta');
+
+    const volta = novaConn();
+    const deVolta = mod.sentar(volta, 'cliente-A', 'Visita');
+    ok(deVolta === 1, `voltar depois de sair devia devolver a cadeira 1, e veio ${deVolta}`);
+    ok(!volta.enviadas.some(m => m.t === 'cheio'),
+      'a mesa respondeu "cheia" com um bot improvisado sentado na vaga de quem tentou voltar');
+    ok(mod.MESA.cadeiras[1].tipo === 'online' && mod.P.cadeiras[1].tipo === 'online',
+      'sentou e a cadeira continuou bot: o relógio do bot e a pessoa viram dois donos da mesma vez');
+    // A vaga foi CONSUMIDA: com a marca de pé, a próxima revanche a converteria de novo em
+    // bot mesmo com o jogador vivo do outro lado.
+    ok(mod.MESA.cadeiras[1].vagaOnline === false,
+      'a marca de vaga sobreviveu a alguém ocupá-la — a cadeira já tem dono de novo');
+  }
+
+  // O BOT LARGA A VEZ DE QUEM VOLTOU. Reconverter só o `MESA` deixaria `P.cadeiras[1]`
+  // dizendo 'bot', e o relógio continuaria jogando por cima da pessoa que acabou de sentar.
+  {
+    const { cadeira } = montar();
+    els.get('btRevanche').onclick();
+    // Até chegar a vez da cadeira que virou bot, jogando pelas outras.
+    for (let i = 0; i < 40 && mod.P.vez !== cadeira; i++) {
+      mod.aplicarIntencao(mod.P.vez, mod.jogadaDoBot(mod.P, mod.P.vez));
+    }
+    ok(mod.P.vez === cadeira, 'montagem: era para a vez ter chegado na cadeira que virou bot');
+    mod.sentar(novaConn(), 'cliente-A', 'Visita');
+    const antes = mod.P.maos[cadeira].length;
+    correrTimers();                          // drena o relógio do bot que já estava agendado
+    ok(mod.P.maos[cadeira].length === antes && mod.P.vez === cadeira,
+      'o bot jogou pela cadeira de quem acabou de voltar — a mão mudou sozinha');
+  }
+
+  // A MESA DIZ A VERDADE QUANDO RECUSA. Um `t:'cheio'` para três situações diferentes é o
+  // que fazia a mesa afirmar "já está cheia" com uma cadeira VAZIA à espera. Recusar está
+  // certo nos três casos; mentir o motivo é o que faz quem tentou desistir de tentar.
+  {
+    const { conn, cadeira } = montarMesaOnline();
+    const cheia = novaConn();
+    ok(mod.sentar(cheia, 'cliente-Z', 'Zé') === -1, 'montagem: a mesa estava cheia mesmo');
+    ok(cheia.enviadas.some(m => m.porque === 'cheio'),
+      'mesa realmente cheia tinha de dizer que está cheia, e com esse motivo');
+
+    mod.largar(cadeira, conn);               // caiu: a cadeira fica RESERVADA por 30s
+    const naJanela = novaConn();
+    mod.sentar(naJanela, 'cliente-Z', 'Zé');
+    ok(naJanela.enviadas.some(m => m.porque === 'guardadas'),
+      'a mesa disse "cheia" para uma cadeira VAZIA, guardada para quem caiu');
+
+    mod.encerrarRede();
+    mod.MESA.n = 3;
+    mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[1].nivel = 'normal';
+    mod.MESA.cadeiras[1].vagaOnline = false;
+    mod.abrirMesaOnline();
+    const semVaga = novaConn();
+    mod.sentar(semVaga, 'cliente-Z', 'Zé');
+    ok(semVaga.enviadas.some(m => m.porque === 'semvaga'),
+      'mesa sem cadeira de visitante tinha de dizer isso, e não "cheia"');
+  }
+
+  mod.encerrarRede();
+}
+
+console.log('\ndois jogadores com o mesmo nome');
+{
+  const u = (n, ...ocupados) => mod.nomeUnico(n, ocupados);
+
+  ok(u('Zé', 'Tião') === 'Zé', `nome que não colide não podia mudar, e virou "${u('Zé', 'Tião')}"`);
+  ok(u('Zé', 'Zé') === 'Zé2', `o segundo "Zé" tinha de virar "Zé2", e veio "${u('Zé', 'Zé')}"`);
+  ok(u('Zé', 'Zé', 'Zé2') === 'Zé3', `o terceiro tinha de pular o Zé2, e veio "${u('Zé', 'Zé', 'Zé2')}"`);
+  // Caixa e espaço nas pontas não fazem duas pessoas: para quem lê a mesa é o mesmo nome.
+  ok(u('ricardo', 'Ricardo ') !== 'ricardo',
+    'trocar a caixa do nome burlava o desempate — para quem lê a mesa os dois são o mesmo');
+
+  // O NÚMERO NO PRIMEIRO NOME, e esta é a asserção que grava a decisão. `nomeEmPartes`
+  // (13-hud.js) esconde tudo depois do primeiro espaço em tela estreita, então
+  // "Ana Paula 2" volta a ser "Ana" na lista — os dois cartões iguais outra vez,
+  // justamente no retrato de quatro, que é onde a confusão dói. Se alguém "simplificar"
+  // para sufixo no fim, esta linha cai.
+  const anas = u('Ana Paula', 'Ana Paula');
+  ok(/^Ana2/.test(anas), `o desempate tinha de entrar no primeiro nome, e veio "${anas}"`);
+
+  // E CABE NOS 14. Quem encolhe é a base, nunca o desempate: um sufixo comido pelo corte
+  // devolve dois nomes iguais, que é o defeito de volta em silêncio.
+  const longo = 'Sebastiãozinho';                    // 14 na bala, o máximo que o menu deixa
+  const apertado = u(longo, longo);
+  ok(apertado.length <= 14, `o desempate estourou o corte de 14: "${apertado}" tem ${apertado.length}`);
+  ok(apertado !== longo, 'o desempate foi comido pelo corte de 14 e os dois nomes ficaram iguais');
+
+  // E o mesmo com sobrenome: é a base que cede, não o número nem o resto.
+  const dois = u('Sebastião Jr', 'Sebastião Jr');
+  ok(dois.length <= 14 && dois !== 'Sebastião Jr' && /\d/.test(dois),
+    `nome longo com sobrenome não desempatou direito: "${dois}"`);
+
+  // O SOBRENOME SAI INTEIRO quando não cabe — nada de palavra cortada pela metade
+  // ("Maria2 Fernand"). É decisão do Ricardo, 04/08/2026, e nenhuma leitura de código
+  // chega a ela: o primeiro nome é a única parte que o cartão mostra em tela estreita,
+  // então o pedaço que sobra tem de ser um nome de gente, não um toco.
+  const maria = u('Maria Fernanda', 'Maria Fernanda');       // 14 na bala; com o número, 15
+  ok(maria === 'Maria2', `o sobrenome tinha de sair inteiro, e veio "${maria}"`);
+
+  // ESTÁVEL ENTRE CHAMADAS, e é o que faz o `{t:'nome'}` (15-rede.js) ser seguro: ele
+  // reentra aqui a cada troca de nome em partida, e não só ao sentar. Funciona porque
+  // `nomesVizinhos` exclui a própria cadeira — quem passar a mesa TODA cria um ratchet
+  // "Ricardo2" → "Ricardo22" → "Ricardo222" que só aparece na segunda troca.
+  let quemSou = u('Ricardo', 'Dona da mesa', 'Ricardo');
+  for (let i = 0; i < 4; i++) quemSou = u('Ricardo', 'Dona da mesa', 'Ricardo');
+  ok(quemSou === 'Ricardo2', `renomear repetido acumulou número: "${quemSou}"`);
+
+  // A colisão que o PRÓPRIO ENCOLHIMENTO cria. Sem conferir o candidato já cortado, o
+  // "Sebastiãozinho" que chega vira "Sebastiãozinho2", que cortado em 14 é
+  // "Sebastiãozinh2" — o outro vizinho, de novo e em silêncio.
+  const terceiro = u('Sebastiãozinho', 'Sebastiãozinho', 'Sebastiãozinh2');
+  ok(terceiro !== 'Sebastiãozinh2' && terceiro.length <= 14,
+    `o corte em 14 fabricou uma colisão nova: "${terceiro}"`);
 }
 
 console.log('\no mudo tem de durar');

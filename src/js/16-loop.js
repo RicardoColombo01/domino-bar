@@ -37,7 +37,15 @@ function comecarLocal() {
   // É também a conversão que o `btIniciarOnline` fazia por conta própria; com ela aqui,
   // aquele botão voltou a ser só `comecarLocal()`. Uma regra em vez de duas.
   MESA.cadeiras.slice(0, MESA.n).forEach((c, i) => {
-    if (c.tipo === 'online' && !conexoes.has(i)) { c.tipo = 'bot'; c.nivel = c.nivel || 'normal'; }
+    if (c.tipo === 'online' && !conexoes.has(i)) {
+      c.tipo = 'bot'; c.nivel = c.nivel || 'normal';
+      // A VAGA NÃO SOME COM O TIPO. Converter continua obrigatório — é a linha acima que
+      // impede a revanche de nascer esperando quem não responde —, e o que faltava era
+      // LEMBRAR que aquela cadeira é de gente, para o `sentar()` poder devolvê-la. Sem a
+      // marca, sair da mesa uma vez custava a cadeira para sempre: quem tentava voltar
+      // ouvia "essa mesa já está cheia" com um bot improvisado sentado no lugar dele.
+      c.vagaOnline = true;
+    }
   });
   const cadeiras = MESA.cadeiras.slice(0, MESA.n)
     .map(c => ({ nome: c.nome, tipo: c.tipo, nivel: c.nivel }));
@@ -221,15 +229,14 @@ el('btSairSim').onclick = () => sairDaPartida();
 function sairDaPartida() {
   saindo = false;
   if (modo === 'convidado') {
-    // O anfitrião é a autoridade: ele é quem registra a derrota. Avisar antes de cair
-    // fora evita depender de o `close` chegar — mas o prazo de volta cobre se não.
-    if (linkAnfitriao && linkAnfitriao.open) linkAnfitriao.send({ t: 'desisto' });
-    // Sair de propósito é dizer que aquela mesa acabou para você: o botão de voltar não
-    // pode continuar oferecendo a partida que você mesmo entregou. Cair é outra coisa —
-    // ali o código FICA guardado, que é o motivo de tudo isto existir.
-    esquecer('sala');
-    encerrarRede();
+    // O anfitrião é a autoridade: ele é quem registra a derrota. `largarAMesa` avisa antes
+    // de cair fora (e dá 400 ms para a mensagem sair), e GUARDA O CÓDIGO — sair entrega a
+    // partida, não a mesa. Aqui havia um `esquecer('sala')`, e ele fechava as três portas de
+    // volta ao mesmo tempo: o convidado não conseguia voltar nem com a sala ainda aberta.
+    largarAMesa();
     P = null; vistaAtual = null;
+    // Antes do encerrarRede atrasado de propósito: `mostrarTela('telaMenu')` recalcula o
+    // botão "Voltar para a mesa XXXX", e ele lê a sala que o `largarAMesa` acabou de gravar.
     mostrarTela('telaMenu');
     return;
   }
