@@ -216,6 +216,14 @@
     <h2 id="onlineTitulo">Mesa aberta</h2>
     <p class="sub" id="onlineSub">Passe este código para quem vai jogar.</p>
     <div class="codigo" id="onlineCodigo">····</div>
+    <!-- QUEM É VOCÊ, e não só em que mesa você entra. Sem este campo o convidado herdava,
+         calado, o nome do slot 0 do menu LOCAL dele — que era "Você" para todo mundo, e por
+         isso o placar de uma mesa de dois dizia "Você × Você". Ninguém sabia que precisava
+         mudar aquilo, porque o lugar de mudar era outra tela.
+         Nasce oculto: só o convidado se apresenta. O anfitrião já é dono da lista de
+         cadeiras e escreve os nomes no menu. `maxlength` igual ao do campo do menu, que é o
+         mesmo corte que o `sentar()` aplica do outro lado do fio. -->
+    <input id="onlineNome" class="entrada oculta" placeholder="seu nome na mesa" maxlength="14" autocomplete="off" />
     <input id="onlineEntrada" class="entrada oculta" placeholder="código da mesa" maxlength="12" autocomplete="off" />
     <div id="onlineLista" class="somas"></div>
     <div class="linha acoesMenu">

@@ -154,6 +154,43 @@ try {
     console.log('  tudo caiu no padrão e a mesa ainda monta');
   }
 
+  // ─── 2a. o "Você" gravado por uma versão antiga ────────────────────────────
+  // A cadeira 0 chamava-se "Você" por padrão até a v2, e é dela que sai o nome que o
+  // convidado manda ao anfitrião: uma mesa de dois pela internet ficava "Você × Você", com
+  // as duas falas da conversa começando igual.
+  //
+  // Trocar o padrão não bastava, e é o que esta cena existe para provar: `lembrarMesa()`
+  // persiste as quatro cadeiras assim que alguém encosta no menu, então quem já jogou UMA
+  // vez tem "Você" no armazenamento e o padrão novo nunca chega até ele — ou seja, o
+  // conserto seria invisível justamente para quem jogou o bastante para se incomodar.
+  //
+  // Esta é a única suíte que RECARREGA a página, e sem recarregar não há como distinguir
+  // "o padrão mudou" de "o guardado foi migrado".
+  console.log('\no "Você" gravado por uma versão antiga não sobrevive');
+  {
+    await pagina.evaluate(() => {
+      localStorage.setItem('dominobar.mesa', JSON.stringify({
+        modo: 'classico', n: 2, alvo: 6, compraVoluntaria: false,
+        // A cadeira 1 também se chama "Você" — e ali é ESCOLHA, porque "Você" nunca foi
+        // padrão fora da cadeira 0. O par separa migrar de apagar nome alheio.
+        cadeiras: [{ nome: 'Você', tipo: 'voce' }, { nome: 'Você', tipo: 'bot', nivel: 'normal' }],
+      }));
+    });
+    await recarregar();
+    const m = await pagina.evaluate(() => ({
+      nome0: j.MESA.cadeiras[0].nome, nome1: j.MESA.cadeiras[1].nome,
+      // E a tela tem de concordar com o dado, senão é o `refletirMesaNosBotoes` de novo:
+      // o jogo certo e o campo mentindo.
+      campo0: (document.querySelector('#cadeiras .nome[data-i="0"]') || {}).value,
+    }));
+    ok(m.nome0 !== 'Você',
+      'o "Você" gravado na sua cadeira sobreviveu à recarga — quem já jogou nunca veria o nome novo');
+    ok(m.campo0 === m.nome0, `o campo do menu mostra "${m.campo0}" e a mesa guarda "${m.nome0}"`);
+    ok(m.nome1 === 'Você',
+      `"Você" na cadeira 1 é nome ESCOLHIDO (nunca foi padrão ali) e foi apagado: veio "${m.nome1}"`);
+    console.log(`  a sua cadeira virou "${m.nome0}" e o nome escolhido da outra ficou`);
+  }
+
   // ─── 2b. a preferência estragada com CHAVE DE PROTÓTIPO ────────────────────
   // O caso acima usa valores inventados ('xadrez', 'divino') e a validação os barrava.
   // Mas ela perguntava `MODOS[g.modo] ?`, e MODOS é objeto literal: `MODOS['constructor']`

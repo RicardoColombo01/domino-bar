@@ -34,7 +34,7 @@ const so = (args.find(a => a.startsWith('--so=')) || '').slice(5).split(',').fil
 // A lista existe para que uma cena inexistente REPROVE em vez de rodar zero asserção e
 // imprimir "tudo certo" — verde vazio é a armadilha que o `diff` de arquivos vazios já
 // pagou aqui. Quem acrescentar cena nova acrescenta o nome aqui, no mesmo commit.
-const CENAS = ['duelo', 'conversa', 'saguao'];
+const CENAS = ['duelo', 'conversa', 'saguao', 'nomes', 'voltar'];
 for (const s of so) if (!CENAS.includes(s)) {
   // Cena que não existe é ERRO e não "rodar tudo": um erro de digitação daria a suíte
   // inteira quando se pediu uma cena, ou zero asserção — e as duas mentem.
@@ -636,6 +636,189 @@ try {
     console.log(`  1 pessoa · ${sala.chegaram} cadeira · ${sala.conexoes} conexão · sempre a ${primeira}`);
     await ab1.close(); await ab2.close(); await ab3.close(); await anf4.close();
   }
+
+  if (rodar('nomes')) {   // DUAS PESSOAS DIFERENTES com o mesmo nome, pelo campo do saguão.
+    // ─── quem é quem na mesa ───────────────────────────────────────────────────
+    // O caso de campo, com foto: mesa de dois, placar "Você × Você", os dois cartões "Você"
+    // e toda linha da conversa começando igual. A causa era a cadeira 0 chamar-se "Você" por
+    // padrão e o convidado mandar esse nome sem nunca ter sido perguntado.
+    //
+    // Esta cena prova as DUAS metades que só existem com rede, e por isso não cabem no
+    // test-jogo: (1) o campo #onlineNome está ligado ao fio — o que se digita nele é o que
+    // chega do outro lado —, e (2) o desempate roda no ANFITRIÃO, que é o único que vê os
+    // dois. As regras do desempate em si (onde entra o número, o que cede para caber nos 14)
+    // são função pura e estão provadas no test-jogo, em milissegundos.
+    console.log('\nduas pessoas com o mesmo nome, pelo campo do saguão');
+    const anfN = await abrir('anfitrião dos nomes');
+    await anfN.evaluate(() => {
+      const j = window.__jogo;
+      j.MESA.modo = 'classico'; j.MESA.n = 3;
+      j.MESA.cadeiras[0].nome = 'Dona da mesa';
+      for (let i = 1; i < 3; i++) { j.MESA.cadeiras[i].tipo = 'online'; j.MESA.cadeiras[i].nome = `Vaga ${i}`; }
+      document.getElementById('btComecar').click();
+    });
+    await anfN.waitForFunction(
+      () => (document.getElementById('onlineCodigo').textContent || '').match(/^[A-Z0-9]{4}$/),
+      { timeout: 25000, polling: 400 });
+    const codN = await anfN.evaluate(() => document.getElementById('onlineCodigo').textContent);
+
+    // PELO CAMPO, e não atribuindo `MESA.cadeiras[0].nome` como as outras cenas fazem. É a
+    // diferença entre provar o campo e provar o caminho velho que ele passou a alimentar:
+    // atribuir no MESA testaria exatamente o que já funcionava antes de o campo existir.
+    const entrarComCampo = async (pagina, nome) => {
+      await pagina.evaluate(([c, n]) => {
+        document.getElementById('btEntrar').click();
+        document.getElementById('onlineNome').value = n;
+        document.getElementById('onlineEntrada').value = c;
+        document.getElementById('btConectar').click();
+      }, [codN, nome]);
+      await pagina.waitForFunction(() => /Você é a cadeira/.test(document.getElementById('onlineErro').textContent),
+        { timeout: 30000, polling: 400 });
+    };
+
+    const um = await abrir('Ricardo 1');
+    const dois = await abrir('Ricardo 2');
+    await entrarComCampo(um, 'Ricardo');
+    await entrarComCampo(dois, 'Ricardo');
+    await anfN.evaluate(() => new Promise(r => setTimeout(r, 800)));
+
+    const naMesa = await anfN.evaluate(() => window.__jogo.MESA.cadeiras.slice(1, 3).map(c => c.nome));
+    ok(naMesa[0] === 'Ricardo',
+      `o primeiro a chegar não podia ser renomeado: veio "${naMesa[0]}"`);
+    ok(naMesa[1] && naMesa[1] !== naMesa[0],
+      `os dois convidados ficaram com o mesmo nome na mesa: ${JSON.stringify(naMesa)}`);
+    // O campo está LIGADO: se ele fosse decoração, os dois entrariam com o padrão do menu
+    // deles ("Careca") e o nome digitado não apareceria em lugar nenhum.
+    ok(naMesa.every(n => /^Ricardo/.test(n)),
+      `o que se digitou no campo de nome não chegou ao anfitrião: ${JSON.stringify(naMesa)}`);
+    // E a lista da sala mostra os dois separados — é ali que o jogador confere quem chegou.
+    const listados = await anfN.evaluate(() =>
+      [...document.querySelectorAll('#onlineLista span')].map(s => s.textContent.trim()).filter(Boolean));
+    ok(listados.length > 0, 'a lista da sala veio vazia — a cena não mediu o que veio medir');
+    ok(new Set(listados).size === listados.length,
+      `a lista da sala repetiu nome: ${JSON.stringify(listados)}`);
+
+    console.log(`  dois "Ricardo" viraram ${naMesa.join(' e ')}`);
+    await um.close(); await dois.close(); await anfN.close();
+  }
+
+  if (rodar('voltar')) {   // SAIR DE PROPÓSITO E VOLTAR — as duas ordens, numa cena só.
+    // ─── o convidado que saiu consegue voltar ─────────────────────────────────
+    // Relato de campo: "saiu da sala e ao tentar voltar não conseguiu, mesmo com a sala
+    // aberta". Eram DOIS defeitos somados num sintoma só, e é por isso que a cena percorre
+    // os dois caminhos: sem revanche o problema é ele não ter mais o CÓDIGO (o
+    // `esquecer('sala')` fechava as três portas de volta de uma vez); com revanche a cadeira
+    // dele virou bot para sempre e a mesa respondia "já está cheia", que é mentira.
+    console.log('\no convidado sai e volta para a mesa');
+    const anfV = await abrir('anfitrião do voltar');
+    await anfV.evaluate(() => {
+      const j = window.__jogo;
+      j.MESA.modo = 'classico'; j.MESA.n = 3;
+      j.MESA.cadeiras[0].nome = 'Quem abriu';
+      j.MESA.cadeiras[1].tipo = 'online'; j.MESA.cadeiras[1].nome = 'Visita';
+      j.MESA.cadeiras[2].tipo = 'bot'; j.MESA.cadeiras[2].nivel = 'normal';
+      document.getElementById('btComecar').click();
+    });
+    await anfV.waitForFunction(
+      () => (document.getElementById('onlineCodigo').textContent || '').match(/^[A-Z0-9]{4}$/),
+      { timeout: 25000, polling: 400 });
+    const codV = await anfV.evaluate(() => document.getElementById('onlineCodigo').textContent);
+
+    const visita = await abrir('a visita');
+    const entrar = async () => {
+      await visita.evaluate(c => {
+        document.getElementById('btEntrar').click();
+        document.getElementById('onlineNome').value = 'Visita';
+        document.getElementById('onlineEntrada').value = c;
+        document.getElementById('btConectar').click();
+      }, codV);
+      await visita.waitForFunction(() => /Você é a cadeira/.test(document.getElementById('onlineErro').textContent),
+        { timeout: 30000, polling: 400 });
+    };
+    const temMao = () => visita.waitForFunction(
+      () => window.__jogo.vista && window.__jogo.vista.fase === 'mao' && window.__jogo.vista.mao.length > 0,
+      { timeout: 30000, polling: 300 });
+
+    await entrar();
+    await anfV.evaluate(() => document.getElementById('btIniciarOnline').click());
+    await temMao();
+
+    // SAIR. O `localStorage` é lido no MESMO evaluate do clique, e isso é de propósito: as
+    // abas do teste vivem na mesma origem e portanto no MESMO armazenamento, então o
+    // `guardarMesaDoAnfitriao()` que o anfitrião dispara ao receber o `desisto` passaria por
+    // cima do registro da visita alguns milissegundos depois. `largarAMesa` grava de forma
+    // síncrona, antes de a mensagem sequer sair — ler ali é ler o que ela escreveu, sem
+    // corrida. Na vida real são navegadores diferentes e o problema não existe.
+    const aoSair = await visita.evaluate(() => {
+      document.getElementById('btSair').click();
+      document.getElementById('btSairSim').click();
+      const g = JSON.parse(localStorage.getItem('dominobar.sala') || 'null');
+      return { g, noMenu: !document.getElementById('telaMenu').classList.contains('oculta') };
+    });
+    ok(aoSair.g && aoSair.g.codigo === codV && aoSair.g.anfitriao === false,
+      `sair apagou o caminho de volta: a sala guardada ficou ${JSON.stringify(aoSair.g)}`);
+    ok(aoSair.noMenu, 'sair da partida devia levar ao menu');
+    const botao = await visita.evaluate(() => ({
+      visivel: !document.getElementById('btVoltarMesa').classList.contains('oculta'),
+      texto: document.getElementById('btVoltarMesa').textContent,
+    }));
+    ok(botao.visivel && botao.texto.includes(codV),
+      `o botão de voltar não oferece a mesa ${codV}: ${JSON.stringify(botao)}`);
+
+    // VOLTA SEM REVANCHE. A partida acabada não pode ser reapresentada a ele: quem chega
+    // entre duas partidas vai para o saguão, não para a tela da derrota que ele já aceitou.
+    await visita.evaluate(g => localStorage.setItem('dominobar.sala', JSON.stringify(g)), aoSair.g);
+    await visita.evaluate(() => document.getElementById('btVoltarMesa').click());
+    await visita.waitForFunction(() => /Você é a cadeira/.test(document.getElementById('onlineErro').textContent),
+      { timeout: 30000, polling: 400 });
+    const depoisDeVoltar = await visita.evaluate(() => ({
+      erro: document.getElementById('onlineErro').textContent,
+      naDerrota: !document.getElementById('telaFimPartida').classList.contains('oculta'),
+      noSaguao: !document.getElementById('telaOnline').classList.contains('oculta'),
+    }));
+    ok(!depoisDeVoltar.naDerrota,
+      'voltar para a mesa reapresentou a tela da derrota que ele já tinha aceitado');
+    ok(depoisDeVoltar.noSaguao, 'quem volta entre duas partidas tinha de ficar no saguão');
+    ok(/Esperando o anfitrião/.test(depoisDeVoltar.erro),
+      `a espera ficou muda: "${depoisDeVoltar.erro}"`);
+
+    // E A REVANCHE O ENCONTRA NA CADEIRA.
+    await anfV.evaluate(() => document.getElementById('btRevanche').click());
+    await temMao();
+    console.log('  voltou sem revanche, esperou no saguão e a revanche o achou na cadeira');
+
+    // AGORA A ORDEM QUE FAZIA O BECO SEM SAÍDA: sai, o anfitrião dá revanche (a cadeira vira
+    // bot, e tem de virar — senão a mesa nasce esperando quem não responde), e ele volta.
+    await visita.evaluate(() => {
+      document.getElementById('btSair').click();
+      document.getElementById('btSairSim').click();
+    });
+    await anfV.waitForFunction(() => window.__jogo.P && window.__jogo.P.fase === 'fim',
+      { timeout: 20000, polling: 300 });
+    await anfV.evaluate(() => document.getElementById('btRevanche').click());
+    const virouBot = await anfV.evaluate(() => ({
+      tipo: window.__jogo.MESA.cadeiras[1].tipo, vaga: window.__jogo.MESA.cadeiras[1].vagaOnline,
+    }));
+    ok(virouBot.tipo === 'bot' && virouBot.vaga === true,
+      `montagem: a cadeira devia ter virado bot COM a marca de vaga, e veio ${JSON.stringify(virouBot)}`);
+
+    await visita.evaluate(g => localStorage.setItem('dominobar.sala', JSON.stringify(g)), aoSair.g);
+    await visita.evaluate(() => document.getElementById('btVoltarMesa').click());
+    await visita.waitForFunction(
+      () => /Você é a cadeira|cheia|vaga/.test(document.getElementById('onlineErro').textContent),
+      { timeout: 30000, polling: 400 });
+    const naVolta = await visita.evaluate(() => document.getElementById('onlineErro').textContent);
+    ok(!/cheia/.test(naVolta),
+      `a mesa disse que estava cheia com um bot improvisado sentado na vaga dele: "${naVolta}"`);
+    ok(/Você é a cadeira/.test(naVolta), `não deu para voltar depois da revanche: "${naVolta}"`);
+    const reconvertida = await anfV.evaluate(() => window.__jogo.MESA.cadeiras[1].tipo);
+    ok(reconvertida === 'online',
+      `a cadeira continuou "${reconvertida}" com gente sentada nela — o bot e a pessoa disputam a vez`);
+    await temMao();
+
+    console.log('  voltou depois da revanche e assumiu a cadeira que tinha virado bot');
+    await visita.close(); await anfV.close();
+  }
 } catch (e) {
   if (process.env.DOMINO_DEBUG) console.error(e.stack);
   // DEFEITO NÃO É PROBLEMA DE REDE, e esta separação existe porque a alternativa já
@@ -666,7 +849,16 @@ if (avisos.length) {
   console.log('\nNÃO DEU PARA TESTAR O ONLINE:\n  ' + avisos.join('\n  '));
   console.log('  O broker gratuito do PeerJS ou a sua rede não deixaram a conexão fechar.');
   console.log('  Isso não reprova o jogo — solo e local não dependem de rede nenhuma.');
-  process.exit(0);
+  // MAS O QUE JÁ REPROVOU CONTINUA REPROVADO. Este `exit(0)` era incondicional, e com ele
+  // uma rodada que imprimiu quatro `✗` na tela saía com código ZERO só porque uma espera
+  // estourou depois — a suíte dizia "não deu para testar" sobre coisas que ela já tinha
+  // testado e reprovado. É a mesma doença que este arquivo já registra dois parágrafos
+  // acima, num degrau adiante: o caminho que existe para perdoar a REDE perdoando o JOGO.
+  // Conferido por mutação (o `esquecer('sala')` de volta no `largarAMesa`): antes desta
+  // guarda, quatro asserções vermelhas saíam com sucesso.
+  if (!falhas) process.exit(0);
+  console.log(`\n…e ainda assim ${falhas} asserção(ões) reprovou/reprovaram ANTES disso — isso é defeito.`);
+  process.exit(1);
 }
 // Como no test-telas: rodada parcial tem de DIZER que foi parcial, senão "tudo certo"
 // descreve as cenas que não rodaram tão bem quanto as que rodaram.
