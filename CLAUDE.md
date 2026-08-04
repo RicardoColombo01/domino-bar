@@ -466,7 +466,8 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 | `main` ↔ `origin/main` | `0 ← \| 0 →` |
 | Filas 5 a 9 | **todas fechadas** |
 | **Fila 10** | **ABERTA** — três defeitos de campo de 03/08, os três com conserto e teste |
-| pendência bloqueada | **uma**: o corpo de `nomeUnico` (`15-rede.js`) é do Ricardo — 8 asserções esperam por ele (6 no `test-jogo`, 2 no `test-online`) |
+| onde o trabalho está | **commitado na `v2`, NÃO enviado, NÃO publicado** (`fa56fbd`) — `main` continua na v1.10.0, que é o que está no ar |
+| falta | **só o corpo de `nomeUnico`** (`15-rede.js`) — 8 asserções vermelhas esperam por ele (6 no `test-jogo`, 2 no `test-online`). O Ricardo tinha pegado essa parte e devolveu em 03/08: **fica comigo, na próxima sessão** |
 
 **A fila esvaziou na v1.10.0 e voltou a encher pela fonte mais barata: jogar.** O Ricardo
 mandou uma foto e três relatos em 03/08 — ver a Fila 10.
@@ -575,9 +576,25 @@ de igualdade tem de exigir também que **haja o que comparar**.
 
 #### O QUE FAZER AMANHÃ — em ordem, e por quê
 
-**Hoje a resposta é uma linha: o corpo de `nomeUnico()` em `15-rede.js`.** É a única coisa
-que a Fila 10 deixou aberta, é do Ricardo por escolha dele, e 8 asserções estão vermelhas
-esperando por ela. Com ela verde, a `v2` fecha: merge `--no-ff` em `main` com tag `v2.0.0`.
+**Combinado com o Ricardo em 03/08: eu termino o que falta.** São cinco passos, nesta ordem,
+e o primeiro é o único que envolve escrever jogo:
+
+1. **O corpo de `nomeUnico()`** (`src/js/15-rede.js`, marcado `TODO(Ricardo)`). O contrato
+   está no comentário da própria função e na Fila 10. As duas armadilhas a respeitar: o
+   número vai no PRIMEIRO nome (o corte na palavra do `nomeEmPartes` come o resto em tela
+   estreita) e quem encolhe para caber nos 14 é a base, nunca o sufixo (sufixo cortado
+   devolve dois nomes iguais — o defeito de volta em silêncio). Tirar o `TODO` junto.
+2. **`npm test`** → as 6 vermelhas do `test-jogo` viram verdes. Depois
+   **`node tests/test-online.mjs --so=nomes`** → as 2 do Chrome.
+3. **`npm run build && git add index.html && npm run check`** — o bundle é gerado e
+   commitado, e o `merge=ours` do `.gitattributes` não perdoa esquecimento.
+4. **As suítes pesadas, uma de cada vez**, antes de fechar: `npm run online` inteiro,
+   `npm run lembrar`, `npm run textura` e o `telas` nas duas metades. Nenhuma delas foi
+   tocada depois da última rodada verde, mas o passo 1 mexe em `15-rede.js`.
+5. **Fechar a onda:** merge `--no-ff` da `v2` em `main` com tag **`v2.0.0`**, apagar a `v2`,
+   e **`git push origin main --tags`** — que é o passo que publica, porque o Pages serve da
+   `main`. Só depois disso dizer que está no ar: **commitado ≠ enviado ≠ publicado**, e um
+   dia inteiro já se perdeu por essa distinção (ver o começo desta seção).
 
 **A lista abaixo esvaziou na v1.10.0.** Os seis itens originais saíram na v1.8.0 e na v1.9.0
 (Fila 8); os três que sobravam saíram na **v1.10.0** (Fila 9).
@@ -614,32 +631,38 @@ Registrado para não ser redescoberto do zero — e com o motivo de não ser pri
 
 #### Perguntas em aberto para o Ricardo
 
-- **UMA BLOQUEIA, e é de propósito:** o corpo de `nomeUnico()` (`15-rede.js`) ficou para ele
-  escrever — foi escolha dele quando perguntado. Enquanto não existir, 8 asserções ficam
-  vermelhas e a `v2` não fecha. Tudo o mais da Fila 10 está feito e verde.
+- **Nenhuma bloqueia.** O corpo de `nomeUnico()` chegou a ser dele — foi escolha dele quando
+  perguntado em 03/08 —, e no fim do mesmo dia ele devolveu: *"amanhã você termina o resto
+  que falta"*. Voltou a ser meu, e está como passo 1 do "O QUE FAZER AMANHÃ".
 - As três decisões da Fila 10 já foram respondidas em 03/08/2026: os **três** consertos de
   nome juntos; o convidado que volta **assume a cadeira mesmo virada em bot**; e a onda sai
   em branch `v2`, tag `v2.0.0` (e não em `hotfix`/`v1.10.1`).
-- **A fila de trabalho esvaziou na v1.10.0.** Não há defeito conhecido nem melhoria medida em
-  aberto. O que existe é a lista de "poderia ser feito, mas não recomendo agora", logo acima,
+- **A fila esvaziou na v1.10.0 e a Fila 10 a encheu de novo em 03/08** — os três defeitos
+  estão consertados e testados; o que sobra é o passo 1 acima. Depois dela, o que resta em
+  aberto continua sendo a lista de "poderia ser feito, mas não recomendo agora", logo acima,
   e dela só uma coisa depende de decisão dele e não de programador: o **`beforeunload` no
   meio de partida online** (um F5 acidental gasta o prazo de 30 s sem aviso, mas
   `beforeunload` é incômodo). As outras duas são escolha de escopo, não de gosto: o botão de
   **compartilhar o código da sala** (impacto real no online, custo pequeno) e fazer o **3D
   desviar dos painéis** (o mais caro, e a gaveta já resolveu o problema real).
-- Vale lembrar como este projeto encheu a fila as duas últimas vezes: **campo** (o Ricardo
-  jogando no celular, que deu a Fila 5 e a Fila 7) e **varredura** (procurar o que ainda não
-  incomodou, que deu a Fila 6). Com a fila vazia, o próximo passo natural é uma das duas —
-  e a mais barata é jogar.
+- Vale lembrar como este projeto enche a fila: **campo** (o Ricardo jogando no celular, que
+  deu a Fila 5, a Fila 7 e agora a **Fila 10**) e **varredura** (procurar o que ainda não
+  incomodou, que deu a Fila 6). Três das quatro últimas vieram de jogar — é a fonte mais
+  barata que este projeto tem, e a Fila 10 saiu de UMA foto e três frases.
 
 #### Como retomar em cinco minutos
 
 ```
 git fetch origin && git rev-list --left-right --count origin/main...main   # tem de dar 0 0
-git branch -a          # tem de haver SÓ main (e a branch da onda, se houver uma aberta)
+git branch -a          # hoje há a v2 aberta, com a Fila 10 dentro
+git checkout v2        # o trabalho de 03/08 está AQUI, não na main
 npm run check          # o bundle está em dia com src/?
 npm test               # as três suítes de lógica, segundos
 ```
+
+**Hoje `npm test` reprova 6 asserções, e isso é ESPERADO:** são as de `nomeUnico`, cujo corpo
+ainda não existe. Mais 2 no `node tests/test-online.mjs --so=nomes`. Se reprovar qualquer
+outra coisa, aí sim é regressão.
 
 **Suíte pesada roda sozinha** — o `test-telas` renderiza WebGL por software e o `test-online`
 tem prazo de navegação de 45 s; duas ao mesmo tempo viram falha que parece da rede. E o
@@ -1864,6 +1887,23 @@ como a mais barata — **jogar**.
 "Você" — incluindo a linha em que o Ricardo escreve *"uma coisa q preciso é mudar esses
 nomes"*. O defeito e o pedido estão na mesma imagem.
 
+#### O que mudou, por arquivo
+
+| arquivo | o que entrou |
+|---|---|
+| `css/estilo.css` | `.carta { margin: auto }` e as safe-areas no `.tela` (dois blocos: o normal e o de tela pequena) |
+| `src/pagina.html` | o campo `#onlineNome` no saguão |
+| `src/js/14-menu.js` | `NOMES` sem "Você"; a migração do "Você" gravado; `vagaOnline` zerada no `<select>` e no literal do `mesaLembrada` |
+| `src/js/15-rede.js` | `nomeUnico`/`nomesVizinhos` (**corpo pendente**), `vagaDeVisita`, `porQueNaoSentou`, `RECUSA`, `largarAMesa`, `deixandoAMesa`, `desistiuDaMesa` (extraída), o `sentar` reconvertendo a vaga, o campo de nome revelado/escondido nas três telas |
+| `src/js/16-loop.js` | `c.vagaOnline = true` na conversão do `comecarLocal`; o ramo convidado do `sairDaPartida` virou `largarAMesa()` |
+| `tests/test-jogo.mjs` | `novaConn` com `open`, `montarMesaOnline` içada e partindo de partida viva, 12 asserções do voltar e 6 do desempate |
+| `tests/test-telas.mjs` | cena `menu` (`soTela`), `semGuardado`/`menuCheio`, a medida de topo alcançável, o `V` vindo do `THREE` |
+| `tests/test-online.mjs` | cenas `nomes` e `voltar`; o `exit(0)` do aviso de rede deixou de engolir falha |
+| `tests/test-lembrar.mjs` | a migração do "Você" gravado, provada por mutação |
+
+**O que ainda vai mudar:** só o corpo de `nomeUnico()` — ver o "O QUE FAZER AMANHÃ", que tem
+os cinco passos até a `v2.0.0` no ar.
+
 ### 1. Todo mundo se chama "Você" ✔ feito (menos o desempate)
 
 `NOMES[0]` era literalmente `'Você'` (`14-menu.js`), e é dele que sai o nome que o convidado
@@ -1898,10 +1938,25 @@ sumiria justamente no retrato de quatro cartões, que é onde a confusão dói. 
 para caber nos 14 é a base, nunca o desempate** — sufixo comido pelo corte devolve dois
 nomes iguais, que é o defeito de volta em silêncio.
 
-> **PENDENTE:** o corpo de `nomeUnico()` (`15-rede.js`) é do Ricardo. A assinatura, o
-> comentário com as duas armadilhas e os dois pontos de chamada estão de pé; **8 asserções
-> esperam por ele** — 6 no `test-jogo.mjs` (contrato completo, milissegundos) e 2 no
-> `test-online.mjs` (dois "Ricardo" de verdade, em duas abas).
+> **PENDENTE — É O ÚNICO ITEM ABERTO DESTA FILA.** O corpo de `nomeUnico()`
+> (`src/js/15-rede.js`) ainda é um `return String(nome).slice(0, 14)` marcado
+> `TODO(Ricardo)`. Ele tinha ficado para o Ricardo escrever, por escolha dele quando
+> perguntado em 03/08; no fim do mesmo dia ele devolveu a tarefa — **quem escreve sou eu, na
+> próxima sessão.** O `TODO` no código ainda diz o nome dele e sai junto com o conserto.
+>
+> A assinatura, o comentário com as duas armadilhas e os dois pontos de chamada já estão de
+> pé, e **8 asserções esperam por ele**: 6 no `test-jogo.mjs` (o contrato inteiro, em
+> milissegundos) e 2 no `test-online.mjs` (dois "Ricardo" de verdade, em duas abas). O
+> contrato está escrito no próprio comentário da função, e é este:
+>
+> ```
+> nomeUnico('Zé', ['Tião'])              → 'Zé'          (não colide: não muda)
+> nomeUnico('Zé', ['Zé'])                → 'Zé2'
+> nomeUnico('Zé', ['Zé', 'Zé2'])         → 'Zé3'         (pula o que já existe)
+> nomeUnico('Ana Paula', ['Ana Paula'])  → 'Ana2 Paula'  (no PRIMEIRO nome)
+> 'ricardo' colide com 'Ricardo '                        (caixa e espaço não fazem duas pessoas)
+> 'Sebastiãozinho' (14) duplicado ainda cabe em 14 e sai diferente do original
+> ```
 
 ### 2. A tela inicial não voltava ao topo ✔ feito
 
