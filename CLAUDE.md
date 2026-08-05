@@ -476,7 +476,7 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 | `main` ↔ `origin/main` | `0 ← \| 0 →` |
 | Filas 5 a 10 | **todas fechadas** |
 | **Fila 11** | **ABERTA — 6 defeitos confirmados + 1, todos reproduzidos rodando o código.** Nenhum consertado: foi decisão do Ricardo (anotar agora, decidir depois) |
-| o que vem | 1º os defeitos da Fila 11 · 2º a reorganização em pastas · 3º o PWA · 4º o Truco |
+| o que vem | **1º consertar a Fila 11** · 2º adotar `git worktree` · 3º a reorganização em pastas · 4º o PWA · 5º o Truco — **ordem dada pelo Ricardo em 04/08/2026**, e está detalhada em "O QUE FAZER AMANHÃ" |
 
 **A fila esvaziou na v1.10.0, encheu em 03/08 pela fonte mais barata (jogar), esvaziou na
 v2.0.0 — e a v2.1.0 a encheu de novo pela OUTRA fonte: varredura.** É a segunda da história
@@ -588,25 +588,62 @@ E uma quarta, de fora do código: **`diff` de dois arquivos vazios passa.** A su
 gerou saída, os dois arquivos saíram com zero linhas e a comparação declarou "idênticas". Teste
 de igualdade tem de exigir também que **haja o que comparar**.
 
-#### O QUE FAZER AMANHÃ — a Fila 11, em ordem
+#### O QUE FAZER AMANHÃ — ordem dada pelo Ricardo em 04/08/2026
 
-Os cinco passos que moravam aqui viraram a `v2.0.0` em 04/08/2026. **No mesmo dia, a
-varredura encheu a fila de novo.** A ordem recomendada, com o porquê:
+Palavras dele: *"amanhã quando eu voltar, você leia os arquivos, já que anotou os erros, vai
+começar consertando isso; logo após, começar a usar o Worktree para realizar as outras tasks
+de forma organizada e limpa — inclusive, tente deixar as próprias pastas limpas e polidas."*
 
-1. **C1 e C2** (`15-rede.js`) — é o que um jogador encontra **sozinho**, sem má-fé. Os dois
-   são `setTimeout` sem dono e sem guarda no disparo; o irmão certo está no mesmo arquivo.
+**PASSO 0 — ler antes de mexer.** Este arquivo (a Fila 11 e as três seções do fim), e depois
+`15-rede.js` e `16-loop.js`, que é onde moram seis dos sete achados.
+
+**PASSO 1 — CONSERTAR A FILA 11**, na branch `v3`, nesta ordem e com **teste vermelho antes
+de cada conserto** (a casa não aceita asserção que nasce verde):
+
+1. **C1 e C2** (`15-rede.js`) — o que um jogador encontra **sozinho**. Os dois são
+   `setTimeout` sem dono e sem guarda no disparo, e o irmão certo (`voltarSozinho`) está no
+   mesmo arquivo. Consertar os **dois de uma vez**, porque são a mesma doença: guardar o
+   handle **e** pôr a guarda no disparo.
 2. **C4** — um convidado congela a mesa de todos com uma linha. **O conserto é copiar os dois
-   guardas que o `receberChat` já tem, dez linhas abaixo.**
-3. **C6** — campos "numéricos" indo para `innerHTML` sem `escapar`. Quarta mordida da mesma
-   classe.
-4. **C5, C3, C7** — guardas de entrada. O C5 é tela preta permanente.
-5. **A cena de teste que falta**: dirigir o `conn.on('data')` com uma `conn` de mentira
-   mandando lixo. **Ela pega quatro dos sete de uma vez** — e hoje nenhuma linha de teste
-   jamais entregou mensagem malformada ao anfitrião.
-6. Só então **a reorganização em pastas**, depois **o PWA**, depois **o Truco**. As três têm
-   seção própria neste arquivo.
+   guardas que o `receberChat` já tem dez linhas abaixo**, e cortar em 14 ANTES de normalizar.
+3. **C6** — campos "numéricos" indo para `innerHTML` sem `escapar`. Quarta mordida da classe.
+4. **C5, C3, C7** — guardas de entrada. O C5 é tela preta permanente e o modelo a copiar é o
+   `mesaLembrada()`.
+5. **A cena de teste que falta, e ela vem PRIMEIRO na prática**: dirigir o `conn.on('data')`
+   com uma `conn` de mentira mandando `null`, `{}`, `{t:'acao',acao:'jogar'}` e um nome
+   gigante. **Ela nasce vermelha e pega quatro dos sete de uma vez.**
 
-**Nada disso é caro.** Três dos sete são uma linha de guarda cada.
+Fecha como `v3.0.0`, ou `v2.2.0` se nada quebrar compatibilidade de dado guardado.
+
+**PASSO 2 — passar a trabalhar com `git worktree`.** Ver a seção própria, na Reorganização.
+O arranjo sugerido, uma frente por diretório:
+
+```
+../domino-bar          main          (o que está no ar; para conferir e publicar)
+../domino-bar-org      reorg         (as pastas — mexe em TODOS os arquivos)
+../domino-bar-app      pwa           (manifest, ícones, service worker)
+```
+
+**Por que nesta ordem e não antes:** a `reorg` toca todo arquivo do projeto, então rodá-la em
+paralelo com os consertos da Fila 11 garantia conflito em `15-rede.js`, que é justamente onde
+os dois trabalhos moram. **Conserta primeiro, reorganiza depois.** E a regra que não muda:
+worktree resolve conflito de arquivo, **não de CPU** — suíte pesada continua rodando sozinha.
+
+**PASSO 3 — as pastas limpas e polidas.** Além da separação por dono (`10-casa/`,
+`30-domino/`, `40-truco/`), duas arrumações que já dá para nomear:
+
+- **O CSS entra no bundle.** Hoje `css/estilo.css` é fonte e mora **fora** de `src/`, e o
+  `index.html` o carrega por `<link>` — que é a razão de o build **não** gerar o arquivo
+  autossuficiente que os três arquivos de documentação prometem. Inlinar o CSS no
+  `build.mjs` resolve **quatro coisas de uma vez**: a promessa passa a ser verdade, a fonte
+  vai para `src/css/` junto com o resto, o service worker passa a cachear um arquivo local em
+  vez de dois, e cai uma requisição HTTP.
+- **Um lugar só para artefato gerado.** Hoje `tests/` mistura suíte com cinco `built*.mjs`
+  gerados (inclusive `built-dbg.mjs` e `built-busca.mjs`, sobras) e mais `shots/`. Juntar o
+  gerado num `tests/.gerado/` deixa a pasta com **só** o que uma pessoa escreveu — e o
+  `.gitignore` vira uma linha em vez de três.
+
+**Nada disso é caro.** Três dos sete achados são uma linha de guarda cada.
 
 E vale lembrar como esta fila enche: **campo** (jogar — deu as Filas 5, 7 e 10) e
 **varredura** (procurar o que ainda não incomodou — deu a Fila 6 e agora a **11**). A Fila 10
@@ -2548,8 +2585,35 @@ reconfigurar o driver por diretório, ao contrário do que acontece a cada **clo
    culpa o broker do PeerJS**, com a rede ótima. Worktree resolve o conflito de *arquivos*,
    não o de *CPU*: **suíte pesada continua rodando sozinha.**
 
-**Não foi adotado ainda** — fica registrado como a próxima coisa a experimentar quando duas
-frentes (por exemplo a reorganização e o PWA) andarem juntas.
+**A receita deste repositório**, para copiar e colar quando chegar a hora (decisão do
+Ricardo em 04/08/2026: adotar worktree logo depois de fechar a Fila 11):
+
+```
+# a partir de C:\Users\ricar\Projetos-Testes\domino-bar, com a main limpa
+git worktree add ../domino-bar-org  -b reorg   main
+git worktree add ../domino-bar-app  -b pwa     main
+
+cd ../domino-bar-org/tests && npm install      # POR WORKTREE — node_modules não é compartilhado
+cd ../domino-bar-app/tests && npm install
+
+git worktree list                              # quem está onde
+```
+
+E ao terminar cada frente, o caminho de volta é o de sempre — merge `--no-ff` em `main` com
+tag, **rebuild do bundle dentro do merge** —, e só então:
+
+```
+git worktree remove ../domino-bar-app
+git branch -d pwa
+```
+
+**A ordem importa:** o worktree entra **depois** dos consertos da Fila 11, não junto. A
+reorganização mexe em todo arquivo do projeto e os consertos moram em `15-rede.js` — as duas
+frentes em paralelo dariam conflito exatamente no arquivo mais disputado. Worktree serve para
+frentes que **não se cruzam**; usá-lo para frentes que se cruzam é criar trabalho de merge.
+
+**Não foi adotado ainda** — fica registrado como a próxima coisa a experimentar, e o
+`git worktree list` é o que diz se já foi.
 
 ### A ordem — e ela importa
 
