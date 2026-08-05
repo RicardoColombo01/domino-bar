@@ -5,8 +5,10 @@ de gente e bot, na mesma tela ou pela internet.
 
 ### ▶ Jogar agora: **https://ricardocolombo01.github.io/domino-bar/**
 
-Também abre offline: duplo-clique no `index.html`. Só o modo online precisa do endereço
-acima (ou de `npm run servir`) — a conexão P2P não fecha a partir de `file://`.
+**Dá para instalar como aplicativo**, e depois de uma partida ele **abre sem internet** — o
+service worker guarda o jogo e as duas bibliotecas. Também abre por duplo-clique no
+`index.html`, que é um arquivo só, com o CSS e o JavaScript dentro. Só o modo online precisa
+do endereço acima (ou de `npm run servir`) — a conexão P2P não fecha a partir de `file://`.
 
 ---
 
@@ -191,18 +193,24 @@ existe mais.
 
 ## O projeto
 
-Sem framework, sem bundler, sem asset. Madeira, piso, as pintas das peças e todos os sons
-são gerados em código na hora — não há um único `.png` ou `.mp3` no repositório. Three.js
-e PeerJS vêm de CDN. São **5.827 linhas** em `src/`.
+Sem framework, sem bundler. Madeira, piso, as pintas das peças e todos os sons são gerados
+em código na hora — não há um único `.mp3` no repositório, e os únicos binários são os dois
+ícones do aplicativo, que o manifest exige em arquivo. Three.js e PeerJS vêm de CDN. São
+**6.061 linhas** em `src/`.
 
 ```
 src/pagina.html      o molde
 src/css/estilo.css   entra no bundle como <style>
-src/js/10-casa/      o que é da CASA e de jogo nenhum: constantes, cena, áudio,
-                     HUD, menu de cadeiras, rede P2P, loop
-src/js/30-domino/    o que é DOMINÓ: baralho, regras, partida, bot, layout,
-                     peça 3D, tabuleiro, mão, interação
+src/sw.js            o service worker, com a versão carimbada pelo build
+src/icone.svg        a fonte dos dois PNG (npm run icones)
+src/js/10-casa/      o que é da CASA e de jogo nenhum: cores, armazenamento, cena,
+                     áudio, HUD, menu de cadeiras, saguão, rede P2P, loop
+src/js/30-domino/    o que é DOMINÓ: constantes, baralho, regras, partida, bot,
+                     layout, peça 3D, tabuleiro, mão, interação, painel de contagem
 ```
+
+Os números dos arquivos vão **de dez em dez**, e é isso que deixa encaixar um arquivo novo
+entre dois velhos sem renumerar tudo — o número é a ordem de carga.
 
 A separação por pasta existe para o **segundo jogo**: a camada de rede, as cadeiras, o
 saguão, a conversa e o hotseat nunca precisaram saber que o jogo era dominó, e é isso que
@@ -221,8 +229,10 @@ sintaxe vira mensagem no terminal em vez de tela preta.
 
 ```
 npm run build       junta src/ num index.html autossuficiente (o CSS entra junto)
-npm run check       avisa se o index.html está desatualizado
+npm run check       avisa se o index.html ou o sw.js estão desatualizados
 npm test            build + as três suítes de lógica (segundos)
+npm run app         build + manifest, ícones, e o jogo abrindo COM A REDE DESLIGADA
+npm run icones      regera os dois PNG a partir de src/icone.svg
 npm run telas       build + o jogo em seis tamanhos de tela, dez situações cada
 npm run textura     build + as texturas sobrevivem a sair do jogo e voltar (~40 s)
 npm run lembrar     build + o que sobrevive a RECARREGAR a página
@@ -292,7 +302,7 @@ dois merges e dois rebuilds do bundle por release. **Um dia inteiro se perdeu po
 disso**, com a `develop` em dia e a `main` três releases atrás. Hoje há um lugar a menos
 para o trabalho ficar preso.
 
-Quinze releases até aqui, e três delas dizem bem o que este repositório é: a **v1.6.0** foi a
+Vinte releases até aqui, e três delas dizem bem o que este repositório é: a **v1.6.0** foi a
 primeira cujos itens vieram quase todos de **jogo de verdade, no celular**, e não de leitura
 de código; a **v1.7.1** veio do contrário — uma varredura atrás do que ainda não tinha
 incomodado ninguém; e a **v1.10.0** fechou os ramos que **existiam e nunca tinham rodado**.
@@ -318,6 +328,15 @@ partida guardada corrompida que dava **tela preta a cada recarregamento**.
 O que ela deixou de mais valioso não é conserto nenhum: é que o `conn.on('data')` — a porta
 por onde entra tudo o que vem da rede — **não era alcançável por teste nenhum**, porque o
 dublê do PeerJS engolia o registro de ouvintes. Quatro dos sete defeitos moravam ali.
+
+A **v3.0.0** é a release em que o jogo **vira aplicativo** — instalável, com ícone próprio, e
+abrindo sem internet depois da primeira partida. Junto veio o maior ganho de download da
+história do projeto por uma linha só: o `three` era baixado **não minificado**, 1,27 MB onde
+670 KB resolvem. E ela fechou as duas dívidas que decidiam se a separação em pastas era fato
+ou promessa — a camada de rede não escreve mais uma única linha na tela (a tela do online
+virou arquivo próprio), e as regras de dominó saíram do primeiro arquivo da casa, onde
+estavam desde sempre. As duas dívidas estavam **anotadas com o diagnóstico errado**, e nos
+dois casos foi medir que mostrou.
 
 O dia a dia: `git switch -c v2` a partir de `main`, commits normais na branch, e no fim ela
 sobe a `version` do `package.json`, roda `npm test`, e volta para `main` com `--no-ff` e a

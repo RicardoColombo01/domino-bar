@@ -4,10 +4,12 @@ Dominó dupla-seis em 3D no navegador. De 2 a 4 jogadores em qualquer mistura de
 bot, na mesma tela ou pela internet. No ar em
 **https://ricardocolombo01.github.io/domino-bar/** (repo público `RicardoColombo01/domino-bar`).
 
-Sem framework, sem bundler, sem asset: madeira, pintas e sons são gerados em canvas e
-WebAudio na hora. Three.js e PeerJS vêm de CDN. **5.827 linhas** no total (`src/js` +
-`pagina.html` + `css/estilo.css`), conferido em 05/08/2026 — este número **envelhece**, e
-envelheceu: ficou dizendo 2.100 por três releases seguidas.
+Sem framework, sem bundler, e **dois binários** — os ícones do aplicativo, exigidos pelo
+manifest: madeira, pintas e sons continuam gerados em canvas e WebAudio na hora. Three.js e
+PeerJS vêm de CDN, e o **service worker os guarda**, então depois de uma partida o jogo abre
+sem internet. **6.061 linhas** no total (`src/js` + `src/pagina.html` + `src/css/estilo.css`
++ `src/sw.js`), conferido em 05/08/2026 — este número **envelhece**, e envelheceu: ficou
+dizendo 2.100 por três releases seguidas.
 
 **Conte com `node`, não com o PowerShell.** `Measure-Object -Line` **não conta linha em
 branco** e devolve ~450 a menos; a discordância entre as duas réguas já custou uma
@@ -16,9 +18,11 @@ investigação. `node -e "…split('\n').length"` é a que bate com o `wc -l`.
 ## Comandos
 
 ```
-npm run build     junta src/ num index.html autossuficiente
-npm run check     avisa se o index.html está desatualizado
+npm run build     junta src/ num index.html autossuficiente, e carimba o sw.js
+npm run check     avisa se o index.html OU o sw.js estão desatualizados
 npm test          build + as três suítes de lógica
+npm run app       build + manifest, ícones e o jogo abrindo COM A REDE DESLIGADA (~30 s)
+npm run icones    regera icone-192.png e icone-512.png a partir de src/icone.svg
 npm run telas     build + o jogo em seis tamanhos de tela (retrato, paisagem, tablet, wide)
                   aceita escolher: node tests/test-telas.mjs 360x640,390x844 nomes,cheia
 npm run textura   build + as texturas sobrevivem a sair do jogo e voltar (~40 s)
@@ -126,26 +130,36 @@ A ordem abaixo é a de CONCATENAÇÃO (o número), e ela se lê de cima a baixo 
 arquivos morando em pastas diferentes — repare como casa e dominó se intercalam. É esse
 intercalamento que torna o número, e não o caminho, a fonte da ordem.
 
+**Os números vão de dez em dez desde a v3.0.0**, e é o que permite encaixar arquivo novo
+entre dois velhos. Consecutivo quer dizer LOTADO: as constantes de dominó não tinham para
+onde ir porque precisavam rodar antes do `140-menu` e não havia inteiro livre em todo o
+intervalo. As nove vagas entre cada par são o espaço do `40-truco/`.
+
 ```
 src/css/estilo.css               entra no bundle como <style>
 src/pagina.html                  o molde, com __ESTILO__ e __JOGO__
+src/sw.js                        o molde do service worker, com __VERSAO__
+src/icone.svg                    a fonte dos dois PNG do manifest
 
-10-casa/010-constantes  medidas, pontuação, folgas visuais, tabela MODOS, guardar/lido
-30-domino/020-baralho   embaralhar, distribuir (com re-embaralho), quem abre, sobraDoBaralho
-30-domino/030-regras    encaixes, pontas, jogadas válidas, tipo de batida     ← puro
-30-domino/040-partida   turnos, compra, passe, placar, visaoDe()
-30-domino/050-bot       níveis = quanta informação o bot recebe
-30-domino/060-layout    onde cada peça cai na mesa, com as dobras             ← puro
-10-casa/070-cena        renderer, câmera, luz de boteco, mesa, tralhas
-30-domino/080-peca3d    geometria + atlas de pintas em canvas + fantasma
-30-domino/090-tabuleiro reconcilia o tabuleiro com a visão; prévia da jogada
-30-domino/100-mao       sua mão em leque, mãos dos outros, monte
-30-domino/110-interacao raycast: escolher → ver → confirmar
-10-casa/120-audio       WebAudio puro, sem arquivo
-10-casa/130-hud         placar, vez, botões, telas de fim
-10-casa/140-menu        montagem da mesa (as cadeiras)
-10-casa/150-rede        PeerJS, anfitrião autoritativo
-10-casa/160-loop        estado do app, turno, hotseat, render loop
+10-casa/010-constantes   cores do boteco, movimento reduzido, guardar/lido/esquecer
+30-domino/015-constantes peça, MODOS, pontuação, medidas do tabuleiro
+30-domino/020-baralho    embaralhar, distribuir (com re-embaralho), quem abre, sobraDoBaralho
+30-domino/030-regras     encaixes, pontas, jogadas válidas, tipo de batida     ← puro
+30-domino/040-partida    turnos, compra, passe, placar, visaoDe()
+30-domino/050-bot        níveis = quanta informação o bot recebe
+30-domino/060-layout     onde cada peça cai na mesa, com as dobras             ← puro
+10-casa/070-cena         renderer, câmera, luz de boteco, mesa, tralhas
+30-domino/080-peca3d     geometria + atlas de pintas em canvas + fantasma
+30-domino/090-tabuleiro  reconcilia o tabuleiro com a visão; prévia da jogada
+30-domino/100-mao        sua mão em leque, mãos dos outros, monte
+30-domino/110-interacao  raycast: escolher → ver → confirmar
+10-casa/120-audio        WebAudio puro, sem arquivo
+10-casa/130-hud          placar, vez, botões, telas de fim, o encaixe painelDoJogo
+30-domino/135-contagem   o que vai DENTRO do painel: quantas peças faltam aparecer
+10-casa/140-menu         montagem da mesa (as cadeiras)
+10-casa/145-saguao       a tela do online: código, quem chegou, os quatro cliques
+10-casa/150-rede         PeerJS, anfitrião autoritativo — ZERO chamadas ao DOM
+10-casa/160-loop         estado do app, turno, hotseat, render loop
 ```
 
 **A pasta é uma AFIRMAÇÃO, não uma gaveta:** o que está em `10-casa/` promete não saber que
@@ -340,6 +354,36 @@ cumprir, não um fato.**
   para uma suíte de Node ao lado do `test-telas`: aquilo renderiza WebGL **por software**,
   ou seja é CPU pura, e a espera dele é "oito quadros iguais" com teto de 240 — máquina
   disputada chega ao teto antes de assentar. **Suíte pesada roda sozinha.**
+- **`String.replace` troca só a PRIMEIRA ocorrência, e o marcador escrito no comentário
+  come o de verdade.** O `build.mjs` carimba a versão do `sw.js` trocando `__VERSAO__` — e o
+  comentário logo acima explicava o mecanismo citando o próprio token. O comentário ficou com
+  o resumo e o `const VERSAO` ficou com o marcador: cache chamado `dominobar-__VERSAO__`, o
+  mesmo nome para sempre, que é exatamente o defeito que aquele mecanismo existe para
+  impedir. **Contar antes de trocar** — é a mesma disciplina que este arquivo já exige das
+  mutações de teste, e agora vale para o build.
+- **Resposta OPACA não entra em cache, e é assim que um recurso some só depois de instalado.**
+  `<script src>` sem `crossorigin` é buscado em modo `no-cors`; o service worker recebe algo
+  que não pode conferir e recusa guardar. O jogo abriria offline **sem o PeerJS**, ou seja,
+  sem online — e o relato seria "o botão de mesa online sumiu depois que instalei".
+- **Nome de topo repetido no escopo concatenado só é SILENCIOSO em `function` e `var`.**
+  `const`, `let` e `class` dão `SyntaxError`, que o `node --check` do build já pegava. A
+  dívida anotada dizia o contrário, e citava justamente um `const`. Hoje o `build.mjs`
+  reprova o repetido dizendo o nome e **os dois donos**.
+- **Numeração consecutiva é numeração LOTADA.** `01…16` não tinha onde encaixar um arquivo
+  que precisasse rodar entre dois existentes, e foi por isso que as constantes de dominó
+  ficaram anos na pasta da casa: não havia inteiro livre antes do `140-menu`. De dez em dez
+  abre nove vagas entre cada par.
+- **Quando a sua conferência acusa TUDO, o errado é ela.** Um script de uma vez só disse que
+  as 19 constantes tinham sumido do bundle depois da separação — era escaping de `\b` comido
+  pelo shell. Um `grep` de dez segundos mostrou que estava tudo lá. Falha universal é sinal de
+  instrumento quebrado, não de código quebrado.
+- **Uma reprovação sozinha não decide de quem é a culpa; o CONTROLE é rodar a mesma cena na
+  `main`.** O `test-online` estourou o prazo de navegação num `page.reload` logo depois de eu
+  mexer no saguão, e o recado pronto do arquivo dizia "foi o broker do PeerJS". Rodar a mesma
+  cena na `main` (passou) e de novo na branch (passou) é o que separou ambiente de defeito —
+  e uma sonda mostrou o `goto` variando de **6 a 18 segundos** contra um prazo de 45.
+  **Corolário do PWA:** com o service worker guardando as bibliotecas, essa fragilidade cai
+  junto.
 
 ---
 
@@ -515,15 +559,18 @@ campo acha o que está escrito certo e mesmo assim não funciona.
 **Leia isto primeiro ao retomar.** É o estado real do trabalho, o que ele produziu, o que
 fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numerados mais abaixo.
 
-#### ESTADO EM UMA OLHADA (04/08/2026)
+#### ESTADO EM UMA OLHADA (05/08/2026)
 
 | | |
 |---|---|
-| publicado | **v2.1.1** — https://ricardocolombo01.github.io/domino-bar/ |
-| esta release | **v2.2.0** — a Fila 11 inteira consertada: os 7 confirmados, mais S1, S3, S4, S5 e **dois defeitos novos achados ao consertar** |
+| publicado | **v3.0.0** — https://ricardocolombo01.github.io/domino-bar/ |
+| esta release | **v3.0.0** — as duas dívidas da reorganização fechadas, e **o jogo virou aplicativo** |
 | `main` ↔ `origin/main` | conferir com `git rev-list --left-right --count origin/main...main` |
-| Filas 5 a 11 | **todas fechadas** |
-| o que vem | **1º adotar `git worktree`** · 2º a reorganização em pastas · 3º o PWA · 4º o Truco — **ordem dada pelo Ricardo em 04/08/2026** |
+| Filas 5 a 11 | **todas fechadas**, e não há defeito conhecido em aberto |
+| o que vem | **o Truco** — é o próximo, e o único item grande que sobrou da ordem dada pelo Ricardo em 04/08 |
+
+**A ordem do Ricardo (04/08) foi cumprida inteira:** worktree ✔ (v2.3.0 e v3.0.0 saíram de
+um), as pastas ✔ (v2.3.0, e as duas dívidas na v3.0.0), o PWA ✔ (v3.0.0). Sobra o Truco.
 
 **A fila esvaziou na v1.10.0, encheu em 03/08 pela fonte mais barata (jogar), esvaziou na
 v2.0.0 — e a v2.1.0 a encheu de novo pela OUTRA fonte: varredura.** É a segunda da história
@@ -2623,15 +2670,26 @@ nível de bot contra `NIVEIS`, que mora em `050-bot.js` (dominó) — com toda a
 de toda a `30-domino/`, é `ReferenceError` na carga e tela preta. Por isso a ordem saiu do
 número e não da pasta, e por isso o `build.mjs` reprova número repetido e arquivo sem número.
 
-**AS DUAS DÍVIDAS CONTINUAM ABERTAS, e são elas que decidem se a pasta é fato ou promessa:**
+**AS DUAS DÍVIDAS FECHARAM NA v3.0.0 — e a medição corrigiu as DUAS antes de consertar.**
+Nono e décimo diagnósticos de leitura que esta base perde para um número.
 
-- **`150-rede.js` escreve na tela por id** — 45 chamadas `el(...)`, mais que o próprio HUD.
-  Enquanto isso durar, ele não é "da casa": é dominó disfarçado de rede.
-- **Um namespace por jogo** (`JOGOS.domino = {…}`). Sem ele, o `naMao` do truco e o do
-  dominó colidem em silêncio no escopo concatenado — e este arquivo já registra que `naMao`
-  sendo dois nomes quase virou colisão uma vez.
+| a dívida como estava anotada | o que a medição mostrou |
+|---|---|
+| "`150-rede.js` é dominó disfarçado de rede" | os 11 ids são **todos do saguão**, e saguão é da casa. Era **transporte** misturado com **apresentação** |
+| "o `naMao` do truco colide **em silêncio**" | `naMao` é `const`, e `const` repetido é **SyntaxError** — o caso citado é o barulhento |
+| — (não anotado) | `010-constantes.js` da casa guardava `PECA_C`, `MAX_PINTAS`, `PONTOS`, `MODOS` |
 
-E `130-hud.js` ainda tem `desenharContagem`, que é regra de dominó dentro da pasta da casa.
+- **A rede tem ZERO chamadas ao DOM.** A tela do online virou `145-saguao.js`: a rede diz o
+  que É (esta cadeira chegou, faltam dois), o saguão diz como isso APARECE.
+- **O namespace não foi feito, e o motivo está medido.** Só `function` redeclarada e `var`
+  colidem calado; `const`/`let`/`class` já eram `SyntaxError` que o `node --check` do build
+  pegava. **O `build.mjs` passou a reprovar nome de topo repetido entre arquivos**, dizendo o
+  nome e os dois donos — vinte linhas, contra as 153 chamadas de cerimônia que um
+  `JOGOS.domino = {…}` custaria com um jogo só na mesa. Se o truco trouxer colisão demais, o
+  objeto continua disponível; hoje ele compraria pouco.
+- **`desenharContagem` saiu do HUD**, e não mudando de pasta: a casa ganhou o encaixe
+  `painelDoJogo`, que nasce sem fazer nada, e o dominó pendura o dele em
+  `30-domino/135-contagem.js`. O HUD desenha um painel de dominó sem citar dominó uma vez.
 
 <details><summary>o plano original, de quando nada disso existia</summary>
 
@@ -2765,44 +2823,60 @@ misturar as regras dos dois.
 
 </details>
 
-## O caminho de aplicativo — PWA agora, Play Store depois
+## O caminho de aplicativo — ✔ PWA feito (v3.0.0), a Play Store em aberto
 
 Decidido com o Ricardo em 04/08/2026. **O PWA é pré-requisito do TWA**: não há como pular
-direto para a loja.
+direto para a loja. O PWA saiu na **v3.0.0**; o que falta para a loja é decisão de conta e
+está mais abaixo.
 
-### O que já existe (o caro, e está pronto)
+### O que já existia, e era o caro
 
-`viewport-fit=cover` (`src/pagina.html:7`), safe-areas (`css/estilo.css:40-43`), alvos de
-44 px por `(pointer: coarse)` (`:448`), `touch-action: none` (`:49`), vibração, gaveta,
-`prefers-reduced-motion`, teclado completo, e o gesto interrompido pelo sistema
-(`110-interacao.js:264`). **O trabalho de celular que costuma ser o caro já foi feito.**
+`viewport-fit=cover`, safe-areas, alvos de 44 px por `(pointer: coarse)`,
+`touch-action: none`, vibração, gaveta, `prefers-reduced-motion`, teclado completo, e o gesto
+interrompido pelo sistema (`110-interacao.js`). **O trabalho de celular que costuma ser o
+caro já estava feito** — foi por isso que o resto custou uma release só.
 
-### O que NÃO existe (nada)
+### O que entrou ✔
 
-Nenhum `manifest`, nenhum service worker, **nenhum arquivo de ícone** (o favicon é SVG inline
-em `data:`), nenhum `theme-color`, nenhuma meta `apple-mobile-web-app-*`. **Zero binários
-versionados** — tudo é gerado em canvas e WebAudio, o que é ótimo para o tamanho e péssimo
-para a loja, que exige ícone em arquivo (192 e 512).
+`manifest.webmanifest`, `src/sw.js` (gerado em `sw.js` pelo build), `icone-192.png` e
+`icone-512.png` — **os dois únicos binários versionados do projeto**, e a exceção é imposta
+de fora: a loja e o manifest exigem PNG em arquivo. A fonte é `src/icone.svg`, e
+`npm run icones` refaz os dois; artefato sem caminho de volta à fonte é artefato que ninguém
+consegue mudar daqui a um ano.
 
-### O orçamento de offline: 1,00 MB
+**O nome do cache é um RESUMO do `index.html`**, carimbado pelo `build.mjs`. Cache de service
+worker que não troca de nome prende o jogador numa versão antiga para sempre, e nem limpar a
+aba resolve — amarrando o nome ao conteúdo, publicar correção JÁ é publicar cache novo, e
+"esquecer de bumpar a versão" deixa de existir como categoria de erro. Por isso `sw.js`
+entrou no `merge=ours` do `.gitattributes` junto do `index.html`.
 
-| | |
-|---|---:|
-| `three.module.min.js` | 655 KB |
-| `peerjs.min.js` | 91 KB |
-| `index.html` | 243 KB |
-| `css/estilo.css` | 39 KB |
-| **total** | **1.027 KB** |
+**As bibliotecas NÃO são baixadas na instalação, de propósito.** São 763 KB, e baixá-las
+duas vezes (uma pela página, outra pelo worker) atrasaria justamente a primeira visita. O
+`fetch` as guarda quando a própria página as pede; o resultado final é o mesmo. Consequência
+que vale saber: **quem enche o cache é a SEGUNDA carga**, porque o worker só intercepta
+depois de instalado.
 
-**GANHO DE GRAÇA, e vale mesmo sem PWA nenhum:** o importmap aponta para
-`three.module.js` **NÃO MINIFICADO** — 1,27 MB onde `three.module.min.js` resolve com
-670 KB. É **47% a menos**, trocando uma linha (`src/pagina.html:257`). Hoje o total é
-**1,58 MB**. E a segunda entrada do importmap (`three/addons/`) é **peso morto**: o único
-`import` do projeto é `070-cena.js:7`.
+### O orçamento de offline: 1,03 MB (era 1,64 MB)
 
-Nota: a promessa do `#semCarga` — *"depois de carregar uma vez, o jogo abre offline"* —
-depende **só do cache HTTP** hoje. É promessa não garantida; o service worker é o que a torna
-verdadeira.
+| | antes | agora |
+|---|---:|---:|
+| three | 1.272.972 (não minificado) | **670.681** |
+| `peerjs.min.js` | 92.865 | 92.865 |
+| `index.html` (com o CSS dentro) | 314.078 | 317.063 |
+| **total** | **1.679.915** | **1.080.609** |
+
+**O ganho de graça era real e saiu numa linha:** o importmap apontava para
+`three.module.js` **não minificado**. 47% a menos no maior download da página. A segunda
+entrada (`three/addons/`) saiu junto — o único `import` do projeto é
+`import * as THREE from 'three'`, em `070-cena.js`.
+
+**`crossorigin` no `<script>` do PeerJS não é enfeite.** Sem ele o navegador busca em modo
+`no-cors`, o worker recebe resposta **opaca** — que não dá para conferir e por isso ele
+recusa guardar — e o jogo abriria offline **sem o online**. O sintoma seria "o botão de mesa
+online sumiu depois que instalei o aplicativo". Provado por mutação.
+
+**A promessa do `#semCarga` deixou de ser promessa.** `npm run app` desliga a rede e recarrega;
+se o jogo não ficar pronto, reprova. É a asserção que vale por todas as outras da suíte.
 
 ### O BLOQUEIO da Play Store, que ninguém adivinharia
 
@@ -2834,13 +2908,15 @@ projeto Android, assinatura do AAB, política de privacidade, ícone e prints.
   vale hoje, no site — o app só torna mais visível. E os códigos de 4 letras vivem num
   **namespace global compartilhado** naquele broker.
 
-### A ordem sugerida
+### A ordem sugerida — os três primeiros ✔ feitos na v3.0.0
 
-1. o three minificado e o importmap limpo (uma linha, ganho imediato, sem PWA);
-2. ícones + `manifest.webmanifest` + `theme-color` → **instalável**;
-3. service worker cacheando os quatro arquivos → **abre sem internet**. Guardar o registro
-   atrás de `location.protocol.startsWith('http')`, senão quebra o duplo-clique em `file://`;
-4. o repositório da user page com o `.well-known/` → **destrava o TWA**;
+1. ~~o three minificado e o importmap limpo~~ ✔
+2. ~~ícones + `manifest.webmanifest` + `theme-color`~~ ✔ **instalável**
+3. ~~service worker~~ ✔ **abre sem internet**, com o registro atrás de
+   `location.protocol.indexOf('http') === 0` — em `file://` o `register` REJEITA, e este
+   jogo existe para abrir por duplo-clique;
+4. **o repositório da user page com o `.well-known/`** → destrava o TWA. ← é aqui que para,
+   e é decisão de conta do Ricardo, não de código;
 5. Bubblewrap, conta, assinatura, loja.
 
 ---
