@@ -44,6 +44,11 @@ const mod = await import(buildModule([
   // que põe o defeito relatado (sair e não conseguir voltar) dentro da suíte rápida.
   'desistiuDaMesa',
   'ajustarCompraAoModo', 'sobraDoBaralho',
+  // `acoesDe` entra para a cena do despachante PODER PROVAR que alcançou o ramo perigoso:
+  // fora da vez (ou com peça obrigatória de fora da mão) ela devolve `jogadas: []`, o
+  // `.some` de `jogar` curto-circuita e o TypeError do C3 nunca acontece — seis asserções
+  // verdes sem ter exercitado nada. Foi exatamente o que aconteceu na primeira rodada.
+  'acoesDe',
 ], undefined, path.join(import.meta.dirname, 'built-jogo.mjs')));
 
 let falhas = 0;
@@ -756,8 +761,16 @@ console.log('\nquem pediu menos movimento');
 // esta casa já pagou com o matchMedia, a captura de ponteiro, o AudioContext, o Peer, os
 // eventos de contexto WebGL, o setAttribute, o preventDefault e o matchMedia de novo: quem
 // estava incompleto era o dublê, não o jogo.
-const novaConn = () => { const c = { enviadas: [], fechada: false, open: true }; Object.assign(c, {
-  send: m => c.enviadas.push(m), close: () => { c.fechada = true; c.open = false; }, on: () => {} }); return c; };
+// E o `on` também GRAVA, pelo mesmo motivo do parágrafo acima levado até o fim: ele era
+// `() => {}` e engolia o registro, então o `conn.on('data')` que o anfitrião instala dentro
+// do `peer.on('connection')` não tinha como ser dirigido daqui. Era esse o buraco por onde
+// entraram o C3, o C4 e o C7 da Fila 11 — nenhuma linha de teste jamais entregou uma
+// mensagem malformada à mesa. Quem dispara é o teste, nunca o dublê sozinho.
+const novaConn = () => { const c = { enviadas: [], fechada: false, open: true, ouvintes: new Map() }; Object.assign(c, {
+  send: m => c.enviadas.push(m), close: () => { c.fechada = true; c.open = false; },
+  on(evento, cb) { if (!c.ouvintes.has(evento)) c.ouvintes.set(evento, []); c.ouvintes.get(evento).push(cb); return c; },
+  disparar(evento, ...args) { const cbs = c.ouvintes.get(evento) || []; cbs.forEach(cb => cb(...args)); return cbs.length; },
+}); return c; };
 
 const montarMesaOnline = () => {
   mod.encerrarRede();
@@ -1451,6 +1464,144 @@ console.log('\na conversa existe antes da partida');
   // E o importante: chamar sem vista não pode estourar. Era isso que faltava.
   ok(true, 'atualizarConversa(undefined) não estourou');
   console.log('  atualizarConversa roda sem vista, que é o que o saguão precisa');
+}
+
+// O DESPACHANTE, com mensagem malformada. Este bloco existe porque NENHUMA linha de teste
+// jamais entregou uma mensagem torta ao anfitrião: o `conn.on('data')` mora dentro do
+// `peer.on('connection')`, e o dublê `Peer` engolia o registro. As suítes chamavam
+// `sentar`/`largar`/`receberChat` DIRETO, ou seja, sempre por dentro do despachante e nunca
+// através dele — e era por ali que passavam o C3, o C4 e o C7 da Fila 11.
+//
+// Tudo aqui é entrada de fora: quem manda é o convidado, e um convidado pode ser uma aba
+// modificada. A pergunta de cada asserção é a mesma — "isto derruba a mesa dos OUTROS?".
+console.log('\nmensagem torta não derruba a mesa');
+{
+  // Monta a mesa e passa pelo caminho REAL: o peer do anfitrião registra 'connection',
+  // e o teste é quem dispara. `Peer.ultimo` é o dublê do harness — o jogo não expõe o
+  // peer, e expô-lo pela ponte seria mudar produção por causa de teste.
+  const abrirMesa = () => {
+    mod.encerrarRede();
+    mod.MESA.modo = 'classico'; mod.MESA.n = 3;
+    mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[1].nivel = 'normal';
+    mod.MESA.cadeiras[2].tipo = 'bot'; mod.MESA.cadeiras[2].nivel = 'normal';
+    mod.comecarLocal();
+    mod.MESA.cadeiras[1].tipo = 'online'; mod.MESA.cadeiras[1].nome = 'Visita';
+    mod.MESA.cadeiras[1].vagaOnline = false;
+    mod.abrirMesaOnline();
+    const conn = novaConn();
+    const houve = Peer.ultimo.disparar('connection', conn);
+    // Guarda do DUBLÊ, não do jogo: zero ouvintes quer dizer que o registro não chegou, e
+    // sem esta linha tudo abaixo ficaria verde por não ter rodado nada. É a lição da
+    // "asserção sobre uma coleção que primeiro exige que a coleção não esteja vazia".
+    ok(houve === 1, `o anfitrião devia ter registrado 1 ouvinte de 'connection', e foram ${houve}`);
+    ok(conn.ouvintes.has('data'), 'o despachante não foi instalado na conn — o resto do bloco não testaria nada');
+    return conn;
+  };
+
+  // Entregar uma mensagem NUNCA pode lançar: uma exceção aqui sobe pelo callback do PeerJS
+  // e mata o processamento da conexão inteira. Devolve o erro em vez de deixá-lo subir,
+  // porque asserção que LANÇA trunca a suíte e faz a conferência por mutação sub-relatar.
+  const entregar = (conn, m) => {
+    try { conn.disparar('data', m); return null; } catch (e) { return e; }
+  };
+
+  {
+    const conn = abrirMesa();
+    // Sem sentar ainda: o primeiro ramo (`cadeira < 0`) tem de aguentar lixo.
+    for (const m of [null, undefined, {}, 42, 'oi', []]) {
+      const e = entregar(conn, m);
+      ok(!e, `mensagem ${JSON.stringify(m)} antes de sentar derrubou o despachante: ${e && e.message}`);
+    }
+  }
+
+  {
+    // C7 — a cadeira passando a se chamar "undefined". `String(undefined)` é a string
+    // "undefined", que é TRUTHY, então o `|| 'Visita'` nunca dispara.
+    const conn = abrirMesa();
+    entregar(conn, { t: 'ola', id: 'cliente-Z', nome: 'Zé' });
+    ok(mod.MESA.cadeiras[1].nome === 'Zé', `montagem: a visita devia sentar como Zé e é ${mod.MESA.cadeiras[1].nome}`);
+
+    for (const [rotulo, m] of [['sem campo', { t: 'nome' }], ['nulo', { t: 'nome', nome: null }],
+                               ['número', { t: 'nome', nome: 42 }], ['objeto', { t: 'nome', nome: {} }]]) {
+      const e = entregar(conn, m);
+      ok(!e, `{t:'nome'} ${rotulo} derrubou o despachante: ${e && e.message}`);
+      const nome = mod.MESA.cadeiras[1].nome;
+      ok(nome !== 'undefined' && nome !== 'null' && nome !== '[object Object]' && nome !== '42',
+         `{t:'nome'} ${rotulo} rebatizou a cadeira de "${nome}" — é o defeito da foto da Fila 10 por outra porta`);
+    }
+  }
+
+  {
+    // C4 — congelar a mesa de todos com uma linha. O nome não tinha limite de TAMANHO nem
+    // de FREQUÊNCIA, e é a mensagem mais cara do protocolo: `listarSala()` mais `publicar()`,
+    // que espalha vista para todo mundo e grava a partida no localStorage, síncrono.
+    const conn = abrirMesa();
+    entregar(conn, { t: 'ola', id: 'cliente-Z', nome: 'Zé' });
+
+    const gigante = 'x'.repeat(4e6);
+    let erro = null;
+    for (let i = 0; i < 20; i++) erro = entregar(conn, { t: 'nome', nome: gigante + i }) || erro;
+    ok(!erro, `a rajada de nomes gigantes derrubou o despachante: ${erro && erro.message}`);
+    ok(mod.MESA.cadeiras[1].nome.length <= 14,
+       `o nome ficou com ${mod.MESA.cadeiras[1].nome.length} caracteres — o corte tem de valer também aqui`);
+
+    // NÃO SE MEDE TEMPO AQUI, e a tentação era grande. O custo real do C4 em produção é o
+    // `publicar()` de cada mensagem gravando a partida inteira no localStorage, síncrono —
+    // e o harness dubla o localStorage, então essa parte não existe em Node. Medido: os 20
+    // nomes de 4 MB custam 382 ms aqui contra os ~9 s relatados no navegador. Um limiar de
+    // tempo estaria medindo o DUBLÊ, não o jogo.
+    //
+    // O que se mede é a AMPLIFICAÇÃO, que é determinística e é o defeito em si: cada
+    // `{t:'nome'}` espalha vista para a mesa toda. Vinte mensagens não podem virar vinte
+    // rodadas de publicação.
+    const vistas = m => m.enviadas.filter(x => x.t === 'vista').length;
+    ok(vistas(conn) <= 2,
+       `20 nomes viraram ${vistas(conn)} publicações para a mesa — é a amplificação que congela todo mundo`);
+
+    // E a FREQUÊNCIA, que é o guarda irmão do `INTERVALO_FALA` do chat.
+    const conn2 = abrirMesa();
+    entregar(conn2, { t: 'ola', id: 'cliente-Y', nome: 'Ana' });
+    entregar(conn2, { t: 'nome', nome: 'Bia' });
+    entregar(conn2, { t: 'nome', nome: 'Cida' });
+    ok(mod.MESA.cadeiras[1].nome !== 'Cida',
+       'dois {t:\'nome\'} colados: o segundo tinha de ser recusado por frequência, como o chat já faz');
+  }
+
+  {
+    // C3 — `{t:'acao'}` sem `peca`. `mesmaPeca` (02-baralho.js:9) lê `b[0]` sem guarda, e o
+    // TypeError sobe pelo `conn.on('data')`. NÃO é trapaça: `jogar` valida contra
+    // `acoesDe(P, cadeira)`, que sai da mão do próprio jogador, então a fronteira do
+    // invariante 3 continua de pé. O dano é o `publicar()` não rodar e a vez não andar.
+    const conn = abrirMesa();
+    entregar(conn, { t: 'ola', id: 'cliente-Z', nome: 'Zé' });
+    mod.comecarLocal();                     // a partida com a cadeira online de pé
+    // A VEZ TEM DE SER DELE, e sem isto o bloco inteiro é decoração: `acoesDe` (04-partida.js:68)
+    // devolve `jogadas: []` fora da vez, e aí o `.some` de `jogar` curto-circuita antes de
+    // chegar em `mesmaPeca` — o TypeError nunca acontece e as seis asserções nascem verdes
+    // sem ter exercitado nada. Foi assim que este bloco passou na primeira rodada.
+    mod.P.vez = 1;
+    // E a peça obrigatória sai: ela só existe na PRIMEIRA jogada da primeira mão (04-partida.js:56,
+    // limpa em :117), e se o 6|6 não estiver na mão desta cadeira ela filtra `jogadas` para
+    // vazio — o mesmo curto-circuito por outra porta. Este é um estado que o jogo produz
+    // sozinho em toda mão seguinte, não um estado inventado.
+    mod.P.pecaObrigatoria = null;
+    // A GUARDA QUE VALE: não "a vez é dele", e sim "existe jogada válida". É a única forma
+    // de o teste afirmar que `mesmaPeca` vai mesmo ser chamada.
+    const podeJogar = mod.acoesDe(mod.P, 1).jogadas.length;
+    ok(podeJogar > 0,
+       `montagem do C3: a cadeira 1 precisa ter jogada válida e tem ${podeJogar} — sem isso o ramo perigoso não roda`);
+
+    for (const [rotulo, m] of [['sem peça', { t: 'acao', acao: 'jogar' }],
+                               ['peça nula', { t: 'acao', acao: 'jogar', peca: null }],
+                               ['peça string', { t: 'acao', acao: 'jogar', peca: '66' }],
+                               ['peça curta', { t: 'acao', acao: 'jogar', peca: [3] }],
+                               ['ação desconhecida', { t: 'acao', acao: 'voar' }],
+                               ['sem ação', { t: 'acao' }]]) {
+      const e = entregar(conn, m);
+      ok(!e, `{t:'acao'} ${rotulo} derrubou o despachante: ${e && e.message}`);
+    }
+  }
+  console.log('  o despachante aguenta lixo do fio — e a mesa não para');
 }
 
 console.log(falhas ? `\n${falhas} falha(s)` : '\ntudo certo');

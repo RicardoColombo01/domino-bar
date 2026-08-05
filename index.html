@@ -3428,6 +3428,24 @@ const OPCOES_PEER = { config: { iceServers: [
   { urls: 'stun:global.stun.twilio.com:3478' },
 ] } };
 
+// TETOS DO QUE CHEGA PELO FIO. O chat já tinha os dois (`TAMANHO_FALA`, `INTERVALO_FALA`,
+// lá embaixo) e o nome não tinha nenhum — dez linhas de distância no mesmo arquivo. Era
+// isso que deixava um convidado congelar a mesa de TODOS com uma linha: `{t:'nome'}` é a
+// mensagem mais cara do protocolo (reescreve a lista da sala, espalha vista para a mesa
+// inteira e grava a partida no armazenamento, síncrono), e nada limitava o tamanho nem a
+// frequência dela.
+//
+// O teto é generoso de propósito — o corte que vale é o dos 14 do `nomeUnico`. Este aqui
+// existe só para o trabalho CARO (normalizar, colapsar espaço) não rodar sobre megabytes.
+const TAMANHO_NOME = 64;
+const INTERVALO_NOME = 600;    // ms, o mesmo do chat: trocar de nome não é coisa de rajada
+const ULTIMO_NOME = new Map(); // cadeira → quando trocou de nome pela última vez
+// O clienteId vai para `donoDaCadeira`, que é PERSISTIDO. Sem teto, um id de megabytes
+// estoura a cota do localStorage — e `guardar` (01-constantes.js) engole o erro CALADO, o
+// que faz a cadeira deixar de ser reservada: é o vazamento de mão do item 4 da Fila 5
+// voltando pela porta dos fundos. 64 é folga larga para um id sorteado.
+const TAMANHO_ID = 64;
+
 let peer = null;
 let conexoes = new Map();      // cadeira → conn (no anfitrião)
 let esperando = new Map();     // cadeira → temporizador de volta (no anfitrião)
@@ -3565,18 +3583,20 @@ function tentarAbrir(tentativa, codigoDesejado) {
     let cadeira = -1;
 
     conn.on('data', m => {
+      // TUDO QUE ENTRA AQUI É ENTRADA DE FORA, e até a v2.1 nada nesta função supunha o
+      // contrário por escrito. `m` pode ser `null`, um número, um array — e `m.t` sobre
+      // `null` LANÇA dentro do callback do PeerJS, que derruba o processamento da conexão
+      // inteira. O `typeof` pega de quebra o array (que é objeto e passaria).
+      if (!m || typeof m !== 'object' || Array.isArray(m)) return;
       if (cadeira < 0) {
         // `ola` traz o clienteId. Um `nome` solto é convidado de versão antiga (uma
         // página em cache), e ele senta como anônimo — o comportamento de antes. Quebrar
         // quem não recarregou seria pior que a falta de identidade dele.
         if (m.t !== 'ola' && m.t !== 'nome') return;
-        cadeira = sentar(conn, m.t === 'ola' ? String(m.id || '') : '', m.nome);
+        cadeira = sentar(conn, m.t === 'ola' ? String(m.id || '').slice(0, TAMANHO_ID) : '', m.nome);
         return;
       }
-      if (m.t === 'nome') {
-        MESA.cadeiras[cadeira].nome = nomeUnico(String(m.nome).trim() || 'Visita', nomesVizinhos(cadeira));
-        listarSala(); if (P) publicar();
-      }
+      if (m.t === 'nome') trocarDeNome(cadeira, m.nome);
       if (m.t === 'acao' && P) aplicarIntencao(cadeira, m);
       if (m.t === 'chat') receberChat(cadeira, m);
       if (m.t === 'desisto') desistiuDaMesa(cadeira);
@@ -3787,6 +3807,33 @@ const vagaDeVisita = c => c.tipo === 'online' || c.vagaOnline === true;
 // Quem acrescentar um sexto sem cortar reabre isso.
 const nomesVizinhos = cadeira =>
   MESA.cadeiras.slice(0, MESA.n).filter((c, i) => i !== cadeira).map(c => c.nome);
+
+// TROCAR DE NOME NO MEIO DA MESA, com os dois guardas que o `receberChat` já tinha dez
+// linhas abaixo e este caminho não tinha nenhum. Vale a pena dizer o que cada um evita,
+// porque os três defeitos eram diferentes:
+//
+//   tipo       `String(m.nome)` sobre `undefined` dá a string "undefined", que é TRUTHY —
+//              então o `|| 'Visita'` NUNCA disparava e a cadeira passava a se chamar
+//              literalmente "undefined". Nome que não é texto não é troca de nome: ignora.
+//              (`sentar` já fazia certo, com `if (nome !== undefined)`. O irmão é que não.)
+//   tamanho    cortar ANTES de normalizar. O trabalho caro do `nomeUnico` é o
+//              `.normalize('NFC').replace(/\s+/g,' ')`, e ele rodava sobre a string inteira.
+//   frequência sem ela, cada mensagem custa um `publicar()` para a mesa TODA — vinte
+//              mensagens viram vinte rodadas de publicação, e o anfitrião é a autoridade:
+//              quando ele para, a mesa inteira para.
+//
+// Extraída do `conn.on('data')` de propósito, pelo mesmo motivo do `desistiuDaMesa`: lá
+// dentro ela seria inalcançável para quem quiser exigir uma regra dela isoladamente.
+function trocarDeNome(cadeira, nome) {
+  if (typeof nome !== 'string') return false;
+  const agora = Date.now();
+  if (agora - (ULTIMO_NOME.get(cadeira) || 0) < INTERVALO_NOME) return false;
+  const pedido = nome.slice(0, TAMANHO_NOME).trim();
+  ULTIMO_NOME.set(cadeira, agora);
+  MESA.cadeiras[cadeira].nome = nomeUnico(pedido || 'Visita', nomesVizinhos(cadeira));
+  listarSala(); if (P) publicar();
+  return true;
+}
 
 // Quem senta onde. Chamada no aperto de mão, e não na conexão, porque é aqui que pela
 // primeira vez se sabe QUEM chegou. Devolve a cadeira, ou -1 se a mesa estiver cheia.
@@ -4417,12 +4464,28 @@ function pedirAcao(intencao) {
 
 // O único lugar que mexe na partida. Vale para o seu clique, para o bot e para o que
 // chega pela rede — e valida os três do mesmo jeito.
+// Uma peça como o FIO pode entregá-la: dois números de 0 a `MAX_PINTAS`, e nada mais.
+// `mesmaPeca` (02-baralho.js) lê `b[0]` sem guarda, então uma peça ausente ou nula LANÇA
+// lá dentro — e a exceção sobe pelo `conn.on('data')` do anfitrião, que é quem tem a
+// partida. Note que isto NÃO é sobre trapaça: `jogar` valida a jogada contra
+// `acoesDe(P, cadeira)`, que sai da mão do próprio jogador, então peça inventada continua
+// devolvendo 'jogada inválida' e a fronteira do invariante 3 segue de pé. É sobre a mesa
+// dos outros parar.
+const pecaDoFio = p => Array.isArray(p) && p.length === 2 &&
+  p.every(n => Number.isInteger(n) && n >= 0 && n <= MAX_PINTAS);
+
 function aplicarIntencao(cadeira, i) {
   if (!P || P.fase !== 'mao') return;
   let r;
-  if (i.acao === 'jogar') r = jogar(P, cadeira, i.peca, i.ponta);
-  else if (i.acao === 'comprar') r = comprar(P, cadeira);
-  else r = passar(P, cadeira);
+  // A CADEIA ERA ABERTA NO FINAL, e é um defeito por si: `{t:'acao'}` sem campo nenhum
+  // caía no `else` e virava um PASSE válido — a rede conseguia passar a vez de alguém
+  // mandando uma mensagem vazia. Agora as três ações são nomeadas e o resto é recusa.
+  if (i.acao === 'jogar') {
+    if (!pecaDoFio(i.peca) || (i.ponta !== 'esq' && i.ponta !== 'dir')) r = { erro: 'jogada inválida' };
+    else r = jogar(P, cadeira, i.peca, i.ponta);
+  } else if (i.acao === 'comprar') r = comprar(P, cadeira);
+  else if (i.acao === 'passar') r = passar(P, cadeira);
+  else r = { erro: 'ação desconhecida' };
 
   if (r.erro) { if (cadeira === euNaTela) avisar(r.erro); return; }
 

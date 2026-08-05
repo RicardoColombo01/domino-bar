@@ -164,10 +164,44 @@ export function installStubs() {
   // interessante dá um verde que não quer dizer nada.
   //
   // Ele não dispara 'open' de propósito: o que se quer é o modo, não a sessão.
-  global.Peer = class {
-    constructor() { this.destruido = false; }
-    on() { return this; }
-    connect() { return { on() {}, send() {}, close() {} }; }
+  //
+  // MAS ELE GRAVA OS OUVINTES, e é a décima vez que este dublê fica para trás (matchMedia,
+  // captura de ponteiro, AudioContext, Peer, contexto WebGL, setAttribute, preventDefault,
+  // matchMedia de novo, conn.open — e agora este). O `on()` devolvia `this` e ENGOLIA o
+  // registro, então o `conn.on('data')` que o anfitrião instala dentro de
+  // `peer.on('connection')` era inalcançável do Node: nenhuma linha de teste jamais entregou
+  // uma mensagem malformada à mesa, que é o buraco por onde passaram o C3, o C4 e o C7.
+  //
+  // Continua não disparando NADA sozinho — quem decide quando a conexão chega é o teste,
+  // por `disparar()`. É o que preserva a intenção do parágrafo acima e o que garante que
+  // nenhuma suíte existente muda de comportamento ao ganhar isto.
+  const gravador = alvo => Object.assign(alvo, {
+    ouvintes: new Map(),
+    on(evento, cb) {
+      if (!this.ouvintes.has(evento)) this.ouvintes.set(evento, []);
+      this.ouvintes.get(evento).push(cb);
+      return this;
+    },
+    // Devolve quantos ouvintes correram: zero é informação (ninguém registrou aquele
+    // evento), e sem esse número um teste que erra o nome do evento fica verde à toa.
+    disparar(evento, ...args) {
+      const cbs = this.ouvintes.get(evento) || [];
+      cbs.forEach(cb => cb(...args));
+      return cbs.length;
+    },
+  });
+  // Nomeada, e não anônima: o `Peer.ultimo` abaixo precisa do vínculo interno da classe —
+  // sem ele a linha dependeria de o dublê continuar pendurado no global com este nome.
+  global.Peer = class Peer {
+    constructor() {
+      this.destruido = false;
+      gravador(this);
+      // O jogo cria o peer lá dentro e não o expõe. Sem este registro o teste não teria
+      // como alcançar o que acabou de nascer — e expor pela ponte do jogo seria mudar o
+      // código de produção por causa do teste.
+      Peer.ultimo = this;
+    }
+    connect() { return gravador({ send() {}, close() {} }); }
     destroy() { this.destruido = true; }
   };
   global.location = { protocol: 'file:', href: '' };

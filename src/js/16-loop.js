@@ -149,12 +149,28 @@ function pedirAcao(intencao) {
 
 // O único lugar que mexe na partida. Vale para o seu clique, para o bot e para o que
 // chega pela rede — e valida os três do mesmo jeito.
+// Uma peça como o FIO pode entregá-la: dois números de 0 a `MAX_PINTAS`, e nada mais.
+// `mesmaPeca` (02-baralho.js) lê `b[0]` sem guarda, então uma peça ausente ou nula LANÇA
+// lá dentro — e a exceção sobe pelo `conn.on('data')` do anfitrião, que é quem tem a
+// partida. Note que isto NÃO é sobre trapaça: `jogar` valida a jogada contra
+// `acoesDe(P, cadeira)`, que sai da mão do próprio jogador, então peça inventada continua
+// devolvendo 'jogada inválida' e a fronteira do invariante 3 segue de pé. É sobre a mesa
+// dos outros parar.
+const pecaDoFio = p => Array.isArray(p) && p.length === 2 &&
+  p.every(n => Number.isInteger(n) && n >= 0 && n <= MAX_PINTAS);
+
 function aplicarIntencao(cadeira, i) {
   if (!P || P.fase !== 'mao') return;
   let r;
-  if (i.acao === 'jogar') r = jogar(P, cadeira, i.peca, i.ponta);
-  else if (i.acao === 'comprar') r = comprar(P, cadeira);
-  else r = passar(P, cadeira);
+  // A CADEIA ERA ABERTA NO FINAL, e é um defeito por si: `{t:'acao'}` sem campo nenhum
+  // caía no `else` e virava um PASSE válido — a rede conseguia passar a vez de alguém
+  // mandando uma mensagem vazia. Agora as três ações são nomeadas e o resto é recusa.
+  if (i.acao === 'jogar') {
+    if (!pecaDoFio(i.peca) || (i.ponta !== 'esq' && i.ponta !== 'dir')) r = { erro: 'jogada inválida' };
+    else r = jogar(P, cadeira, i.peca, i.ponta);
+  } else if (i.acao === 'comprar') r = comprar(P, cadeira);
+  else if (i.acao === 'passar') r = passar(P, cadeira);
+  else r = { erro: 'ação desconhecida' };
 
   if (r.erro) { if (cadeira === euNaTela) avisar(r.erro); return; }
 
