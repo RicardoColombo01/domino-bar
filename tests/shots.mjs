@@ -7,7 +7,7 @@ import path from 'path';
 
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const JOGO = 'file:///' + path.join(import.meta.dirname, '..', 'index.html').split(path.sep).join('/');
-const DIR = path.join(import.meta.dirname, 'shots');
+const DIR = path.join(import.meta.dirname, '.gerado', 'shots');
 
 const TELAS = {
   wide: { width: 1600, height: 900 },
@@ -175,7 +175,7 @@ for (const cena of CENAS) {
 
 await navegador.close();
 
-console.log(`${fotos} fotos em tests/shots/`);
+console.log(`${fotos} fotos em tests/.gerado/shots/`);
 if (offline.length) console.log(`\nAVISO: ${offline.length} requisições não saíram (rede indisponível).`);
 if (problemas.length) {
   console.log('\nPROBLEMAS DETECTADOS:\n' + problemas.join('\n'));

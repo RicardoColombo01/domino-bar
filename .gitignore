@@ -1,4 +1,3 @@
 node_modules/
-tests/built*.mjs
-tests/shots/
+tests/.gerado/
 .build-check.mjs

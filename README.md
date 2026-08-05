@@ -193,18 +193,26 @@ existe mais.
 
 Sem framework, sem bundler, sem asset. Madeira, piso, as pintas das peças e todos os sons
 são gerados em código na hora — não há um único `.png` ou `.mp3` no repositório. Three.js
-e PeerJS vêm de CDN. São **5.827 linhas** entre `src/` e o CSS.
+e PeerJS vêm de CDN. São **5.827 linhas** em `src/`.
 
 ```
-src/js/01-05   regras puras: baralho, encaixes, turnos, placar, bot
-src/js/06      onde cada peça cai na mesa (o serpenteio e as dobras)
-src/js/07-08   a cena do boteco e a peça em 3D
-src/js/09-13   tabuleiro animado, mão em leque, cliques, som, HUD
-src/js/14-16   menu das cadeiras, rede P2P, e a costura de tudo
+src/pagina.html      o molde
+src/css/estilo.css   entra no bundle como <style>
+src/js/10-casa/      o que é da CASA e de jogo nenhum: constantes, cena, áudio,
+                     HUD, menu de cadeiras, rede P2P, loop
+src/js/30-domino/    o que é DOMINÓ: baralho, regras, partida, bot, layout,
+                     peça 3D, tabuleiro, mão, interação
 ```
 
-Os arquivos de `src/js/` são **pedaços do mesmo escopo**, concatenados na ordem do número
-por `build.mjs` — não têm `import`/`export` entre si. Isso existe porque o navegador
+A separação por pasta existe para o **segundo jogo**: a camada de rede, as cadeiras, o
+saguão, a conversa e o hotseat nunca precisaram saber que o jogo era dominó, e é isso que
+um Truco herdaria de graça.
+
+Os arquivos de `src/js/` são **pedaços do mesmo escopo**, concatenados por `build.mjs` na
+ordem do NÚMERO do nome — nunca na do caminho — e não têm `import`/`export` entre si. A
+pasta organiza para quem lê; o número manda em quem executa, porque casa e dominó se
+intercalam na carga (o menu, que é da casa, valida o nível de bot contra uma tabela que
+mora no dominó). Isso existe porque o navegador
 bloqueia módulos em `file://`: o código tem de chegar embutido na página para o
 duplo-clique funcionar. O build ainda roda `node --check` no resultado, então erro de
 sintaxe vira mensagem no terminal em vez de tela preta.
@@ -212,7 +220,7 @@ sintaxe vira mensagem no terminal em vez de tela preta.
 ### Comandos
 
 ```
-npm run build       junta src/js/ num index.html (o CSS continua externo)
+npm run build       junta src/ num index.html autossuficiente (o CSS entra junto)
 npm run check       avisa se o index.html está desatualizado
 npm test            build + as três suítes de lógica (segundos)
 npm run telas       build + o jogo em seis tamanhos de tela, dez situações cada

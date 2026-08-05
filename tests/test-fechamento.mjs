@@ -21,7 +21,7 @@ const mod = await import(buildModule([
   'novaPartida', 'novaMao', 'acoesDe', 'jogar', 'passar', 'comprar',
   'jogadasValidas', 'fechamentosArmados', 'pontasDepois', 'jogadaDoBot',
   'baralhoDoModo', 'modoDe', 'carroca', 'mesmaPeca', 'chave',
-], undefined, new URL('./built-busca.mjs', import.meta.url).pathname.slice(1)));
+], undefined, new URL('./.gerado/built-busca.mjs', import.meta.url).pathname.slice(1)));
 
 const PARTIDAS = Number(process.argv[2] || 300);
 seedRandom(20260731);

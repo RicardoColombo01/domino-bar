@@ -10,7 +10,7 @@ const mod = await import(buildModule([
   'layoutDaMesa', 'escalaDoTabuleiro', 'novaPartida', 'novaMao', 'jogar', 'comprar',
   'passar', 'jogadaDoBot', 'carroca', 'PECA_C', 'PECA_L',
   'larguraUtilDoTabuleiro', 'caixaDoMonte', 'anguloDaCadeira', 'TABULEIRO_Z', 'FOLGA_VIZINHO',
-], undefined, path.join(import.meta.dirname, 'built-mesa.mjs')));
+], undefined, path.join(import.meta.dirname, '.gerado', 'built-mesa.mjs')));
 
 let falhas = 0;
 const ok = (cond, msg) => { if (!cond) { console.error('  ✗ ' + msg); falhas++; } };
