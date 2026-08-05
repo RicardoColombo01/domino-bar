@@ -64,7 +64,7 @@ const mod = await import(buildModule([
   // `linkAnfitriao.on('data')` mora dentro de dois callbacks aninhados do PeerJS. Com o
   // dublê gravando ouvintes dá para dirigi-lo, e é onde entra a vista que vem de fora.
   'linkAnfitriao',
-], undefined, path.join(import.meta.dirname, 'built-jogo.mjs')));
+], undefined, path.join(import.meta.dirname, '.gerado', 'built-jogo.mjs')));
 
 let falhas = 0;
 const ok = (cond, msg) => { if (!cond) { console.error('  ✗ ' + msg); falhas++; } };

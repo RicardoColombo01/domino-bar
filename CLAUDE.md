@@ -86,10 +86,24 @@ não a dois merges.
 
 ## Invariantes — não quebrar
 
-**1. `src/js/NN-*.js` são pedaços do MESMO escopo.** Sem `import`/`export` entre si;
-`build.mjs` concatena na ordem do número e roda `node --check` antes de gravar. Existe
-porque o navegador bloqueia módulos em `file://` e o jogo tem de abrir por duplo-clique.
+**1. `src/js/<pasta>/NN-*.js` são pedaços do MESMO escopo.** Sem `import`/`export` entre si;
+`build.mjs` varre `src/js/` recursivamente e concatena **na ordem do NÚMERO do nome, nunca
+na do caminho**, rodando `node --check` antes de gravar. Existe porque o navegador bloqueia
+módulos em `file://` e o jogo tem de abrir por duplo-clique.
 **Nunca editar `index.html` à mão — ele é gerado.**
+
+**A pasta organiza para quem LÊ; o número manda em quem EXECUTA**, e a distinção não é
+estilo. `14-menu.js` (casa) chama `mesaLembrada()` no topo do módulo, e ela valida o nível
+de bot contra `NIVEIS`, que mora em `05-bot.js` (**dominó**). Ordenar por caminho poria toda
+a `10-casa/` antes de toda a `30-domino/`, `NIVEIS` cairia na zona morta e a carga estouraria
+com `ReferenceError` — tela preta que não depende de dado guardado nenhum para acontecer.
+Arquivo novo escolhe o número pela **dependência de carga**, não pela pasta em que cai; o
+`build.mjs` reprova número repetido e arquivo sem número, porque os dois deixariam a ordem
+ao acaso do sistema de arquivos.
+
+**E o `index.html` é AUTOSSUFICIENTE de verdade** — o CSS entra no bundle
+(`src/css/estilo.css` vira `<style>`). Ele vinha por `<link>` até aqui, e a palavra
+"autossuficiente" era falsa em três arquivos ao mesmo tempo.
 
 **2. Uma cadeira é `voce`, `local`, `bot` ou `online`, e o motor não sabe a diferença.**
 Ele diz de quem é a vez e espera; quem responde (mouse, bot ou rede) é outra camada. Não
@@ -108,24 +122,38 @@ As pontas são o primeiro e o último número; jogar na esquerda é um `unshift`
 
 ### Mapa
 
+A ordem abaixo é a de CONCATENAÇÃO (o número), e ela se lê de cima a baixo mesmo com os
+arquivos morando em pastas diferentes — repare como casa e dominó se intercalam. É esse
+intercalamento que torna o número, e não o caminho, a fonte da ordem.
+
 ```
-01-constantes  peças, medidas, pontuação, folgas visuais, tabela MODOS, guardar/lido
-02-baralho     embaralhar, distribuir (com re-embaralho), quem abre, sobraDoBaralho
-03-regras      encaixes, pontas, jogadas válidas, tipo de batida     ← puro
-04-partida     turnos, compra, passe, placar, visaoDe()
-05-bot         níveis = quanta informação o bot recebe
-06-layout      onde cada peça cai na mesa, com as dobras             ← puro
-07-cena        renderer, câmera, luz de boteco, mesa, tralhas
-08-peca3d      geometria + atlas de pintas em canvas + fantasma
-09-tabuleiro   reconcilia o tabuleiro com a visão; prévia da jogada
-10-mao         sua mão em leque, mãos dos outros, monte
-11-interacao   raycast: escolher → ver → confirmar
-12-audio       WebAudio puro, sem arquivo
-13-hud         placar, vez, botões, telas de fim
-14-menu        montagem da mesa (as cadeiras)
-15-rede        PeerJS, anfitrião autoritativo
-16-loop        estado do app, turno, hotseat, render loop
+src/css/estilo.css               entra no bundle como <style>
+src/pagina.html                  o molde, com __ESTILO__ e __JOGO__
+
+10-casa/01-constantes  medidas, pontuação, folgas visuais, tabela MODOS, guardar/lido
+30-domino/02-baralho   embaralhar, distribuir (com re-embaralho), quem abre, sobraDoBaralho
+30-domino/03-regras    encaixes, pontas, jogadas válidas, tipo de batida     ← puro
+30-domino/04-partida   turnos, compra, passe, placar, visaoDe()
+30-domino/05-bot       níveis = quanta informação o bot recebe
+30-domino/06-layout    onde cada peça cai na mesa, com as dobras             ← puro
+10-casa/07-cena        renderer, câmera, luz de boteco, mesa, tralhas
+30-domino/08-peca3d    geometria + atlas de pintas em canvas + fantasma
+30-domino/09-tabuleiro reconcilia o tabuleiro com a visão; prévia da jogada
+30-domino/10-mao       sua mão em leque, mãos dos outros, monte
+30-domino/11-interacao raycast: escolher → ver → confirmar
+10-casa/12-audio       WebAudio puro, sem arquivo
+10-casa/13-hud         placar, vez, botões, telas de fim
+10-casa/14-menu        montagem da mesa (as cadeiras)
+10-casa/15-rede        PeerJS, anfitrião autoritativo
+10-casa/16-loop        estado do app, turno, hotseat, render loop
 ```
+
+**A pasta é uma AFIRMAÇÃO, não uma gaveta:** o que está em `10-casa/` promete não saber que
+o jogo é dominó, e é o que o Truco vai herdar de graça. Hoje a promessa ainda não é
+verdadeira em dois pontos, e eles estão nomeados na seção da Reorganização: `15-rede.js`
+escreve na tela por id (45 chamadas `el(...)`, mais que o próprio HUD) e `13-hud.js` tem o
+`desenharContagem`, que é regra de dominó. **Enquanto isso durar, a pasta é uma promessa a
+cumprir, não um fato.**
 
 ### Armadilhas já pagas (não repetir)
 
@@ -2579,6 +2607,34 @@ isso a ordem é boa: **o truco paga o baralho e a carta, e o pife e o 21 depois 
 
 ---
 
+## A reorganização — ✔ as pastas feitas (v2.3.0), as duas dívidas EM ABERTO
+
+**Feito em 05/08/2026:** `src/js/10-casa/` e `src/js/30-domino/`, o `build.mjs` varrendo
+recursivo e ordenando pelo NÚMERO, o CSS entrando no bundle (`src/css/`), e `tests/.gerado/`
+para todo artefato — `tests/` passou a mostrar só o que uma pessoa escreveu.
+
+**A prova de que não mudou comportamento nenhum:** o `index.html` gerado ficou **idêntico
+byte a byte** ao anterior, tirando as linhas de separador `/* ····· … ····· */`. É a
+verificação certa para mudança estrutural — verde de suíte diria bem menos.
+
+**O que a implementação descobriu, e o plano abaixo não previa:** ordenar por CAMINHO
+QUEBRARIA o jogo. `14-menu.js` (casa) chama `mesaLembrada()` no topo do módulo e valida o
+nível de bot contra `NIVEIS`, que mora em `05-bot.js` (dominó) — com toda a `10-casa/` antes
+de toda a `30-domino/`, é `ReferenceError` na carga e tela preta. Por isso a ordem saiu do
+número e não da pasta, e por isso o `build.mjs` reprova número repetido e arquivo sem número.
+
+**AS DUAS DÍVIDAS CONTINUAM ABERTAS, e são elas que decidem se a pasta é fato ou promessa:**
+
+- **`15-rede.js` escreve na tela por id** — 45 chamadas `el(...)`, mais que o próprio HUD.
+  Enquanto isso durar, ele não é "da casa": é dominó disfarçado de rede.
+- **Um namespace por jogo** (`JOGOS.domino = {…}`). Sem ele, o `naMao` do truco e o do
+  dominó colidem em silêncio no escopo concatenado — e este arquivo já registra que `naMao`
+  sendo dois nomes quase virou colisão uma vez.
+
+E `13-hud.js` ainda tem `desenharContagem`, que é regra de dominó dentro da pasta da casa.
+
+<details><summary>o plano original, de quando nada disso existia</summary>
+
 ## A reorganização — pré-requisito, não gosto
 
 Pedido do Ricardo em 04/08/2026: *"mantenha tudo organizado, separe os códigos, as pastas,
@@ -2706,6 +2762,8 @@ sete suítes de rede; reorganizar com dois jogos escritos é o dobro do trabalho
 misturar as regras dos dois.
 
 ---
+
+</details>
 
 ## O caminho de aplicativo — PWA agora, Play Store depois
 

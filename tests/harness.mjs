@@ -262,7 +262,16 @@ export const JOGO_HTML = path.join(import.meta.dirname, '..', 'index.html');
 // A troca do renderer é OPCIONAL de propósito: enquanto o projeto ainda é só o motor
 // de regras, não existe WebGLRenderer nenhum para trocar, e exigir isso deixaria os
 // testes de regra reféns do 3D existir.
-export function buildModule(exportar, htmlPath = JOGO_HTML, outPath = path.join(import.meta.dirname, 'built.mjs')) {
+// TUDO QUE É GERADO MORA NUM LUGAR SÓ. Antes os cinco `built*.mjs` e as fotos ficavam
+// soltos em `tests/`, misturados com as suítes que uma pessoa escreveu — e dois deles
+// (`built-dbg`, `built-busca`) eram sobras que ninguém sabia dizer se ainda serviam. Com a
+// pasta, `tests/` mostra só o que é fonte, e o `.gitignore` vira uma linha em vez de três.
+const GERADO = '.gerado';
+
+export function buildModule(exportar, htmlPath = JOGO_HTML, outPath = path.join(import.meta.dirname, GERADO, 'built.mjs')) {
+  // A pasta pode não existir num clone novo ou num worktree recém-criado, e ela é ignorada
+  // pelo git — então quem escreve é quem a cria.
+  fs.mkdirSync(path.dirname(outPath), { recursive: true });
   const html = fs.readFileSync(htmlPath, 'utf8');
   let src = html.match(/<script type="module">([\s\S]*?)<\/script>/)[1];
 

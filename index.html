@@ -9,7 +9,684 @@
 <!-- Ícone embutido: sem ele o navegador pede /favicon.ico sozinho e leva 404 em toda
      visita. Um SVG em data: resolve sem acrescentar arquivo nem requisição. -->
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='3' y='9' width='26' height='14' rx='3' fill='%23f4ecd9' stroke='%23241a12' stroke-width='2'/><path d='M16 10v12' stroke='%23241a12' stroke-width='1.5'/><g fill='%23191512'><circle cx='8' cy='13' r='1.9'/><circle cx='12' cy='19' r='1.9'/><circle cx='20' cy='13' r='1.9'/><circle cx='25' cy='13' r='1.9'/><circle cx='20' cy='19' r='1.9'/><circle cx='25' cy='19' r='1.9'/></g></svg>" />
-<link rel="stylesheet" href="css/estilo.css" />
+<style>
+/* GERADO por build.mjs a partir de src/ — não edite este bloco à mão. */
+/* Dominó de Bar — a camada de HTML por cima do 3D.
+   Paleta de luz de lâmpada amarelada sobre madeira escura: âmbar sobre marrom. */
+:root {
+  --ambar: #f0c274;
+  --ambar-forte: #ffd98f;
+  --escuro: rgba(20, 13, 9, .82);
+  --borda: rgba(240, 194, 116, .22);
+  --texto: #efe3cf;
+  /* O PISO DA OPACIDADE. Texto secundário desbota para dizer "isto é fundo, não figura" —
+     e desbotar demais é o mesmo que apagar. `opacity` não escurece a cor, ela MISTURA o
+     texto com o que está atrás, então o contraste real depende do fundo: aqui é o .painel
+     (rgba .82) por cima da cena 3D. Medido nos três fundos do jogo, .52 é onde o AA
+     (4.5:1 para texto pequeno) começa a passar — e .52 é folga zero, que a casa já
+     aprendeu a não chamar de conserto. .58 é o valor que o `.rot` sempre usou e que já
+     passava (5,4:1), então isto não inventa número novo na paleta: promove um que já era
+     bom a REGRA. Toda opacidade de texto abaixo daqui tem de ter um motivo escrito. */
+  --fraco: .58;
+  /* Vermelho de boteco, o mesmo do hover do botão de sair. Erro não é decoração: é o
+     único texto da tela que aparece justamente quando alguém já está confuso. */
+  --erro: #ff9b86;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; height: 100%; overflow: hidden;
+  background: #0d0908; color: var(--texto);
+  font: 15px/1.45 "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  /* A mesa não é texto: sem isto, arrastar uma peça no celular seleciona o HUD inteiro
+     e o toque longo abre o menu de contexto por cima do jogo. */
+  user-select: none; -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+/* Recuo das bordas do aparelho (notch, ilha, barra de gestos). Vira zero em qualquer
+   tela que não tenha entalhe, então serve para os dois casos sem media query. */
+:root {
+  --seg-t: env(safe-area-inset-top, 0px);
+  --seg-b: env(safe-area-inset-bottom, 0px);
+  --seg-l: env(safe-area-inset-left, 0px);
+  --seg-r: env(safe-area-inset-right, 0px);
+}
+
+#app { position: fixed; inset: 0; -webkit-touch-callout: none; }
+/* touch-action: none é a linha sem a qual o jogo não existe no celular — sem ela o
+   navegador entende o arrasto como rolagem, rouba o gesto e ainda dá zoom por cima. */
+#app canvas { display: block; touch-action: none; }
+
+/* O user-select: none do body é para a MESA, não para os campos: sem estas duas linhas
+   o Safari herda e o jogador não consegue selecionar nem colar o código da mesa. */
+.entrada { user-select: text; -webkit-user-select: text; }
+.codigo { -webkit-user-select: all; }
+
+.oculta { display: none !important; }
+
+/* ── caixinhas do HUD ─────────────────────────────────────────────────────── */
+.painel {
+  background: var(--escuro);
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  padding: 8px 13px;
+  backdrop-filter: blur(7px);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, .5);
+}
+
+.rot { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; opacity: var(--fraco); }
+
+#topo {
+  position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 9px; align-items: stretch; z-index: 5; pointer-events: none;
+}
+.dado { display: flex; flex-direction: column; align-items: center; min-width: 74px; }
+.dado b { font-size: 17px; font-variant-numeric: tabular-nums; color: var(--ambar); }
+
+/* O #topo é pointer-events:none para não roubar o toque da mesa — e isso também impediria
+   SELECIONAR o código da sala, que é metade do motivo de mostrá-lo. Exceção pontual, como
+   a que o #conversa já tem. `all` seleciona o código inteiro num toque, igual ao
+   #onlineCodigo do saguão. */
+#salaPainel { pointer-events: auto; }
+#salaVal { user-select: all; -webkit-user-select: all; letter-spacing: .08em; }
+
+#placar { display: flex; align-items: center; gap: 11px; }
+#placar .time { display: flex; flex-direction: column; align-items: center; }
+#placar .time i { font-style: normal; font-size: 11px; opacity: .65; max-width: 130px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#placar .time b { font-size: 22px; line-height: 1; color: var(--ambar-forte); }
+/* EXCEÇÃO ao --fraco, e o motivo é que este × não é texto: é o traço que separa um placar
+   do outro. Quem informa são os dois números que ele fica no meio, e a separação também é
+   feita pelo espaço. Subi-lo faria ele competir com o que ele existe para separar. */
+#placar .x { opacity: .35; }
+#placar .ate { font-size: 10.5px; opacity: var(--fraco); margin-left: 4px; }
+
+/* lista de jogadores, canto superior direito */
+#jogadores { position: fixed; top: 14px; right: 14px; z-index: 5; display: grid; gap: 6px; }
+.jog {
+  background: var(--escuro); border: 1px solid var(--borda); border-left: 3px solid transparent;
+  border-radius: 9px; padding: 6px 11px; min-width: 176px;
+  display: grid; grid-template-columns: 1fr auto; gap: 1px 8px; align-items: center;
+}
+.jog.davez { border-left-color: var(--ambar); background: rgba(58, 38, 16, .88); }
+.jog.euu .nome::after { content: " ·"; color: var(--ambar); }
+.jog .nome { font-weight: 600; }
+/* O sobrenome vive num <i> só para o CSS poder escondê-lo onde a faixa aperta — não é
+   ênfase, então não é itálico. Onde há espaço o nome inteiro aparece, como sempre. */
+.jog .nome .resto { font-style: normal; }
+.jog .tipo { font-size: 10.5px; opacity: var(--fraco); text-align: right; }
+.jog .pecas { grid-column: 1/3; font-size: 10px; letter-spacing: -1px; color: var(--ambar); opacity: .8; }
+.jog .pecas i { font-style: normal; opacity: .6; margin-left: 6px; letter-spacing: 0; }
+
+/* Coluna inferior esquerda: ações em cima, de quem é a vez embaixo. No centro elas
+   cobririam a sua mão, que é justamente onde os olhos estão. */
+/* Painéis que só informam não podem comer o toque: em retrato eles viram faixas da
+   largura inteira, e o pointerdown do jogo só reage a evento cujo alvo é o canvas —
+   um toque em cima deles não chegaria à mesa nem cancelaria a peça levantada. */
+#vez, #jogadores { pointer-events: none; }
+
+#vez {
+  position: fixed; bottom: 16px; left: 16px; z-index: 5;
+  font-size: 13px; opacity: .8;
+}
+#vez.minha { color: #101010; background: var(--ambar); font-weight: 700; opacity: 1; border-color: transparent; }
+
+/* A conversa: narração e falas no mesmo fio. Diferente dos outros painéis, este RECEBE
+   toque — tem campo dentro —, então nada de pointer-events: none aqui. */
+#conversa {
+  position: fixed; bottom: 16px; right: 16px; z-index: 6;
+  width: 268px; font-size: 11.5px; line-height: 1.55;
+  display: flex; flex-direction: column; gap: 6px; padding: 8px 10px;
+}
+#conversaLista { max-height: 132px; overflow-y: auto; scrollbar-width: thin; }
+#conversaLista::-webkit-scrollbar { width: 4px; }
+#conversaLista::-webkit-scrollbar-thumb { background: var(--borda); border-radius: 2px; }
+#conversaLista > div { margin-top: 2px; overflow-wrap: anywhere; }
+/* Jogada é fundo, fala é figura: a diferença tem de ser vista sem ler. Estava em .45,
+   que dava 3,79:1 — reprovado. O que carrega a distinção não é o quanto isto desbota, é o
+   quanto a FALA acende: ela tem o nome em âmbar e vem a opacidade cheia. .58 contra 1.0
+   continua sendo uma diferença de 42%, e agora a narração também dá para ler. */
+#conversaLista .doJogo { opacity: var(--fraco); }
+#conversaLista .fala b { color: var(--ambar); font-weight: 600; }
+#conversaLista .daDupla b { color: #9fd6a0; }
+#conversaLista .fala i {
+  font-style: normal; font-size: 9px; text-transform: uppercase; letter-spacing: .08em;
+  opacity: var(--fraco); margin-left: 4px;
+}
+#conversaEscrever { display: flex; gap: 5px; align-items: center; }
+#conversaEscrever .entrada { font-size: 12px; padding: 5px 8px; }
+#btCanal { white-space: nowrap; }
+#btConversa.temNovidade {
+  background: var(--ambar); color: #17100a; border-color: transparent; font-weight: 700;
+}
+
+#acoes { position: fixed; bottom: 60px; left: 16px; z-index: 6; display: flex; gap: 9px; align-items: center; }
+
+/* A cortina da gaveta do celular — o posicionamento dela está no último bloco do arquivo,
+   junto do resto da gaveta. Aqui só o desenho. */
+#cortina { position: fixed; inset: 0; z-index: 5; background: rgba(8, 5, 3, .58); }
+.btn.peq.on { background: var(--ambar); color: #17100a; border-color: transparent; }
+
+/* Contagem do jogo: uma linha por número, barrinha do que já apareceu e quantas faltam.
+   Fica do lado, ligada por botão — quem já conta de cabeça não quer a tabela na tela. */
+#contagem {
+  /* Acima da conversa, que é o painel mais alto do canto — a lista dela tem teto de
+     altura justamente para esta conta não virar adivinhação. */
+  position: fixed; right: 14px; bottom: 220px; z-index: 5;
+  display: grid; gap: 2px; font-size: 12px; min-width: 168px;
+  pointer-events: none;
+}
+#contagem > span.rot { margin-bottom: 3px; }
+#contagem div { display: grid; grid-template-columns: 14px 1fr 20px auto; gap: 7px; align-items: center; }
+#contagem b { color: var(--ambar-forte); font-size: 13px; }
+#contagem i { font-style: normal; letter-spacing: -1px; color: var(--ambar); opacity: .85; }
+#contagem s { text-decoration: none; text-align: right; font-variant-numeric: tabular-nums; opacity: .75; }
+#contagem em { font-style: normal; font-size: 10px; opacity: var(--fraco); max-width: 92px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Número que já apareceu inteiro: apaga, porque não há mais nada para esperar dele.
+   Estava em .38 (3,04:1) — e "apagado" virou "ilegível". O painel de contagem é
+   FERRAMENTA DE DECISÃO: saber que o 5 acabou é o que decide a jogada, tanto quanto saber
+   que faltam dois. Uma linha zerada que não dá para ler não informa, esconde. */
+#contagem .zerado { opacity: var(--fraco); }
+
+/* Barra de confirmação: no centro, acima da mão, porque é onde os olhos já estão
+   quando você acabou de levantar uma peça. */
+#confirmar {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 7;
+  display: flex; align-items: center; gap: 10px; padding: 9px 13px;
+  border-color: rgba(240, 194, 116, .45);
+  animation: subir .16s ease-out;
+}
+@keyframes subir { from { opacity: 0; transform: translate(-50%, 8px); } }
+.pecaEscolhida {
+  font: 700 18px/1 ui-monospace, Consolas, monospace; letter-spacing: .06em;
+  color: #17100a; background: var(--ambar-forte);
+  padding: 7px 11px; border-radius: 7px;
+}
+
+#aviso {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(.94);
+  background: rgba(28, 18, 11, .95); border: 1px solid var(--borda); color: var(--ambar-forte);
+  padding: 11px 20px; border-radius: 11px; z-index: 20;
+  opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s;
+}
+#aviso.vendo { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+.canto {
+  position: fixed; top: 14px; left: 14px; z-index: 6;
+  width: 36px; height: 36px; padding: 0; cursor: pointer; color: var(--ambar);
+  font-size: 15px; line-height: 1;
+}
+/* O botão de som desligado. Estava em .45 — e um botão de ESTADO cujo estado não dá para
+   ler é um botão que não diz nada. Quem carrega o "desligado" é o glifo (♪ vira 🔇), não
+   o desbotamento; ele só acompanha. */
+.canto.desligado { opacity: var(--fraco); }
+/* O de sair fica ao lado do som no computador, e embaixo dele no celular em pé, onde a
+   coluna da esquerda é dos dois e a faixa do topo começa depois dela. */
+#btSair { left: 58px; }
+#btConversa { left: 102px; display: none; }
+#btSair:hover { color: #ff9b86; border-color: rgba(255, 155, 134, .5); }
+
+/* ── botões ───────────────────────────────────────────────────────────────── */
+.btn {
+  background: rgba(52, 34, 20, .92); color: var(--texto);
+  border: 1px solid var(--borda); border-radius: 9px;
+  padding: 10px 17px; font: inherit; font-weight: 600; cursor: pointer;
+  transition: background .14s, transform .08s, border-color .14s;
+}
+.btn:hover { background: rgba(80, 52, 28, .95); border-color: rgba(240, 194, 116, .45); }
+.btn:active { transform: translateY(1px); }
+.btn.principal { background: var(--ambar); color: #17100a; border-color: transparent; }
+.btn.principal:hover { background: var(--ambar-forte); }
+.btn.peq { padding: 6px 13px; font-size: 13px; font-weight: 500; }
+.btn.peq.on { background: var(--ambar); color: #17100a; border-color: transparent; }
+/* Cadeira que não fecha com o modo escolhido (Duelo é 1v1, Trio é 3).
+   EXCEÇÃO ao --fraco: o WCAG dispensa componente DESABILITADO justamente porque o
+   apagado é a informação. Aqui é literal — o botão não está fraco, ele está fora. */
+.btn:disabled { opacity: .28; cursor: not-allowed; }
+.btn:disabled:hover { background: rgba(52, 34, 20, .92); border-color: var(--borda); }
+.btn.peq i { font-style: normal; opacity: .55; font-size: 11.5px; margin-left: 5px; }
+.btn.peq.on i { opacity: .65; }
+
+/* Continuar a partida de antes. Verde e não âmbar de propósito: o âmbar é do "Sentar e
+   jogar", que é a ação normal — e retomar não pode competir com começar. Quem chegou
+   para jogar de novo acha, quem chegou para começar não tropeça. */
+.btn.retomar {
+  border-color: rgba(159, 214, 160, .45); color: #cfe9cf;
+  background: rgba(38, 62, 42, .92);
+}
+.btn.retomar:hover { background: rgba(48, 80, 54, .95); border-color: rgba(159, 214, 160, .7); }
+
+/* ── telas cheias ─────────────────────────────────────────────────────────── */
+.tela {
+  position: fixed; inset: 0; z-index: 30;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at 50% 40%, rgba(60, 38, 20, .74), rgba(8, 5, 4, .95));
+  backdrop-filter: blur(4px);
+  /* O RECUO DO APARELHO, como em todo o resto do HUD. Esta era a única família de painel do
+     projeto sem `--seg-*`, e ela é `position: fixed; inset: 0` com viewport-fit=cover: o
+     título ficava debaixo do entalhe. Em celular DEITADO o entalhe está na lateral, que é
+     justamente onde a carta é mais larga. */
+  padding: calc(20px + var(--seg-t)) calc(20px + var(--seg-r))
+           calc(20px + var(--seg-b)) calc(20px + var(--seg-l));
+  overflow: auto;
+}
+/* A CONVERSA DO SAGUÃO. A tela de espera é um overlay de z-index 30 e cobria a conversa
+   por completo — nenhuma classe de visibilidade resolveria isso, porque o problema era
+   empilhamento. Enquanto a mesa enche, e só então, a conversa e o botão que a abre sobem
+   acima da tela: é o único momento do jogo em que um painel do HUD fica POR CIMA de uma
+   tela, e é justamente quando as pessoas mais querem falar ("cadê você?", "entra aí").
+   O canto de baixo à direita fica livre porque a carta é centrada e tem 620px de teto. */
+body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
+
+/* O TOPO TEM DE SER ALCANÇÁVEL. A `.tela` é um scroller (`overflow: auto`) que centra pelo
+   `align-items: center` — e conteúdo mais alto que o contêiner, num flex centrado,
+   transborda para os DOIS lados. Só que a área rolável de um scroller se estende para o
+   FIM e não para o começo: `scrollTop: 0` já é o mais alto que a rolagem vai, e o que ficou
+   acima fica fora do curso para sempre. Rolar as regras para baixo e não conseguir subir de
+   volta ao título era isto, e valia para as SETE telas que compartilham esta classe.
+
+   `margin: auto` resolve porque as duas pontas do flexbox se comportam diferente conforme o
+   sinal da folga: sobrando espaço, as margens automáticas o dividem e o resultado é o mesmo
+   centro de sempre; faltando espaço, elas resolvem para ZERO (é o que a spec manda) e a
+   carta encosta no começo do scroller, onde a rolagem alcança.
+
+   Não `align-items: safe center`, que faz exatamente isto e é a ferramenta desenhada para
+   isto: declaração não suportada é descartada INTEIRA, então num navegador sem ela o
+   `align-items` cairia para `stretch` e a carta ficaria com a altura da tela — precisaria de
+   duas linhas em cascata e ainda assim com suporte pior (Safari 16.4). Margem automática em
+   item flex é universal, e este jogo abre por duplo-clique em file:// e roda em celular.
+
+   Não `flex-start`, que sempre alcança o topo e perde o centro vertical num monitor grande:
+   regressão visual em troca de nada.
+
+   De brinde, o `padding` do scroller volta a valer: hoje ele não protegia nada, porque a
+   carta transbordava ACIMA dele. */
+.carta {
+  margin: auto;
+  background: linear-gradient(180deg, rgba(38, 25, 16, .97), rgba(22, 14, 9, .97));
+  border: 1px solid var(--borda); border-radius: 16px;
+  padding: 26px 30px; max-width: 620px; width: 100%;
+  box-shadow: 0 26px 70px rgba(0, 0, 0, .7);
+}
+.carta h1 { margin: 0 0 4px; font-size: 30px; letter-spacing: -.01em; color: var(--ambar-forte); }
+.carta h2 { margin: 0 0 6px; font-size: 22px; color: var(--ambar-forte); }
+.sub { margin: 0 0 18px; opacity: .62; font-size: 13.5px; }
+.nota { font-size: 12px; opacity: var(--fraco); }
+/* O TEXTO DE ERRO DO ONLINE. Ele era `.nota` e nada mais — ou seja, o texto de MENOR
+   contraste da tela era justamente o que avisa que algo deu errado, em 12px e 4,4:1.
+   Erro não é nota de rodapé: opacidade cheia e a cor de perigo da casa. */
+#onlineErro:not(:empty) { opacity: 1; color: var(--erro); }
+.grandao { font-size: 27px; font-weight: 700; color: var(--ambar); margin: 6px 0 10px; }
+
+.linha { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 14px 0; }
+.grupo { display: flex; gap: 5px; }
+.acoesMenu { margin-top: 20px; }
+
+#cadeiras { display: grid; gap: 7px; margin: 6px 0 4px; }
+.cadeira {
+  display: grid; grid-template-columns: 84px 1fr 190px; gap: 10px; align-items: center;
+  background: rgba(0, 0, 0, .26); border: 1px solid rgba(240, 194, 116, .12);
+  border-radius: 10px; padding: 8px 12px;
+}
+.cadeira .num { font-size: 11.5px; opacity: var(--fraco); text-transform: uppercase; letter-spacing: .07em; }
+.cadeira .fixo { font-size: 12px; opacity: var(--fraco); text-align: center; }
+
+.entrada, .cadeira select {
+  background: rgba(0, 0, 0, .35); color: var(--texto);
+  border: 1px solid var(--borda); border-radius: 7px;
+  padding: 7px 10px; font: inherit; font-size: 14px; width: 100%;
+}
+/* O `outline: none` aqui é seguro porque a borda âmbar É o indicador — mas ela só existe
+   nestes dois, e o resto da tela não tinha indicador nenhum. Ver o `:focus-visible`
+   global lá embaixo. */
+.entrada:focus, .cadeira select:focus { outline: none; border-color: var(--ambar); }
+.cadeira select option { background: #241811; }
+
+.codigo {
+  font: 700 42px/1.1 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  letter-spacing: .22em; color: var(--ambar-forte); text-align: center;
+  background: rgba(0, 0, 0, .32); border: 1px dashed var(--borda);
+  border-radius: 12px; padding: 16px 10px; margin: 6px 0 14px;
+  user-select: all;
+}
+
+.somas { display: grid; gap: 4px; margin: 12px 0 2px; font-size: 13.5px; }
+.somas div { display: flex; justify-content: space-between; gap: 12px;
+  border-bottom: 1px dotted rgba(240, 194, 116, .14); padding-bottom: 3px; }
+.somas b { color: var(--ambar); }
+
+/* O que sobrou na mão. Herda a lista de .somas mas NÃO o âmbar do <b>: com a mesma cor
+   e peso do placar do topo, o número lia-se como pontuação — e é o contrário, é o que
+   ficou por jogar. Classe própria porque .somas também veste a sala online. */
+.rotBloco { margin-top: 16px; }
+.sobrou { display: grid; gap: 4px; margin: 6px 0 2px; font-size: 13.5px; }
+.sobrou div { display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  border-bottom: 1px dotted rgba(240, 194, 116, .14); padding-bottom: 3px; }
+.sobrou b { color: var(--texto); opacity: .8; font-variant-numeric: tabular-nums; }
+/* em duplas, as parcelas de cada parceiro ao lado do nome da dupla */
+.sobrou i { font-style: normal; opacity: var(--fraco); font-size: 12px; margin-left: 8px; }
+
+/* placar final, na tela de campeão: mesmo desenho do placar do topo */
+#placarFinal { display: flex; align-items: center; gap: 18px; margin: 10px 0 14px; }
+#placarFinal .time { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+#placarFinal .time i { font-style: normal; font-size: 12px; opacity: .6; max-width: 190px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* EXCEÇÃO ao --fraco, e aqui é a regra do AA que muda, não o desenho: 34px é TEXTO GRANDE,
+   que pede 3:1 e não 4.5:1 — .45 dá 4,3:1 e passa com folga. */
+#placarFinal .time b { font-size: 34px; line-height: 1; opacity: .45; }
+#placarFinal .time.venceu b { color: var(--ambar-forte); opacity: 1; }
+/* separador, como o #placar .x */
+#placarFinal .x { opacity: .3; font-size: 18px; align-self: flex-end; padding-bottom: 4px; }
+
+.regras { margin-top: 20px; font-size: 13px; opacity: .72; }
+.regras summary { cursor: pointer; opacity: .8; }
+.regras ul { margin: 10px 0 0; padding-left: 20px; line-height: 1.75; }
+.regras b { color: var(--ambar); }
+
+/* ── quem pediu menos movimento ───────────────────────────────────────────────
+   O outro lado do `movimentoReduzido()` do 01-constantes.js, que cuida do 3D — a lâmpada
+   que respira e as peças que deslizam. Aqui ficam os três movimentos de HTML que existem
+   no projeto: a barra de confirmar subindo, o aviso crescendo e o hover dos botões.
+
+   As transições NÃO viram `none`: viram `0.01ms`. A diferença importa porque código que
+   espera por `transitionend`/`animationend` nunca é avisado quando a transição deixa de
+   existir — aqui não há nenhum hoje, e é exatamente por isso que a hora de escrever assim
+   é agora, e não depois de alguém adicionar um e passar uma tarde procurando.
+
+   `transform` do `#confirmar` e do `#aviso` fica de FORA da anulação de propósito: aqueles
+   dois são centrados por `translate(-50%)`, e zerar o transform os joga meia largura para
+   fora da tela. É a mesma armadilha que a gaveta pagou no item 10 da Fila 5, e ela volta
+   sempre que alguém mexe em movimento sem olhar quem usava o transform para POSIÇÃO. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* O botão afundava 1px ao ser apertado. É pequeno, mas é movimento sob o dedo, e o
+     retorno de "apertei" já é dado pela cor. */
+  .btn:active { transform: none; }
+}
+
+/* ── o anel de foco ───────────────────────────────────────────────────────────
+   Não existia UM indicador de foco no projeto inteiro, e os botões de confirmar sempre
+   foram <button> de verdade que pegam Tab — ou seja, dava para chegar neles pelo teclado
+   e não dava para saber que se chegou.
+
+   `:focus-visible` e não `:focus`, e a diferença é o motivo de isto poder existir sem
+   incomodar ninguém: o navegador só o acende quando o foco veio de TECLADO. Clicar num
+   botão com o mouse não deixa anel para trás — que é exatamente a queixa que fez meio
+   mundo escrever `outline: none` e quebrar o teclado junto.
+
+   `outline` e não `border`/`box-shadow`: outline não ocupa espaço, então não empurra
+   layout nenhum — e num HUD onde cada faixa tem dono (item 8), mexer em caixa é caro.
+   O `offset` negativo no .canto é porque ele é redondo e pequeno: por fora, o anel
+   encostaria no botão vizinho, que fica a 22px. */
+:focus-visible {
+  outline: 2px solid var(--ambar-forte);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.canto:focus-visible { outline-offset: -3px; }
+/* A borda âmbar já era o indicador destes dois; o anel por cima seria ruído em cima de
+   sinal. Mas só quando o foco é de teclado — daí não voltar a ser um `:focus` seco. */
+.entrada:focus-visible, .cadeira select:focus-visible { outline: none; }
+
+/* ── tela pequena ─────────────────────────────────────────────────────────────
+   Duas perguntas diferentes: `max-width` é "cabe texto?", `orientation` é "que forma
+   tem a tela?". Girar o celular muda a segunda sem mudar a primeira, e era só a
+   primeira que existia aqui — daí o HUD de retrato ser um empilhamento de painéis
+   brigando pelo mesmo canto. */
+@media (max-width: 720px) {
+  .cadeira { grid-template-columns: 1fr; gap: 6px; }
+  .carta { padding: 20px; }
+  /* O recuo do aparelho acompanha, senão a tela pequena — que é onde há entalhe — perde
+     justamente o que a regra de cima foi acrescentar. */
+  .tela {
+    padding: calc(12px + var(--seg-t)) calc(12px + var(--seg-r))
+             calc(12px + var(--seg-b)) calc(12px + var(--seg-l));
+  }
+}
+
+/* Alvo de toque: 36px é o que o dedo erra. 44 é o mínimo que a Apple e o Google
+   recomendam há uma década, e a diferença some no polegar. A pergunta certa aqui é
+   "que apontador?" e não "que largura?" — um tablet de 820px e um celular deitado de
+   844px são largos e continuam sendo dedo. */
+@media (pointer: coarse), (max-width: 900px) {
+  .canto { width: 44px; height: 44px; font-size: 17px; }
+  .btn { padding: 12px 18px; }
+  .btn.peq { padding: 9px 14px; }
+}
+
+/* Em tela apertada a conversa não some: ela FECHA. Antes o log era simplesmente
+   escondido em todo celular — e com o chat dentro dele isso deixaria de ser aceitável.
+   Agora abre por botão, com contador de não lidas. */
+@media (pointer: coarse), (max-width: 900px), (max-height: 560px) {
+  #conversa { display: none; }
+  #conversa.aberta { display: flex; }
+  #btConversa { display: block; }
+  #btConversa.oculta { display: none !important; }
+}
+
+/* Celular DEITADO: 390px de altura para caber tudo, e o topo e a lista de jogadores
+   dividem a mesma faixa. Sem isto os dois se encostam. */
+@media (max-height: 560px) {
+  /* CADA FAIXA TEM DONO. O defeito do item 8 não era nenhuma caixa ser grande demais:
+     era o #topo ser centrado na TELA enquanto os botões (linha em 14→146px) e o
+     #jogadores (ancorado à direita) ocupavam as pontas dela. Cada um cabia sozinho e
+     nenhum perguntava pelo outro — em 640×360 davam 58px de sobreposição à direita e
+     mais nos botões à esquerda, e de longe isso se parece com nome cortado.
+     Agora o topo é uma faixa entre as duas colunas, e não pode alcançá-las por
+     construção. Zerar o `transform` é obrigatório: só trocar left/right deixaria o
+     translateX(-50%) de pé e a faixa nasceria meia largura fora do lugar — é a mesma
+     armadilha que a gaveta pagou no item 10. */
+  #topo {
+    /* As duas reservas são a LARGURA DA COLUNA MAIS A MARGEM DELA, e não a largura só.
+       À esquerda os três botões acabam em 146px (14 + 44×3, empilhados na horizontal); à
+       direita o #jogadores tem 116px de largura ancorados a 14px da borda, ou seja 130.
+       Reservar 124 deixava 6px de invasão — pouco para o olho e o bastante para o teste,
+       que é exatamente para isso que ele serve. */
+    left: calc(var(--seg-l) + 150px); right: calc(var(--seg-r) + 138px);
+    transform: none; justify-content: center; min-width: 0;
+    gap: 5px; overflow: hidden;
+  }
+  #topo .painel { padding: 4px 7px; min-width: 0; }
+  .dado { min-width: 0; }
+  .dado b { font-size: 14px; }
+  .rot { font-size: 9px; letter-spacing: .06em; }
+  /* A faixa é apertada: o que sai é o que se deduz de outro lugar. O "até 6" está na
+     tela de fim e no menu; o nome do time já está na lista de jogadores ao lado. */
+  #placar { gap: 6px; }
+  #placar .ate { display: none; }
+  #placar .time b { font-size: 16px; }
+  #placar .time i { max-width: 58px; font-size: 9.5px; }
+  /* Largura FIXA, e é o que torna a conta acima verdadeira: com largura de conteúdo um
+     nome longo empurraria a coluna para dentro da faixa do topo de novo. */
+  #jogadores { gap: 4px; width: 116px; }
+  .jog { min-width: 0; padding: 4px 7px; }
+  .jog .nome { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .jog .nome .resto { display: none; }
+  .jog .tipo { display: none; }
+  /* DEITADO A BARRA SOBE PARA O TOPO, ao lado dos botões de canto. Em 844×390 a mão se
+     espalha por ~80% da largura e desce até a beirada de baixo: qualquer coisa no rodapé
+     esquerdo fica EM CIMA da peça mais à esquerda — foi o que o teste de "peça por baixo
+     de painel" acusou, e é a última sobra da Fila 2 aparecendo em número.
+     A faixa entre os botões de canto e o topo é a única sobra real de espaço aqui. */
+  /* ...e ela cabe na FAIXA ESQUERDA, quebrando em linhas em vez de atravessar a mesa.
+     A barra tem a mesma largura nas duas paisagens (14→264), mas o arco dos adversários
+     não: em 844×390 ele começa em 271 e escapa por 7px; em 640×360 começa em 181, porque
+     a mesa é mais estreita, e a barra monta em cima de 83px de peça. Prender a barra à
+     faixa que já é dela resolve os dois de uma vez, e sem tocar no 3D — o caminho de
+     fazer a mesa desviar existe (`apertoDaMesa`), mas é o mais caro e não é preciso aqui. */
+  #acoes {
+    bottom: auto; top: calc(var(--seg-t) + 74px); left: calc(var(--seg-l) + 14px);
+    max-width: 124px; flex-wrap: wrap; gap: 6px;
+  }
+  #vez { bottom: 12px; }
+  /* Tela baixa não tem coluna direita sobrando: a contagem vira faixa, como no retrato. */
+  #contagem {
+    top: calc(var(--seg-t) + 62px); bottom: auto;
+    left: 50%; right: auto; transform: translateX(-50%);
+    grid-auto-flow: column; grid-auto-columns: 1fr; gap: 5px; min-width: 0;
+  }
+  #contagem > span.rot, #contagem i, #contagem em { display: none; }
+  #contagem div { grid-template-columns: 1fr; justify-items: center; gap: 0; }
+  #contagem s { text-align: center; }
+}
+
+@media (orientation: portrait) and (max-width: 860px) {
+  /* O topo era um flex centrado por translateX(-50%) com três painéis de min-width 74px:
+     em 360px ele saía pelos dois lados SEM aparecer no scrollWidth, porque overflow
+     negativo em elemento fixo não conta. Agora ele é uma faixa da largura da tela. */
+  /* Em pé o HUD vira duas pilhas e nada no meio: informação em cima, ação embaixo, e a
+     mesa com a mão no miolo. O botão de som fica com os 52px da esquerda só dele. */
+  #topo {
+    left: calc(var(--seg-l) + 52px); right: var(--seg-r); transform: none;
+    top: calc(var(--seg-t) + 8px);
+    justify-content: center; gap: 5px; padding-right: 6px;
+  }
+  #topo .painel { padding: 6px 9px; }
+  .dado { min-width: 0; }
+  .dado b { font-size: 15px; }
+  .rot { font-size: 9px; letter-spacing: .08em; }
+  #placar { gap: 7px; }
+  #placar .time i { font-size: 10px; max-width: 74px; }
+  #placar .time b { font-size: 17px; }
+  #placar .ate { display: none; }
+
+  /* Os jogadores viram uma linha abaixo do topo, rolável se não couber. Em pé não há
+     canto direito sobrando: ele já é do topo. */
+  /* O topo cresce quando os nomes são longos (em duplas o placar tem "Fulano e
+     Sicrano"), então a lista de jogadores começa depois da altura do pior caso. */
+  #topo .painel { white-space: nowrap; }
+  /* Altura fixa: com 2, 3 ou 4 jogadores a faixa tem de ocupar o mesmo espaço, senão o
+     que vem embaixo dela (a contagem, o "sua vez") não tem onde se ancorar. */
+  #jogadores {
+    top: calc(var(--seg-t) + 72px); left: calc(var(--seg-l) + 56px); right: var(--seg-r);
+    height: 48px; align-content: center;
+    /* `1fr` NUNCA encolhe abaixo do `min` do minmax, e era esse o defeito: com quatro
+       cadeiras a trilha pedia 4×96 + 3×5 = 399px numa caixa de conteúdo de 322 (tela de
+       390) ou 292 (tela de 360), e o QUARTO CARTÃO nascia inteiro fora da tela — 96px
+       dele em 390, 101px em 360.
+       O `overflow-x: auto` abaixo não salvava nada: #jogadores é `pointer-events: none`
+       (lá em cima, junto do #vez) e nunca deixa de ser em retrato, então a rolagem existe
+       no papel e não existe no dedo; e a barra escondida tirava até a pista de que havia
+       mais coisa. Com o piso em 0 a faixa reparte o que tem. */
+    grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
+    gap: 3px; padding: 0 3px; overflow-x: auto; scrollbar-width: none;
+  }
+  #jogadores::-webkit-scrollbar { display: none; }
+  /* `overflow: hidden` porque a régua de peças (▮▮▮▮▮▮▮ 7) não tem corte próprio: numa
+     trilha estreita ela é a única coisa que ainda podia espirrar para fora do cartão, e o
+     defeito voltaria um nível abaixo, onde a asserção nova não olha. */
+  /* CADA PIXEL AQUI É NOME. Encolher o cartão para caberem quatro custa o espaço do nome —
+     medido, ele caiu de 68px para 47px numa tela de 360 —, e a 47px o ellipsis começava a
+     comer nomes curtos como "Ricardo". Padding, gap e borda mais magros devolvem 9px, e a
+     fonte um ponto menor encurta o texto uns 4%: com os dois juntos nenhum primeiro nome
+     do pior caso é cortado. Não é enfeite: nome cortado deixa de identificar quem é, que
+     foi exatamente a razão de o item 8 cortar na PALAVRA em vez de no meio dela. */
+  .jog { min-width: 0; padding: 5px 5px; overflow: hidden; border-left-width: 2px; }
+  .jog .nome { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* Quatro cartões em 360px deixam 68px para um nome que pede 95: o ellipsis cortava no
+     meio da palavra e "Maria Fernanda" virava "Maria Fer…", que não identifica ninguém.
+     Escondendo o resto sobra "Maria", inteiro e legível de relance. O ellipsis continua
+     ali para o primeiro nome que ainda assim não couber. */
+  .jog .nome .resto { display: none; }
+  .jog .tipo { display: none; }
+
+  .canto { top: calc(var(--seg-t) + 8px); left: calc(var(--seg-l) + 6px); }
+  #btSair { top: calc(var(--seg-t) + 58px); left: calc(var(--seg-l) + 6px); }
+  /* A coluna da esquerda é dos três botões; tudo que é faixa começa depois dela. */
+  #btConversa { top: calc(var(--seg-t) + 108px); left: calc(var(--seg-l) + 6px); }
+
+  /* "Sua vez" é informação, não ação: sobe para junto do resto da informação. Deixado
+     no rodapé ele brigava com a barra de confirmação, que é quem manda ali embaixo. */
+  #vez {
+    top: calc(var(--seg-t) + 130px); bottom: auto;
+    left: 50%; transform: translateX(-50%); font-size: 12.5px; white-space: nowrap;
+  }
+
+  /* Rodapé, de baixo para cima: confirmação da largura inteira, ações logo acima. */
+  #confirmar {
+    left: calc(var(--seg-l) + 8px); right: calc(var(--seg-r) + 8px); transform: none;
+    bottom: calc(var(--seg-b) + 8px);
+    justify-content: center; flex-wrap: wrap; gap: 8px;
+  }
+  @keyframes subir { from { opacity: 0; transform: translateY(8px); } }
+  #confBotoes { flex: 1 1 auto; }
+  #confBotoes .btn { width: 100%; }
+  #acoes {
+    bottom: calc(var(--seg-b) + 74px);
+    left: calc(var(--seg-l) + 8px); right: calc(var(--seg-r) + 8px);
+    flex-wrap: wrap; justify-content: center; gap: 7px;
+  }
+  #acoes .btn { flex: 1 1 auto; }
+  /* Em pé a conversa vira folha do rodapé, ACIMA das ações — o rodapé é delas. */
+  #conversa.aberta {
+    left: calc(var(--seg-l) + 8px); right: calc(var(--seg-r) + 8px); width: auto;
+    bottom: calc(var(--seg-b) + 130px);
+  }
+  #conversa.aberta #conversaLista { max-height: 92px; }
+  /* A contagem vira faixa embaixo dos jogadores: em pé não há canto direito sobrando. */
+  #contagem {
+    top: calc(var(--seg-t) + 128px); bottom: auto;
+    left: calc(var(--seg-l) + 56px); right: calc(var(--seg-r) + 6px);
+    grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; min-width: 0;
+  }
+  #contagem > span.rot { display: none; }
+  #contagem div { grid-template-columns: 1fr; justify-items: center; gap: 0; }
+  #contagem i, #contagem em { display: none; }
+  #contagem s { text-align: center; }
+  /* e o "sua vez" desce para não brigar com ela */
+  #vez { top: calc(var(--seg-t) + 186px); }
+}
+
+/* ── a gaveta do celular ──────────────────────────────────────────────────────
+   ÚLTIMO BLOCO DO ARQUIVO de propósito: as regras de retrato e de tela baixa acima
+   também posicionam #conversa e #contagem, e a última com a mesma especificidade ganha.
+   Escrito antes delas, este bloco não valia nada.
+
+   Numa tela de 360px o #conversa tem 268px FIXOS: painel e mão não cabem lado a lado.
+   Não é margem mal ajustada, é que os dois não cabem — e encolher a mesa até caber
+   deixaria o tabuleiro pequeno demais para ler. Então no celular estes painéis param de
+   conviver com o jogo e viram coisa que se abre e se fecha, com cortina atrás dizendo
+   isso. Sem a cortina, painel em cima de peça parece defeito — e foi relatado como tal.
+
+   O limiar é 560px nos DOIS sentidos, e não o `(orientation: portrait) and (max-width:
+   860px)` do resto do arquivo: o tablet de 820×1180 casa com aquele e passa limpo no
+   teste de sobreposição. Virar gaveta lá seria consertar o que não está quebrado. */
+@media (max-width: 560px), (max-height: 560px) {
+  #conversa.aberta, #contagem {
+    left: calc(var(--seg-l) + 8px); right: calc(var(--seg-r) + 8px); width: auto;
+    bottom: calc(var(--seg-b) + 8px); top: auto;
+    z-index: 7; max-height: 62vh; overflow-y: auto;
+    /* ZERAR O TRANSFORM é obrigatório e não é óbvio: em tela baixa a contagem era
+       centrada por `left: 50%` + `translateX(-50%)`. Só trocar o `left` deixa o
+       deslocamento de meia largura de pé, e a gaveta nasce 414px fora da tela — foi
+       exatamente o que o teste acusou. */
+    transform: none;
+  }
+  #conversa.aberta #conversaLista { max-height: 34vh; }
+  /* A contagem só informava, e por isso era pointer-events:none. Como gaveta ela precisa
+     receber o dedo para rolar — sete números não cabem em 62vh de tela deitada. */
+  #contagem { pointer-events: auto; }
+
+  /* A GAVETA É MODAL, e isso não é enfeite: sem esconder o resto, a barra de ações e o
+     "sua vez" continuam boiando POR CIMA da cortina, o que é a mesma confusão de antes de
+     cabeça para baixo. Aberta, a gaveta manda na tela sozinha; fechada, tudo volta.
+     O #confirmar sai junto — uma peça levantada continua levantada quando a gaveta
+     fechar, e um botão de confirmar por cima de um painel modal é convite a erro. */
+  body.gaveta #acoes,
+  body.gaveta #vez,
+  body.gaveta #confirmar { display: none; }
+}
+</style>
 </head>
 <body>
 <div id="app"></div>
@@ -262,7 +939,7 @@
 
 <script type="module">
 /* GERADO por build.mjs a partir de src/ — não edite este bloco à mão. */
-/* ····· 01-constantes.js ····· */
+/* ····· 10-casa/01-constantes.js ····· */
 const MAX_PINTAS = 6;            // dupla-seis → 28 peças
 
 // Os modos da casa. Um modo é só quantas peças cada um recebe, com quantas cadeiras
@@ -380,7 +1057,7 @@ function esquecer(chave) {
   try { localStorage.removeItem(GUARDA + chave); } catch (e) { void e; }
 }
 
-/* ····· 02-baralho.js ····· */
+/* ····· 30-domino/02-baralho.js ····· */
 // O baralho: as peças, o embaralho e quem abre a mão. Quantas peças e quantas na mão
 // depende do modo da mesa (MODOS, em 01-constantes.js).
 // (parte de src/js — mesmo escopo, concatenado por build.mjs)
@@ -481,7 +1158,7 @@ function quemAbre(maos) {
   return melhor;
 }
 
-/* ····· 03-regras.js ····· */
+/* ····· 30-domino/03-regras.js ····· */
 // As regras propriamente ditas. Tudo aqui é função pura sobre a linha da mesa:
 // nenhum estado guardado, nenhum Three.js — é o que permite rodar mil partidas
 // no terminal em segundos e achar erro de regra antes de existir um pixel.
@@ -621,7 +1298,7 @@ function tipoDaBatida(peca, linha) {
   return e !== d && serve(e) && serve(d) ? 'laelo' : 'simples';
 }
 
-/* ····· 04-partida.js ····· */
+/* ····· 30-domino/04-partida.js ····· */
 //
 // A IDEIA QUE SEGURA O PROJETO INTEIRO: uma cadeira é só
 //     { nome, tipo: 'voce' | 'local' | 'bot' | 'online', nivel }
@@ -848,7 +1525,7 @@ function visaoDe(P, cadeira) {
   };
 }
 
-/* ····· 05-bot.js ····· */
+/* ····· 30-domino/05-bot.js ····· */
 //
 // A dificuldade aqui NÃO é um algoritmo diferente por nível — é QUANTA INFORMAÇÃO o
 // bot recebe e quanto ele erra no impulso. O bot fácil não presta atenção em quem
@@ -1015,7 +1692,7 @@ function jogadaDoBot(P, cadeira) {
   return { acao: 'jogar', peca: escolha.peca, ponta: escolha.ponta };
 }
 
-/* ····· 06-layout.js ····· */
+/* ····· 30-domino/06-layout.js ····· */
 // Onde cada peça fica na mesa. Puro cálculo — nada de Three.js aqui, o que deixa
 // o serpenteio testável no terminal.
 // (parte de src/js — mesmo escopo, concatenado por build.mjs)
@@ -1168,7 +1845,7 @@ function larguraUtilDoTabuleiro(caixa, tela = Infinity, montes = [], folga = FOL
   return Math.max(PECA_C, Math.min(semVizinhos, corredor));
 }
 
-/* ····· 07-cena.js ····· */
+/* ····· 10-casa/07-cena.js ····· */
 //
 // Nenhum arquivo de imagem no projeto: madeira, piso e as pintas das peças são
 // desenhados em canvas na hora. Textura procedural custa ~40 linhas e economiza
@@ -1597,7 +2274,7 @@ if (typeof visualViewport !== 'undefined' && visualViewport) {
   visualViewport.addEventListener('resize', agendarEnquadre);
 }
 
-/* ····· 08-peca3d.js ····· */
+/* ····· 30-domino/08-peca3d.js ····· */
 //
 // As 28 peças saem de UMA textura só. Em vez de desenhar 28 combinações, o atlas tem
 // as sete meias-faces (0 a 6) lado a lado, e cada metade da peça é um plano cuja UV
@@ -1721,7 +2398,7 @@ function porNaMesa(obj, posta) {
   obj.rotation.set(0, posta.rotY, 0);
 }
 
-/* ····· 09-tabuleiro.js ····· */
+/* ····· 30-domino/09-tabuleiro.js ····· */
 //
 // Não existe "animar a jogada X". A cada mudança o tabuleiro é RECONCILIADO com a
 // visão: cria o que falta, tira o que sobra, e manda todo mundo deslizar para o novo
@@ -1889,7 +2566,7 @@ function animarTabuleiro(dt) {
   }
 }
 
-/* ····· 10-mao.js ····· */
+/* ····· 30-domino/10-mao.js ····· */
 //
 // Quem está na sua frente depende de quem é "você": a cadeira mostrada vai sempre
 // para a beirada de baixo da tela e as outras se distribuem em volta da mesa. É o que
@@ -2230,7 +2907,7 @@ function animarMao(dt, apontada) {
   });
 }
 
-/* ····· 11-interacao.js ····· */
+/* ····· 30-domino/11-interacao.js ····· */
 //
 // SEMPRE dois passos, inclusive quando só existe uma ponta possível. Antes o clique na
 // peça já a jogava nesses casos, e um deslize do mouse virava jogada — num jogo em que
@@ -2592,7 +3269,7 @@ function porQueNaoDa(peca) {
   return encaixa ? 'Essa peça fecharia o jogo de propósito.' : 'Essa peça não encaixa em nenhuma ponta.';
 }
 
-/* ····· 12-audio.js ····· */
+/* ····· 10-casa/12-audio.js ····· */
 //
 // Uma peça batendo na madeira é um estalo curto de ruído filtrado somado a um baque
 // grave — dá para descrever isso em dez linhas, e aí o jogo continua sendo um arquivo
@@ -2683,7 +3360,7 @@ function silenciar(calado) {
   if (ac) ac[calado ? 'suspend' : 'resume']();
 }
 
-/* ····· 13-hud.js ····· */
+/* ····· 10-casa/13-hud.js ····· */
 //
 // Tudo aqui lê a VISÃO, nunca a partida. É o mesmo objeto que chega pela rede no
 // modo online, então a tela do convidado não tem como mostrar mais do que ele pode
@@ -3173,7 +3850,7 @@ pintarBotaoSom();
 // adiantaria nada; quem aplica o silêncio guardado é `ligarMurmuro`, que roda quando o
 // áudio de fato começa.
 
-/* ····· 14-menu.js ····· */
+/* ····· 10-casa/14-menu.js ····· */
 //
 // Esta tela é a interface da ideia central do projeto: não se escolhe um "modo de
 // jogo", escolhe-se quem ocupa cada cadeira. Solo é uma mesa em que as outras são
@@ -3425,7 +4102,7 @@ refletirMesaNosBotoes();
 ajustarCadeirasAoModo();
 montarCadeiras();
 
-/* ····· 15-rede.js ····· */
+/* ····· 10-casa/15-rede.js ····· */
 //
 // O ANFITRIÃO É A AUTORIDADE. Ele embaralha, guarda o estado e valida tudo. O
 // convidado não tem partida nenhuma na memória: ele manda INTENÇÃO ("quero jogar 3|5
@@ -4485,7 +5162,7 @@ function receberChat(cadeira, m) {
   return true;
 }
 
-/* ····· 16-loop.js ····· */
+/* ····· 10-casa/16-loop.js ····· */
 //
 // Existe UM caminho para uma jogada acontecer, venha ela de onde vier:
 //
