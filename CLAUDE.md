@@ -4,10 +4,12 @@ Dominó dupla-seis em 3D no navegador. De 2 a 4 jogadores em qualquer mistura de
 bot, na mesma tela ou pela internet. No ar em
 **https://ricardocolombo01.github.io/domino-bar/** (repo público `RicardoColombo01/domino-bar`).
 
-Sem framework, sem bundler, sem asset: madeira, pintas e sons são gerados em canvas e
-WebAudio na hora. Three.js e PeerJS vêm de CDN. **5.827 linhas** no total (`src/js` +
-`pagina.html` + `css/estilo.css`), conferido em 05/08/2026 — este número **envelhece**, e
-envelheceu: ficou dizendo 2.100 por três releases seguidas.
+Sem framework, sem bundler, e **dois binários** — os ícones do aplicativo, exigidos pelo
+manifest: madeira, pintas e sons continuam gerados em canvas e WebAudio na hora. Three.js e
+PeerJS vêm de CDN, e o **service worker os guarda**, então depois de uma partida o jogo abre
+sem internet. **6.061 linhas** no total (`src/js` + `src/pagina.html` + `src/css/estilo.css`
++ `src/sw.js`), conferido em 05/08/2026 — este número **envelhece**, e envelheceu: ficou
+dizendo 2.100 por três releases seguidas.
 
 **Conte com `node`, não com o PowerShell.** `Measure-Object -Line` **não conta linha em
 branco** e devolve ~450 a menos; a discordância entre as duas réguas já custou uma
@@ -16,9 +18,11 @@ investigação. `node -e "…split('\n').length"` é a que bate com o `wc -l`.
 ## Comandos
 
 ```
-npm run build     junta src/ num index.html autossuficiente
-npm run check     avisa se o index.html está desatualizado
+npm run build     junta src/ num index.html autossuficiente, e carimba o sw.js
+npm run check     avisa se o index.html OU o sw.js estão desatualizados
 npm test          build + as três suítes de lógica
+npm run app       build + manifest, ícones e o jogo abrindo COM A REDE DESLIGADA (~30 s)
+npm run icones    regera icone-192.png e icone-512.png a partir de src/icone.svg
 npm run telas     build + o jogo em seis tamanhos de tela (retrato, paisagem, tablet, wide)
                   aceita escolher: node tests/test-telas.mjs 360x640,390x844 nomes,cheia
 npm run textura   build + as texturas sobrevivem a sair do jogo e voltar (~40 s)
@@ -93,8 +97,8 @@ módulos em `file://` e o jogo tem de abrir por duplo-clique.
 **Nunca editar `index.html` à mão — ele é gerado.**
 
 **A pasta organiza para quem LÊ; o número manda em quem EXECUTA**, e a distinção não é
-estilo. `14-menu.js` (casa) chama `mesaLembrada()` no topo do módulo, e ela valida o nível
-de bot contra `NIVEIS`, que mora em `05-bot.js` (**dominó**). Ordenar por caminho poria toda
+estilo. `140-menu.js` (casa) chama `mesaLembrada()` no topo do módulo, e ela valida o nível
+de bot contra `NIVEIS`, que mora em `050-bot.js` (**dominó**). Ordenar por caminho poria toda
 a `10-casa/` antes de toda a `30-domino/`, `NIVEIS` cairia na zona morta e a carga estouraria
 com `ReferenceError` — tela preta que não depende de dado guardado nenhum para acontecer.
 Arquivo novo escolhe o número pela **dependência de carga**, não pela pasta em que cai; o
@@ -113,7 +117,7 @@ criar "modo de jogo" — mesa mista (2 online + 1 bot) sai de graça justamente 
 trafega, e o anfitrião nunca manda a mão alheia. Toda tela lê a *visão*, nunca a partida.
 Há teste conferindo que nenhuma peça da mão do anfitrião chega no convidado.
 
-**4. `03-regras.js` e `06-layout.js` são funções puras.** É o que permite testar 53 mil
+**4. `030-regras.js` e `060-layout.js` são funções puras.** É o que permite testar 53 mil
 tabuleiros no terminal — e é de onde a prévia da jogada sai de graça: ela simula com
 `aplicar()` e pergunta a posição ao `layoutDaMesa()`, sem geometria nova.
 
@@ -126,32 +130,42 @@ A ordem abaixo é a de CONCATENAÇÃO (o número), e ela se lê de cima a baixo 
 arquivos morando em pastas diferentes — repare como casa e dominó se intercalam. É esse
 intercalamento que torna o número, e não o caminho, a fonte da ordem.
 
+**Os números vão de dez em dez desde a v3.0.0**, e é o que permite encaixar arquivo novo
+entre dois velhos. Consecutivo quer dizer LOTADO: as constantes de dominó não tinham para
+onde ir porque precisavam rodar antes do `140-menu` e não havia inteiro livre em todo o
+intervalo. As nove vagas entre cada par são o espaço do `40-truco/`.
+
 ```
 src/css/estilo.css               entra no bundle como <style>
 src/pagina.html                  o molde, com __ESTILO__ e __JOGO__
+src/sw.js                        o molde do service worker, com __VERSAO__
+src/icone.svg                    a fonte dos dois PNG do manifest
 
-10-casa/01-constantes  medidas, pontuação, folgas visuais, tabela MODOS, guardar/lido
-30-domino/02-baralho   embaralhar, distribuir (com re-embaralho), quem abre, sobraDoBaralho
-30-domino/03-regras    encaixes, pontas, jogadas válidas, tipo de batida     ← puro
-30-domino/04-partida   turnos, compra, passe, placar, visaoDe()
-30-domino/05-bot       níveis = quanta informação o bot recebe
-30-domino/06-layout    onde cada peça cai na mesa, com as dobras             ← puro
-10-casa/07-cena        renderer, câmera, luz de boteco, mesa, tralhas
-30-domino/08-peca3d    geometria + atlas de pintas em canvas + fantasma
-30-domino/09-tabuleiro reconcilia o tabuleiro com a visão; prévia da jogada
-30-domino/10-mao       sua mão em leque, mãos dos outros, monte
-30-domino/11-interacao raycast: escolher → ver → confirmar
-10-casa/12-audio       WebAudio puro, sem arquivo
-10-casa/13-hud         placar, vez, botões, telas de fim
-10-casa/14-menu        montagem da mesa (as cadeiras)
-10-casa/15-rede        PeerJS, anfitrião autoritativo
-10-casa/16-loop        estado do app, turno, hotseat, render loop
+10-casa/010-constantes   cores do boteco, movimento reduzido, guardar/lido/esquecer
+30-domino/015-constantes peça, MODOS, pontuação, medidas do tabuleiro
+30-domino/020-baralho    embaralhar, distribuir (com re-embaralho), quem abre, sobraDoBaralho
+30-domino/030-regras     encaixes, pontas, jogadas válidas, tipo de batida     ← puro
+30-domino/040-partida    turnos, compra, passe, placar, visaoDe()
+30-domino/050-bot        níveis = quanta informação o bot recebe
+30-domino/060-layout     onde cada peça cai na mesa, com as dobras             ← puro
+10-casa/070-cena         renderer, câmera, luz de boteco, mesa, tralhas
+30-domino/080-peca3d     geometria + atlas de pintas em canvas + fantasma
+30-domino/090-tabuleiro  reconcilia o tabuleiro com a visão; prévia da jogada
+30-domino/100-mao        sua mão em leque, mãos dos outros, monte
+30-domino/110-interacao  raycast: escolher → ver → confirmar
+10-casa/120-audio        WebAudio puro, sem arquivo
+10-casa/130-hud          placar, vez, botões, telas de fim, o encaixe painelDoJogo
+30-domino/135-contagem   o que vai DENTRO do painel: quantas peças faltam aparecer
+10-casa/140-menu         montagem da mesa (as cadeiras)
+10-casa/145-saguao       a tela do online: código, quem chegou, os quatro cliques
+10-casa/150-rede         PeerJS, anfitrião autoritativo — ZERO chamadas ao DOM
+10-casa/160-loop         estado do app, turno, hotseat, render loop
 ```
 
 **A pasta é uma AFIRMAÇÃO, não uma gaveta:** o que está em `10-casa/` promete não saber que
 o jogo é dominó, e é o que o Truco vai herdar de graça. Hoje a promessa ainda não é
-verdadeira em dois pontos, e eles estão nomeados na seção da Reorganização: `15-rede.js`
-escreve na tela por id (45 chamadas `el(...)`, mais que o próprio HUD) e `13-hud.js` tem o
+verdadeira em dois pontos, e eles estão nomeados na seção da Reorganização: `150-rede.js`
+escreve na tela por id (45 chamadas `el(...)`, mais que o próprio HUD) e `130-hud.js` tem o
 `desenharContagem`, que é regra de dominó. **Enquanto isso durar, a pasta é uma promessa a
 cumprir, não um fato.**
 
@@ -170,9 +184,9 @@ cumprir, não um fato.**
   teste passa sem ter rodado nada.
 - **Buscar peça por texto no JSON dá falso positivo:** `[0,0]` também é um placar 0×0.
 - **`naMao` já é dois nomes** — o array de contagens em `visaoDe` e o array de peças 3D em
-  `10-mao.js`. Como tudo é o mesmo escopo concatenado, um terceiro `naMao` seria colisão
+  `100-mao.js`. Como tudo é o mesmo escopo concatenado, um terceiro `naMao` seria colisão
   silenciosa; o tamanho da mão chama-se `pecasPorMao`.
-- **Aritmética de baralho fora do motor apodrece.** `14-menu.js` tinha `28 - 7 * MESA.n`
+- **Aritmética de baralho fora do motor apodrece.** `140-menu.js` tinha `28 - 7 * MESA.n`
   escrito à mão e foi a primeira linha a quebrar com os modos. Tamanho de baralho sai de
   `baralhoDoModo()`, sempre.
 - **`distribuir` dava mão curta em silêncio** quando `n × peças` não cabia no baralho. Hoje
@@ -196,11 +210,11 @@ cumprir, não um fato.**
   quer, explicitamente.
 - **O que cabe na mesa não é o que cabe na TELA.** O tabuleiro, os adversários e o monte
   cabiam nos 6.1 de raio do tampo e mesmo assim saíam do quadro em retrato. Quem tem a
-  palavra final é `larguraVisivelEm()`, em `07-cena.js`.
+  palavra final é `larguraVisivelEm()`, em `070-cena.js`.
 - **`Set` não sobrevive a JSON**, e `P.faltaNo` é um array de `Set`.
   `JSON.stringify(new Set())` dá `{}` — objeto sem `.has` e sem `.indexOf`. Guardar a
   partida no `localStorage` perdia calada a marca de "passou no número" e o bot estourava
-  em `05-bot.js`. `visaoDe` já convertia para o fio (`Array.from`); quem guarda tem de
+  em `050-bot.js`. `visaoDe` já convertia para o fio (`Array.from`); quem guarda tem de
   fazer a mesma conversão nos dois sentidos. **Vale para qualquer coisa nova em `P`.**
 - **`performance.now()` no harness AVANÇA o relógio falso a cada chamada**
   (`tests/harness.mjs`). Código novo que só consulte a hora desloca os temporizadores do
@@ -340,6 +354,36 @@ cumprir, não um fato.**
   para uma suíte de Node ao lado do `test-telas`: aquilo renderiza WebGL **por software**,
   ou seja é CPU pura, e a espera dele é "oito quadros iguais" com teto de 240 — máquina
   disputada chega ao teto antes de assentar. **Suíte pesada roda sozinha.**
+- **`String.replace` troca só a PRIMEIRA ocorrência, e o marcador escrito no comentário
+  come o de verdade.** O `build.mjs` carimba a versão do `sw.js` trocando `__VERSAO__` — e o
+  comentário logo acima explicava o mecanismo citando o próprio token. O comentário ficou com
+  o resumo e o `const VERSAO` ficou com o marcador: cache chamado `dominobar-__VERSAO__`, o
+  mesmo nome para sempre, que é exatamente o defeito que aquele mecanismo existe para
+  impedir. **Contar antes de trocar** — é a mesma disciplina que este arquivo já exige das
+  mutações de teste, e agora vale para o build.
+- **Resposta OPACA não entra em cache, e é assim que um recurso some só depois de instalado.**
+  `<script src>` sem `crossorigin` é buscado em modo `no-cors`; o service worker recebe algo
+  que não pode conferir e recusa guardar. O jogo abriria offline **sem o PeerJS**, ou seja,
+  sem online — e o relato seria "o botão de mesa online sumiu depois que instalei".
+- **Nome de topo repetido no escopo concatenado só é SILENCIOSO em `function` e `var`.**
+  `const`, `let` e `class` dão `SyntaxError`, que o `node --check` do build já pegava. A
+  dívida anotada dizia o contrário, e citava justamente um `const`. Hoje o `build.mjs`
+  reprova o repetido dizendo o nome e **os dois donos**.
+- **Numeração consecutiva é numeração LOTADA.** `01…16` não tinha onde encaixar um arquivo
+  que precisasse rodar entre dois existentes, e foi por isso que as constantes de dominó
+  ficaram anos na pasta da casa: não havia inteiro livre antes do `140-menu`. De dez em dez
+  abre nove vagas entre cada par.
+- **Quando a sua conferência acusa TUDO, o errado é ela.** Um script de uma vez só disse que
+  as 19 constantes tinham sumido do bundle depois da separação — era escaping de `\b` comido
+  pelo shell. Um `grep` de dez segundos mostrou que estava tudo lá. Falha universal é sinal de
+  instrumento quebrado, não de código quebrado.
+- **Uma reprovação sozinha não decide de quem é a culpa; o CONTROLE é rodar a mesma cena na
+  `main`.** O `test-online` estourou o prazo de navegação num `page.reload` logo depois de eu
+  mexer no saguão, e o recado pronto do arquivo dizia "foi o broker do PeerJS". Rodar a mesma
+  cena na `main` (passou) e de novo na branch (passou) é o que separou ambiente de defeito —
+  e uma sonda mostrou o `goto` variando de **6 a 18 segundos** contra um prazo de 45.
+  **Corolário do PWA:** com o service worker guardando as bibliotecas, essa fragilidade cai
+  junto.
 
 ---
 
@@ -384,7 +428,7 @@ e subtotal por dupla (`fecharMao` grava `somasPorTime`).
 
 **O que ficou de lição:** a tela é função pura de `vista.fase` e `atualizarVista()` roda
 em **todo** `publicar()`. Qualquer passo de UI com mais de um estado para a mesma fase
-precisa de um flag de módulo em `16-loop.js` (`viuOFimDaMao`), zerado quando a fase muda —
+precisa de um flag de módulo em `160-loop.js` (`viuOFimDaMao`), zerado quando a fase muda —
 não dá para resolver dentro do HUD.
 
 ## Fila 2 — celular ✔ feito (v1.2.0)
@@ -401,12 +445,12 @@ alvos de 44 px, safe-area, `touch-action: none` e vibração ao encaixar.
 - **A largura visível é TETO, não alvo.** A primeira versão deixava a mão crescer até a
   largura real (12.4 no computador) e ela se espalhava de beirada a beirada, por baixo
   dos painéis. `MAO_CHEIA = 8.2` continua sendo o que a mão *quer*; a tela só pode tirar.
-- **A largura tem de entrar na assinatura da mão** (`10-mao.js`). Invalidar à força
+- **A largura tem de entrar na assinatura da mão** (`100-mao.js`). Invalidar à força
   reconstruía o leque a cada `resize` — e no iOS a barra de URL dispara `resize` o tempo
   todo, o que apagava a peça que você tinha levantado.
 - **`typeof x` sobre um `let` na zona morta LANÇA**, não devolve `'undefined'`. O guarda
   que parecia defensivo não defendia nada; o que segura é a primeira chamada de
-  `enquadrar()` morar em `16-loop.js`, depois de tudo declarado.
+  `enquadrar()` morar em `160-loop.js`, depois de tudo declarado.
 - **`max-width` é a pergunta errada para alvo de toque.** Um tablet de 820 px e um
   celular deitado de 844 px são largos e continuam sendo dedo — quem responde é
   `(pointer: coarse)`.
@@ -435,7 +479,7 @@ duas telas para fora), adversários a 1,57 e tabuleiro a 1,04 em retrato.
 Feito na v1.4.0: o bot de verdade (1), arrumar a mão (2), o painel de contagem (3), a
 marca de "passou no número" (4) e a reconexão no online (6, na v1.3.0).
 
-**`escolherJogada` (`05-bot.js`)** virou uma nota por opção, e a ordem dos pesos é a
+**`escolherJogada` (`050-bot.js`)** virou uma nota por opção, e a ordem dos pesos é a
 ordem das prioridades de quem joga bem: bater (e bater caro), **não se enterrar** —
 contar com quantas peças você ainda responde às pontas que acabou de deixar —, apertar
 quem joga depois usando `faltaNo`, e só então descarregar peso. `informacao()` passa a
@@ -443,17 +487,17 @@ entregar `P.linha`, que é público. Os níveis continuam sendo *quanta informa�
 recebe, não três algoritmos. `tests/test-regras.mjs` tem a única asserção do projeto que
 mede QUALIDADE: o difícil ganha ~59% do fácil em 300 partidas.
 
-**Arrumar a mão (`10-mao.js`, `11-interacao.js`).** `sincronizarMao` quebrou em
+**Arrumar a mão (`100-mao.js`, `110-interacao.js`).** `sincronizarMao` quebrou em
 `reconciliarMao()` (mantém vivo quem continua na mão) + `posicionarMao()` (só geometria,
 lê a ordem atual de `naMao`). A ordem mora em `ordemDaMao`, um `Map` por cadeira com
 chaves de peça, e **nunca no motor**. Arrastar é uma máquina de estados em
 `pointerdown/move/up`, separada do toque por DISTÂNCIA e não por tempo.
 
-**Painel de contagem (`13-hud.js`).** Sai inteiro de `vista.linha` + `vista.mao` + o
+**Painel de contagem (`130-hud.js`).** Sai inteiro de `vista.linha` + `vista.mao` + o
 `faltaNo` novo na visão — tudo público, nada a mudar no motor.
 
-**Lembrar preferências (5) ✔ feito (v1.5.0).** `guardar`/`lido`/`esquecer` em `01-constantes.js` —
-mora no primeiro arquivo porque o `13-hud.js` lê preferência na hora em que é concatenado.
+**Lembrar preferências (5) ✔ feito (v1.5.0).** `guardar`/`lido`/`esquecer` em `010-constantes.js` —
+mora no primeiro arquivo porque o `130-hud.js` lê preferência na hora em que é concatenado.
 A mesa inteira é lembrada (modo, jogadores, alvo, compra livre, nome e tipo das **quatro**
 cadeiras) e o som também. `mesaLembrada()` valida tudo; `refletirMesaNosBotoes()` existe
 porque os botões nascem marcados no HTML com o padrão, e sem mover a marca o jogo começa
@@ -467,7 +511,7 @@ que era `online` vira bot ao retomar, senão o motor espera para sempre por quem
 responder. `tests/test-lembrar.mjs` (`npm run lembrar`) é a primeira suíte que **recarrega
 a página** — sem isso, "lembrar" não é testável, e foi ela que achou o defeito do `Set`.
 
-**Dica de jogada (7) ✔ feito (v1.5.0).** `dicaDaVista(vista)` em `05-bot.js`: é o bot pensando com
+**Dica de jogada (7) ✔ feito (v1.5.0).** `dicaDaVista(vista)` em `050-bot.js`: é o bot pensando com
 a sua mão, sem ruído. Sai da **vista** e nunca da partida — e repare que isso não custou
 nada, porque **todo** campo que `informacao()` entrega ao bot já existe na visão. Não é
 coincidência: é consequência de o bot ter sido escrito para não trapacear. Se a dica
@@ -515,15 +559,18 @@ campo acha o que está escrito certo e mesmo assim não funciona.
 **Leia isto primeiro ao retomar.** É o estado real do trabalho, o que ele produziu, o que
 fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numerados mais abaixo.
 
-#### ESTADO EM UMA OLHADA (04/08/2026)
+#### ESTADO EM UMA OLHADA (05/08/2026)
 
 | | |
 |---|---|
-| publicado | **v2.1.1** — https://ricardocolombo01.github.io/domino-bar/ |
-| esta release | **v2.2.0** — a Fila 11 inteira consertada: os 7 confirmados, mais S1, S3, S4, S5 e **dois defeitos novos achados ao consertar** |
+| publicado | **v3.0.0** — https://ricardocolombo01.github.io/domino-bar/ |
+| esta release | **v3.0.0** — as duas dívidas da reorganização fechadas, e **o jogo virou aplicativo** |
 | `main` ↔ `origin/main` | conferir com `git rev-list --left-right --count origin/main...main` |
-| Filas 5 a 11 | **todas fechadas** |
-| o que vem | **1º adotar `git worktree`** · 2º a reorganização em pastas · 3º o PWA · 4º o Truco — **ordem dada pelo Ricardo em 04/08/2026** |
+| Filas 5 a 11 | **todas fechadas**, e não há defeito conhecido em aberto |
+| o que vem | **o Truco** — é o próximo, e o único item grande que sobrou da ordem dada pelo Ricardo em 04/08 |
+
+**A ordem do Ricardo (04/08) foi cumprida inteira:** worktree ✔ (v2.3.0 e v3.0.0 saíram de
+um), as pastas ✔ (v2.3.0, e as duas dívidas na v3.0.0), o PWA ✔ (v3.0.0). Sobra o Truco.
 
 **A fila esvaziou na v1.10.0, encheu em 03/08 pela fonte mais barata (jogar), esvaziou na
 v2.0.0 — e a v2.1.0 a encheu de novo pela OUTRA fonte: varredura.** É a segunda da história
@@ -612,7 +659,7 @@ menos que o conserto teria custado no lugar errado.
 
 E aconteceu de novo na Fila 6, com dois dos cinco: o "vazamento de GPU" dos materiais clonados
 **não era vazamento** (mesma `cacheKey`, os materiais viram lixo coletável), e o `alvos`
-aliasado do `06-layout.js` **não é defeito** porque ninguém lê aquele campo. Nos dois casos
+aliasado do `060-layout.js` **não é defeito** porque ninguém lê aquele campo. Nos dois casos
 meia hora de investigação evitou um conserto inútil. **Suspeita não confirmada tem de ser
 registrada COMO suspeita** — foi o que permitiu descartá-las sem refazer a leitura.
 
@@ -660,7 +707,7 @@ O arranjo sugerido, uma frente por diretório:
 ```
 
 **Por que nesta ordem e não antes:** a `reorg` toca todo arquivo do projeto, então rodá-la em
-paralelo com os consertos da Fila 11 garantia conflito em `15-rede.js`, que é justamente onde
+paralelo com os consertos da Fila 11 garantia conflito em `150-rede.js`, que é justamente onde
 os dois trabalhos moram. **Conserta primeiro, reorganiza depois.** E a regra que não muda:
 worktree resolve conflito de arquivo, **não de CPU** — suíte pesada continua rodando sozinha.
 
@@ -700,7 +747,7 @@ que é de onde o tempo vem — e **não** voltar ao prazo fixo, que foi o defeit
 Registrado para não ser redescoberto do zero — e com o motivo de não ser prioridade:
 
 - **Fazer o 3D DESVIAR dos painéis** em vez de os painéis darem lugar. Combina com
-  `larguraVisivelEm()` e `assentosDaMesa()` (`07-cena.js`), e é o caminho não escolhido do
+  `larguraVisivelEm()` e `assentosDaMesa()` (`070-cena.js`), e é o caminho não escolhido do
   item 10. É o mais caro, e a gaveta e as faixas já resolveram o problema real.
   **`apertoDaMesa()` NÃO EXISTE MAIS** — a Fila 7 o dissolveu quando o aperto passou a ser
   decidido pelo assento que binda; este arquivo ainda o cita em três lugares como se
@@ -716,9 +763,9 @@ Registrado para não ser redescoberto do zero — e com o motivo de não ser pri
   única função de suavização do projeto, e a lâmpada é o único movimento que não acaba nunca.
 - **Dívidas que investiguei e concluí que NÃO são defeito hoje** — não refaça o trabalho:
   o clone de material por peça sem `dispose()` (mesma `cacheKey`, os materiais viram lixo
-  coletável; é churn, não vazamento); o `alvos.esq === alvos.dir` do `06-layout.js` (aliasing
+  coletável; é churn, não vazamento); o `alvos.esq === alvos.dir` do `060-layout.js` (aliasing
   armado, mas `alvos` é **código morto** — remover é melhor que consertar); e o array `VAZIO`
-  compartilhado do `05-bot.js` (só é lido hoje; um `add` ali um dia envenenaria todos).
+  compartilhado do `050-bot.js` (só é lido hoje; um `add` ali um dia envenenaria todos).
 
 #### Perguntas em aberto para o Ricardo
 
@@ -777,7 +824,7 @@ Pontas iguais não são "dois lados". Nas palavras do Ricardo: pontas `3` e `3`,
 com a `3|1` — **não** conta como bater dos dois lados, é batida simples. Para valer, teria de
 ser uma ponta `3` e a outra `1`.
 
-O defeito estava em `tipoDaBatida` (`03-regras.js`), nesta linha:
+O defeito estava em `tipoDaBatida` (`030-regras.js`), nesta linha:
 
 ```js
 const nasDuas = (peca[0] === e || peca[1] === e) && (peca[0] === d || peca[1] === d);
@@ -802,7 +849,7 @@ documenta a confusão de origem: a `3|6` **encaixa nos dois lados de verdade** e
 `3` — `jogadasValidas` devolve duas. A regra é sobre os NÚMEROS das pontas, não sobre a
 contagem de encaixes, e trocar uma coisa pela outra é o que criou o defeito.
 
-`05-bot.js` pontua batida com `PONTOS[tipoDaBatida]`, então as partidas semeadas se mexeram:
+`050-bot.js` pontua batida com `PONTOS[tipoDaBatida]`, então as partidas semeadas se mexeram:
 a força do bot foi de 359 × 241 (59,8%) para **347 × 253 (57,8%, 3,8σ)**. A asserção é
 **limiar** (`> 2σ`), não número fixo — foi de propósito que ela foi escrita assim, e é por
 isso que uma mudança semântica de regra não a derruba.
@@ -818,7 +865,7 @@ a essa resposta — as duas saídas eram defensáveis.
 ### 2. Ainda dá para FORÇAR o fechamento ✔ feito (31/07/2026)
 
 **NÃO PRECISOU DO CASO DO RICARDO, e é isso que vale registrar.** Esta seção pedia um caso
-concreto antes de mexer. A saída melhor foi *procurar* o caso: `03-regras.js` é puro, então dá
+concreto antes de mexer. A saída melhor foi *procurar* o caso: `030-regras.js` é puro, então dá
 para jogar milhares de mãos e caçar a posição — que é a mesma propriedade que permite medir a
 força do bot em 300 partidas. `tests/busca-fechamento.mjs` faz isso, e a chave do desenho é que
 a busca é **onisciente** (vê todas as mãos) enquanto a regra nunca pode ser. A diferença entre
@@ -861,7 +908,7 @@ há tranca para armar"*, e era ela que sustentava a janela. Virou um par, e o pa
 inteira: monte com `0|1` não responde a 3 nenhum, comprar não adianta, o fechamento **continua
 barrado**; monte com o `3|3` responde à ponta, o 3 deixa de estar morto e nada é barrado.
 
-**A força do bot se mexeu**, como no item 1 — `05-bot.js` joga pelas ações que `acoesDe`
+**A força do bot se mexeu**, como no item 1 — `050-bot.js` joga pelas ações que `acoesDe`
 oferece. Foi de 57,8% para **55,8% (2,9σ)**. A asserção é **limiar** (`> 2σ`), não número fixo,
 e foi escrita assim exatamente para sobreviver a mudanças de regra.
 
@@ -1014,7 +1061,7 @@ diferentes no online (não conseguir voltar, entrar na cadeira errada, duas abas
 cliente.
 
 ```js
-// 15-rede.js, no peer.on('connection')
+// 150-rede.js, no peer.on('connection')
 const cadeira = MESA.cadeiras.slice(0, MESA.n)
   .findIndex((c, i) => c.tipo === 'online' && !conexoes.has(i));
 ```
@@ -1062,7 +1109,7 @@ de ocupar UMA conexão.
 
 ### 5. Cada clique em "Entrar" consome outra cadeira ✔ feito (junto do 4)
 
-De **30/07/2026**. O `btConectar.onclick` (`15-rede.js`) não tinha guarda de reentrada: cada
+De **30/07/2026**. O `btConectar.onclick` (`150-rede.js`) não tinha guarda de reentrada: cada
 clique fazia um `new Peer`, abandonava o peer anterior **vivo** e consumia mais uma vaga. O
 "lota o servidor" que o Ricardo relatou era literal.
 
@@ -1078,7 +1125,7 @@ O corpo virou `conectarNaMesa(codigo)`, que é o que o botão "voltar para a mes
 
 ### 6. Toque preso: o jogo parece congelar e não está ✔ feito (31/07/2026)
 
-De **30/07/2026**. `11-interacao.js` começava o trato do toque com `if (arrasto) return;`. Se o
+De **30/07/2026**. `110-interacao.js` começava o trato do toque com `if (arrasto) return;`. Se o
 dedo saísse da tela ainda apoiado, o `pointerup` **nunca chegava**, `arrasto` ficava preenchido
 para sempre e **todo toque seguinte era descartado**. O render loop continua rodando — por isso
 parece congelado sem estar, que é a parte que confunde na hora de relatar.
@@ -1182,7 +1229,7 @@ fim) e parte do nome do time (está na lista ao lado).
 - **Zerar o `transform` é obrigatório** — mesma armadilha que a gaveta pagou no item 10.
 
 **No retrato, o corte passou a ser na PALAVRA** (escolha do Ricardo): `nomeEmPartes()` em
-`13-hud.js` põe o sobrenome num `<i class="resto">` e o CSS o esconde onde a faixa aperta.
+`130-hud.js` põe o sobrenome num `<i class="resto">` e o CSS o esconde onde a faixa aperta.
 "Maria Fernanda" vira **"Maria"**, inteiro e legível de relance, em vez de "Maria Fer…" — cortar
 no meio da palavra é o que fazia o nome deixar de identificar quem é. O ellipsis continua ali
 para o primeiro nome que ainda assim não couber.
@@ -1267,7 +1314,7 @@ em opinião.
 O caminho não escolhido, se um dia fizer falta: fazer o 3D **desviar** das faixas ocupadas,
 que combina com o `apertoDaMesa()` e o `larguraVisivelEm()` — e é o mais caro.
 
-Não é hipótese de que esta família reincide: o comentário do `07-cena.js` registra que o copo
+Não é hipótese de que esta família reincide: o comentário do `070-cena.js` registra que o copo
 já foi movido à mão uma vez pelo mesmo motivo. Defeito que já voltou uma vez volta de novo, e
 a diferença entre um conserto e uma asserção é exatamente essa.
 
@@ -1333,7 +1380,7 @@ gambiarra de hoje em ferramenta — inclusive para iterar num defeito de uma tel
 Três armadilhas pagas, e as três valem mais que o conserto:
 
 - **A posição do GRUPO conta, não só a das peças.** O `grupoMesa` faz o próprio easing em z
-  para manter o tabuleiro centrado (`09-tabuleiro.js`). Olhando só os filhos, a foto ficava
+  para manter o tabuleiro centrado (`090-tabuleiro.js`). Olhando só os filhos, a foto ficava
   parada enquanto o mundo inteiro ainda deslizava — e a medida é em coordenadas de **mundo**.
 - **`throw` dentro de um callback de `requestAnimationFrame` NÃO rejeita a `Promise` que o
   envolve.** O `reject` nunca é chamado, então o erro vira travamento silencioso: a suíte
@@ -1365,7 +1412,7 @@ complementam: o campo acha o que incomoda, a varredura acha o que ainda não inc
 
 ### 1. O mudo durava exatamente um clique ✔ feito
 
-`12-audio.js` implementa o mudo suspendendo o AudioContext. O listener de `pointerdown`
+`120-audio.js` implementa o mudo suspendendo o AudioContext. O listener de `pointerdown`
 que existe para destravar o áudio (navegador exige um gesto) retomava o contexto em
 **qualquer** toque, sem perguntar se o jogador tinha pedido silêncio. Clicava em ♪, calava;
 o toque seguinte — escolher uma peça — religava tudo, **com o botão ainda mostrando ✕**. A
@@ -1383,11 +1430,11 @@ difícil de enxergar. Chama-se `calado` agora.
 
 ### 2. O nome ia para `innerHTML` sem escape — a TERCEIRA mordida ✔ feito
 
-`montarCadeiras` (`14-menu.js`) escrevia `value="${c.nome}"`. Era o único `innerHTML` do
+`montarCadeiras` (`140-menu.js`) escrevia `value="${c.nome}"`. Era o único `innerHTML` do
 projeto fora do `escapar()`, e **pior que os anteriores por estar dentro de um ATRIBUTO**:
 basta uma aspa para sair dele.
 
-`c.nome` vem de fora — o convidado manda o nome pela rede, `15-rede.js` escreve em
+`c.nome` vem de fora — o convidado manda o nome pela rede, `150-rede.js` escreve em
 `MESA.cadeiras[].nome`, e `lembrarMesa()` persiste as quatro cadeiras. Um convidado com
 nome `"><img src=x onerror=…>` rodava script na máquina do **anfitrião** assim que ele
 mexesse no modo, no número de jogadores, ou recarregasse.
@@ -1480,7 +1527,7 @@ sobre custo:
   existe e é a mesma que a dica usa).
 
 **Cobertura — o buraco é a camada que o olho e o dedo tocam.** O motor e a rede estão muito
-bem testados; sem asserção nenhuma estão: **as pintas da peça** (`08-peca3d.js` — se
+bem testados; sem asserção nenhuma estão: **as pintas da peça** (`080-peca3d.js` — se
 `faceDaPinta(3)` desenhasse 4 pintas, *tudo continuaria verde* e o jogo mostraria peças
 erradas), o **fim de mão em duplas** (só há asserção com `MESA.n = 2`), **o conteúdo** do
 painel de contagem (só se testa se ele cobre a mesa, nunca se conta certo), o **`<select>`
@@ -1496,14 +1543,14 @@ v1.1.0. (O cabeçalho deste arquivo dizia o mesmo e já foi corrigido: são **4.
 
 **Dívidas registradas e NÃO consertadas, com o porquê:**
 
-- `08-peca3d.js` clona um material por peça e o projeto **não tem um único `dispose()`**.
+- `080-peca3d.js` clona um material por peça e o projeto **não tem um único `dispose()`**.
   Investigado: os clones têm parâmetros idênticos, logo mesma `cacheKey` no three — é um
   programa só, e os materiais viram lixo coletável ao sair da cena. É churn de alocação por
   rodada, não memória crescente. Dívida, não defeito que o jogador sente.
-- `06-layout.js` devolve o MESMO objeto em `alvos.esq` e `alvos.dir` quando a linha está
+- `060-layout.js` devolve o MESMO objeto em `alvos.esq` e `alvos.dir` quando a linha está
   vazia. Aliasing armado — mas `alvos` **não é lido por ninguém**: é código morto. Consertar
   ou remover, e remover é provavelmente melhor.
-- `05-bot.js` entrega o mesmo array `VAZIO` de Sets a todos os bots fáceis. Hoje só é lido,
+- `050-bot.js` entrega o mesmo array `VAZIO` de Sets a todos os bots fáceis. Hoje só é lido,
   então está correto; um `add` ali um dia envenenaria o esquecimento de todos.
 
 ## Fila 7 — as cinco fotos de campo de 31/07/2026 ✔ fechada (v1.8.0)
@@ -1555,7 +1602,7 @@ O conserto é guardar a receita: `desenho` era um arrow inline usado uma vez e j
 `fillRect` opaco):
 
 - **`webglcontextrestored`** — o que o three não pode fazer por nós.
-- **`visibilitychange` na VOLTA** — o outro lado do gancho do `11-interacao.js`, que só trata
+- **`visibilitychange` na VOLTA** — o outro lado do gancho do `110-interacao.js`, que só trata
   a saída. Sem contexto perdido a tela continua certa, mas o bitmap em branco fica **armado**
   para o próximo restore.
 
@@ -1568,7 +1615,7 @@ dos fundos. Medido: **0 sorteios globais por repintura**.
 `AudioContext`, `Peer`, e agora os eventos de contexto WebGL). A tentação era guardar no jogo
 com `if (domElement.addEventListener)`; está errado pelo mesmo motivo de sempre.
 
-**A suíte fecha de quebra a maior lacuna de teste do projeto:** `08-peca3d.js` não tinha
+**A suíte fecha de quebra a maior lacuna de teste do projeto:** `080-peca3d.js` não tinha
 NENHUMA asserção sobre o que a face desenha. Agora cada célula do atlas é amostrada nos 9
 pontos da grade contra uma tabela escrita **no teste** — ler `PINTAS` do jogo conferiria a
 tabela contra ela mesma —, e a UV de cada metade prova a convenção "o `[0]` à esquerda".
@@ -1614,13 +1661,13 @@ Quem devolve pixel é padding, gap e borda mais magros (9px) mais um ponto a men
 
 ### 3. A linha da mesa atravessando a mão do vizinho ✔ feito
 
-**Eram duas contas que não se falavam** — `09-tabuleiro.js` media o orçamento do tabuleiro em
-`z = 0.4` com divisor `0.86`; `10-mao.js` apertava os assentos em `z = −3.05` com divisor
+**Eram duas contas que não se falavam** — `090-tabuleiro.js` media o orçamento do tabuleiro em
+`z = 0.4` com divisor `0.86`; `100-mao.js` apertava os assentos em `z = −3.05` com divisor
 `13.5`. Que as duas dessem quase o mesmo número era coincidência aritmética, **e a
 coincidência era justamente o que garantia a colisão**: folga de −0,42 em todo retrato. É a
 mesma doença do item 8 ("cada caixa cabe sozinha e nenhuma pergunta pela outra"), agora em 3D.
 
-Hoje é uma conta só: `larguraUtilDoTabuleiro` (em `06-layout.js`, **puro**) tem três tetos e
+Hoje é uma conta só: `larguraUtilDoTabuleiro` (em `060-layout.js`, **puro**) tem três tetos e
 o menor manda — a madeira, a tela, e o **corredor** entre os montes dos adversários. E o
 aperto passou a ser decidido pelo assento que **binda**, cada um medido na profundidade dele:
 o `13.5` media sempre onde senta o adversário DE CIMA, e quem estoura é o de LADO, em `z = 0`,
@@ -1845,17 +1892,17 @@ e que nenhuma linha de teste jamais executou.
 A metade do CSS sozinha seria meia promessa, e meia promessa em acessibilidade é pior que
 nenhuma: quem liga a preferência confia nela. Então foram os dois lados.
 
-**O 3D custou DUAS LINHAS, e a razão é estrutural:** `chegarPerto` (`09-tabuleiro.js`) é a
+**O 3D custou DUAS LINHAS, e a razão é estrutural:** `chegarPerto` (`090-tabuleiro.js`) é a
 **única** função de suavização do projeto — treze chamadas, do tabuleiro e da mão. Com a
 preferência ligada ela devolve o alvo direto. E ninguém perde informação: o deslizamento
 mostra o CAMINHO, e o que decide a jogada é o destino, que continua onde estava.
 
-A outra linha é a lâmpada (`16-loop.js`), e ela era o pior item do jogo para sensibilidade
+A outra linha é a lâmpada (`160-loop.js`), e ela era o pior item do jogo para sensibilidade
 vestibular — o único movimento que **não acaba nunca**: não depende de jogada nem de vez,
 enquanto a aba estiver aberta a luz oscila. Parada, o boteco continua de pé; a luz fica
 quente e baixa, só não pulsa.
 
-**A `MediaQueryList` é consultada UMA VEZ e guardada** (`01-constantes.js`). Ela é viva — o
+**A `MediaQueryList` é consultada UMA VEZ e guardada** (`010-constantes.js`). Ela é viva — o
 `.matches` acompanha o sistema —, então guardá-la custa uma alocação em vez de sessenta por
 segundo, e continua respondendo se a pessoa mudar a preferência com o jogo aberto, sem
 listener nenhum.
@@ -1919,7 +1966,7 @@ impedir: **o jogo está certo e a tela mente.**
 **"Modo com monte" NÃO EXISTE, e é o que a leitura apressada erra:** o Clássico tem monte
 com 2 ou 3 jogadores e **nenhum** com 4 — a mesa de 4 esgota o baralho igualzinho ao Duelo
 e ao Trio. Por isso a pergunta leva o `n` junto e por isso ela **não** é uma propriedade da
-tabela `MODOS`. Quem responde é `sobraDoBaralho(modo, n)`, em `02-baralho.js`, pelo motivo
+tabela `MODOS`. Quem responde é `sobraDoBaralho(modo, n)`, em `020-baralho.js`, pelo motivo
 de sempre: aritmética de baralho escrita à mão no menu já quebrou uma vez (`28 - 7 * MESA.n`).
 
 O botão desabilitado ganhou uma nota ao lado dizendo **por que** não dá — botão apagado sem
@@ -1939,7 +1986,7 @@ ignora o valor onde não há monte, então guardá-lo não custa nada.
   devolve como encontrou.**
 - **`catch` que transforma falha de rede em aviso engole defeito de verdade — e o recado
   tranquilizador é o que faz ninguém olhar.** Um `j.ajustarCompraAoModo is not a function`
-  (nome novo que a ponte do `16-loop.js` não expunha) saiu do `test-online` com o texto "o
+  (nome novo que a ponte do `160-loop.js` não expunha) saiu do `test-online` com o texto "o
   broker gratuito do PeerJS ou a sua rede não deixaram a conexão fechar", com a rede ótima.
   Hoje `TypeError` e `ReferenceError` são reprovação com stack, não aviso: **rede não
   produz nenhum dos dois.**
@@ -1989,9 +2036,9 @@ nomes"*. O defeito e o pedido estão na mesma imagem.
 |---|---|
 | `css/estilo.css` | `.carta { margin: auto }` e as safe-areas no `.tela` (dois blocos: o normal e o de tela pequena) |
 | `src/pagina.html` | o campo `#onlineNome` no saguão |
-| `src/js/14-menu.js` | `NOMES` sem "Você"; a migração do "Você" gravado; `vagaOnline` zerada no `<select>` e no literal do `mesaLembrada` |
-| `src/js/15-rede.js` | `nomeUnico`/`nomesVizinhos`, `vagaDeVisita`, `porQueNaoSentou`, `RECUSA`, `largarAMesa`, `deixandoAMesa`, `desistiuDaMesa` (extraída), o `sentar` reconvertendo a vaga, o campo de nome revelado/escondido nas três telas |
-| `src/js/16-loop.js` | `c.vagaOnline = true` na conversão do `comecarLocal`; o ramo convidado do `sairDaPartida` virou `largarAMesa()` |
+| `src/js/140-menu.js` | `NOMES` sem "Você"; a migração do "Você" gravado; `vagaOnline` zerada no `<select>` e no literal do `mesaLembrada` |
+| `src/js/150-rede.js` | `nomeUnico`/`nomesVizinhos`, `vagaDeVisita`, `porQueNaoSentou`, `RECUSA`, `largarAMesa`, `deixandoAMesa`, `desistiuDaMesa` (extraída), o `sentar` reconvertendo a vaga, o campo de nome revelado/escondido nas três telas |
+| `src/js/160-loop.js` | `c.vagaOnline = true` na conversão do `comecarLocal`; o ramo convidado do `sairDaPartida` virou `largarAMesa()` |
 | `tests/test-jogo.mjs` | `novaConn` com `open`, `montarMesaOnline` içada e partindo de partida viva, 12 asserções do voltar e 6 do desempate |
 | `tests/test-telas.mjs` | cena `menu` (`soTela`), `semGuardado`/`menuCheio`, a medida de topo alcançável, o `V` vindo do `THREE` |
 | `tests/test-online.mjs` | cenas `nomes` e `voltar`; o `exit(0)` do aviso de rede deixou de engolir falha |
@@ -2003,7 +2050,7 @@ sobrenome que sai inteiro, a estabilidade entre chamadas, e a colisão que o cor
 
 ### 1. Todo mundo se chama "Você" ✔ feito
 
-`NOMES[0]` era literalmente `'Você'` (`14-menu.js`), e é dele que sai o nome que o convidado
+`NOMES[0]` era literalmente `'Você'` (`140-menu.js`), e é dele que sai o nome que o convidado
 manda ao anfitrião (`{t:'ola'}`). Os dois lados liam o mesmo literal.
 
 **São TRÊS medidas, e nenhuma sozinha resolve** — o que só ficou claro ao medir:
@@ -2025,7 +2072,7 @@ manda ao anfitrião (`{t:'ola'}`). Os dois lados liam o mesmo literal.
   cadeiras locais do menu, onde a pessoa digitou os dois nomes e vê os dois na mesma tela.
   A colisão que se desempata é a **invisível para quem a causou**.
 
-**Sem sorteio de nome, e o motivo é de teste:** `Math.random()` no topo do `14-menu.js` roda
+**Sem sorteio de nome, e o motivo é de teste:** `Math.random()` no topo do `140-menu.js` roda
 antes de qualquer `semear()` e desloca o embaralho de todas as cenas de tela. É a armadilha
 que este arquivo já registra duas vezes (a receita do `pintar()`, o `performance.now()`).
 
@@ -2235,7 +2282,7 @@ Três coisas escritas aqui embaixo estavam erradas, e valem mais que os conserto
 
 | o que esta fila dizia | o que era |
 |---|---|
-| `aplicarIntencao` e `atualizarVista` em `04-partida.js` | estão em **`16-loop.js:152`** e **`:91`** |
+| `aplicarIntencao` e `atualizarVista` em `040-partida.js` | estão em **`160-loop.js:152`** e **`:91`** |
 | "escrever a cena que dirige o `conn.on('data')`" | **aquele código era inalcançável do Node** — o dublê `Peer` tinha `on() { return this; }`. A cena não era escrevível como anotado |
 | C2: bastava consertar a guarda `modo !== 'convidado'` | checar `modo` **nunca poderia** funcionar: `conectarNaMesa:615` repõe `modo`. Precisava de identidade da tentativa |
 
@@ -2243,10 +2290,10 @@ Três coisas escritas aqui embaixo estavam erradas, e valem mais que os conserto
 
 ### Os dois defeitos que só apareceram consertando
 
-- **A QUARTA CABEÇA DA HIDRA**, em `16-loop.js`: `setTimeout(encerrarRede, 400)`, sem dono e
+- **A QUARTA CABEÇA DA HIDRA**, em `160-loop.js`: `setTimeout(encerrarRede, 400)`, sem dono e
   sem guarda, chamando `encerrarRede` incondicionalmente. Abrir outra mesa nesses 400 ms
   destruía o peer que acabou de nascer. Não estava na fila porque a varredura procurou os
-  `setTimeout` de `15-rede.js`.
+  `setTimeout` de `150-rede.js`.
 - **`ULTIMO_NOME` não era limpo no `encerrarRede`** — nasceu com o conserto do C4, e é da
   família de `conexoes`/`esperando`/`donoDaCadeira`, que já eram limpos. Chaveado por
   CADEIRA: a cadeira 1 de uma mesa nova é outra pessoa, e herdava o relógio de quem sentou
@@ -2321,7 +2368,7 @@ e 2 dos 5 da Fila 6 tinham diagnóstico errado escrito antes de alguém medir).
 
 ### C1 · o jogo se reabre sozinho depois de você clicar "Voltar" ⚠ ABERTO
 
-`15-rede.js:185-190`. O `setTimeout` da reabertura de mesa **não guarda o handle**,
+`150-rede.js:185-190`. O `setTimeout` da reabertura de mesa **não guarda o handle**,
 `encerrarRede()` não o cancela (ele limpa `esperando`, que é outro mapa) e o callback **não
 confere nada** ao disparar. Compare com o irmão `voltarSozinho` (`:719`), que começa com
 `if (modo !== 'convidado') return;`. **A assimetria é o defeito.**
@@ -2345,7 +2392,7 @@ timers; nenhum peer novo pode nascer.
 
 ### C2 · o convidado que troca de mesa fica sem conexão, e a tela mente ⚠ ABERTO
 
-`15-rede.js:711-727`. O comentário diz `// desistiu no meio, ou entrou noutra mesa` e a
+`150-rede.js:711-727`. O comentário diz `// desistiu no meio, ou entrou noutra mesa` e a
 guarda `if (modo !== 'convidado') return` **não cobre o segundo caso** — quem entrou noutra
 mesa também é `'convidado'`. **Comentário que descreve uma proteção que a linha não dá.**
 
@@ -2363,7 +2410,7 @@ teste**.
 
 ### C4 · um convidado congela a mesa de todos com uma linha ⚠ ABERTO
 
-`15-rede.js:164-167`. O `{t:'nome'}` não tem limite de tamanho nem de frequência — e **o
+`150-rede.js:164-167`. O `{t:'nome'}` não tem limite de tamanho nem de frequência — e **o
 contraste está no mesmo arquivo**: `receberChat` (`:848`) tem os dois (`INTERVALO_FALA` de
 600 ms e `TAMANHO_FALA` de 160). É a mensagem **mais cara** do protocolo: `listarSala()`
 (reescreve `innerHTML`) + `publicar()` (espalha vistas a todos, e **grava a partida no
@@ -2379,16 +2426,16 @@ vez só.
 
 ### C5 · tela preta permanente por partida guardada ⚠ ABERTO
 
-`16-loop.js:292-298`. `partidaGuardada()` confere quatro campos e entrega o resto cru;
-`mesaLembrada()` (`14-menu.js:39`) confere campo a campo com `Object.hasOwn`. **A diferença
+`160-loop.js:292-298`. `partidaGuardada()` confere quatro campos e entrega o resto cru;
+`mesaLembrada()` (`140-menu.js:39`) confere campo a campo com `Object.hasOwn`. **A diferença
 de rigor entre os dois é acidental, não decidida** — e é o defeito 5 da Fila 6 sobrevivendo
 no único validador de `localStorage` que nunca foi endurecido.
 
 Sem o objeto `regras`, `atualizarBotaoRetomar()` — que roda **no topo do módulo**
-(`16-loop.js:457`) — lança e mata o script concatenado inteiro: **tela preta que volta a cada
+(`160-loop.js:457`) — lança e mata o script concatenado inteiro: **tela preta que volta a cada
 recarregamento**, porque a causa está guardada, e sem saída a não ser limpar o armazenamento.
 
-E com um modo que não existe mais, `MODOS[vista.modo].rotulo` (`13-hud.js:91`) lança dentro
+E com um modo que não existe mais, `MODOS[vista.modo].rotulo` (`130-hud.js:91`) lança dentro
 do `desenharHUD`: o menu some, a mesa 3D aparece, e **o HUD não existe** — sem placar, sem
 vez, sem botões. `atualizarBotaoRetomar` protege isso (`m ? m.rotulo : …`); `desenharHUD`
 **não**. Chave de protótipo ainda passa: `modo: 'constructor'` mostra `undefined · até 6`.
@@ -2399,11 +2446,11 @@ armazenamento adulterado ou troca de versão. Fica registrado porque é a defini
 
 ### C6 · a QUARTA mordida do `innerHTML`, por uma porta nova ⚠ ABERTO
 
-`13-hud.js:86-98` e `:377`. A regra da casa — *todo texto de fora passa pelo `escapar`* — foi
+`130-hud.js:86-98` e `:377`. A regra da casa — *todo texto de fora passa pelo `escapar`* — foi
 aplicada às **strings** (`nome`, `txt`) e **nunca aos campos que se assume serem números**:
 `vista.placar`, `vista.alvo`, `vista.naMao[i]`, `vista.maoNum`, `r.somas[i]`, `r.pontos`.
 
-E no convidado, `atualizarVista(m.v)` (`15-rede.js:667`) recebe o objeto do fio **sem uma
+E no convidado, `atualizarVista(m.v)` (`150-rede.js:667`) recebe o objeto do fio **sem uma
 única validação**. Como qualquer aba pode ser anfitriã, um anfitrião modificado manda
 `{t:'vista', v:{placar:['<img src=x onerror=…>', 0]}}` e roda script na máquina dos
 convidados. Reproduzido; `escapou o placar? false`.
@@ -2412,7 +2459,7 @@ Também: `atualizarVista(m.v)` com `m.v` ausente deixa `vistaAtual` indefinido e
 
 ### C3 · `{t:'acao'}` sem `peca` estoura no anfitrião ⚠ ABERTO
 
-`15-rede.js:168` → `04-partida.js:107` → `mesmaPeca` (`02-baralho.js:9`). `aplicarIntencao`
+`150-rede.js:168` → `040-partida.js:107` → `mesmaPeca` (`020-baralho.js:9`). `aplicarIntencao`
 não confere **nada** da mensagem: `i.acao`, `i.peca` e `i.ponta` vão crus para o motor.
 `mesmaPeca([1,2], undefined)` lança `Cannot read properties of undefined`.
 
@@ -2422,7 +2469,7 @@ invariante 3 continua de pé.** O dano é o `publicar()` não rodar e a vez não
 
 ### C7 · a cadeira pode passar a se chamar `"undefined"` ⚠ ABERTO
 
-`15-rede.js:165`. Com o campo ausente, `String(undefined)` é a string `"undefined"`, que é
+`150-rede.js:165`. Com o campo ausente, `String(undefined)` é a string `"undefined"`, que é
 **truthy** — então o `|| 'Visita'` nunca dispara. Medido: `{t:'nome'}` → `"undefined"`,
 `{nome:null}` → `"null"`, `{nome:42}` → `"42"`. Aparece no placar, na lista da sala e no
 começo de toda linha da conversa: **é o defeito da foto da Fila 10 por outra porta.**
@@ -2436,12 +2483,12 @@ lugar errado é guarda que não guarda.* O irmão em `sentar` (`:363`) está cer
 
 | # | onde | o quê |
 |---|---|---|
-| S1 | `15-rede.js:161,413,91` | `String(m.id \|\| '')` sem teto vai para `donoDaCadeira`, que é **persistido**. Id de megabytes ou estoura a cota (e `guardar` engole calado — o bug do item 4 pela porta dos fundos) ou come a cota da origem. **Cota real não medida.** |
-| S2 | `15-rede.js:641` | `euNaTela = m.cadeira` sem faixa nem tipo. Rastreados os consumidores, **nenhum dano hoje** — mas é "índice do fio usado sem checar limites", e basta alguém passar a lê-lo |
-| S3 | `16-loop.js:159` | ação recusada de convidado morre **em silêncio**: não existe `{t:'erro'}` no protocolo. É a doença que a Fila 6 e o item 2 da Fila 8 passaram consertando, viva no único caminho que atravessa a rede |
-| S4 | `04-partida.js` (6 pontos) | `P.log` cresce para sempre — **347 entradas / 18,7 KB** numa partida de 12 mãos — e é serializado a cada `publicar()`: **334 gravações síncronas por partida**. E **não tem um único leitor** em `src/` nem em `tests/`: é peso morto. Jank em celular não medido |
-| S5 | `15-rede.js:712` | `voltando` não é zerado ao cancelar pelo botão. A próxima queda começa em 4/8. Causa idêntica à do C2 |
-| S6 | `15-rede.js:223` | `donoDaCadeira` restaurado exige `Number.isInteger` mas **não a faixa**. Os três leitores são limitados por `MESA.n` — inofensivo hoje |
+| S1 | `150-rede.js:161,413,91` | `String(m.id \|\| '')` sem teto vai para `donoDaCadeira`, que é **persistido**. Id de megabytes ou estoura a cota (e `guardar` engole calado — o bug do item 4 pela porta dos fundos) ou come a cota da origem. **Cota real não medida.** |
+| S2 | `150-rede.js:641` | `euNaTela = m.cadeira` sem faixa nem tipo. Rastreados os consumidores, **nenhum dano hoje** — mas é "índice do fio usado sem checar limites", e basta alguém passar a lê-lo |
+| S3 | `160-loop.js:159` | ação recusada de convidado morre **em silêncio**: não existe `{t:'erro'}` no protocolo. É a doença que a Fila 6 e o item 2 da Fila 8 passaram consertando, viva no único caminho que atravessa a rede |
+| S4 | `040-partida.js` (6 pontos) | `P.log` cresce para sempre — **347 entradas / 18,7 KB** numa partida de 12 mãos — e é serializado a cada `publicar()`: **334 gravações síncronas por partida**. E **não tem um único leitor** em `src/` nem em `tests/`: é peso morto. Jank em celular não medido |
+| S5 | `150-rede.js:712` | `voltando` não é zerado ao cancelar pelo botão. A próxima queda começa em 4/8. Causa idêntica à do C2 |
+| S6 | `150-rede.js:223` | `donoDaCadeira` restaurado exige `Number.isInteger` mas **não a faixa**. Os três leitores são limitados por `MESA.n` — inofensivo hoje |
 
 ### A RAIZ COMUM, e é a lição desta fila
 
@@ -2459,7 +2506,7 @@ desta linha, e ele tem a mesma guarda?"*
 ### O buraco de TESTE que explica C3, C4 e C7
 
 **Nenhuma linha de teste jamais entregou uma mensagem malformada ao anfitrião.** O
-`conn.on('data')` inteiro (`15-rede.js:155-171`) não é alcançado por suíte nenhuma: o
+`conn.on('data')` inteiro (`150-rede.js:155-171`) não é alcançado por suíte nenhuma: o
 `test-jogo` chama `sentar`/`largar`/`receberChat`/`desistiuDaMesa` **direto**, e o
 `test-online` só troca mensagens bem-formadas. Zero ocorrências nos testes de: `conectando`,
 `pararDeConectar`, `explicarErroDeRede` (nenhum dos seis ramos roda), o retry de
@@ -2478,7 +2525,7 @@ sete de uma vez.
   carga. **O único crescimento sem teto é o `P.log` (S4).**
 - **Listeners não acumulam**: os 18 `addEventListener` de `src/js/` são todos de topo de
   módulo. Não há um único dentro de função.
-- **O único `JSON.parse`** (`01-constantes.js:112`) está em `try/catch` com padrão de volta.
+- **O único `JSON.parse`** (`010-constantes.js:112`) está em `try/catch` com padrão de volta.
 - **`mesaLembrada()` é sólido** — e é o **modelo** que falta ao `partidaGuardada` (C5).
 
 </details>
@@ -2486,17 +2533,17 @@ sete de uma vez.
 
 ### As lacunas de teste que a varredura mediu
 
-- **`08-peca3d.js`: 2 nomes exercitados de 18.** Ninguém afirma que a peça `[3,5]` mostra
+- **`080-peca3d.js`: 2 nomes exercitados de 18.** Ninguém afirma que a peça `[3,5]` mostra
   três pintas de um lado e cinco do outro — a única prova é olho humano no `tests/shots/`.
   O que existe é cobertura **negativa** (peça de adversário não tem `material.map`), que é
   fronteira de segurança, não geometria.
-- **`12-audio.js`: nenhuma asserção de que um som SAI.** E é pior que ramo verde: o dublê
+- **`120-audio.js`: nenhuma asserção de que um som SAI.** E é pior que ramo verde: o dublê
   (`tests/harness.mjs:140-153`) é um objeto-nulo — `createGain()` e `createOscillator()`
   devolvem `nada()` —, então `estalo()` e `nota()` rodam inteiros e **ninguém pergunta o que
   saiu**. Só `ac.state` é conferido. **É o arquivo mais reaproveitável para os jogos novos:
   reusá-lo hoje é reusar sem rede.**
 - **`enquadrar()` não tem asserção, e o `fov` só é IMPRESSO** (`test-telas.mjs:416,630`).
-  `FOV_BASE = 46` e `FOV_TETO = 62` (`07-cena.js:26-27`) **não têm guarda**: trocar o 46 por
+  `FOV_BASE = 46` e `FOV_TETO = 62` (`070-cena.js:26-27`) **não têm guarda**: trocar o 46 por
   50 não derruba suíte nenhuma, só muda um número no log. O comentário do próprio arquivo
   chama isso de "o bug do celular inteiro".
 - **Nenhum teste dispara `resize` nem `orientationchange`.** O harness fixa 1600×900 e o
@@ -2566,12 +2613,12 @@ Medindo linhas contra menções ao vocabulário de dominó (`peça`, `pinta`, `c
 
 | arquivo | linhas | menções | leitura |
 |---|---:|---:|---|
-| `15-rede.js` | **857** | **3** | a camada mais cara do projeto é **genérica** |
-| `12-audio.js` | 92 | 1 | genérica |
-| `14-menu.js` | 250 | 14 | quase toda genérica (as cadeiras) |
-| `13-hud.js` | 473 | 15 | placar, vez e conversa são genéricos |
-| `07-cena.js` | 430 | 27 | o boteco é genérico; a mesa é do jogo |
-| `04-partida.js` | 235 | 29 | motor **do dominó** |
+| `150-rede.js` | **857** | **3** | a camada mais cara do projeto é **genérica** |
+| `120-audio.js` | 92 | 1 | genérica |
+| `140-menu.js` | 250 | 14 | quase toda genérica (as cadeiras) |
+| `130-hud.js` | 473 | 15 | placar, vez e conversa são genéricos |
+| `070-cena.js` | 430 | 27 | o boteco é genérico; a mesa é do jogo |
+| `040-partida.js` | 235 | 29 | motor **do dominó** |
 | `03` · `06` · `08` | 139 · 152 · 125 | 33 · 37 · 45 | **puro dominó** |
 
 É consequência direta do **invariante 2**: a rede nunca precisou saber que o jogo era
@@ -2591,7 +2638,7 @@ DA CASA (herdado)                    DO JOGO (nasce por jogo)
 ```
 
 O que **não existe e vale para os três jogos de carta** é um baralho e uma **carta 3D** —
-naipe e valor num atlas de canvas, exatamente como o `08-peca3d.js` já faz com as pintas. Por
+naipe e valor num atlas de canvas, exatamente como o `080-peca3d.js` já faz com as pintas. Por
 isso a ordem é boa: **o truco paga o baralho e a carta, e o pife e o 21 depois ficam baratos.**
 
 ### Duas armadilhas previstas — escritas ANTES de alguém começar
@@ -2618,20 +2665,31 @@ byte a byte** ao anterior, tirando as linhas de separador `/* ····· … ·�
 verificação certa para mudança estrutural — verde de suíte diria bem menos.
 
 **O que a implementação descobriu, e o plano abaixo não previa:** ordenar por CAMINHO
-QUEBRARIA o jogo. `14-menu.js` (casa) chama `mesaLembrada()` no topo do módulo e valida o
-nível de bot contra `NIVEIS`, que mora em `05-bot.js` (dominó) — com toda a `10-casa/` antes
+QUEBRARIA o jogo. `140-menu.js` (casa) chama `mesaLembrada()` no topo do módulo e valida o
+nível de bot contra `NIVEIS`, que mora em `050-bot.js` (dominó) — com toda a `10-casa/` antes
 de toda a `30-domino/`, é `ReferenceError` na carga e tela preta. Por isso a ordem saiu do
 número e não da pasta, e por isso o `build.mjs` reprova número repetido e arquivo sem número.
 
-**AS DUAS DÍVIDAS CONTINUAM ABERTAS, e são elas que decidem se a pasta é fato ou promessa:**
+**AS DUAS DÍVIDAS FECHARAM NA v3.0.0 — e a medição corrigiu as DUAS antes de consertar.**
+Nono e décimo diagnósticos de leitura que esta base perde para um número.
 
-- **`15-rede.js` escreve na tela por id** — 45 chamadas `el(...)`, mais que o próprio HUD.
-  Enquanto isso durar, ele não é "da casa": é dominó disfarçado de rede.
-- **Um namespace por jogo** (`JOGOS.domino = {…}`). Sem ele, o `naMao` do truco e o do
-  dominó colidem em silêncio no escopo concatenado — e este arquivo já registra que `naMao`
-  sendo dois nomes quase virou colisão uma vez.
+| a dívida como estava anotada | o que a medição mostrou |
+|---|---|
+| "`150-rede.js` é dominó disfarçado de rede" | os 11 ids são **todos do saguão**, e saguão é da casa. Era **transporte** misturado com **apresentação** |
+| "o `naMao` do truco colide **em silêncio**" | `naMao` é `const`, e `const` repetido é **SyntaxError** — o caso citado é o barulhento |
+| — (não anotado) | `010-constantes.js` da casa guardava `PECA_C`, `MAX_PINTAS`, `PONTOS`, `MODOS` |
 
-E `13-hud.js` ainda tem `desenharContagem`, que é regra de dominó dentro da pasta da casa.
+- **A rede tem ZERO chamadas ao DOM.** A tela do online virou `145-saguao.js`: a rede diz o
+  que É (esta cadeira chegou, faltam dois), o saguão diz como isso APARECE.
+- **O namespace não foi feito, e o motivo está medido.** Só `function` redeclarada e `var`
+  colidem calado; `const`/`let`/`class` já eram `SyntaxError` que o `node --check` do build
+  pegava. **O `build.mjs` passou a reprovar nome de topo repetido entre arquivos**, dizendo o
+  nome e os dois donos — vinte linhas, contra as 153 chamadas de cerimônia que um
+  `JOGOS.domino = {…}` custaria com um jogo só na mesa. Se o truco trouxer colisão demais, o
+  objeto continua disponível; hoje ele compraria pouco.
+- **`desenharContagem` saiu do HUD**, e não mudando de pasta: a casa ganhou o encaixe
+  `painelDoJogo`, que nasce sem fazer nada, e o dominó pendura o dele em
+  `30-domino/135-contagem.js`. O HUD desenha um painel de dominó sem citar dominó uma vez.
 
 <details><summary>o plano original, de quando nada disso existia</summary>
 
@@ -2651,7 +2709,7 @@ naturalmente `naMao`, `carta`, `chave`, `valor`, `distribuir`, `embaralhar`, `jo
 `naMao` sendo dois nomes quase virou colisão silenciosa; com dois jogos, cada um desses é um
 conflito.
 
-Some-se: **uma** ponte `window.__jogo` (`16-loop.js:488`), de que as sete suítes dependem, e
+Some-se: **uma** ponte `window.__jogo` (`160-loop.js:488`), de que as sete suítes dependem, e
 **75 `id="…"`** de dominó no `src/pagina.html`.
 
 ### A separação proposta
@@ -2670,18 +2728,18 @@ src/js/
 
 ### Duas dívidas a pagar JUNTO, senão a pasta é cosmética
 
-- **A rede escreve na tela por id — e mais que o próprio HUD.** Medido: `15-rede.js` tem
-  **45** chamadas `el('…')` contra **43** do `13-hud.js`. A camada de rede é hoje a que mais
-  toca no DOM do projeto inteiro. **Enquanto isso existir, `15-rede.js` não é "da casa": é
+- **A rede escreve na tela por id — e mais que o próprio HUD.** Medido: `150-rede.js` tem
+  **45** chamadas `el('…')` contra **43** do `130-hud.js`. A camada de rede é hoje a que mais
+  toca no DOM do projeto inteiro. **Enquanto isso existir, `150-rede.js` não é "da casa": é
   dominó disfarçado de rede.**
 - **Um namespace por jogo** — cada jogo pendura o seu num objeto (`JOGOS.domino = {…}`) em vez
   de soltar nomes no escopo comum. É o que torna o `naMao` do truco e o do dominó duas coisas
   diferentes sem prefixo feio.
 
-E os três arquivos que misturam vidas diferentes, por ordem de custo: **`07-cena.js`**
-(infra de render + texturas + o boteco concreto + `assentosDaMesa`), **`13-hud.js`**
+E os três arquivos que misturam vidas diferentes, por ordem de custo: **`070-cena.js`**
+(infra de render + texturas + o boteco concreto + `assentosDaMesa`), **`130-hud.js`**
 (telas + conversa + gavetas + som + `desenharContagem`, que é **regra de dominó**), e
-**`16-loop.js`** (estado + turno + render loop + persistência + a ponte).
+**`160-loop.js`** (estado + turno + render loop + persistência + a ponte).
 
 ### No Git
 
@@ -2748,7 +2806,7 @@ git branch -d pwa
 ```
 
 **A ordem importa:** o worktree entra **depois** dos consertos da Fila 11, não junto. A
-reorganização mexe em todo arquivo do projeto e os consertos moram em `15-rede.js` — as duas
+reorganização mexe em todo arquivo do projeto e os consertos moram em `150-rede.js` — as duas
 frentes em paralelo dariam conflito exatamente no arquivo mais disputado. Worktree serve para
 frentes que **não se cruzam**; usá-lo para frentes que se cruzam é criar trabalho de merge.
 
@@ -2765,44 +2823,60 @@ misturar as regras dos dois.
 
 </details>
 
-## O caminho de aplicativo — PWA agora, Play Store depois
+## O caminho de aplicativo — ✔ PWA feito (v3.0.0), a Play Store em aberto
 
 Decidido com o Ricardo em 04/08/2026. **O PWA é pré-requisito do TWA**: não há como pular
-direto para a loja.
+direto para a loja. O PWA saiu na **v3.0.0**; o que falta para a loja é decisão de conta e
+está mais abaixo.
 
-### O que já existe (o caro, e está pronto)
+### O que já existia, e era o caro
 
-`viewport-fit=cover` (`src/pagina.html:7`), safe-areas (`css/estilo.css:40-43`), alvos de
-44 px por `(pointer: coarse)` (`:448`), `touch-action: none` (`:49`), vibração, gaveta,
-`prefers-reduced-motion`, teclado completo, e o gesto interrompido pelo sistema
-(`11-interacao.js:264`). **O trabalho de celular que costuma ser o caro já foi feito.**
+`viewport-fit=cover`, safe-areas, alvos de 44 px por `(pointer: coarse)`,
+`touch-action: none`, vibração, gaveta, `prefers-reduced-motion`, teclado completo, e o gesto
+interrompido pelo sistema (`110-interacao.js`). **O trabalho de celular que costuma ser o
+caro já estava feito** — foi por isso que o resto custou uma release só.
 
-### O que NÃO existe (nada)
+### O que entrou ✔
 
-Nenhum `manifest`, nenhum service worker, **nenhum arquivo de ícone** (o favicon é SVG inline
-em `data:`), nenhum `theme-color`, nenhuma meta `apple-mobile-web-app-*`. **Zero binários
-versionados** — tudo é gerado em canvas e WebAudio, o que é ótimo para o tamanho e péssimo
-para a loja, que exige ícone em arquivo (192 e 512).
+`manifest.webmanifest`, `src/sw.js` (gerado em `sw.js` pelo build), `icone-192.png` e
+`icone-512.png` — **os dois únicos binários versionados do projeto**, e a exceção é imposta
+de fora: a loja e o manifest exigem PNG em arquivo. A fonte é `src/icone.svg`, e
+`npm run icones` refaz os dois; artefato sem caminho de volta à fonte é artefato que ninguém
+consegue mudar daqui a um ano.
 
-### O orçamento de offline: 1,00 MB
+**O nome do cache é um RESUMO do `index.html`**, carimbado pelo `build.mjs`. Cache de service
+worker que não troca de nome prende o jogador numa versão antiga para sempre, e nem limpar a
+aba resolve — amarrando o nome ao conteúdo, publicar correção JÁ é publicar cache novo, e
+"esquecer de bumpar a versão" deixa de existir como categoria de erro. Por isso `sw.js`
+entrou no `merge=ours` do `.gitattributes` junto do `index.html`.
 
-| | |
-|---|---:|
-| `three.module.min.js` | 655 KB |
-| `peerjs.min.js` | 91 KB |
-| `index.html` | 243 KB |
-| `css/estilo.css` | 39 KB |
-| **total** | **1.027 KB** |
+**As bibliotecas NÃO são baixadas na instalação, de propósito.** São 763 KB, e baixá-las
+duas vezes (uma pela página, outra pelo worker) atrasaria justamente a primeira visita. O
+`fetch` as guarda quando a própria página as pede; o resultado final é o mesmo. Consequência
+que vale saber: **quem enche o cache é a SEGUNDA carga**, porque o worker só intercepta
+depois de instalado.
 
-**GANHO DE GRAÇA, e vale mesmo sem PWA nenhum:** o importmap aponta para
-`three.module.js` **NÃO MINIFICADO** — 1,27 MB onde `three.module.min.js` resolve com
-670 KB. É **47% a menos**, trocando uma linha (`src/pagina.html:257`). Hoje o total é
-**1,58 MB**. E a segunda entrada do importmap (`three/addons/`) é **peso morto**: o único
-`import` do projeto é `07-cena.js:7`.
+### O orçamento de offline: 1,03 MB (era 1,64 MB)
 
-Nota: a promessa do `#semCarga` — *"depois de carregar uma vez, o jogo abre offline"* —
-depende **só do cache HTTP** hoje. É promessa não garantida; o service worker é o que a torna
-verdadeira.
+| | antes | agora |
+|---|---:|---:|
+| three | 1.272.972 (não minificado) | **670.681** |
+| `peerjs.min.js` | 92.865 | 92.865 |
+| `index.html` (com o CSS dentro) | 314.078 | 317.063 |
+| **total** | **1.679.915** | **1.080.609** |
+
+**O ganho de graça era real e saiu numa linha:** o importmap apontava para
+`three.module.js` **não minificado**. 47% a menos no maior download da página. A segunda
+entrada (`three/addons/`) saiu junto — o único `import` do projeto é
+`import * as THREE from 'three'`, em `070-cena.js`.
+
+**`crossorigin` no `<script>` do PeerJS não é enfeite.** Sem ele o navegador busca em modo
+`no-cors`, o worker recebe resposta **opaca** — que não dá para conferir e por isso ele
+recusa guardar — e o jogo abriria offline **sem o online**. O sintoma seria "o botão de mesa
+online sumiu depois que instalei o aplicativo". Provado por mutação.
+
+**A promessa do `#semCarga` deixou de ser promessa.** `npm run app` desliga a rede e recarrega;
+se o jogo não ficar pronto, reprova. É a asserção que vale por todas as outras da suíte.
 
 ### O BLOQUEIO da Play Store, que ninguém adivinharia
 
@@ -2829,25 +2903,27 @@ projeto Android, assinatura do AAB, política de privacidade, ícone e prints.
   `dominobar.cliente`, que é a identidade que devolve a cadeira certa a quem cai. **Um TWA
   mantém a origem `https://` e não sofre disso**; um WebView empacotado (Capacitor) sofre, e
   é mais um motivo para o TWA.
-- **O online depende do broker público do PeerJS, com STUN e sem TURN** (`15-rede.js:14-17`).
+- **O online depende do broker público do PeerJS, com STUN e sem TURN** (`150-rede.js:14-17`).
   Em rede móvel com NAT simétrico a conexão falha e **não há plano B no código**. Isto já
   vale hoje, no site — o app só torna mais visível. E os códigos de 4 letras vivem num
   **namespace global compartilhado** naquele broker.
 
-### A ordem sugerida
+### A ordem sugerida — os três primeiros ✔ feitos na v3.0.0
 
-1. o three minificado e o importmap limpo (uma linha, ganho imediato, sem PWA);
-2. ícones + `manifest.webmanifest` + `theme-color` → **instalável**;
-3. service worker cacheando os quatro arquivos → **abre sem internet**. Guardar o registro
-   atrás de `location.protocol.startsWith('http')`, senão quebra o duplo-clique em `file://`;
-4. o repositório da user page com o `.well-known/` → **destrava o TWA**;
+1. ~~o three minificado e o importmap limpo~~ ✔
+2. ~~ícones + `manifest.webmanifest` + `theme-color`~~ ✔ **instalável**
+3. ~~service worker~~ ✔ **abre sem internet**, com o registro atrás de
+   `location.protocol.indexOf('http') === 0` — em `file://` o `register` REJEITA, e este
+   jogo existe para abrir por duplo-clique;
+4. **o repositório da user page com o `.well-known/`** → destrava o TWA. ← é aqui que para,
+   e é decisão de conta do Ricardo, não de código;
 5. Bubblewrap, conta, assinatura, loja.
 
 ---
 
 ## Regras da casa (implementadas)
 
-Três modos, na tabela `MODOS` de `01-constantes.js`: **Clássico** (7 na mão, 2 a 4
+Três modos, na tabela `MODOS` de `010-constantes.js`: **Clássico** (7 na mão, 2 a 4
 jogadores, 28 peças), **Duelo** (14 na mão, 1v1, 28 peças) e **Trio** (9 na mão, 3
 jogadores, 27 peças — o `0|0` sai, e é isso que faz 27 dividir exato por 3).
 
@@ -2856,16 +2932,16 @@ monte, quem trava passa" que a mesa de 4 já usava — não há regra de compra 
 monte só o Clássico de 2 ou 3, onde quem não pode jogar **compra até conseguir**.
 
 **Clássico de 4:** duplas em cruz (1&3 × 2&4). Primeira mão abre com o 6|6 — ou, quando
-ele está no monte, com a maior carroça (`quemAbre`, `02-baralho.js`); as seguintes, quem
+ele está no monte, com a maior carroça (`quemAbre`, `020-baralho.js`); as seguintes, quem
 bateu. Batida: simples 1, carroça 2, **lá-e-lô 2**, cruzada 4. Trancou: 1 ponto para a
 mão mais leve; empatou, a mão morre. Partida até 6 (ou 10, no menu). Compra voluntária e
 o modo da mesa são alternáveis no menu.
 
-`maoRuim(mao, modo)` em `02-baralho.js` reprova a mão com `modo.carrocasDemais` carroças
+`maoRuim(mao, modo)` em `020-baralho.js` reprova a mão com `modo.carrocasDemais` carroças
 ou mais e manda `distribuir` refazer tudo (até `MAX_EMBARALHOS`). Acontece em 1,4% das
 distribuições no clássico, 0,6% no duelo e 2,6% no trio.
 
-**Não dá para trancar de propósito** (`fechamentosArmados`, `03-regras.js`, filtrado em
+**Não dá para trancar de propósito** (`fechamentosArmados`, `030-regras.js`, filtrado em
 `acoesDe`). Cinco condições para barrar, e cada uma tem um porquê:
 
 1. sem monte — com monte ninguém trava, compra;
@@ -2885,7 +2961,7 @@ sensível à ordem, e a linha guarda as peças JÁ ORIENTADAS — quase 40% dela
 gravadas invertidas, não casavam com o baralho, e a regra deixava passar o fechamento
 armado. O teste cobre isso rodando cada cenário também na **fileira espelhada**.
 
-**Sair conta como derrota** (`abandonar`, `04-partida.js`): grava `P.desistiu`, põe
+**Sair conta como derrota** (`abandonar`, `040-partida.js`): grava `P.desistiu`, põe
 `fase='fim'` e a tela de campeão tira o time do desistente da conta. No online a cadeira
 fica guardada `ESPERA_VOLTA` (30 s) antes de virar derrota — e continua marcada `online`
 justamente para o mesmo código reclamá-la.

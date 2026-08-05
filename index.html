@@ -9,6 +9,19 @@
 <!-- Ícone embutido: sem ele o navegador pede /favicon.ico sozinho e leva 404 em toda
      visita. Um SVG em data: resolve sem acrescentar arquivo nem requisição. -->
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='3' y='9' width='26' height='14' rx='3' fill='%23f4ecd9' stroke='%23241a12' stroke-width='2'/><path d='M16 10v12' stroke='%23241a12' stroke-width='1.5'/><g fill='%23191512'><circle cx='8' cy='13' r='1.9'/><circle cx='12' cy='19' r='1.9'/><circle cx='20' cy='13' r='1.9'/><circle cx='25' cy='13' r='1.9'/><circle cx='20' cy='19' r='1.9'/><circle cx='25' cy='19' r='1.9'/></g></svg>" />
+<!-- ─── aplicativo ────────────────────────────────────────────────────────────
+     Tudo em caminho RELATIVO ('./'), e não por estilo: o jogo mora numa project page
+     (`ricardocolombo01.github.io/domino-bar/`), então '/manifest.webmanifest' apontaria
+     para a raiz do domínio, que é 404. E o mesmo caminho relativo é o que deixa o
+     duplo-clique em file:// continuar funcionando — lá isto tudo simplesmente não resolve,
+     sem quebrar nada. -->
+<link rel="manifest" href="./manifest.webmanifest" />
+<meta name="theme-color" content="#241a16" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Dominó" />
+<link rel="apple-touch-icon" href="./icone-192.png" />
 <style>
 /* GERADO por build.mjs a partir de src/ — não edite este bloco à mão. */
 /* Dominó de Bar — a camada de HTML por cima do 3D.
@@ -389,7 +402,7 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
 .regras b { color: var(--ambar); }
 
 /* ── quem pediu menos movimento ───────────────────────────────────────────────
-   O outro lado do `movimentoReduzido()` do 01-constantes.js, que cuida do 3D — a lâmpada
+   O outro lado do `movimentoReduzido()` do 010-constantes.js, que cuida do 3D — a lâmpada
    que respira e as peças que deslizam. Aqui ficam os três movimentos de HTML que existem
    no projeto: a barra de confirmar subindo, o aviso crescendo e o hover dos botões.
 
@@ -926,42 +939,38 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
   </div>
 </div>
 
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<!-- `crossorigin` não é enfeite aqui: sem ele o navegador busca o script em modo `no-cors` e
+     o service worker recebe uma resposta OPACA — que ele não pode conferir e por isso recusa
+     guardar. Resultado: o jogo abriria offline sem o PeerJS, ou seja, sem online, e o
+     sintoma seria "o botão de mesa online sumiu depois que instalei o aplicativo". O unpkg
+     manda `access-control-allow-origin: *`, conferido, então isto não custa nada. -->
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js" crossorigin="anonymous"></script>
 
+<!-- O three MINIFICADO, e a diferença não é detalhe: 670.681 bytes contra 1.272.972 do
+     não-minificado que estava aqui — 47% a menos, medido no CDN. Era o maior download da
+     página inteira, num jogo que se orgulha de não ter um único asset.
+
+     A segunda entrada do importmap (`three/addons/`) SAIU: o único import de todo o
+     projeto é `import * as THREE from 'three'`, em 070-cena.js. Entrada de importmap que
+     ninguém resolve não custa download, mas custa a próxima pessoa perguntando o que a
+     usa. -->
 <script type="importmap">
 {
   "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js"
   }
 }
 </script>
 
 <script type="module">
 /* GERADO por build.mjs a partir de src/ — não edite este bloco à mão. */
-/* ····· 10-casa/01-constantes.js ····· */
-const MAX_PINTAS = 6;            // dupla-seis → 28 peças
-
-// Os modos da casa. Um modo é só quantas peças cada um recebe, com quantas cadeiras
-// isso fecha, e se alguma peça sai do baralho.
+/* ····· 10-casa/010-constantes.js ····· */
 //
-// Repare que Duelo e Trio ESGOTAM o baralho na distribuição (2×14 = 28, 3×9 = 27) —
-// então caem sozinhos no caminho "sem monte, quem trava passa" que a mesa de 4 já
-// usava, sem uma linha de regra nova. E o 27 do Trio não é coincidência: tirar a
-// bucha de zero é justamente o que faz o baralho dividir exato entre três.
+// Este arquivo começava com a linha "Números fixos do dominó de bar" e guardava `PECA_C`,
+// `MAX_PINTAS`, `PONTOS` e a tabela `MODOS` — ou seja, as regras de um jogo dentro da pasta
+// que promete não saber que jogo é. Isso foi para `30-domino/015-constantes.js`.
 //
-// `carrocasDemais` é a munição de maoRuim() (02-baralho.js): a partir de quantas
-// carroças a mesa embaralha de novo.
-const MODOS = {
-  classico: { rotulo: 'Clássico', nota: '7 peças',  pecasPorMao: 7,  cadeiras: [2, 3, 4], semZeroZero: false, carrocasDemais: 5 },
-  duelo:    { rotulo: 'Duelo',    nota: '14, 1v1',  pecasPorMao: 14, cadeiras: [2],       semZeroZero: false, carrocasDemais: 7 },
-  trio:     { rotulo: 'Trio',     nota: '9, sem 0|0', pecasPorMao: 9, cadeiras: [3],      semZeroZero: true,  carrocasDemais: 5 },
-};
-const MODO_PADRAO = 'classico';
-
-// Trava do laço de re-embaralho. Um critério exigente demais em maoRuim() faria a
-// distribuição rodar para sempre; aqui ela desiste e entrega a última mão.
-const MAX_EMBARALHOS = 100;
+// O que sobrou é o que o truco, o pife e o vinte-e-um herdam sem mudar uma letra.
 
 // ─── quem pediu menos movimento ──────────────────────────────────────────────
 // Sensibilidade vestibular não é preferência estética: para quem tem, movimento na tela
@@ -973,62 +982,27 @@ const MAX_EMBARALHOS = 100;
 // custa uma alocação em vez de sessenta por segundo — e continua respondendo se a pessoa
 // mudar a preferência com o jogo aberto, sem listener nenhum.
 //
-// Mora em 01 porque quem pergunta são o 09 (a suavização) e o 16 (a lâmpada), e no escopo
-// concatenado o primeiro arquivo é o único lugar de onde todos enxergam.
+// Mora no PRIMEIRO arquivo porque quem pergunta são o 090 (a suavização) e o 160 (a
+// lâmpada), e no escopo concatenado o primeiro arquivo é o único lugar de onde todos
+// enxergam.
 const MQ_MOVIMENTO = matchMedia('(prefers-reduced-motion: reduce)');
 const movimentoReduzido = () => MQ_MOVIMENTO.matches;
 
-// Medidas da peça em unidades de mundo. O comprimento é EXATAMENTE o dobro da
-// largura — é isso que faz uma carroça atravessada ocupar meia peça no braço e
-// o tabuleiro fechar sem sobra em 06-layout.js. Mexer num, mexer no outro.
-const PECA_C = 1.0;
-const PECA_L = 0.5;
-const PECA_E = 0.18;
-
-// A MALHA é desenhada um tico menor que o espaço que a peça ocupa. Encostadas exatamente
-// uma na outra, marfim contra marfim, oito peças na mesa lêem como uma tábua só — a folga
-// abre uma linha de sombra entre elas e a fileira volta a ser contável de relance.
-// O layout continua avançando o tamanho cheio: isto aqui é casca, não geometria de jogo.
-const FOLGA_C = 0.965;
-const FOLGA_L = 0.93;
-
-// Até onde o tabuleiro pode se espalhar antes de dobrar (meia-largura, em unidades).
-const ESPALHA_X = 4.0;
-const ESPALHA_Z = 2.2;
-
-// O tabuleiro é empurrado meio corpo para o fundo, para a mão caber embaixo dele. Era um
-// literal 0.4 escrito em dois pontos de 09-tabuleiro.js, e virou constante porque quem
-// confere sobreposição no tampo precisa saber onde a caixa do tabuleiro realmente está.
-const TABULEIRO_Z = 0.4;
-
-// O vão entre a ponta da linha e o monte do adversário. NÃO é folga de renderização: é o
-// espaço que a mão de quem joga precisa para pegar a peça sem esbarrar na do vizinho.
-const FOLGA_VIZINHO = 0.30;
-
-// Regra da casa: bater nas duas pontas com peça comum vale o mesmo que bater de
-// carroça. Só a cruzada — carroça servindo nas duas — paga mais.
-const PONTOS = { simples: 1, carroca: 2, laelo: 2, cruzada: 4, tranca: 1 };
-const ALVO_PADRAO = 6;
-
-const NOME_BATIDA = {
-  simples: 'batida simples',
-  carroca: 'batida de carroça',
-  laelo: 'batida de lá-e-lô',
-  cruzada: 'batida cruzada',
-  tranca: 'jogo trancado',
-};
-
+// A paleta do boteco. `luz` e `parede` são do cenário (070-cena.js); `marfim` é a cor de
+// quem senta na mesa, e hoje quem senta é peça de dominó — quando houver carta, ela pede a
+// dela aqui do lado, e é por isso que a paleta é da casa e não do jogo.
+//
+// Tinha mais três chaves — `feltro`, `madeira` e `pinta` — e NENHUMA era lida por linha
+// alguma do projeto. Saíram: paleta é documentação da aparência, e chave que ninguém lê
+// documenta uma aparência que não existe.
 const CORES = {
-  feltro: 0x1e5f3d,
-  madeira: 0x53331d,
   marfim: 0xf4ecd9,
-  pinta: 0x191512,
   luz: 0xffd7a0,
   parede: 0x241a16,
 };
 
 // ─── o que o navegador lembra ────────────────────────────────────────────────
-// Mora aqui, no primeiro arquivo, porque o 13-hud lê preferência na hora em que é
+// Mora aqui, no primeiro arquivo, porque o 130-hud lê preferência na hora em que é
 // concatenado — quem chama tem de já existir.
 //
 // Um lugar só para falar com o localStorage. Ele falha de quatro jeitos e todos
@@ -1057,9 +1031,84 @@ function esquecer(chave) {
   try { localStorage.removeItem(GUARDA + chave); } catch (e) { void e; }
 }
 
-/* ····· 30-domino/02-baralho.js ····· */
+/* ····· 30-domino/015-constantes.js ····· */
+//
+// Estava tudo em `10-casa/010-constantes.js`, cuja primeira linha dizia, ela mesma,
+// "Números fixos do dominó de bar" — regra de um jogo morando na pasta que promete não
+// saber que jogo é. Enquanto for um jogo só isso não incomoda ninguém; com o truco ao
+// lado, `PECA_C` e `MAX_PINTAS` no arquivo comum são convite a `CARTA_C` do lado deles.
+//
+// O NÚMERO 015 não é decorativo: `140-menu.js` roda `mesaLembrada()` no topo do módulo e
+// valida o modo guardado contra `MODOS`, então esta tabela tem de estar declarada antes
+// dele. Foi por não haver inteiro livre entre 01 e 14 que os arquivos passaram a ser
+// numerados de dez em dez.
+
+const MAX_PINTAS = 6;            // dupla-seis → 28 peças
+
+// Os modos da casa. Um modo é só quantas peças cada um recebe, com quantas cadeiras
+// isso fecha, e se alguma peça sai do baralho.
+//
+// Repare que Duelo e Trio ESGOTAM o baralho na distribuição (2×14 = 28, 3×9 = 27) —
+// então caem sozinhos no caminho "sem monte, quem trava passa" que a mesa de 4 já
+// usava, sem uma linha de regra nova. E o 27 do Trio não é coincidência: tirar a
+// bucha de zero é justamente o que faz o baralho dividir exato entre três.
+//
+// `carrocasDemais` é a munição de maoRuim() (020-baralho.js): a partir de quantas
+// carroças a mesa embaralha de novo.
+const MODOS = {
+  classico: { rotulo: 'Clássico', nota: '7 peças',  pecasPorMao: 7,  cadeiras: [2, 3, 4], semZeroZero: false, carrocasDemais: 5 },
+  duelo:    { rotulo: 'Duelo',    nota: '14, 1v1',  pecasPorMao: 14, cadeiras: [2],       semZeroZero: false, carrocasDemais: 7 },
+  trio:     { rotulo: 'Trio',     nota: '9, sem 0|0', pecasPorMao: 9, cadeiras: [3],      semZeroZero: true,  carrocasDemais: 5 },
+};
+const MODO_PADRAO = 'classico';
+
+// Trava do laço de re-embaralho. Um critério exigente demais em maoRuim() faria a
+// distribuição rodar para sempre; aqui ela desiste e entrega a última mão.
+const MAX_EMBARALHOS = 100;
+
+// Medidas da peça em unidades de mundo. O comprimento é EXATAMENTE o dobro da
+// largura — é isso que faz uma carroça atravessada ocupar meia peça no braço e
+// o tabuleiro fechar sem sobra em 060-layout.js. Mexer num, mexer no outro.
+const PECA_C = 1.0;
+const PECA_L = 0.5;
+const PECA_E = 0.18;
+
+// A MALHA é desenhada um tico menor que o espaço que a peça ocupa. Encostadas exatamente
+// uma na outra, marfim contra marfim, oito peças na mesa lêem como uma tábua só — a folga
+// abre uma linha de sombra entre elas e a fileira volta a ser contável de relance.
+// O layout continua avançando o tamanho cheio: isto aqui é casca, não geometria de jogo.
+const FOLGA_C = 0.965;
+const FOLGA_L = 0.93;
+
+// Até onde o tabuleiro pode se espalhar antes de dobrar (meia-largura, em unidades).
+const ESPALHA_X = 4.0;
+const ESPALHA_Z = 2.2;
+
+// O tabuleiro é empurrado meio corpo para o fundo, para a mão caber embaixo dele. Era um
+// literal 0.4 escrito em dois pontos de 090-tabuleiro.js, e virou constante porque quem
+// confere sobreposição no tampo precisa saber onde a caixa do tabuleiro realmente está.
+const TABULEIRO_Z = 0.4;
+
+// O vão entre a ponta da linha e o monte do adversário. NÃO é folga de renderização: é o
+// espaço que a mão de quem joga precisa para pegar a peça sem esbarrar na do vizinho.
+const FOLGA_VIZINHO = 0.30;
+
+// Regra da casa: bater nas duas pontas com peça comum vale o mesmo que bater de
+// carroça. Só a cruzada — carroça servindo nas duas — paga mais.
+const PONTOS = { simples: 1, carroca: 2, laelo: 2, cruzada: 4, tranca: 1 };
+const ALVO_PADRAO = 6;
+
+const NOME_BATIDA = {
+  simples: 'batida simples',
+  carroca: 'batida de carroça',
+  laelo: 'batida de lá-e-lô',
+  cruzada: 'batida cruzada',
+  tranca: 'jogo trancado',
+};
+
+/* ····· 30-domino/020-baralho.js ····· */
 // O baralho: as peças, o embaralho e quem abre a mão. Quantas peças e quantas na mão
-// depende do modo da mesa (MODOS, em 01-constantes.js).
+// depende do modo da mesa (MODOS, em 010-constantes.js).
 // (parte de src/js — mesmo escopo, concatenado por build.mjs)
 
 const chave = p => p[0] + '|' + p[1];
@@ -1089,7 +1138,7 @@ function baralhoDoModo(modo) {
 }
 
 // QUANTAS PEÇAS SOBRAM PARA O MONTE nesta combinação de modo e jogadores. Mora aqui, junto
-// do `baralhoDoModo`, porque aritmética de baralho fora do motor apodrece — o `14-menu.js`
+// do `baralhoDoModo`, porque aritmética de baralho fora do motor apodrece — o `140-menu.js`
 // já teve um `28 - 7 * MESA.n` escrito à mão, e foi a primeira linha a quebrar quando os
 // modos chegaram.
 //
@@ -1158,7 +1207,7 @@ function quemAbre(maos) {
   return melhor;
 }
 
-/* ····· 30-domino/03-regras.js ····· */
+/* ····· 30-domino/030-regras.js ····· */
 // As regras propriamente ditas. Tudo aqui é função pura sobre a linha da mesa:
 // nenhum estado guardado, nenhum Three.js — é o que permite rodar mil partidas
 // no terminal em segundos e achar erro de regra antes de existir um pixel.
@@ -1231,7 +1280,7 @@ function pontasDepois(linha, peca, ponta) {
 // que deixou, os outros passam, a vez volta e você joga de novo. Isso é jogar sozinho —
 // jogo bom, não manobra —, e não pode ser barrado.
 //
-// Quem chama decide o resto (é `acoesDe`, em 04-partida.js): a regra não vale na sua
+// Quem chama decide o resto (é `acoesDe`, em 040-partida.js): a regra não vale na sua
 // última peça (jogar a última é bater), e só barra se sobrar jogada que não seja também
 // um fechamento — senão as duas se barrariam, você ficaria sem jogada, e o motor te
 // mandaria passar: a tranca aconteceria igual, pela porta dos fundos.
@@ -1250,7 +1299,7 @@ function fechamentosArmados(linha, jogadas, mao, baralho) {
   // invertidas, e a regra errava sempre para menos.
   //
   // Só aqui dentro: `chave` continua sensível à orientação de propósito, porque em
-  // 09-tabuleiro.js e 10-mao.js ela é o identificador do objeto 3D.
+  // 090-tabuleiro.js e 100-mao.js ela é o identificador do objeto 3D.
   const kc = p => Math.min(p[0], p[1]) + '|' + Math.max(p[0], p[1]);
 
   const vistas = new Set(linha.map(kc));
@@ -1298,7 +1347,7 @@ function tipoDaBatida(peca, linha) {
   return e !== d && serve(e) && serve(d) ? 'laelo' : 'simples';
 }
 
-/* ····· 30-domino/04-partida.js ····· */
+/* ····· 30-domino/040-partida.js ····· */
 //
 // A IDEIA QUE SEGURA O PROJETO INTEIRO: uma cadeira é só
 //     { nome, tipo: 'voce' | 'local' | 'bot' | 'online', nivel }
@@ -1482,7 +1531,7 @@ function fecharMao(P, res) {
 // Alguém saiu da mesa no meio. A partida acaba aqui, e acaba PERDIDA para quem saiu —
 // senão fechar a aba viraria a saída de emergência de toda partida mal encaminhada.
 // Não mexe no placar: quem saiu simplesmente não leva, e quem decide o campeão é a tela
-// (13-hud.js), que tira o time do desistente da conta.
+// (130-hud.js), que tira o time do desistente da conta.
 function abandonar(P, cadeira) {
   if (P.fase === 'fim') return { erro: 'a partida já acabou' };
   P.desistiu = cadeira;
@@ -1525,7 +1574,7 @@ function visaoDe(P, cadeira) {
   };
 }
 
-/* ····· 30-domino/05-bot.js ····· */
+/* ····· 30-domino/050-bot.js ····· */
 //
 // A dificuldade aqui NÃO é um algoritmo diferente por nível — é QUANTA INFORMAÇÃO o
 // bot recebe e quanto ele erra no impulso. O bot fácil não presta atenção em quem
@@ -1692,7 +1741,7 @@ function jogadaDoBot(P, cadeira) {
   return { acao: 'jogar', peca: escolha.peca, ponta: escolha.ponta };
 }
 
-/* ····· 30-domino/06-layout.js ····· */
+/* ····· 30-domino/060-layout.js ····· */
 // Onde cada peça fica na mesa. Puro cálculo — nada de Three.js aqui, o que deixa
 // o serpenteio testável no terminal.
 // (parte de src/js — mesmo escopo, concatenado por build.mjs)
@@ -1801,7 +1850,7 @@ function escalaDoTabuleiro(caixa, larguraUtil = ESPALHA_X * 2.1) {
 // ─── quem mais está sentado à mesa ───────────────────────────────────────────
 // Onde cada cadeira fica, vista de quem joga: você em 0, o resto em volta no sentido
 // da vez. Mora aqui porque é trigonometria pura e porque o orçamento do tabuleiro,
-// logo abaixo, precisa dela — 10-mao.js só a consumia.
+// logo abaixo, precisa dela — 100-mao.js só a consumia.
 const anguloDaCadeira = (i, eu, n) => ((i - eu + n) % n) * Math.PI * 2 / n;
 
 // A caixa que o monte de um adversário ocupa no tampo. Ele nasce girado -a e as peças
@@ -1830,7 +1879,7 @@ function caixaDoMonte(a, x, z, quantas, espaco) {
 // primeiros tetos — um passo só, sem laço, e o erro é sempre para o lado seguro (faixa
 // larga demais conta assentos demais e o orçamento sai menor, nunca maior).
 //
-// Continua PURA: recebe onde os assentos ficaram; quem mede a tela é 07-cena.js.
+// Continua PURA: recebe onde os assentos ficaram; quem mede a tela é 070-cena.js.
 function larguraUtilDoTabuleiro(caixa, tela = Infinity, montes = [], folga = FOLGA_VIZINHO) {
   const semVizinhos = Math.min(ESPALHA_X * 2.1, tela);
   if (!caixa.l) return semVizinhos;
@@ -1845,7 +1894,7 @@ function larguraUtilDoTabuleiro(caixa, tela = Infinity, montes = [], folga = FOL
   return Math.max(PECA_C, Math.min(semVizinhos, corredor));
 }
 
-/* ····· 10-casa/07-cena.js ····· */
+/* ····· 10-casa/070-cena.js ····· */
 //
 // Nenhum arquivo de imagem no projeto: madeira, piso e as pintas das peças são
 // desenhados em canvas na hora. Textura procedural custa ~40 linhas e economiza
@@ -2032,7 +2081,7 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
 // próximo restore. O retorno da aba é o único momento em que dá para PERGUNTAR, e a
 // pergunta custa três pixels.
 //
-// O `visibilitychange` do 11-interacao.js trata a SAÍDA (document.hidden) e é sobre gesto
+// O `visibilitychange` do 110-interacao.js trata a SAÍDA (document.hidden) e é sobre gesto
 // preso; este é o outro lado, e mora aqui, junto do assunto dele.
 document.addEventListener('visibilitychange', () => { if (!document.hidden) conferirTexturas(); });
 
@@ -2096,7 +2145,7 @@ parede.position.set(0, 7.6, -13);
 scene.add(parede);
 
 // A mesa é redonda e o jogo cabe nela: o tabuleiro pode ir a ~8.4 de largura e o
-// tampo tem 12 de diâmetro. Quando não cabe, quem encolhe é o tabuleiro (06-layout).
+// tampo tem 12 de diâmetro. Quando não cabe, quem encolhe é o tabuleiro (060-layout).
 const MESA_R = 6.1;
 const tampo = new THREE.Mesh(
   new THREE.CylinderGeometry(MESA_R, MESA_R, 0.34, 64),
@@ -2185,8 +2234,8 @@ scene.add(cinzeiro);
 tralhas.push(cinzeiro);
 
 // ─── quem senta onde ─────────────────────────────────────────────────────────
-// A conta ÚNICA do que está no tampo. Antes eram duas: 10-mao.js apertava o círculo dos
-// adversários por um lado e 09-tabuleiro.js media o orçamento do tabuleiro por outro, em
+// A conta ÚNICA do que está no tampo. Antes eram duas: 100-mao.js apertava o círculo dos
+// adversários por um lado e 090-tabuleiro.js media o orçamento do tabuleiro por outro, em
 // profundidades diferentes (z = -3.05 contra z = 0.4) e com divisores mágicos diferentes
 // (13.5 contra 0.86), sem uma saber da outra. Que os dois dessem quase o mesmo número era
 // coincidência aritmética — e a coincidência era justamente o que garantia a colisão.
@@ -2246,14 +2295,14 @@ function enquadrar() {
   const fovX = 2 * Math.atan((MAO_CHEIA / 2) / profundidadeDe(MAO_Y, MAO_Z));
   const preciso = 2 * Math.atan(Math.tan(fovX / 2) / aspect) * 180 / Math.PI;
   // Em retrato o "preciso" passa de 90°, e aí é melhor a mão em mais fileiras do que a
-  // mesa entortada de perspectiva: o teto corta, e 10-mao.js quebra o leque.
+  // mesa entortada de perspectiva: o teto corta, e 100-mao.js quebra o leque.
   camera.fov = Math.min(FOV_TETO, Math.max(FOV_BASE, preciso));
   camera.updateProjectionMatrix();
 
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.setSize(innerWidth, innerHeight);
   // A largura disponível mudou: o leque tem de ser refeito. Quem decide se vale a pena
-  // é a assinatura da mão, em 10-mao.js — resize que não mexe na largura é no-op.
+  // é a assinatura da mão, em 100-mao.js — resize que não mexe na largura é no-op.
   redesenharMao();
 }
 
@@ -2274,7 +2323,7 @@ if (typeof visualViewport !== 'undefined' && visualViewport) {
   visualViewport.addEventListener('resize', agendarEnquadre);
 }
 
-/* ····· 30-domino/08-peca3d.js ····· */
+/* ····· 30-domino/080-peca3d.js ····· */
 //
 // As 28 peças saem de UMA textura só. Em vez de desenhar 28 combinações, o atlas tem
 // as sete meias-faces (0 a 6) lado a lado, e cada metade da peça é um plano cuja UV
@@ -2398,7 +2447,7 @@ function porNaMesa(obj, posta) {
   obj.rotation.set(0, posta.rotY, 0);
 }
 
-/* ····· 30-domino/09-tabuleiro.js ····· */
+/* ····· 30-domino/090-tabuleiro.js ····· */
 //
 // Não existe "animar a jogada X". A cada mudança o tabuleiro é RECONCILIADO com a
 // visão: cria o que falta, tira o que sobra, e manda todo mundo deslizar para o novo
@@ -2566,7 +2615,7 @@ function animarTabuleiro(dt) {
   }
 }
 
-/* ····· 30-domino/10-mao.js ····· */
+/* ····· 30-domino/100-mao.js ····· */
 //
 // Quem está na sua frente depende de quem é "você": a cadeira mostrada vai sempre
 // para a beirada de baixo da tela e as outras se distribuem em volta da mesa. É o que
@@ -2614,7 +2663,7 @@ function porFileira(n) {
 // força, cada um desses reconstruía a mão e apagava a peça que você tinha levantado.
 // Assim, resize que não muda a largura é no-op.
 //
-// `vistaAtual` mora em 16-loop.js, e é por isso que a primeira chamada de enquadrar()
+// `vistaAtual` mora em 160-loop.js, e é por isso que a primeira chamada de enquadrar()
 // vem de lá: aqui ela ainda estaria na zona morta do `let`.
 function redesenharMao() {
   if (vistaAtual && vistaAtual.mao) sincronizarMao(vistaAtual);
@@ -2833,7 +2882,7 @@ function esconderMao() {
 }
 
 // Onde os adversários sentam e quanto a fileira deles mede sai inteiro de
-// `assentosDaMesa()` (07-cena.js) — aqui só se monta o que ele decidiu. O `apertoDaMesa`
+// `assentosDaMesa()` (070-cena.js) — aqui só se monta o que ele decidiu. O `apertoDaMesa`
 // que morava nesta linha media a tela na profundidade do assento DE CIMA e apertava todos
 // por ela, o que deixava o de lado (mais perto da câmera, onde a tela é mais estreita)
 // sobrando por fora e ainda por cima dentro da linha da mesa.
@@ -2907,7 +2956,7 @@ function animarMao(dt, apontada) {
   });
 }
 
-/* ····· 30-domino/11-interacao.js ····· */
+/* ····· 30-domino/110-interacao.js ····· */
 //
 // SEMPRE dois passos, inclusive quando só existe uma ponta possível. Antes o clique na
 // peça já a jogava nesses casos, e um deslize do mouse virava jogada — num jogo em que
@@ -3269,7 +3318,7 @@ function porQueNaoDa(peca) {
   return encaixa ? 'Essa peça fecharia o jogo de propósito.' : 'Essa peça não encaixa em nenhuma ponta.';
 }
 
-/* ····· 10-casa/12-audio.js ····· */
+/* ····· 10-casa/120-audio.js ····· */
 //
 // Uma peça batendo na madeira é um estalo curto de ruído filtrado somado a um baque
 // grave — dá para descrever isso em dez linhas, e aí o jogo continua sendo um arquivo
@@ -3296,7 +3345,7 @@ function ligarAudio() {
 // mudo no começo da partida e o primeiro toque na mesa desfazia.
 //
 // Ler `mudo` daqui é seguro pela mesma razão explicada em `ligarMurmuro`: ele mora no
-// 13-hud, concatenado DEPOIS, mas o corpo desta função só roda a um clique de distância.
+// 130-hud, concatenado DEPOIS, mas o corpo desta função só roda a um clique de distância.
 addEventListener('pointerdown', () => { ligarAudio(); if (ac && ac.state === 'suspended' && !mudo) ac.resume(); });
 
 function estalo({ dur = 0.09, freq = 1500, q = 1.1, vol = 0.3, tipo = 'bandpass' }) {
@@ -3348,19 +3397,19 @@ function ligarMurmuro() {
   s.start();
   murmuro = g;
   // O silêncio lembrado só pode ser aplicado agora: o AudioContext nasce no primeiro som,
-  // e antes dele não existe o que suspender. `mudo` mora no 13-hud e já está de pé aqui,
+  // e antes dele não existe o que suspender. `mudo` mora no 130-hud e já está de pé aqui,
   // porque esta função só roda depois de um clique do jogador.
   if (mudo) silenciar(true);
 }
 
-// O parâmetro chama-se `calado` e não `mudo` de propósito: `mudo` é uma global (13-hud) que
+// O parâmetro chama-se `calado` e não `mudo` de propósito: `mudo` é uma global (130-hud) que
 // o listener de pointerdown lá em cima consulta, e um parâmetro de mesmo nome sombreando-a
 // aqui dentro é o tipo de coisa que faz o defeito de cima ser difícil de enxergar.
 function silenciar(calado) {
   if (ac) ac[calado ? 'suspend' : 'resume']();
 }
 
-/* ····· 10-casa/13-hud.js ····· */
+/* ····· 10-casa/130-hud.js ····· */
 //
 // Tudo aqui lê a VISÃO, nunca a partida. É o mesmo objeto que chega pela rede no
 // modo online, então a tela do convidado não tem como mostrar mais do que ele pode
@@ -3386,7 +3435,21 @@ const HUD = {
 // que já são o verdadeiro e o falso que interessam. Quem jogava antes não perde a escolha.
 let contando = !!lido('contagem', false);
 
-const ETIQUETA = { voce: 'você', local: 'nesta tela', bot: 'bot', online: 'online' };
+// ─── o encaixe do painel do jogo ─────────────────────────────────────────────
+// A gaveta, o botão que a abre e o "lembrar se estava aberta" são da CASA — qualquer jogo
+// de mesa quer um painel de apoio. O CONTEÚDO é do jogo: no dominó é quantas peças de cada
+// número já apareceram, e essa é uma frase que só faz sentido com pinta e monte.
+//
+// Estava tudo aqui dentro (`desenharContagem`), que era a última regra de dominó morando na
+// pasta que promete não conhecer o jogo. Agora a casa reserva o lugar e chama; quem sabe as
+// regras pendura o seu em `30-domino/135-contagem.js`, e o truco pendura o dele sem que um
+// precise saber do outro.
+//
+// Nasce sem fazer nada de propósito: um jogo que não tenha painel não paga nada por isso, e
+// a casa não fica com um `if` perguntando qual jogo está na mesa.
+let painelDoJogo = () => {};
+
+const ETIQUETA ={ voce: 'você', local: 'nesta tela', bot: 'bot', online: 'online' };
 
 // Tudo que vem de fora passa por aqui antes de virar innerHTML. Até agora o único texto
 // alheio era o nome, cortado em 14 caracteres — o texto do chat é o primeiro campo
@@ -3504,39 +3567,10 @@ function desenharHUD(vista) {
   // Quando a única saída é comprar, o botão precisa gritar: o jogador está travado.
   HUD.comprar.classList.toggle('principal', a.comprar && !a.jogadas.length);
 
-  desenharContagem(vista);
+  painelDoJogo(vista);
   desenharConversa(vista);
   // Depois das duas, porque é a visibilidade DELAS que decide se há gaveta aberta.
   atualizarCortina();
-}
-
-// Quantas peças de cada número já apareceram — as da mesa MAIS as da sua mão, como o
-// Ricardo pediu. Sai inteiro de `vista`: é exatamente o que o jogador enxerga, então não
-// vaza nada e não precisou de nada novo no motor.
-function desenharContagem(vista) {
-  HUD.contagem.classList.toggle('oculta', !contando || !vista.mao);
-  if (!contando || !vista.mao) return;
-
-  const baralho = baralhoDoModo(MODOS[vista.modo] || MODOS[MODO_PADRAO]);
-  const aparecidas = vista.linha.concat(vista.mao);
-  const linhas = [];
-  for (let n = 0; n <= MAX_PINTAS; n++) {
-    // O total NÃO é 7 fixo: no Trio o 0|0 sai do baralho e o zero mora em 6 peças.
-    const total = baralho.filter(p => p[0] === n || p[1] === n).length;
-    if (!total) continue;
-    const visto = aparecidas.filter(p => p[0] === n || p[1] === n).length;
-    // Quem passou numa ponta provou não ter aquele número. É informação pública — a
-    // mesa inteira viu o passe —, e até agora só o bot usava.
-    const semEle = (vista.faltaNo || [])
-      .map((nums, i) => (i !== vista.cadeira && nums.indexOf(n) >= 0 ? escapar(vista.cadeiras[i].nome) : null))
-      .filter(Boolean);
-    linhas.push(`<div${visto === total ? ' class="zerado"' : ''}>` +
-      `<b>${n}</b>` +
-      `<i>${'▮'.repeat(visto)}${'▯'.repeat(total - visto)}</i>` +
-      `<s>${total - visto || '—'}</s>` +
-      `<em>${semEle.join(', ')}</em></div>`);
-  }
-  HUD.contagem.innerHTML = '<span class="rot">faltam aparecer</span>' + linhas.join('');
 }
 
 // A barra de confirmação. O rótulo diz o NÚMERO da ponta, não "esquerda/direita" sozinho:
@@ -3626,7 +3660,7 @@ function guardarFala(de, canal, txt, para) {
   falasGuardadas.push({ de, canal, txt, para });
 }
 
-// Chamada quando o hotseat entrega a tela a `cadeira` (btPronto, em 16-loop.js).
+// Chamada quando o hotseat entrega a tela a `cadeira` (btPronto, em 160-loop.js).
 //
 // Solta as TRÊS últimas. O limite é sobre ATENÇÃO e não sobre memória — `porNaConversa`
 // já corta a lista em 40 —: quem volta de três rodadas de hotseat estaria lendo parede de
@@ -3709,7 +3743,7 @@ el('cortina').onclick = () => { tocarClique(); fecharGavetas(); };
 // Girar o aparelho pode cruzar o limiar dos 560px nos dois sentidos, e aí a mesma
 // conversa aberta deixa de ser gaveta (ou passa a ser). Sem isto sobra um vidro fosco por
 // cima do jogo, ou a gaveta abre sem cortina. Listener próprio e não um gancho no
-// `agendarEnquadre` do 07-cena.js: aquilo é sobre a câmera, isto é sobre o HUD.
+// `agendarEnquadre` do 070-cena.js: aquilo é sobre a câmera, isto é sobre o HUD.
 addEventListener('resize', atualizarCortina);
 addEventListener('orientationchange', atualizarCortina);
 
@@ -3850,7 +3884,48 @@ pintarBotaoSom();
 // adiantaria nada; quem aplica o silêncio guardado é `ligarMurmuro`, que roda quando o
 // áudio de fato começa.
 
-/* ····· 10-casa/14-menu.js ····· */
+/* ····· 30-domino/135-contagem.js ····· */
+//
+// A gaveta que o mostra, o botão que a abre e a preferência lembrada são da casa
+// (`10-casa/130-hud.js`); o que vai DENTRO é regra de dominó, e por isso mora aqui.
+//
+// O número 135 põe este arquivo logo depois do HUD, que é quem declara `painelDoJogo`,
+// `HUD` e `escapar` — a linha de encaixe lá embaixo é uma ATRIBUIÇÃO e roda na carga, então
+// ela não pode acontecer antes de o `let` existir.
+
+// Quantas peças de cada número já apareceram — as da mesa MAIS as da sua mão, como o
+// Ricardo pediu. Sai inteiro de `vista`: é exatamente o que o jogador enxerga, então não
+// vaza nada e não precisou de nada novo no motor.
+function desenharContagem(vista) {
+  HUD.contagem.classList.toggle('oculta', !contando || !vista.mao);
+  if (!contando || !vista.mao) return;
+
+  const baralho = baralhoDoModo(MODOS[vista.modo] || MODOS[MODO_PADRAO]);
+  const aparecidas = vista.linha.concat(vista.mao);
+  const linhas = [];
+  for (let n = 0; n <= MAX_PINTAS; n++) {
+    // O total NÃO é 7 fixo: no Trio o 0|0 sai do baralho e o zero mora em 6 peças.
+    const total = baralho.filter(p => p[0] === n || p[1] === n).length;
+    if (!total) continue;
+    const visto = aparecidas.filter(p => p[0] === n || p[1] === n).length;
+    // Quem passou numa ponta provou não ter aquele número. É informação pública — a
+    // mesa inteira viu o passe —, e até agora só o bot usava.
+    const semEle = (vista.faltaNo || [])
+      .map((nums, i) => (i !== vista.cadeira && nums.indexOf(n) >= 0 ? escapar(vista.cadeiras[i].nome) : null))
+      .filter(Boolean);
+    linhas.push(`<div${visto === total ? ' class="zerado"' : ''}>` +
+      `<b>${n}</b>` +
+      `<i>${'▮'.repeat(visto)}${'▯'.repeat(total - visto)}</i>` +
+      `<s>${total - visto || '—'}</s>` +
+      `<em>${semEle.join(', ')}</em></div>`);
+  }
+  HUD.contagem.innerHTML = '<span class="rot">faltam aparecer</span>' + linhas.join('');
+}
+
+// É por esta linha que o HUD da casa desenha um painel de dominó sem nunca citar dominó.
+painelDoJogo = desenharContagem;
+
+/* ····· 10-casa/140-menu.js ····· */
 //
 // Esta tela é a interface da ideia central do projeto: não se escolhe um "modo de
 // jogo", escolhe-se quem ocupa cada cadeira. Solo é uma mesa em que as outras são
@@ -3859,7 +3934,7 @@ pintarBotaoSom();
 
 // A CADEIRA 0 É SUA E POR ISSO NÃO SE CHAMA "VOCÊ". Quem é você já está dito em dois
 // lugares que não dependem do nome: o rótulo da cadeira, no `montarCadeiras()` aqui
-// embaixo, e a etiqueta "você" do cartão do HUD (`ETIQUETA`, 13-hud.js). O campo guarda um
+// embaixo, e a etiqueta "você" do cartão do HUD (`ETIQUETA`, 130-hud.js). O campo guarda um
 // NOME, e nome existe para os OUTROS — no online ele viaja para o anfitrião e vira o
 // placar, a lista da sala e o começo de toda linha da conversa.
 //
@@ -3867,7 +3942,7 @@ pintarBotaoSom();
 // duas falas da conversa começando igual: ninguém sabia quem era quem. E repare que trocar
 // só este literal NÃO consertaria o online — os dois lados leem o mesmo NOMES[0], então
 // viraria "Careca × Careca". Quem conserta a colisão é o campo de nome do saguão
-// (pagina.html) e o desempate do anfitrião (`nomeUnico`, 15-rede.js); este literal conserta
+// (pagina.html) e o desempate do anfitrião (`nomeUnico`, 150-rede.js); este literal conserta
 // a semântica, que é o campo guardar um nome em vez de um pronome.
 const NOMES = ['Careca', 'Zé', 'Dona Cida', 'Tião', 'Bigode'];
 const TIPOS = [
@@ -3950,16 +4025,16 @@ function lembrarMesa() {
   });
 }
 
-// O `escapar` no `value=` foi a TERCEIRA mordida da mesma classe. `listarSala` (15-rede)
+// O `escapar` no `value=` foi a TERCEIRA mordida da mesma classe. `listarSala` (150-rede)
 // punha `c.nome` direto em innerHTML e foi consertado; esta linha ficou para trás, e é pior
 // por ser dentro de um ATRIBUTO — basta uma aspa para sair dele.
 //
-// E `c.nome` vem de fora: o convidado manda o nome dele pela rede e `15-rede.js` escreve em
+// E `c.nome` vem de fora: o convidado manda o nome dele pela rede e `150-rede.js` escreve em
 // `MESA.cadeiras[cadeira].nome`; `lembrarMesa()` persiste as quatro cadeiras, então o valor
 // sobrevive à recarga. Sem escape, um convidado com nome `"><img src=x onerror=…>` roda
 // script na máquina do ANFITRIÃO assim que ele mexe no modo ou no número de jogadores.
 //
-// Sem risco de zona morta: 13-hud é concatenado ANTES de 14-menu, então `escapar` já está
+// Sem risco de zona morta: 130-hud é concatenado ANTES de 140-menu, então `escapar` já está
 // de pé quando `montarCadeiras()` roda no fim deste arquivo.
 function montarCadeiras() {
   el('cadeiras').innerHTML = MESA.cadeiras.slice(0, MESA.n).map((c, i) => {
@@ -4030,7 +4105,7 @@ function ajustarCadeirasAoModo() {
 // `refletirMesaNosBotoes` existe para impedir: o jogo está certo e a tela mente.
 //
 // A pergunta NÃO é "qual modo": o Clássico tem monte com 2 ou 3 jogadores e nenhum com 4.
-// Quem responde é `sobraDoBaralho`, em 02-baralho.js, pelo mesmo motivo de sempre —
+// Quem responde é `sobraDoBaralho`, em 020-baralho.js, pelo mesmo motivo de sempre —
 // aritmética de baralho escrita à mão no menu já quebrou uma vez.
 //
 // A preferência guardada NÃO é apagada quando o botão desliga: quem jogava Clássico de 2 com
@@ -4093,7 +4168,7 @@ el('btComecar').onclick = () => {
   else comecarLocal();
 };
 el('btEntrar').onclick = () => entrarNumaMesa();
-// `recomecarAsVoltas` mora no 15-rede.js, que é concatenado DEPOIS deste arquivo — e isso
+// `recomecarAsVoltas` mora no 150-rede.js, que é concatenado DEPOIS deste arquivo — e isso
 // está certo: declaração de função é içada para o topo do escopo, e este corpo só roda no
 // clique. É o mesmo caminho que o `encerrarRede` ao lado já fazia.
 el('btMenu').onclick = () => { recomecarAsVoltas(); encerrarRede(); mostrarTela('telaMenu'); };
@@ -4102,7 +4177,151 @@ refletirMesaNosBotoes();
 ajustarCadeirasAoModo();
 montarCadeiras();
 
-/* ····· 10-casa/15-rede.js ····· */
+/* ····· 10-casa/145-saguao.js ····· */
+//
+// Por que este arquivo existe. `150-rede.js` tinha 45 chamadas `el('…')` — mais que o
+// próprio HUD, que é o arquivo cujo trabalho É desenhar. A dívida estava anotada como
+// "dominó disfarçado de rede", e medindo os ids ela era outra coisa: os onze são TODOS do
+// saguão (`onlineTitulo`, `onlineCodigo`, `btConectar`…), e saguão é da casa tanto quanto
+// a rede é. O que estava misturado não era jogo com rede — era TRANSPORTE com APRESENTAÇÃO.
+//
+// A divisão que ficou: a rede decide o que É (esta cadeira chegou, aquela espera, faltam
+// dois), o saguão decide como isso APARECE. Nenhuma das duas metades sabe que o jogo é
+// dominó, e é isso que faz as duas irem para o truco sem uma linha nova.
+//
+// O número 145 põe a tela ANTES de quem a dirige, que é a ordem em que se lê. Funciona nos
+// dois sentidos porque tudo aqui é `function` (içada) e os handlers só rodam ao clique,
+// muito depois de a página inteira estar carregada.
+
+// Os elementos, pegos UMA vez. Mesmo padrão do `HUD` em 130-hud.js, e pelo mesmo motivo:
+// `el()` faz uma busca no documento, e estes onze são consultados a cada troca de estado.
+const SAGUAO = {
+  titulo: el('onlineTitulo'), sub: el('onlineSub'), codigo: el('onlineCodigo'),
+  entrada: el('onlineEntrada'), nome: el('onlineNome'), lista: el('onlineLista'),
+  erro: el('onlineErro'), entrar: el('btConectar'), comecar: el('btIniciarOnline'),
+  cancelar: el('btCancelarOnline'), voltar: el('btVoltarMesa'),
+};
+
+// O canal de recado da tela. Nome antigo de propósito: são quinze chamadas em `150-rede.js`
+// e renomear todas seria churn sem ganho — o que mudou é o arquivo em que ele mora.
+function erroOnline(txt) {
+  SAGUAO.erro.textContent = txt;
+}
+
+// ─── os três estados da tela ─────────────────────────────────────────────────
+// São três telas de verdade, não variações: quem ABRE mesa mostra um código e um botão de
+// começar; quem ENTRA mostra dois campos e um botão de entrar; quem CAIU mostra só o
+// recado. Estavam escritas três vezes em `150-rede.js`, cada uma com seis linhas de
+// `classList` — e a de reabrir era cópia byte a byte da de abrir, com outro título.
+function saguaoDeAnfitriao(titulo, sub, codigo) {
+  mostrarTela('telaOnline');
+  SAGUAO.titulo.textContent = titulo;
+  SAGUAO.sub.textContent = sub;
+  SAGUAO.codigo.textContent = codigo;
+  SAGUAO.entrada.classList.add('oculta');
+  SAGUAO.nome.classList.add('oculta');       // quem abre a mesa nomeia as cadeiras no menu
+  SAGUAO.entrar.classList.add('oculta');
+  SAGUAO.comecar.classList.remove('oculta');
+}
+
+function saguaoDeConvidado(nomePadrao, codigoPadrao) {
+  mostrarTela('telaOnline');
+  SAGUAO.titulo.textContent = 'Entrar numa mesa';
+  SAGUAO.sub.textContent = 'Digite o código que o anfitrião passou.';
+  SAGUAO.codigo.textContent = '';
+  SAGUAO.entrada.classList.remove('oculta');
+  // O NOME, que só o convidado precisa dizer. Pré-preenchido com o do menu — que é
+  // exatamente o que ele já mandava calado —, então o campo não inventa caminho novo: ele
+  // torna visível e editável o que sempre viajou. Era esta ausência que fazia a mesa de
+  // dois virar "Você × Você" sem que ninguém soubesse onde mudar.
+  SAGUAO.nome.classList.remove('oculta');
+  SAGUAO.nome.value = nomePadrao;
+  // Pré-preenchido com a última mesa em que você sentou: quem volta quase sempre volta
+  // para a mesma, e antes o campo era zerado justamente aqui.
+  SAGUAO.entrada.value = codigoPadrao;
+  SAGUAO.entrada.focus();
+  SAGUAO.entrar.classList.remove('oculta');
+  SAGUAO.comecar.classList.add('oculta');
+  SAGUAO.lista.innerHTML = '';
+}
+
+function saguaoDeQueda() {
+  mostrarTela('telaOnline');
+  SAGUAO.titulo.textContent = 'A mesa caiu';
+  SAGUAO.sub.textContent = 'Tentando voltar — o anfitrião pode estar recarregando.';
+}
+
+const saguaoCodigo = codigo => { SAGUAO.codigo.textContent = codigo; };
+
+// ─── quem já chegou ──────────────────────────────────────────────────────────
+// Recebe o que CADA cadeira é e devolve a lista pintada. A rede monta os estados porque só
+// ela sabe quem conectou; o escape mora aqui porque é aqui que o texto vira HTML — e este
+// nome foi escrito pelo convidado, então um `<img onerror>` rodava script na máquina do
+// anfitrião. É o buraco mais antigo do projeto, e ele mora do lado da apresentação.
+function saguaoLista(itens, rotuloComecar) {
+  SAGUAO.lista.innerHTML = itens
+    .map(i => `<div><span>${escapar(i.nome)}</span><b>${i.estado}</b></div>`).join('');
+  SAGUAO.comecar.textContent = rotuloComecar;
+}
+
+// ─── o botão de entrar, e os três estados dele ───────────────────────────────
+// 'solto' destrava; 'entrando' e 'namesa' travam. SENTADO NÃO É OCIOSO: o botão fica travado
+// depois do `sentou`, porque solto ele reconectaria — e como o clienteId é o mesmo, o jogador
+// faria take-over da própria cadeira. O texto muda porque a tela não muda até o anfitrião
+// começar, e era essa espera muda que convidava ao segundo clique.
+const ROTULO_ENTRAR = { solto: 'Entrar', entrando: 'Entrando…', namesa: 'Na mesa' };
+
+function saguaoEntrar(estado) {
+  SAGUAO.entrar.disabled = estado !== 'solto';
+  SAGUAO.entrar.textContent = ROTULO_ENTRAR[estado];
+}
+
+// ─── o botão de voltar, que mora no MENU ─────────────────────────────────────
+// REABRIR e VOLTAR são coisas diferentes, e o botão tem de dizer qual é: no anfitrião a
+// mesa nasce de novo dele; no convidado ele vai bater na porta de alguém.
+function atualizarBotaoVoltarMesa() {
+  const g = salaGuardada();
+  SAGUAO.voltar.classList.toggle('oculta', !g);
+  if (g) SAGUAO.voltar.textContent = g.anfitriao
+    ? `Reabrir a sua mesa ${g.codigo}` : `Voltar para a mesa ${g.codigo}`;
+}
+
+// ─── os quatro cliques ───────────────────────────────────────────────────────
+// COMEÇAR A PARTIDA DESLIGA A RESERVA DO CÓDIGO. Este botão fica visível na tela de
+// reabertura, e é a ÚNICA porta de lá que não passa pelo `encerrarRede` — o "Voltar" passa.
+// Sem esta linha, o anfitrião que cansa de esperar o código e começa a jogar vê a reserva
+// acordar 1,5 s depois e trocar a partida que ele acabou de montar pela guardada.
+SAGUAO.comecar.onclick = () => { pararDeReservar(); comecarLocal(); };
+
+SAGUAO.cancelar.onclick = () => { recomecarAsVoltas(); encerrarRede(); mostrarTela('telaMenu'); };
+
+// O NOME VALE PARA A MESA E PARA O MENU. Quem se apresentou como "Lia" aqui não quer voltar
+// a ser "Careca" na próxima partida local — e é `lembrarMesa()` que faz isso durar, o mesmo
+// caminho do campo do menu. Um segundo lugar que gravasse nome é como as duas telas passam
+// a discordar. Campo vazio não apaga nada: fica o que o menu já dizia.
+SAGUAO.entrar.onclick = () => {
+  // A porta que NÃO passa por `entrarNumaMesa`: Entrar direto, da tela "A mesa caiu". Quem
+  // digita um código e clica está começando de novo, e a escada tem de acompanhar.
+  recomecarAsVoltas();
+  const nome = SAGUAO.nome.value.trim().slice(0, 14);
+  if (nome && nome !== MESA.cadeiras[0].nome) {
+    MESA.cadeiras[0].nome = nome;
+    lembrarMesa();
+    montarCadeiras();                     // o menu atrás desta tela mostra o nome novo
+  }
+  conectarNaMesa(SAGUAO.entrada.value.trim().toUpperCase());
+};
+
+SAGUAO.voltar.onclick = () => {
+  const g = salaGuardada();
+  if (!g) { avisar('O código daquela mesa venceu.'); atualizarBotaoVoltarMesa(); return; }
+  tocarClique();
+  if (g.anfitriao) { reabrirMesaOnline(); return; }
+  entrarNumaMesa();                       // prepara a tela; ela já pré-preenche o campo
+  conectarNaMesa(g.codigo);
+};
+
+/* ····· 10-casa/150-rede.js ····· */
 //
 // O ANFITRIÃO É A AUTORIDADE. Ele embaralha, guarda o estado e valida tudo. O
 // convidado não tem partida nenhuma na memória: ele manda INTENÇÃO ("quero jogar 3|5
@@ -4132,7 +4351,7 @@ const TAMANHO_NOME = 64;
 const INTERVALO_NOME = 600;    // ms, o mesmo do chat: trocar de nome não é coisa de rajada
 const ULTIMO_NOME = new Map(); // cadeira → quando trocou de nome pela última vez
 // O clienteId vai para `donoDaCadeira`, que é PERSISTIDO. Sem teto, um id de megabytes
-// estoura a cota do localStorage — e `guardar` (01-constantes.js) engole o erro CALADO, o
+// estoura a cota do localStorage — e `guardar` (010-constantes.js) engole o erro CALADO, o
 // que faz a cadeira deixar de ser reservada: é o vazamento de mão do item 4 da Fila 5
 // voltando pela porta dos fundos. 64 é folga larga para um id sorteado.
 const TAMANHO_ID = 64;
@@ -4187,10 +4406,6 @@ function meuId() {
     guardar('cliente', idCliente);
   }
   return idCliente;
-}
-
-function erroOnline(txt) {
-  el('onlineErro').textContent = txt;
 }
 
 // SAIR DE PROPÓSITO É UM ESTADO, e ele dura os 400 ms entre o `desisto` sair e o peer
@@ -4309,14 +4524,7 @@ function abrirMesaOnline() {
   if (!temPeerJS()) { avisar('A biblioteca de rede não carregou — sem internet, só dá para jogar local.'); return; }
   encerrarRede();
   modo = 'anfitriao';
-  mostrarTela('telaOnline');
-  el('onlineTitulo').textContent = 'Mesa aberta';
-  el('onlineSub').textContent = 'Passe este código para quem vai jogar.';
-  el('onlineEntrada').classList.add('oculta');
-  el('onlineNome').classList.add('oculta');     // quem abre a mesa nomeia as cadeiras no menu
-  el('btConectar').classList.add('oculta');
-  el('btIniciarOnline').classList.remove('oculta');
-  el('onlineCodigo').textContent = '····';
+  saguaoDeAnfitriao('Mesa aberta', 'Passe este código para quem vai jogar.', '····');
   erroOnline('');
   tentarAbrir(0);
 }
@@ -4330,7 +4538,7 @@ function tentarAbrir(tentativa, codigoDesejado) {
   peer = new Peer(PREFIXO + codigo, OPCOES_PEER);
 
   peer.on('open', () => {
-    el('onlineCodigo').textContent = codigo;
+    saguaoCodigo(codigo);
     usarCodigo(codigo);
     guardarMesaDoAnfitriao();
     listarSala();
@@ -4416,14 +4624,7 @@ function reabrirMesaOnline() {
   if (!temPeerJS()) { avisar('A biblioteca de rede não carregou — sem internet, só dá para jogar local.'); return; }
   encerrarRede();
   modo = 'anfitriao';
-  mostrarTela('telaOnline');
-  el('onlineTitulo').textContent = 'Reabrindo a sua mesa';
-  el('onlineSub').textContent = 'Quem estava na mesa volta com o mesmo código.';
-  el('onlineEntrada').classList.add('oculta');
-  el('onlineNome').classList.add('oculta');
-  el('btConectar').classList.add('oculta');
-  el('btIniciarOnline').classList.remove('oculta');
-  el('onlineCodigo').textContent = g.codigo;
+  saguaoDeAnfitriao('Reabrindo a sua mesa', 'Quem estava na mesa volta com o mesmo código.', g.codigo);
   erroOnline('Reservando o código…');
   // O mapa ANTES de abrir: a primeira conexão pode chegar no mesmo instante do 'open', e
   // um `sentar()` sem os donos daria a primeira vaga livre — o bug do item 4 de volta,
@@ -4484,7 +4685,7 @@ function desistiuDaMesa(cadeira) {
 // casa:
 //
 //   · O NÚMERO VAI NO PRIMEIRO NOME — "Ricardo2 Neves", nunca "Ricardo Neves 2".
-//     `nomeEmPartes` (13-hud.js) corta na PALAVRA em tela estreita: some tudo depois do
+//     `nomeEmPartes` (130-hud.js) corta na PALAVRA em tela estreita: some tudo depois do
 //     primeiro espaço. Um sufixo no fim desapareceria justamente no retrato de quatro
 //     cartões, que é onde a confusão dói.
 //   · QUEM ENCOLHE PARA CABER É A BASE, NUNCA O DESEMPATE. O nome é cortado em 14 (é o
@@ -4522,7 +4723,7 @@ function nomeUnico(nome, ocupados) {
     (Array.isArray(ocupados) ? ocupados : []).map(chaveDoNome).filter(Boolean));
 
   // O nome vai NORMALIZADO para a mesa, e não só para a comparação: quem o fatia depois é
-  // o `nomeEmPartes` (13-hud.js), no primeiro espaço, e os dois têm de achar o mesmo.
+  // o `nomeEmPartes` (130-hud.js), no primeiro espaço, e os dois têm de achar o mesmo.
   const base = String(nome == null ? '' : nome).normalize('NFC').replace(/\s+/g, ' ').trim();
   const corte = base.indexOf(' ');
   const primeiro = corte < 0 ? base : base.slice(0, corte);
@@ -4566,7 +4767,7 @@ function nomeUnico(nome, ocupados) {
 }
 
 // UMA CADEIRA É VAGA DE VISITANTE se está marcada `online`, ou se virou bot por falta de
-// gente e guardou a marca (`comecarLocal`, 16-loop.js). A marca é o que separa "bot que a
+// gente e guardou a marca (`comecarLocal`, 160-loop.js). A marca é o que separa "bot que a
 // mesa escolheu" de "bot que a mesa improvisou": um "Bot · difícil" posto de propósito no
 // menu continua fechado a quem tem o código, e a cadeira de quem saiu volta a ser dele.
 const vagaDeVisita = c => c.tipo === 'online' || c.vagaOnline === true;
@@ -4608,7 +4809,7 @@ const nomesVizinhos = cadeira =>
 //
 // Confere o CONTINENTE, não o conteúdo: é o que os desenhistas desreferenciam sem
 // perguntar. O conteúdo hostil (um placar que é string, por exemplo) quem trata é o
-// `escapar` do 13-hud.js — são duas defesas para dois danos diferentes, e nenhuma delas
+// `escapar` do 130-hud.js — são duas defesas para dois danos diferentes, e nenhuma delas
 // faz o trabalho da outra.
 const vistaDoFio = v => !!v && typeof v === 'object' &&
   Array.isArray(v.linha) && Array.isArray(v.mao) && Array.isArray(v.naMao) &&
@@ -4760,16 +4961,18 @@ function largar(cadeira, conn) {
   listarSala();
 }
 
+// QUEM É CADA CADEIRA, que é a única parte disto que depende da rede: só ela sabe quem
+// conectou. Como isso aparece na tela — e o escape do nome, que é entrada de fora — é do
+// `145-saguao.js`.
 function listarSala() {
-  const faltam = MESA.cadeiras.slice(0, MESA.n).filter((c, i) => c.tipo === 'online' && !conexoes.has(i)).length;
-  el('onlineLista').innerHTML = MESA.cadeiras.slice(0, MESA.n).map((c, i) => {
-    const estado = c.tipo === 'online' ? (conexoes.has(i) ? 'chegou' : 'esperando…') : (ETIQUETA[c.tipo] || c.tipo);
-    // ESCAPADO: este nome foi escrito pelo convidado (`m.nome`, ali em cima) e ia direto
-    // para innerHTML. É o mesmo buraco do texto do chat, na tela ao lado — e mais antigo
-    // que ele. Um nome com <img onerror> rodava script na máquina do anfitrião.
-    return `<div><span>${escapar(c.nome)}</span><b>${estado}</b></div>`;
-  }).join('');
-  el('btIniciarOnline').textContent = faltam ? `Faltam ${faltam} · começar assim mesmo` : 'Começar a partida';
+  const cadeiras = MESA.cadeiras.slice(0, MESA.n);
+  const faltam = cadeiras.filter((c, i) => c.tipo === 'online' && !conexoes.has(i)).length;
+  saguaoLista(
+    cadeiras.map((c, i) => ({
+      nome: c.nome,
+      estado: c.tipo === 'online' ? (conexoes.has(i) ? 'chegou' : 'esperando…') : (ETIQUETA[c.tipo] || c.tipo),
+    })),
+    faltam ? `Faltam ${faltam} · começar assim mesmo` : 'Começar a partida');
   salaDuplas = MESA.n === 4;
   atualizarSaguao();
 }
@@ -4778,37 +4981,15 @@ function listarSala() {
 // conversão MUDOU DE CASA e agora mora no `comecarLocal` — ela era feita aqui, certa, e
 // lá era feita errada (condicionada a `modo === 'local'`), o que travava a revanche do
 // anfitrião. Duas cópias da mesma regra, uma delas com defeito, é como o defeito dura.
-// E COMEÇAR A PARTIDA DESLIGA A RESERVA DO CÓDIGO. Este botão fica visível na tela de
-// reabertura, e é a ÚNICA porta de lá que não passa pelo `encerrarRede` — o "Voltar" passa.
-// Sem esta linha, o anfitrião que cansa de esperar o código e começa a jogar vê a reserva
-// acordar 1,5 s depois e trocar a partida que ele acabou de montar pela guardada.
-el('btIniciarOnline').onclick = () => { pararDeReservar(); comecarLocal(); };
-
-el('btCancelarOnline').onclick = () => { recomecarAsVoltas(); encerrarRede(); mostrarTela('telaMenu'); };
+// O clique que a executa mora em `145-saguao.js`, junto dos outros três — e é lá que está
+// escrito por que ele tem de desligar a reserva do código antes de começar.
 
 // ─── convidado ───────────────────────────────────────────────────────────────
 function entrarNumaMesa() {
   if (!temPeerJS()) { avisar('A biblioteca de rede não carregou — sem internet, só dá para jogar local.'); return; }
   encerrarRede();
-  mostrarTela('telaOnline');
-  el('onlineTitulo').textContent = 'Entrar numa mesa';
-  el('onlineSub').textContent = 'Digite o código que o anfitrião passou.';
-  el('onlineCodigo').textContent = '';
-  el('onlineEntrada').classList.remove('oculta');
-  // O NOME, que só o convidado precisa dizer. Pré-preenchido com o do menu — que é
-  // exatamente o que ele já mandava calado —, então o campo não inventa caminho novo: ele
-  // torna visível e editável o que sempre viajou. Era esta ausência que fazia a mesa de
-  // dois virar "Você × Você" sem que ninguém soubesse onde mudar.
-  el('onlineNome').classList.remove('oculta');
-  el('onlineNome').value = MESA.cadeiras[0].nome;
-  // Pré-preenchido com a última mesa em que você sentou: quem volta quase sempre volta
-  // para a mesma, e antes o campo era zerado justamente aqui.
   const guardada = salaGuardada();
-  el('onlineEntrada').value = guardada ? guardada.codigo : '';
-  el('onlineEntrada').focus();
-  el('btConectar').classList.remove('oculta');
-  el('btIniciarOnline').classList.add('oculta');
-  el('onlineLista').innerHTML = '';
+  saguaoDeConvidado(MESA.cadeiras[0].nome, guardada ? guardada.codigo : '');
   // Destrava o botão: a tentativa anterior pode ter deixado 'Entrando…' ou 'Na mesa'.
   // Aqui e não no `encerrarRede`, que roda em pontos do carregamento onde `conectando`
   // ainda estaria na zona morta — e `typeof` sobre `let` na zona morta LANÇA.
@@ -4828,7 +5009,7 @@ const RECUSA = {
   semvaga: 'Essa mesa não tem cadeira de visitante agora — quem abriu a mesa precisa deixar uma vaga.',
 };
 
-// LARGAR A MESA, do lado de quem é convidado. Mora aqui e não no 16-loop porque conhece o
+// LARGAR A MESA, do lado de quem é convidado. Mora aqui e não no 160-loop porque conhece o
 // `codigoDaSala` e o `linkAnfitriao`.
 //
 // O CÓDIGO FICA GUARDADO, e é a mudança de fundo: sair entrega a PARTIDA, não a MESA. A
@@ -4857,8 +5038,7 @@ let conectando = false;
 
 function pararDeConectar(recado) {
   conectando = false;
-  el('btConectar').disabled = false;
-  el('btConectar').textContent = 'Entrar';
+  saguaoEntrar('solto');
   if (recado !== undefined) erroOnline(recado);
 }
 
@@ -4875,8 +5055,7 @@ function conectarNaMesa(codigo) {
   // que acordaria para matar a conexão nova. Bumpar aqui é dizer "quem manda na rede agora
   // sou eu"; o que foi agendado antes que se cale.
   geracaoRede++;
-  el('btConectar').disabled = true;
-  el('btConectar').textContent = 'Entrando…';
+  saguaoEntrar('entrando');
   erroOnline('Procurando a mesa…');
   modo = 'convidado';
   usarCodigo(codigo);
@@ -4906,12 +5085,9 @@ function conectarNaMesa(codigo) {
       if (m.t === 'sentou') {
         euNaTela = m.cadeira;
         voltando = 0;                      // sentou: a próxima queda começa a contar do zero
-        // Sentado NÃO é ocioso: `conectando` fica de pé e o botão fica travado. Solto,
-        // ele reconectaria — e como o clienteId é o mesmo, o jogador faria take-over da
-        // própria cadeira. O texto muda porque a tela não muda até o anfitrião começar, e
-        // era essa espera muda que convidava ao segundo clique.
-        el('btConectar').disabled = true;
-        el('btConectar').textContent = 'Na mesa';
+        // Sentado NÃO é ocioso: `conectando` fica de pé e o botão fica travado (o porquê
+        // está no `saguaoEntrar`, em 145-saguao.js).
+        saguaoEntrar('namesa');
         // A ESPERA TEM DE TER NOME. Sentar entre duas partidas é o caso de quem sai e
         // volta: o anfitrião de propósito não manda vista de partida acabada (ela levaria
         // o convidado direto para a tela da derrota que ele já aceitou), então a tela fica
@@ -4953,23 +5129,6 @@ function conectarNaMesa(codigo) {
   peer.on('error', e => pararDeConectar(explicarErroDeRede(e)));
 }
 
-// O NOME VALE PARA A MESA E PARA O MENU. Quem se apresentou como "Lia" aqui não quer voltar
-// a ser "Careca" na próxima partida local — e é `lembrarMesa()` que faz isso durar, o mesmo
-// caminho do campo do menu. Um segundo lugar que gravasse nome é como as duas telas passam
-// a discordar. Campo vazio não apaga nada: fica o que o menu já dizia.
-el('btConectar').onclick = () => {
-  // A porta que NÃO passa por `entrarNumaMesa`: Entrar direto, da tela "A mesa caiu". Quem
-  // digita um código e clica está começando de novo, e a escada tem de acompanhar.
-  recomecarAsVoltas();
-  const nome = el('onlineNome').value.trim().slice(0, 14);
-  if (nome && nome !== MESA.cadeiras[0].nome) {
-    MESA.cadeiras[0].nome = nome;
-    lembrarMesa();
-    montarCadeiras();                     // o menu atrás desta tela mostra o nome novo
-  }
-  conectarNaMesa(el('onlineEntrada').value.trim().toUpperCase());
-};
-
 // ─── o convidado voltando sozinho ────────────────────────────────────────────
 // Quantas vezes e de quanto em quanto tempo. O anfitrião recarregando leva alguns
 // segundos para reivindicar o código de volta (o servidor de sinalização só larga o id
@@ -4983,9 +5142,7 @@ let voltando = 0;
 function voltarSozinho(codigo) {
   if (modo !== 'convidado' || !codigo || voltando >= VOLTAS) { voltando = 0; return false; }
   voltando++;
-  mostrarTela('telaOnline');
-  el('onlineTitulo').textContent = 'A mesa caiu';
-  el('onlineSub').textContent = 'Tentando voltar — o anfitrião pode estar recarregando.';
+  saguaoDeQueda();
   erroOnline(`Tentando voltar para a mesa ${codigo}… (${voltando}/${VOLTAS})`);
   // UMA VOLTA PENDENTE DE CADA VEZ, como o `largar` já faz com o relógio da cadeira: dois
   // degraus armados ao mesmo tempo são dois peers nascendo com 4 s de diferença.
@@ -5037,23 +5194,9 @@ function salaGuardada() {
   return g;
 }
 
-function atualizarBotaoVoltarMesa() {
-  const g = salaGuardada();
-  el('btVoltarMesa').classList.toggle('oculta', !g);
-  // REABRIR e VOLTAR são coisas diferentes, e o botão tem de dizer qual é: no anfitrião a
-  // mesa nasce de novo dele; no convidado ele vai bater na porta de alguém.
-  if (g) el('btVoltarMesa').textContent = g.anfitriao
-    ? `Reabrir a sua mesa ${g.codigo}` : `Voltar para a mesa ${g.codigo}`;
-}
-
-el('btVoltarMesa').onclick = () => {
-  const g = salaGuardada();
-  if (!g) { avisar('O código daquela mesa venceu.'); atualizarBotaoVoltarMesa(); return; }
-  tocarClique();
-  if (g.anfitriao) { reabrirMesaOnline(); return; }
-  entrarNumaMesa();                       // prepara a tela; ela já pré-preenche o campo
-  conectarNaMesa(g.codigo);
-};
+// `atualizarBotaoVoltarMesa` e o clique dele são apresentação, e moram em `145-saguao.js`.
+// O que fica aqui é `salaGuardada()`, que os dois consultam: saber se aquele código ainda
+// vale é regra de rede, não desenho de botão.
 
 function explicarErroDeRede(e) {
   const t = e && e.type;
@@ -5162,7 +5305,7 @@ function receberChat(cadeira, m) {
   return true;
 }
 
-/* ····· 10-casa/16-loop.js ····· */
+/* ····· 10-casa/160-loop.js ····· */
 //
 // Existe UM caminho para uma jogada acontecer, venha ela de onde vier:
 //
@@ -5313,7 +5456,7 @@ function pedirAcao(intencao) {
 // O único lugar que mexe na partida. Vale para o seu clique, para o bot e para o que
 // chega pela rede — e valida os três do mesmo jeito.
 // Uma peça como o FIO pode entregá-la: dois números de 0 a `MAX_PINTAS`, e nada mais.
-// `mesmaPeca` (02-baralho.js) lê `b[0]` sem guarda, então uma peça ausente ou nula LANÇA
+// `mesmaPeca` (020-baralho.js) lê `b[0]` sem guarda, então uma peça ausente ou nula LANÇA
 // lá dentro — e a exceção sobe pelo `conn.on('data')` do anfitrião, que é quem tem a
 // partida. Note que isto NÃO é sobre trapaça: `jogar` valida a jogada contra
 // `acoesDe(P, cadeira)`, que sai da mão do próprio jogador, então peça inventada continua
@@ -5458,7 +5601,7 @@ const HORAS_GUARDADA = 12;
 // `P.faltaNo` é um array de Set, e Set NÃO sobrevive a JSON: `JSON.stringify(new Set())`
 // dá `{}` — um objeto sem `.has` e sem `.indexOf`. Sem estas duas conversões a partida
 // retomada perdia calada quem passou em qual número (a marca da Fila 4) e o bot estourava
-// na primeira consulta, em `05-bot.js`. É a MESMA conversão que `visaoDe` faz para o fio,
+// na primeira consulta, em `050-bot.js`. É a MESMA conversão que `visaoDe` faz para o fio,
 // e pela mesma razão: o que não sobrevive à serialização não existe do outro lado.
 const partidaParaGuardar = () =>
   Object.assign({}, P, { faltaNo: P.faltaNo.map(s => Array.from(s)) });
@@ -5484,7 +5627,7 @@ function guardarPartida() {
 //
 // PARTIDA GUARDADA É ENTRADA DE FORA, exatamente como a mesa lembrada — e este era o único
 // validador de `localStorage` do projeto que nunca tinha sido endurecido. Ele conferia
-// quatro campos e entregava o resto CRU, enquanto o `mesaLembrada()` (14-menu.js) confere
+// quatro campos e entregava o resto CRU, enquanto o `mesaLembrada()` (140-menu.js) confere
 // campo a campo com `Object.hasOwn`. A diferença de rigor entre os dois era acidental, não
 // decidida.
 //
@@ -5673,8 +5816,8 @@ addEventListener('keydown', ev => {
 });
 
 // ─── loop ────────────────────────────────────────────────────────────────────
-// Primeiro enquadramento. Fica aqui, e não no fim de 07-cena.js, porque enquadrar() lê
-// a profundidade da mão (10-mao.js) e manda refazer o leque — nada disso existe ainda
+// Primeiro enquadramento. Fica aqui, e não no fim de 070-cena.js, porque enquadrar() lê
+// a profundidade da mão (100-mao.js) e manda refazer o leque — nada disso existe ainda
 // quando o arquivo da cena termina de rodar.
 enquadrar();
 
@@ -5810,6 +5953,26 @@ window.__jogo = {
     if (gasto >= prazo) recado.classList.remove('oculta');
   }, passo);
 })();
+</script>
+
+<!-- SERVICE WORKER — o que torna verdadeira a frase do #semCarga logo acima ("depois de
+     carregar uma vez, o jogo abre offline"). Até aqui ela dependia só do cache HTTP, que o
+     navegador esvazia quando quer: era promessa, não garantia.
+
+     ATRÁS DE `http`, e isso não é zelo excessivo: em file:// o `register` REJEITA, e um
+     jogo que existe para abrir por duplo-clique não pode ganhar um erro no console por
+     causa de um recurso que só faz sentido servido. `catch` vazio pelo mesmo motivo — SW
+     desligado por política, aba anônima, navegador velho: nada disso pode atrapalhar quem
+     só quer jogar.
+
+     Registrado no `load` e não no ato: o download do worker disputaria banda justamente com
+     o three.js, na visita em que o jogador ainda não tem nada em cache. -->
+<script>
+if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
+  addEventListener('load', function () {
+    navigator.serviceWorker.register('./sw.js').catch(function () {});
+  });
+}
 </script>
 </body>
 </html>

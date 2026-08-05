@@ -183,7 +183,7 @@ function fecharMao(P, res) {
 // Alguém saiu da mesa no meio. A partida acaba aqui, e acaba PERDIDA para quem saiu —
 // senão fechar a aba viraria a saída de emergência de toda partida mal encaminhada.
 // Não mexe no placar: quem saiu simplesmente não leva, e quem decide o campeão é a tela
-// (13-hud.js), que tira o time do desistente da conta.
+// (130-hud.js), que tira o time do desistente da conta.
 function abandonar(P, cadeira) {
   if (P.fase === 'fim') return { erro: 'a partida já acabou' };
   P.desistiu = cadeira;

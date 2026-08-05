@@ -1,6 +1,6 @@
 {
   "name": "domino-bar",
-  "version": "2.3.0",
+  "version": "3.0.0",
   "private": true,
   "description": "Dominó de bar em 3D: 2 a 4 jogadores, bots opcionais e online P2P sem servidor",
   "scripts": {
@@ -13,6 +13,8 @@
     "online": "node build.mjs && node tests/test-online.mjs",
     "fechamento": "node build.mjs && cd tests && npm run fechamento",
     "servir": "npx --yes serve .",
+    "app": "node build.mjs && node tests/test-app.mjs",
+    "icones": "node tests/gerar-icones.mjs",
     "textura": "node build.mjs && node tests/test-textura.mjs"
   }
 }

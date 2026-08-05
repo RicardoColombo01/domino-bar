@@ -25,7 +25,15 @@ const mod = await import(buildModule([
   'apontada', 'porQueNaoDa',
   // O painel de contagem só era testado por FORA (se cobre a mesa, nas suítes de tela).
   // Ele é ferramenta de decisão: contar errado é pior que não contar.
-  'desenharContagem',
+  // O painel de apoio é chamado pelo ENCAIXE da casa, não pela função do jogo: quem o
+  // desenha de verdade é `painelDoJogo`, que `30-domino/135-contagem.js` preenche na carga.
+  // Testar `desenharContagem` direto deixaria a linha do encaixe sem uma única asserção —
+  // e sem ela o painel simplesmente não aparece, calado. Conferido por mutação: tirando o
+  // `painelDoJogo = desenharContagem`, três asserções reprovam e a QUARTA mata a suíte, ao
+  // ler `t['3'].vistos` de um painel que ficou vazio. Reprovar MENOS do que devia é o
+  // sintoma que este projeto já registra — aqui a causa é conhecida e está escrita, e não
+  // uma asserção fraca.
+  'painelDoJogo',
   // `bulbo` é a lâmpada, e é a única maneira de perguntar se ela parou de respirar — a
   // preferência não pode ser testada por uma variável de configuração, tem de ser pelo
   // MOVIMENTO que ela promete tirar da tela.
@@ -381,7 +389,7 @@ console.log('\narrastar a peça');
 
   const V = mod.naMao[0].obj.position.constructor;
   // Onde o slot de repouso de uma peça cai na tela — o inverso exato da conta que o
-  // jogo faz para mirar (11-interacao.js).
+  // jogo faz para mirar (110-interacao.js).
   const naTela = m => {
     const v = new V(m.xBase, m.yBase, m.zBase).project(mod.camera);
     return { x: (v.x + 1) / 2 * 1600, y: (1 - v.y) / 2 * 900 };
@@ -498,7 +506,7 @@ console.log('\njogar sem apontador');
   }
 
   // ESCREVER NA CONVERSA NÃO É JOGAR. O projeto já pagou isto uma vez com o 'a' de
-  // arrumar e o 'd' de dica (16-loop.js): com um campo na tela, digitar "vamos" chamava
+  // arrumar e o 'd' de dica (160-loop.js): com um campo na tela, digitar "vamos" chamava
   // arrumarMao() a cada 'a'. Um caminho novo de teclado herda a mesma armadilha, e agora
   // ela é pior — os dígitos aparecem em qualquer texto.
   mod.cancelarEscolha();
@@ -540,7 +548,7 @@ console.log('\no painel de contagem conta certo');
       modo: 'trio', cadeira: 0, linha: [], mao: [], faltaNo: [[], [], []],
       cadeiras: [{ nome: 'eu' }, { nome: 'Zé' }, { nome: 'Ana' }],
     };
-    mod.desenharContagem(vista);
+    mod.painelDoJogo(vista);
     const t = ler();
     ok(t['0'] && t['0'].total === 6,
       `no Trio o zero mora em 6 peças (o 0|0 sai do baralho) e o painel disse ${t['0'] && t['0'].total}`);
@@ -559,7 +567,7 @@ console.log('\no painel de contagem conta certo');
       faltaNo: [[], [], []],
       cadeiras: [{ nome: 'eu' }, { nome: 'Zé' }, { nome: 'Ana' }],
     };
-    mod.desenharContagem(vista);
+    mod.painelDoJogo(vista);
     const t = ler();
     // Peças com o 3: 3|3, 3|5, 3|0 = três peças. O 3|3 é UMA peça, não duas — contar por
     // metade daria quatro e o painel mentiria a favor do jogador.
@@ -578,7 +586,7 @@ console.log('\no painel de contagem conta certo');
       modo: 'classico', cadeira: 0, linha: todosOs2, mao: [], faltaNo: [[], [], []],
       cadeiras: [{ nome: 'eu' }, { nome: 'Zé' }, { nome: 'Ana' }],
     };
-    mod.desenharContagem(vista);
+    mod.painelDoJogo(vista);
     const t = ler();
     ok(t['2'].zerado, 'o número que apareceu inteiro tinha de vir marcado como zerado');
     ok(t['2'].faltam === '—', `zerado, o "faltam" vira um traço, e veio "${t['2'].faltam}"`);
@@ -594,7 +602,7 @@ console.log('\no painel de contagem conta certo');
       faltaNo: [[4], [4], [4]],              // os TRÊS passaram no 4, inclusive você
       cadeiras: [{ nome: 'eu' }, { nome: 'Zé' }, { nome: 'Ana' }],
     };
-    mod.desenharContagem(vista);
+    mod.painelDoJogo(vista);
     const t = ler();
     ok(t['4'].quemPassou === 'Zé, Ana',
       `deviam aparecer só os outros dois, e o painel disse "${t['4'].quemPassou}"`);
@@ -609,7 +617,7 @@ console.log('\no painel de contagem conta certo');
       modo: 'classico', cadeira: 0, linha: [], mao: [], faltaNo: [[], [6], []],
       cadeiras: [{ nome: 'eu' }, { nome: '<img src=x onerror=alert(1)>' }, { nome: 'Ana' }],
     };
-    mod.desenharContagem(vista);
+    mod.painelDoJogo(vista);
     ok(painel.innerHTML.indexOf('<img') < 0,
       'o nome do convidado virou um elemento dentro do painel de contagem');
     ok(painel.innerHTML.indexOf('&lt;img') >= 0, 'o nome devia ter saído escapado, e não sumido');
@@ -1002,7 +1010,7 @@ console.log('\ndois jogadores com o mesmo nome');
     'trocar a caixa do nome burlava o desempate — para quem lê a mesa os dois são o mesmo');
 
   // O NÚMERO NO PRIMEIRO NOME, e esta é a asserção que grava a decisão. `nomeEmPartes`
-  // (13-hud.js) esconde tudo depois do primeiro espaço em tela estreita, então
+  // (130-hud.js) esconde tudo depois do primeiro espaço em tela estreita, então
   // "Ana Paula 2" volta a ser "Ana" na lista — os dois cartões iguais outra vez,
   // justamente no retrato de quatro, que é onde a confusão dói. Se alguém "simplificar"
   // para sufixo no fim, esta linha cai.
@@ -1028,7 +1036,7 @@ console.log('\ndois jogadores com o mesmo nome');
   const maria = u('Maria Fernanda', 'Maria Fernanda');       // 14 na bala; com o número, 15
   ok(maria === 'Maria2', `o sobrenome tinha de sair inteiro, e veio "${maria}"`);
 
-  // ESTÁVEL ENTRE CHAMADAS, e é o que faz o `{t:'nome'}` (15-rede.js) ser seguro: ele
+  // ESTÁVEL ENTRE CHAMADAS, e é o que faz o `{t:'nome'}` (150-rede.js) ser seguro: ele
   // reentra aqui a cada troca de nome em partida, e não só ao sentar. Funciona porque
   // `nomesVizinhos` exclui a própria cadeira — quem passar a mesa TODA cria um ratchet
   // "Ricardo2" → "Ricardo22" → "Ricardo222" que só aparece na segunda troca.
@@ -1598,19 +1606,19 @@ console.log('\nmensagem torta não derruba a mesa');
   }
 
   {
-    // C3 — `{t:'acao'}` sem `peca`. `mesmaPeca` (02-baralho.js:9) lê `b[0]` sem guarda, e o
+    // C3 — `{t:'acao'}` sem `peca`. `mesmaPeca` (020-baralho.js:9) lê `b[0]` sem guarda, e o
     // TypeError sobe pelo `conn.on('data')`. NÃO é trapaça: `jogar` valida contra
     // `acoesDe(P, cadeira)`, que sai da mão do próprio jogador, então a fronteira do
     // invariante 3 continua de pé. O dano é o `publicar()` não rodar e a vez não andar.
     const conn = abrirMesa();
     entregar(conn, { t: 'ola', id: 'cliente-Z', nome: 'Zé' });
     mod.comecarLocal();                     // a partida com a cadeira online de pé
-    // A VEZ TEM DE SER DELE, e sem isto o bloco inteiro é decoração: `acoesDe` (04-partida.js:68)
+    // A VEZ TEM DE SER DELE, e sem isto o bloco inteiro é decoração: `acoesDe` (040-partida.js:68)
     // devolve `jogadas: []` fora da vez, e aí o `.some` de `jogar` curto-circuita antes de
     // chegar em `mesmaPeca` — o TypeError nunca acontece e as seis asserções nascem verdes
     // sem ter exercitado nada. Foi assim que este bloco passou na primeira rodada.
     mod.P.vez = 1;
-    // E a peça obrigatória sai: ela só existe na PRIMEIRA jogada da primeira mão (04-partida.js:56,
+    // E a peça obrigatória sai: ela só existe na PRIMEIRA jogada da primeira mão (040-partida.js:56,
     // limpa em :117), e se o 6|6 não estiver na mão desta cadeira ela filtra `jogadas` para
     // vazio — o mesmo curto-circuito por outra porta. Este é um estado que o jogo produz
     // sozinho em toda mão seguinte, não um estado inventado.
@@ -1827,7 +1835,7 @@ console.log('\ntemporizador de rede que perdeu o dono');
 }
 
 // A QUARTA MORDIDA DO innerHTML. A regra da casa — todo texto de fora passa pelo `escapar` —
-// está escrita no comentário do próprio `13-hud.js`, e foi aplicada às STRINGS e nunca aos
+// está escrita no comentário do próprio `130-hud.js`, e foi aplicada às STRINGS e nunca aos
 // campos que se assume serem números. O desenho do defeito é a evidência: no mesmo template
 // literal, o NOME passa por `escapar` e o número irmão ao lado não. "Numérico" foi tratado
 // como sinônimo de "seguro".

@@ -8,7 +8,7 @@
 
 // A CADEIRA 0 É SUA E POR ISSO NÃO SE CHAMA "VOCÊ". Quem é você já está dito em dois
 // lugares que não dependem do nome: o rótulo da cadeira, no `montarCadeiras()` aqui
-// embaixo, e a etiqueta "você" do cartão do HUD (`ETIQUETA`, 13-hud.js). O campo guarda um
+// embaixo, e a etiqueta "você" do cartão do HUD (`ETIQUETA`, 130-hud.js). O campo guarda um
 // NOME, e nome existe para os OUTROS — no online ele viaja para o anfitrião e vira o
 // placar, a lista da sala e o começo de toda linha da conversa.
 //
@@ -16,7 +16,7 @@
 // duas falas da conversa começando igual: ninguém sabia quem era quem. E repare que trocar
 // só este literal NÃO consertaria o online — os dois lados leem o mesmo NOMES[0], então
 // viraria "Careca × Careca". Quem conserta a colisão é o campo de nome do saguão
-// (pagina.html) e o desempate do anfitrião (`nomeUnico`, 15-rede.js); este literal conserta
+// (pagina.html) e o desempate do anfitrião (`nomeUnico`, 150-rede.js); este literal conserta
 // a semântica, que é o campo guardar um nome em vez de um pronome.
 const NOMES = ['Careca', 'Zé', 'Dona Cida', 'Tião', 'Bigode'];
 const TIPOS = [
@@ -99,16 +99,16 @@ function lembrarMesa() {
   });
 }
 
-// O `escapar` no `value=` foi a TERCEIRA mordida da mesma classe. `listarSala` (15-rede)
+// O `escapar` no `value=` foi a TERCEIRA mordida da mesma classe. `listarSala` (150-rede)
 // punha `c.nome` direto em innerHTML e foi consertado; esta linha ficou para trás, e é pior
 // por ser dentro de um ATRIBUTO — basta uma aspa para sair dele.
 //
-// E `c.nome` vem de fora: o convidado manda o nome dele pela rede e `15-rede.js` escreve em
+// E `c.nome` vem de fora: o convidado manda o nome dele pela rede e `150-rede.js` escreve em
 // `MESA.cadeiras[cadeira].nome`; `lembrarMesa()` persiste as quatro cadeiras, então o valor
 // sobrevive à recarga. Sem escape, um convidado com nome `"><img src=x onerror=…>` roda
 // script na máquina do ANFITRIÃO assim que ele mexe no modo ou no número de jogadores.
 //
-// Sem risco de zona morta: 13-hud é concatenado ANTES de 14-menu, então `escapar` já está
+// Sem risco de zona morta: 130-hud é concatenado ANTES de 140-menu, então `escapar` já está
 // de pé quando `montarCadeiras()` roda no fim deste arquivo.
 function montarCadeiras() {
   el('cadeiras').innerHTML = MESA.cadeiras.slice(0, MESA.n).map((c, i) => {
@@ -179,7 +179,7 @@ function ajustarCadeirasAoModo() {
 // `refletirMesaNosBotoes` existe para impedir: o jogo está certo e a tela mente.
 //
 // A pergunta NÃO é "qual modo": o Clássico tem monte com 2 ou 3 jogadores e nenhum com 4.
-// Quem responde é `sobraDoBaralho`, em 02-baralho.js, pelo mesmo motivo de sempre —
+// Quem responde é `sobraDoBaralho`, em 020-baralho.js, pelo mesmo motivo de sempre —
 // aritmética de baralho escrita à mão no menu já quebrou uma vez.
 //
 // A preferência guardada NÃO é apagada quando o botão desliga: quem jogava Clássico de 2 com
@@ -242,7 +242,7 @@ el('btComecar').onclick = () => {
   else comecarLocal();
 };
 el('btEntrar').onclick = () => entrarNumaMesa();
-// `recomecarAsVoltas` mora no 15-rede.js, que é concatenado DEPOIS deste arquivo — e isso
+// `recomecarAsVoltas` mora no 150-rede.js, que é concatenado DEPOIS deste arquivo — e isso
 // está certo: declaração de função é içada para o topo do escopo, e este corpo só roda no
 // clique. É o mesmo caminho que o `encerrarRede` ao lado já fazia.
 el('btMenu').onclick = () => { recomecarAsVoltas(); encerrarRede(); mostrarTela('telaMenu'); };

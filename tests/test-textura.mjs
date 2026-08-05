@@ -5,7 +5,7 @@
 // iluminação continuam desenhando.
 //
 // O jogo não tem arquivo de imagem: madeira, piso e as pintas são desenhados em canvas 2D
-// na carga (`pintar()`, em 07-cena.js). Duas coisas podem sumir quando a aba vai para o
+// na carga (`pintar()`, em 070-cena.js). Duas coisas podem sumir quando a aba vai para o
 // fundo num aparelho de pouca memória, e elas são INDEPENDENTES:
 //
 //   · o CONTEXTO WebGL — o navegador libera a GPU da aba de fundo. O three trata isso
@@ -294,7 +294,7 @@ await experimento('E4 · perder e restaurar TRÊS vezes seguidas',
 
 // ─── 1. O ATLAS DESENHA O QUE PROMETE ────────────────────────────────────────
 // Verde hoje, de propósito: é rede de regressão, não conserto. E é a lacuna que o
-// CLAUDE.md aponta como a mais perigosa do projeto — `08-peca3d.js` não tinha NENHUMA
+// CLAUDE.md aponta como a mais perigosa do projeto — `080-peca3d.js` não tinha NENHUMA
 // asserção sobre o que a face desenha, então `faceDaPinta(3)` passando a desenhar quatro
 // pintas deixaria as suítes todas verdes com o jogo mostrando peças erradas.
 //
@@ -326,8 +326,8 @@ if (!atlas.erro) {
 }
 
 // A UV, que é quem escolhe a célula. O atlas pode estar perfeito e a peça mostrar os
-// números trocados — ou espelhados, e aí o `rotY` que o 06-layout calcula fica certo para
-// uma peça que aparece errada. A convenção é do 08-peca3d.js: o valor [0] à ESQUERDA.
+// números trocados — ou espelhados, e aí o `rotY` que o 060-layout calcula fica certo para
+// uma peça que aparece errada. A convenção é do 080-peca3d.js: o valor [0] à ESQUERDA.
 const uvs = await pagina.evaluate(naPagina('uvDaMao()'));
 for (const u of uvs) {
   const [a, b] = u.peca;

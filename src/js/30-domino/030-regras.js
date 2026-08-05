@@ -70,7 +70,7 @@ function pontasDepois(linha, peca, ponta) {
 // que deixou, os outros passam, a vez volta e você joga de novo. Isso é jogar sozinho —
 // jogo bom, não manobra —, e não pode ser barrado.
 //
-// Quem chama decide o resto (é `acoesDe`, em 04-partida.js): a regra não vale na sua
+// Quem chama decide o resto (é `acoesDe`, em 040-partida.js): a regra não vale na sua
 // última peça (jogar a última é bater), e só barra se sobrar jogada que não seja também
 // um fechamento — senão as duas se barrariam, você ficaria sem jogada, e o motor te
 // mandaria passar: a tranca aconteceria igual, pela porta dos fundos.
@@ -89,7 +89,7 @@ function fechamentosArmados(linha, jogadas, mao, baralho) {
   // invertidas, e a regra errava sempre para menos.
   //
   // Só aqui dentro: `chave` continua sensível à orientação de propósito, porque em
-  // 09-tabuleiro.js e 10-mao.js ela é o identificador do objeto 3D.
+  // 090-tabuleiro.js e 100-mao.js ela é o identificador do objeto 3D.
   const kc = p => Math.min(p[0], p[1]) + '|' + Math.max(p[0], p[1]);
 
   const vistas = new Set(linha.map(kc));

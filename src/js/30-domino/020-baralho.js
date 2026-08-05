@@ -1,5 +1,5 @@
 // O baralho: as peças, o embaralho e quem abre a mão. Quantas peças e quantas na mão
-// depende do modo da mesa (MODOS, em 01-constantes.js).
+// depende do modo da mesa (MODOS, em 010-constantes.js).
 // (parte de src/js — mesmo escopo, concatenado por build.mjs)
 
 const chave = p => p[0] + '|' + p[1];
@@ -29,7 +29,7 @@ function baralhoDoModo(modo) {
 }
 
 // QUANTAS PEÇAS SOBRAM PARA O MONTE nesta combinação de modo e jogadores. Mora aqui, junto
-// do `baralhoDoModo`, porque aritmética de baralho fora do motor apodrece — o `14-menu.js`
+// do `baralhoDoModo`, porque aritmética de baralho fora do motor apodrece — o `140-menu.js`
 // já teve um `28 - 7 * MESA.n` escrito à mão, e foi a primeira linha a quebrar quando os
 // modos chegaram.
 //

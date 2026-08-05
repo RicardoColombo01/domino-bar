@@ -1,7 +1,7 @@
 // CAÇA AO FECHAMENTO FORÇADO (Fila 5, item 2). Ferramenta de investigação, não suíte.
 //
 // O CLAUDE.md manda pedir ao Ricardo um caso concreto antes de mexer em
-// `fechamentosArmados`. Isto é a alternativa: 03-regras.js é puro, então dá para JOGAR
+// `fechamentosArmados`. Isto é a alternativa: 030-regras.js é puro, então dá para JOGAR
 // milhares de mãos e procurar o caso sozinho — com a mesa, as mãos e o lance em mãos.
 //
 // A busca é ONISCIENTE (vê todas as mãos), o que a regra jamais pode ser. É exatamente

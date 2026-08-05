@@ -1,5 +1,15 @@
-// Números fixos do dominó de bar: peças, medidas e pontuação.
+// Números fixos do DOMINÓ: peças, modos, medidas de mesa e pontuação.
 // (parte de src/js — todos os arquivos compartilham o mesmo escopo)
+//
+// Estava tudo em `10-casa/010-constantes.js`, cuja primeira linha dizia, ela mesma,
+// "Números fixos do dominó de bar" — regra de um jogo morando na pasta que promete não
+// saber que jogo é. Enquanto for um jogo só isso não incomoda ninguém; com o truco ao
+// lado, `PECA_C` e `MAX_PINTAS` no arquivo comum são convite a `CARTA_C` do lado deles.
+//
+// O NÚMERO 015 não é decorativo: `140-menu.js` roda `mesaLembrada()` no topo do módulo e
+// valida o modo guardado contra `MODOS`, então esta tabela tem de estar declarada antes
+// dele. Foi por não haver inteiro livre entre 01 e 14 que os arquivos passaram a ser
+// numerados de dez em dez.
 
 const MAX_PINTAS = 6;            // dupla-seis → 28 peças
 
@@ -11,7 +21,7 @@ const MAX_PINTAS = 6;            // dupla-seis → 28 peças
 // usava, sem uma linha de regra nova. E o 27 do Trio não é coincidência: tirar a
 // bucha de zero é justamente o que faz o baralho dividir exato entre três.
 //
-// `carrocasDemais` é a munição de maoRuim() (02-baralho.js): a partir de quantas
+// `carrocasDemais` é a munição de maoRuim() (020-baralho.js): a partir de quantas
 // carroças a mesa embaralha de novo.
 const MODOS = {
   classico: { rotulo: 'Clássico', nota: '7 peças',  pecasPorMao: 7,  cadeiras: [2, 3, 4], semZeroZero: false, carrocasDemais: 5 },
@@ -24,24 +34,9 @@ const MODO_PADRAO = 'classico';
 // distribuição rodar para sempre; aqui ela desiste e entrega a última mão.
 const MAX_EMBARALHOS = 100;
 
-// ─── quem pediu menos movimento ──────────────────────────────────────────────
-// Sensibilidade vestibular não é preferência estética: para quem tem, movimento na tela
-// dá enjoo de verdade. Este jogo era o pior conjunto possível — a lâmpada respira PARA
-// SEMPRE, as peças deslizam até o lugar e a câmera reenquadra sozinha.
-//
-// A CONSULTA É FEITA UMA VEZ e o objeto guardado, em vez de chamar `matchMedia` a cada
-// quadro: a `MediaQueryList` é VIVA (o `.matches` acompanha o sistema), então guardá-la
-// custa uma alocação em vez de sessenta por segundo — e continua respondendo se a pessoa
-// mudar a preferência com o jogo aberto, sem listener nenhum.
-//
-// Mora em 01 porque quem pergunta são o 09 (a suavização) e o 16 (a lâmpada), e no escopo
-// concatenado o primeiro arquivo é o único lugar de onde todos enxergam.
-const MQ_MOVIMENTO = matchMedia('(prefers-reduced-motion: reduce)');
-const movimentoReduzido = () => MQ_MOVIMENTO.matches;
-
 // Medidas da peça em unidades de mundo. O comprimento é EXATAMENTE o dobro da
 // largura — é isso que faz uma carroça atravessada ocupar meia peça no braço e
-// o tabuleiro fechar sem sobra em 06-layout.js. Mexer num, mexer no outro.
+// o tabuleiro fechar sem sobra em 060-layout.js. Mexer num, mexer no outro.
 const PECA_C = 1.0;
 const PECA_L = 0.5;
 const PECA_E = 0.18;
@@ -58,7 +53,7 @@ const ESPALHA_X = 4.0;
 const ESPALHA_Z = 2.2;
 
 // O tabuleiro é empurrado meio corpo para o fundo, para a mão caber embaixo dele. Era um
-// literal 0.4 escrito em dois pontos de 09-tabuleiro.js, e virou constante porque quem
+// literal 0.4 escrito em dois pontos de 090-tabuleiro.js, e virou constante porque quem
 // confere sobreposição no tampo precisa saber onde a caixa do tabuleiro realmente está.
 const TABULEIRO_Z = 0.4;
 
@@ -78,42 +73,3 @@ const NOME_BATIDA = {
   cruzada: 'batida cruzada',
   tranca: 'jogo trancado',
 };
-
-const CORES = {
-  feltro: 0x1e5f3d,
-  madeira: 0x53331d,
-  marfim: 0xf4ecd9,
-  pinta: 0x191512,
-  luz: 0xffd7a0,
-  parede: 0x241a16,
-};
-
-// ─── o que o navegador lembra ────────────────────────────────────────────────
-// Mora aqui, no primeiro arquivo, porque o 13-hud lê preferência na hora em que é
-// concatenado — quem chama tem de já existir.
-//
-// Um lugar só para falar com o localStorage. Ele falha de quatro jeitos e todos
-// silenciosos: desligado pelo usuário, modo privado que recusa gravar, cota cheia, e
-// JSON estragado por uma versão anterior do jogo. Quem chama nunca quer saber de nada
-// disso — quer o valor, ou o padrão.
-//
-// O harness de teste não tem localStorage nenhum, e é de propósito que isto não
-// reclame: em Node cada chamada cai no catch e o jogo roda com os padrões.
-const GUARDA = 'dominobar.';
-
-function guardar(chave, valor) {
-  try { localStorage.setItem(GUARDA + chave, JSON.stringify(valor)); } catch (e) { void e; }
-}
-
-function lido(chave, padrao) {
-  try {
-    const txt = localStorage.getItem(GUARDA + chave);
-    if (txt === null) return padrao;
-    const v = JSON.parse(txt);
-    return v === null || v === undefined ? padrao : v;
-  } catch (e) { void e; return padrao; }
-}
-
-function esquecer(chave) {
-  try { localStorage.removeItem(GUARDA + chave); } catch (e) { void e; }
-}

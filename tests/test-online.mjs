@@ -347,7 +347,7 @@ try {
       // Quem abre o atributo é a aspa, e é por isso que ela lidera este nome.
       //
       // Atribuir direto é o que `sentar()`/`{t:'nome'}` fazem quando o convidado se apresenta
-      // (15-rede.js), com o mesmo corte de 14 caracteres; o caminho de rede já está provado
+      // (150-rede.js), com o mesmo corte de 14 caracteres; o caminho de rede já está provado
       // pela asserção do saguão logo acima.
       j.MESA.cadeiras[1].nome = '"><img src=x>';
       j.montarCadeiras();
@@ -823,7 +823,7 @@ try {
   if (process.env.DOMINO_DEBUG) console.error(e.stack);
   // DEFEITO NÃO É PROBLEMA DE REDE, e esta separação existe porque a alternativa já
   // enganou: um `j.ajustarCompraAoModo is not a function` — nome novo que a ponte do
-  // 16-loop.js não expunha — saiu daqui com o recado "o broker gratuito do PeerJS ou a
+  // 160-loop.js não expunha — saiu daqui com o recado "o broker gratuito do PeerJS ou a
   // sua rede não deixaram a conexão fechar", e a rede estava ótima.
   //
   // É a mesma lição que este arquivo já registrou de outro jeito (o `catch` que guardava

@@ -186,7 +186,7 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
 // próximo restore. O retorno da aba é o único momento em que dá para PERGUNTAR, e a
 // pergunta custa três pixels.
 //
-// O `visibilitychange` do 11-interacao.js trata a SAÍDA (document.hidden) e é sobre gesto
+// O `visibilitychange` do 110-interacao.js trata a SAÍDA (document.hidden) e é sobre gesto
 // preso; este é o outro lado, e mora aqui, junto do assunto dele.
 document.addEventListener('visibilitychange', () => { if (!document.hidden) conferirTexturas(); });
 
@@ -250,7 +250,7 @@ parede.position.set(0, 7.6, -13);
 scene.add(parede);
 
 // A mesa é redonda e o jogo cabe nela: o tabuleiro pode ir a ~8.4 de largura e o
-// tampo tem 12 de diâmetro. Quando não cabe, quem encolhe é o tabuleiro (06-layout).
+// tampo tem 12 de diâmetro. Quando não cabe, quem encolhe é o tabuleiro (060-layout).
 const MESA_R = 6.1;
 const tampo = new THREE.Mesh(
   new THREE.CylinderGeometry(MESA_R, MESA_R, 0.34, 64),
@@ -339,8 +339,8 @@ scene.add(cinzeiro);
 tralhas.push(cinzeiro);
 
 // ─── quem senta onde ─────────────────────────────────────────────────────────
-// A conta ÚNICA do que está no tampo. Antes eram duas: 10-mao.js apertava o círculo dos
-// adversários por um lado e 09-tabuleiro.js media o orçamento do tabuleiro por outro, em
+// A conta ÚNICA do que está no tampo. Antes eram duas: 100-mao.js apertava o círculo dos
+// adversários por um lado e 090-tabuleiro.js media o orçamento do tabuleiro por outro, em
 // profundidades diferentes (z = -3.05 contra z = 0.4) e com divisores mágicos diferentes
 // (13.5 contra 0.86), sem uma saber da outra. Que os dois dessem quase o mesmo número era
 // coincidência aritmética — e a coincidência era justamente o que garantia a colisão.
@@ -400,14 +400,14 @@ function enquadrar() {
   const fovX = 2 * Math.atan((MAO_CHEIA / 2) / profundidadeDe(MAO_Y, MAO_Z));
   const preciso = 2 * Math.atan(Math.tan(fovX / 2) / aspect) * 180 / Math.PI;
   // Em retrato o "preciso" passa de 90°, e aí é melhor a mão em mais fileiras do que a
-  // mesa entortada de perspectiva: o teto corta, e 10-mao.js quebra o leque.
+  // mesa entortada de perspectiva: o teto corta, e 100-mao.js quebra o leque.
   camera.fov = Math.min(FOV_TETO, Math.max(FOV_BASE, preciso));
   camera.updateProjectionMatrix();
 
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.setSize(innerWidth, innerHeight);
   // A largura disponível mudou: o leque tem de ser refeito. Quem decide se vale a pena
-  // é a assinatura da mão, em 10-mao.js — resize que não mexe na largura é no-op.
+  // é a assinatura da mão, em 100-mao.js — resize que não mexe na largura é no-op.
   redesenharMao();
 }
 
