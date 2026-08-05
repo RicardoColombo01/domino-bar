@@ -49,6 +49,12 @@ const mod = await import(buildModule([
   // `.some` de `jogar` curto-circuita e o TypeError do C3 nunca acontece — seis asserções
   // verdes sem ter exercitado nada. Foi exatamente o que aconteceu na primeira rodada.
   'acoesDe',
+  // O ENCANAMENTO DA REDE que vive dentro dos callbacks do PeerJS, e que por isso era
+  // inalcançável daqui — a mesma justificativa do `desistiuDaMesa`. É onde moram os três
+  // `setTimeout` sem dono (C1, C2, S5 da Fila 11): o defeito é um temporizador acordando
+  // depois de o jogador já ter mudado de ideia, e isso só se enxerga drenando os timers.
+  'modo', 'peer', 'conectando', 'voltando', 'codigoDaSala', 'VOLTAS',
+  'tentarAbrir', 'conectarNaMesa', 'voltarSozinho', 'pararDeConectar', 'entrarNumaMesa',
 ], undefined, path.join(import.meta.dirname, 'built-jogo.mjs')));
 
 let falhas = 0;
@@ -1565,6 +1571,21 @@ console.log('\nmensagem torta não derruba a mesa');
     entregar(conn2, { t: 'nome', nome: 'Cida' });
     ok(mod.MESA.cadeiras[1].nome !== 'Cida',
        'dois {t:\'nome\'} colados: o segundo tinha de ser recusado por frequência, como o chat já faz');
+
+    // O CORTE ACONTECE ANTES DE NORMALIZAR, e esta asserção existe porque a mutação a
+    // cobrou: tirando o `.slice(0, TAMANHO_NOME)` a suíte continuava verde, porque o limite
+    // de FREQUÊNCIA já descartava 19 das 20 mensagens da rajada e o `nomeUnico` corta em 14
+    // no fim de qualquer jeito. Ou seja: o guarda existia sem ninguém provar que existia.
+    //
+    // O jeito de enxergar a ordem é um nome cujos primeiros 64 caracteres são espaço: com o
+    // corte antes, sobra string vazia e a cadeira vira 'Visita'; sem ele, o `trim` alcança o
+    // "Zé" lá no fim e o nome passa. É a mesma pergunta do `receberChat`, onde `slice` vem
+    // antes de `trim` — só que aqui dá para reprovar por ela.
+    const conn3 = abrirMesa();
+    entregar(conn3, { t: 'ola', id: 'cliente-X', nome: 'Ivo' });
+    entregar(conn3, { t: 'nome', nome: ' '.repeat(200) + 'Zé' });
+    ok(mod.MESA.cadeiras[1].nome !== 'Zé',
+       'o nome foi normalizado ANTES do corte — é sobre essa string inteira que roda o trabalho caro');
   }
 
   {
@@ -1602,6 +1623,153 @@ console.log('\nmensagem torta não derruba a mesa');
     }
   }
   console.log('  o despachante aguenta lixo do fio — e a mesa não para');
+}
+
+// TEMPORIZADOR QUE ACORDA DEPOIS DE O JOGADOR MUDAR DE IDEIA. Os três defeitos deste bloco
+// são a MESMA doença, e este arquivo já tinha a regra escrita desde o item 7 da Fila 5:
+// "para todo `if (x) return`, perguntar as duas coisas — quem zera o x, e o que acontece se
+// esse alguém não vier". São três `setTimeout` sem dono e sem guarda no disparo — e o padrão
+// certo já existia DUAS vezes no mesmo arquivo (`esperando`, e o `deixandoAMesa` dos 400 ms).
+//
+// O QUE A MUTAÇÃO PROVA AQUI, dito de frente porque é diferente do resto da suíte: o
+// conserto tem DUAS camadas por defeito (cancelar o handle e conferir a geração no
+// disparo), e removendo UMA delas isolada a suíte continua verde — a outra segura o caso.
+// Isso não é asserção fraca, é o desenho: as camadas existem porque falham de jeitos
+// diferentes (cancelar faz o temporizador deixar de existir; a geração só o faz calar, e é
+// a única que alcança callback de peer, que `clearTimeout` não cancela). Conferido
+// removendo os PARES: C1 cai com 3 falhas, C2 com 2. Quem mexer numa camada e a suíte
+// continuar verde não descobriu que ela é inútil — descobriu que a irmã está de pé.
+console.log('\ntemporizador de rede que perdeu o dono');
+{
+  // Cada bloco diz o que quer e devolve como encontrou — a mesma regra das cenas do
+  // `test-telas` e do `test-online`, aqui dentro do harness. O `voltarSozinho('')` é o
+  // caminho que o PRÓPRIO jogo usa para zerar a escada (código vazio cai no ramo de
+  // desistência), e não um estado inventado: `encerrarRede` não a zera, e é exatamente esse
+  // o defeito S5 — sem isto, o bloco seguinte herda a contagem do anterior e reprova com uma
+  // mensagem que fala de outra coisa. O teste sofria do bug que testa.
+  const zerar = () => { mod.encerrarRede(); mod.voltarSozinho(''); mod.pararDeConectar(''); Peer.todos.length = 0; };
+
+  {
+    // C1 — o anfitrião reivindicando o código que era dele desiste, e a reserva acorda
+    // assim mesmo: 1,5 s depois o menu some sozinho e ele cai numa partida antiga com a
+    // mesa parada, porque `retomarComoAnfitriao` roda com `modo` já 'local' e o
+    // `espalharVistas` está atrás de `if (modo === 'anfitriao')`.
+    zerar();
+    mod.abrirMesaOnline();
+    mod.tentarAbrir(0, 'ABCD');
+    Peer.ultimo.disparar('error', { type: 'unavailable-id' });
+    ok(els.get('onlineErro').textContent.includes('1/6'),
+       `montagem: a reserva devia estar insistindo e o erro diz "${els.get('onlineErro').textContent}"`);
+
+    const antes = Peer.todos.length;
+    els.get('btCancelarOnline').onclick();          // o jogador desiste — "Voltar"
+    ok(mod.modo === 'local', 'montagem: o Voltar devia ter desligado a rede');
+    correrTimers();
+    ok(Peer.todos.length === antes,
+       `a reserva acordou depois do Voltar e abriu ${Peer.todos.length - antes} peer(s) novo(s)`);
+    ok(mod.peer === null, 'sobrou peer vivo reivindicando o código de uma mesa abandonada');
+  }
+
+  {
+    // A VARIANTE, e ela é o que prova que a guarda não pode morar só no `encerrarRede`:
+    // "Começar a partida" é a única porta daquela tela que NÃO passa por ele. Sem uma
+    // desligada própria, a reserva acorda e troca a partida recém-montada pela guardada.
+    zerar();
+    mod.abrirMesaOnline();
+    mod.tentarAbrir(0, 'ABCD');
+    Peer.ultimo.disparar('error', { type: 'unavailable-id' });
+    const antes = Peer.todos.length;
+    els.get('btIniciarOnline').onclick();
+    correrTimers();
+    ok(Peer.todos.length === antes,
+       `"Começar a partida" não desligou a reserva: nasceram ${Peer.todos.length - antes} peer(s) depois`);
+  }
+
+  {
+    // C2 — o convidado cuja mesa caiu entra NOUTRA nos 4 s seguintes, e o temporizador da
+    // mesa velha acorda e mata a nova. A guarda `modo !== 'convidado'` do disparo não
+    // separa "desistiu" de "entrou noutra mesa": quem entrou noutra mesa TAMBÉM é
+    // convidado, e `conectarNaMesa` repõe `modo`. O comentário daquela linha descrevia uma
+    // proteção que ela não dava.
+    zerar();
+    mod.entrarNumaMesa(); mod.conectarNaMesa('AAAA');
+    mod.pararDeConectar();                          // é o que o `close` faz antes de agendar
+    ok(mod.voltarSozinho('AAAA') === true, 'montagem: a volta devia ter sido agendada');
+
+    mod.entrarNumaMesa(); mod.conectarNaMesa('BBBB');
+    const daNova = mod.peer;
+    ok(daNova, 'montagem: a mesa nova devia ter peer');
+
+    correrTimers();
+    ok(!daNova.destruido, 'a volta da mesa velha destruiu o peer da mesa NOVA');
+    ok(mod.peer === daNova, 'a mesa nova ficou sem peer nenhum');
+    ok(mod.codigoDaSala === 'BBBB',
+       `a tela ficou apontando para a mesa velha (código "${mod.codigoDaSala}")`);
+    ok(mod.conectando === false || mod.peer === daNova,
+       'o botão Entrar ficou travado em "Entrando…" para sempre — nenhum clique volta a funcionar');
+  }
+
+  {
+    // A OUTRA PORTA DO C2, e ela existe porque a conferência por MUTAÇÃO a cobrou: tirando o
+    // `geracaoRede++` do `conectarNaMesa`, a suíte continuava verde. O bloco acima entra
+    // sempre por `entrarNumaMesa`, que chama `encerrarRede` e já cancela o temporizador —
+    // então ele nunca exercitava a guarda de geração daquele caminho.
+    //
+    // Aqui é o caminho de verdade da tela "A mesa caiu": o botão Entrar está clicável (o
+    // `close` chamou `pararDeConectar` ANTES de agendar a volta) e o campo do código está
+    // lá. Dá para entrar noutra mesa sem passar pelo `encerrarRede` uma única vez.
+    zerar();
+    mod.entrarNumaMesa(); mod.conectarNaMesa('AAAA');
+    mod.pararDeConectar();
+    ok(mod.voltarSozinho('AAAA') === true, 'montagem: a volta devia ter sido agendada');
+
+    els.get('onlineEntrada').value = 'BBBB';
+    els.get('onlineNome').value = '';
+    els.get('btConectar').onclick();                  // Entrar DIRETO, sem passar pelo menu
+    const daNova = mod.peer;
+    ok(daNova && mod.codigoDaSala === 'BBBB',
+       `montagem: o Entrar direto devia ter aberto a mesa BBBB e o código é "${mod.codigoDaSala}"`);
+
+    correrTimers();
+    ok(!daNova.destruido, 'a volta da mesa velha matou a mesa nova aberta pelo Entrar direto');
+    ok(mod.peer === daNova, 'a mesa nova ficou sem peer — o Entrar direto não desligou a volta velha');
+  }
+
+  {
+    // S5 — desistir pelo botão não zerava a escada, e a próxima queda começava no meio.
+    zerar();
+    mod.entrarNumaMesa(); mod.conectarNaMesa('AAAA');
+    mod.pararDeConectar(); mod.voltarSozinho('AAAA');
+    mod.pararDeConectar(); mod.voltarSozinho('AAAA');
+    ok(mod.voltando === 2, `montagem: a escada devia estar em 2 e está em ${mod.voltando}`);
+
+    els.get('btCancelarOnline').onclick();
+    ok(mod.voltando === 0, 'o Voltar não zerou a escada: a próxima queda começa em 3/8');
+  }
+
+  {
+    // E A ESCADA TEM FIM. Esta asserção PASSA hoje, e está aqui dita como o que é: guarda
+    // contra o conserto ser feito no lugar errado. Zerar `voltando` dentro do `encerrarRede`
+    // ou do `conectarNaMesa` deixaria a asserção do S5 verde por acidente — e como o
+    // temporizador do `voltarSozinho` chama OS DOIS no próprio corpo, a escada reiniciaria a
+    // cada degrau e o convidado tentaria voltar PARA SEMPRE. É o único jeito de a suíte
+    // enxergar esse laço.
+    zerar();
+    mod.entrarNumaMesa(); mod.conectarNaMesa('CCCC');
+    let degraus = 0;
+    for (let i = 0; i < 20; i++) {
+      // O `pararDeConectar` vem antes de propósito: é a ordem do jogo. Quem chama
+      // `voltarSozinho` é o `linkAnfitriao.on('close')`, e ele destrava o botão ANTES. Sem
+      // esse passo `conectando` fica de pé, o `conectarNaMesa` do degrau desiste calado e a
+      // escada morre no primeiro — que é o C2 aparecendo dentro do teste do S5.
+      mod.pararDeConectar();
+      if (!mod.voltarSozinho('CCCC')) break;
+      degraus++;
+      correrTimers();
+    }
+    ok(degraus === mod.VOLTAS, `a escada devia parar em ${mod.VOLTAS} degraus e parou em ${degraus}`);
+  }
+  console.log('  temporizador que perdeu o dono acorda calado');
 }
 
 console.log(falhas ? `\n${falhas} falha(s)` : '\ntudo certo');

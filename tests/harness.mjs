@@ -200,10 +200,21 @@ export function installStubs() {
       // como alcançar o que acabou de nascer — e expor pela ponte do jogo seria mudar o
       // código de produção por causa do teste.
       Peer.ultimo = this;
+      // E a LISTA, que responde a pergunta que `ultimo` não responde: "nasceu peer novo?".
+      // É essa a asserção do temporizador sem dono — um peer que aparece 1,5 s depois de o
+      // jogador ter desistido não muda nada de visível, só existe. `Peer.todos.length` antes
+      // e depois de `correrTimers()` é como isso vira número.
+      Peer.todos.push(this);
     }
     connect() { return gravador({ send() {}, close() {} }); }
     destroy() { this.destruido = true; }
   };
+  // Fora do construtor porque campo estático dentro de `class` expressão atribuída ao
+  // global fica mais escondido do que ajuda. `ultimo` começa nulo de propósito: um teste
+  // que o leia antes de o jogo criar peer nenhum tem de estourar, não devolver o peer de
+  // uma cena anterior.
+  global.Peer.ultimo = null;
+  global.Peer.todos = [];
   global.location = { protocol: 'file:', href: '' };
 }
 

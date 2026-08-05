@@ -259,7 +259,13 @@ function sairDaPartida() {
   if (modo === 'anfitriao' && P && P.fase !== 'fim') {
     abandonar(P, euNaTela);
     publicar();                                   // a mesa fica sabendo por que acabou
-    setTimeout(encerrarRede, 400);                // e dá tempo de a mensagem sair
+    // A QUARTA CABEÇA DA MESMA HIDRA, achada ao consertar as outras três: um `setTimeout`
+    // sem dono, sem guarda, e chamando `encerrarRede` incondicionalmente. Se o anfitrião
+    // abrir OUTRA mesa nestes 400 ms, esta chamada acorda e destrói o peer que acabou de
+    // nascer. Quem abriu já chamou `encerrarRede`, então a geração de lá é outra — e é
+    // exatamente isso que a conferência pergunta.
+    const geracao = geracaoRede;
+    setTimeout(() => { if (geracao === geracaoRede) encerrarRede(); }, 400);
     return;
   }
   encerrarRede();

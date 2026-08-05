@@ -3405,7 +3405,10 @@ el('btComecar').onclick = () => {
   else comecarLocal();
 };
 el('btEntrar').onclick = () => entrarNumaMesa();
-el('btMenu').onclick = () => { encerrarRede(); mostrarTela('telaMenu'); };
+// `recomecarAsVoltas` mora no 15-rede.js, que é concatenado DEPOIS deste arquivo — e isso
+// está certo: declaração de função é içada para o topo do escopo, e este corpo só roda no
+// clique. É o mesmo caminho que o `encerrarRede` ao lado já fazia.
+el('btMenu').onclick = () => { recomecarAsVoltas(); encerrarRede(); mostrarTela('telaMenu'); };
 
 refletirMesaNosBotoes();
 ajustarCadeirasAoModo();
@@ -3509,6 +3512,60 @@ function erroOnline(txt) {
 // mesa fechou", que é mentira: quem fechou foi ele.
 let deixandoAMesa = false;
 
+// A GERAÇÃO DA REDE. Toda sessão — uma mesa aberta, uma tentativa de entrar numa — é uma
+// geração, e ela vira quando alguém passa a mandar na rede. Quem agenda um temporizador
+// anota a geração em que estava; quem acorda pergunta se ainda é aquela, e vai embora
+// calado se não for.
+//
+// É o `deixandoAMesa` aí em cima, generalizado: lá a pergunta do disparo é "ainda estou
+// saindo?", aqui é "esta rede ainda é a MINHA?". E é a resposta que o item 7 da Fila 5
+// manda dar sobre todo `if (x) return` — quem zera o x. Aqui o x tem dono.
+//
+// CONTADOR E NÃO BOOLEANO: um booleano diria "há rede ligada", e as três vezes em que isto
+// doeu não foram rede desligada — foram rede ligada de OUTRA mesa. A pergunta não é "ainda
+// há rede", é "ainda é a mesma".
+//
+// DECLARADO AQUI EM CIMA, e não junto de quem usa: `encerrarRede` roda em pontos do
+// carregamento, e um `let` mais abaixo estaria na zona morta — onde o `++` LANÇA, e não
+// devolve `undefined`. É a armadilha que o comentário do `pararDeConectar` já registra.
+let geracaoRede = 0;
+
+// OS DOIS TEMPORIZADORES QUE CRIAM PEER SOZINHOS, agora com nome. Eram anônimos, e era isso
+// que os tornava incanceláveis: `encerrarRede` limpa o `esperando`, que é outro mapa, e não
+// tinha o que fazer com estes. O da reserva acordava 1,5 s depois do "Voltar" e reivindicava
+// um código que já não interessava a ninguém; o da volta acordava 4 s depois e matava a
+// mesa NOVA.
+let reservaDoCodigo = null;   // o anfitrião insistindo no código que era dele (tentarAbrir)
+let voltaAgendada = null;     // o convidado tentando voltar sozinho (voltarSozinho)
+
+// PARAR DE RESERVAR O CÓDIGO — as duas camadas num lugar só, porque são duas as portas que
+// precisam disto: o `encerrarRede` (a sessão acabou) e o "Começar a partida" (a mesa é esta
+// agora; o código que se dane). Bumpar a geração duas vezes no mesmo caminho não custa
+// nada; ter a regra escrita em dois lugares custa — foi assim que a conversão de cadeira
+// online em bot durou com defeito.
+//
+// As DUAS camadas e não uma: cancelar faz o temporizador deixar de existir, a geração só o
+// faz calar. Falham de jeitos diferentes, e é por isso que são duas — item 7 da Fila 5.
+function pararDeReservar() {
+  clearTimeout(reservaDoCodigo); reservaDoCodigo = null;
+  geracaoRede++;
+}
+
+// A ESCADA DE VOLTAS RECOMEÇA DO ZERO QUANDO O DEDO AGE — e só então. `voltando` tinha dois
+// lugares que o zeravam (o `sentou`, quando dá certo, e o próprio limite, quando acaba) e
+// nenhum para o caso mais comum: o jogador desistindo pelo botão. A escada ficava em 5, e a
+// queda seguinte — noutra mesa, noutro dia — começava em 6/8, sem uma palavra explicando.
+//
+// ONDE ISTO NÃO PODE MORAR, e é a parte que custa: nem no `encerrarRede`, nem no
+// `conectarNaMesa`. O temporizador do `voltarSozinho` chama OS DOIS no próprio corpo, então
+// zerar em qualquer um deles reiniciaria a escada a cada degrau e o convidado tentaria
+// voltar PARA SEMPRE — trocaria um defeito visível por um laço eterno. Os caminhos abaixo
+// são os únicos que o temporizador nunca percorre: são CLIQUES.
+function recomecarAsVoltas() {
+  clearTimeout(voltaAgendada); voltaAgendada = null;
+  voltando = 0;
+}
+
 // O ANFITRIÃO GUARDA A MESA — o código E o mapa de quem é dono de qual cadeira. Sem o
 // mapa, reabrir com o mesmo código devolveria o código certo e as cadeiras ERRADAS:
 // `donoDaCadeira` só existia em memória, e memória morre com a página. É o item 4 um
@@ -3527,6 +3584,19 @@ function guardarMesaDoAnfitriao() {
 }
 
 function encerrarRede() {
+  // A SESSÃO MORRE AQUI, e com ela os dois temporizadores que criam peer por conta própria.
+  // `pararDeReservar` é quem carrega o `geracaoRede++` — ler o nome como "coisa do
+  // anfitrião" é engano: ele é o ponto onde a geração vira, e por isso a volta agendada
+  // logo abaixo também fica órfã.
+  pararDeReservar();
+  clearTimeout(voltaAgendada); voltaAgendada = null;
+
+  // `voltando` NÃO É ZERADO AQUI, e a tentação é grande porque tudo o mais desta função é
+  // "esqueça a mesa". O temporizador do `voltarSozinho` chama o `encerrarRede` NO PRÓPRIO
+  // CORPO, antes de tentar outra vez: zerar o contador aqui reiniciaria a escada a cada
+  // degrau e o convidado tentaria voltar para sempre. Quem zera é o clique, em
+  // `recomecarAsVoltas`.
+
   // Desarma a saída em curso: qualquer outro caminho de rede (entrar noutra mesa, abrir uma,
   // cancelar) tem de cancelar o temporizador pendente de `largarAMesa`, senão ele acorda 400
   // ms depois e destrói o peer NOVO.
@@ -3535,6 +3605,10 @@ function encerrarRede() {
   esperando.forEach(t => clearTimeout(t));
   esperando.clear();
   donoDaCadeira.clear();
+  // O carimbo do último nome é POR CADEIRA, como todos os mapas acima — e cadeira 1 de uma
+  // mesa nova é outra pessoa. Sem limpar, quem chega herda o relógio de quem sentou ali
+  // antes e leva um limite de frequência de graça no primeiro nome que manda.
+  ULTIMO_NOME.clear();
   conexoes.forEach(c => { try { c.close(); } catch (e) { void e; } });
   conexoes.clear();
   if (linkAnfitriao) { try { linkAnfitriao.close(); } catch (e) { void e; } linkAnfitriao = null; }
@@ -3618,7 +3692,21 @@ function tentarAbrir(tentativa, codigoDesejado) {
         peer.destroy();
         if (tentativa < 6) {
           erroOnline(`Reservando o código ${codigo}… (${tentativa + 1}/6)`);
-          setTimeout(() => tentarAbrir(tentativa + 1, codigoDesejado), 1500);
+          // A GERAÇÃO VAI JUNTO. Este é o único ponto do jogo que cria um peer sem dedo
+          // nenhum em cima, e 1,5 s é tempo de sobra para o jogador ter clicado "Voltar"
+          // (menu), "Começar a partida" (mesa local) ou ter entrado noutra mesa. Sem a
+          // conferência ele abria um peer reivindicando o código velho, e o
+          // `retomarComoAnfitriao` do 'open' arrancava a tela para a partida guardada com
+          // `modo` já 'local' — e aí `espalharVistas`, que está atrás de
+          // `if (modo === 'anfitriao')`, nunca roda: mesa parada, sem mensagem e sem botão.
+          // Ainda sobrava um peer vivo reivindicando o código, para quem o tivesse sentar
+          // e nunca receber vista nenhuma.
+          const geracao = geracaoRede;
+          reservaDoCodigo = setTimeout(() => {
+            reservaDoCodigo = null;                // disparou: o handle não vale mais nada
+            if (geracao !== geracaoRede) return;   // esta mesa não é mais a da vez
+            tentarAbrir(tentativa + 1, codigoDesejado);
+          }, 1500);
           return;
         }
         erroOnline(`O código ${codigo} ainda está ocupado. Se você acabou de fechar a mesa, ` +
@@ -3985,9 +4073,13 @@ function listarSala() {
 // conversão MUDOU DE CASA e agora mora no `comecarLocal` — ela era feita aqui, certa, e
 // lá era feita errada (condicionada a `modo === 'local'`), o que travava a revanche do
 // anfitrião. Duas cópias da mesma regra, uma delas com defeito, é como o defeito dura.
-el('btIniciarOnline').onclick = () => comecarLocal();
+// E COMEÇAR A PARTIDA DESLIGA A RESERVA DO CÓDIGO. Este botão fica visível na tela de
+// reabertura, e é a ÚNICA porta de lá que não passa pelo `encerrarRede` — o "Voltar" passa.
+// Sem esta linha, o anfitrião que cansa de esperar o código e começa a jogar vê a reserva
+// acordar 1,5 s depois e trocar a partida que ele acabou de montar pela guardada.
+el('btIniciarOnline').onclick = () => { pararDeReservar(); comecarLocal(); };
 
-el('btCancelarOnline').onclick = () => { encerrarRede(); mostrarTela('telaMenu'); };
+el('btCancelarOnline').onclick = () => { recomecarAsVoltas(); encerrarRede(); mostrarTela('telaMenu'); };
 
 // ─── convidado ───────────────────────────────────────────────────────────────
 function entrarNumaMesa() {
@@ -4016,6 +4108,9 @@ function entrarNumaMesa() {
   // Aqui e não no `encerrarRede`, que roda em pontos do carregamento onde `conectando`
   // ainda estaria na zona morta — e `typeof` sobre `let` na zona morta LANÇA.
   pararDeConectar('');
+  // Trocar de mesa começa escada nova. Cobre também o "voltar para a mesa" do menu, que
+  // passa por aqui — e é clique, portanto muito depois da carga.
+  recomecarAsVoltas();
 }
 
 // O QUE A MESA RESPONDE QUANDO NÃO DÁ PARA SENTAR. Era uma frase só para os três casos, e
@@ -4068,6 +4163,13 @@ function conectarNaMesa(codigo) {
   if (!codigo || codigo.length < 3) { erroOnline('Faltou o código.'); return; }
 
   conectando = true;
+  // A GERAÇÃO TROCA AQUI TAMBÉM, e não só no `encerrarRede`. Esta é a OUTRA porta por onde
+  // nasce um peer: na tela "A mesa caiu" o botão Entrar está clicável (o `close` chama
+  // `pararDeConectar` antes de agendar a volta) e o campo do código continua lá, então dá
+  // para entrar noutra mesa sem passar pelo `encerrarRede` — e era justamente essa a volta
+  // que acordaria para matar a conexão nova. Bumpar aqui é dizer "quem manda na rede agora
+  // sou eu"; o que foi agendado antes que se cale.
+  geracaoRede++;
   el('btConectar').disabled = true;
   el('btConectar').textContent = 'Entrando…';
   erroOnline('Procurando a mesa…');
@@ -4148,6 +4250,9 @@ function conectarNaMesa(codigo) {
 // caminho do campo do menu. Um segundo lugar que gravasse nome é como as duas telas passam
 // a discordar. Campo vazio não apaga nada: fica o que o menu já dizia.
 el('btConectar').onclick = () => {
+  // A porta que NÃO passa por `entrarNumaMesa`: Entrar direto, da tela "A mesa caiu". Quem
+  // digita um código e clica está começando de novo, e a escada tem de acompanhar.
+  recomecarAsVoltas();
   const nome = el('onlineNome').value.trim().slice(0, 14);
   if (nome && nome !== MESA.cadeiras[0].nome) {
     MESA.cadeiras[0].nome = nome;
@@ -4174,11 +4279,33 @@ function voltarSozinho(codigo) {
   el('onlineTitulo').textContent = 'A mesa caiu';
   el('onlineSub').textContent = 'Tentando voltar — o anfitrião pode estar recarregando.';
   erroOnline(`Tentando voltar para a mesa ${codigo}… (${voltando}/${VOLTAS})`);
-  setTimeout(() => {
-    if (modo !== 'convidado') return;      // desistiu no meio, ou entrou noutra mesa
+  // UMA VOLTA PENDENTE DE CADA VEZ, como o `largar` já faz com o relógio da cadeira: dois
+  // degraus armados ao mesmo tempo são dois peers nascendo com 4 s de diferença.
+  clearTimeout(voltaAgendada);
+  // A GERAÇÃO É A GUARDA QUE O `modo` NÃO CONSEGUIA DAR. O `modo !== 'convidado'` não separa
+  // "desistiu no meio" de "entrou noutra mesa" — quem entrou noutra mesa TAMBÉM é convidado,
+  // porque `conectarNaMesa` repõe o `modo`. O comentário que ficava nesta linha descrevia
+  // uma proteção que ela não dava. Era esse buraco que fazia o temporizador da mesa velha
+  // matar a NOVA: o `encerrarRede` derrubava o peer recém-criado e o `conectarNaMesa`
+  // seguinte batia no `if (conectando) return` e desistia CALADO — botão "Entrando…"
+  // travado para sempre, zero peers, e a tela ainda dizendo "Conectado".
+  const geracao = geracaoRede;
+  voltaAgendada = setTimeout(() => {
+    voltaAgendada = null;
+    if (geracao !== geracaoRede) return;   // outra mesa assumiu a rede: esta volta não tem dono
+    // O `modo` FICA, e não por superstição: ele pega o que a geração não pega. O
+    // `{t:'expulso'}` e o "A mesa fechou" põem `modo = 'local'` SEM passar pelo
+    // `encerrarRede`, e nesses caminhos a geração continua a mesma. Duas guardas com falhas
+    // diferentes é o desenho, não redundância.
+    if (modo !== 'convidado') return;
     // O peer VELHO tem de morrer antes: `conectarNaMesa` não o derruba (quem fazia isso
     // era o `entrarNumaMesa` da tela), e sem isto cada tentativa deixaria um peer vivo —
     // o mesmo vazamento que o item 5 consertou no botão de entrar.
+    //
+    // E este `encerrarRede` SOBE A GERAÇÃO, o que é seguro POR ORDEM: a conferência acima já
+    // passou, e o `conectarNaMesa` de baixo anota a geração nova quando for a vez dele.
+    // Trocar a conferência de lugar — pô-la depois do `encerrarRede` — mataria a escada no
+    // primeiro degrau, em silêncio.
     encerrarRede();
     conectarNaMesa(codigo);                // ele próprio devolve `modo` a 'convidado'
   }, ESPERA_VOLTAR);
@@ -4574,7 +4701,13 @@ function sairDaPartida() {
   if (modo === 'anfitriao' && P && P.fase !== 'fim') {
     abandonar(P, euNaTela);
     publicar();                                   // a mesa fica sabendo por que acabou
-    setTimeout(encerrarRede, 400);                // e dá tempo de a mensagem sair
+    // A QUARTA CABEÇA DA MESMA HIDRA, achada ao consertar as outras três: um `setTimeout`
+    // sem dono, sem guarda, e chamando `encerrarRede` incondicionalmente. Se o anfitrião
+    // abrir OUTRA mesa nestes 400 ms, esta chamada acorda e destrói o peer que acabou de
+    // nascer. Quem abriu já chamou `encerrarRede`, então a geração de lá é outra — e é
+    // exatamente isso que a conferência pergunta.
+    const geracao = geracaoRede;
+    setTimeout(() => { if (geracao === geracaoRede) encerrarRede(); }, 400);
     return;
   }
   encerrarRede();
