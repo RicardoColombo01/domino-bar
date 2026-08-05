@@ -497,6 +497,23 @@ const nomesVizinhos = cadeira =>
 //
 // Extraída do `conn.on('data')` de propósito, pelo mesmo motivo do `desistiuDaMesa`: lá
 // dentro ela seria inalcançável para quem quiser exigir uma regra dela isoladamente.
+// A VISTA COMO O FIO PODE ENTREGÁ-LA. Ela chegava CRUA em `atualizarVista`, e três linhas
+// acima o mesmo handler já fazia `Array.isArray(m.cadeiras) && m.cadeiras.length === 4` —
+// o padrão existia no arquivo e não tinha sido aplicado justamente ao objeto mais pesado
+// que atravessa a rede. Uma vista sem `cadeiras` mata a tela do convidado no primeiro
+// `sincronizar`, e ele fica com o jogo preto sem uma palavra.
+//
+// Confere o CONTINENTE, não o conteúdo: é o que os desenhistas desreferenciam sem
+// perguntar. O conteúdo hostil (um placar que é string, por exemplo) quem trata é o
+// `escapar` do 13-hud.js — são duas defesas para dois danos diferentes, e nenhuma delas
+// faz o trabalho da outra.
+const vistaDoFio = v => !!v && typeof v === 'object' &&
+  Array.isArray(v.linha) && Array.isArray(v.mao) && Array.isArray(v.naMao) &&
+  Array.isArray(v.placar) && Array.isArray(v.cadeiras) && v.cadeiras.length > 0 &&
+  !!v.acoes && typeof v.acoes === 'object' &&
+  Number.isInteger(v.vez) && v.vez >= 0 && v.vez < v.cadeiras.length &&
+  Number.isInteger(v.cadeira) && v.cadeira >= 0 && v.cadeira < v.cadeiras.length;
+
 function trocarDeNome(cadeira, nome) {
   if (typeof nome !== 'string') return false;
   const agora = Date.now();
@@ -810,7 +827,7 @@ function conectarNaMesa(codigo) {
         salaDuplas = Array.isArray(m.cadeiras) && m.cadeiras.length === 4;
         atualizarSaguao();
       }
-      if (m.t === 'vista') { esconderTelas(); ligarMurmuro(); atualizarVista(m.v); }
+      if (m.t === 'vista' && vistaDoFio(m.v)) { esconderTelas(); ligarMurmuro(); atualizarVista(m.v); }
       if (m.t === 'log') anotar(m.txt);
       if (m.t === 'chat') dizer(vistaAtual, m.de, m.canal, m.txt, m.nome);
     });

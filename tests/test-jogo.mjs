@@ -55,6 +55,15 @@ const mod = await import(buildModule([
   // depois de o jogador já ter mudado de ideia, e isso só se enxerga drenando os timers.
   'modo', 'peer', 'conectando', 'voltando', 'codigoDaSala', 'VOLTAS',
   'tentarAbrir', 'conectarNaMesa', 'voltarSozinho', 'pararDeConectar', 'entrarNumaMesa',
+  // `desenharHUD` e `mostrarFimDeMao` escrevem `innerHTML` a partir da VISTA, e a vista do
+  // convidado vem inteira do fio. Chamá-los direto é o que permite envenenar um campo de
+  // cada vez numa vista de verdade — pela `atualizarVista` o teste mediria de quebra a mão,
+  // o tabuleiro e o monte, e uma falha ali falaria de outra coisa.
+  'desenharHUD', 'mostrarFimDeMao', 'escapar',
+  // `linkAnfitriao` é o lado CONVIDADO do fio, e ele não tinha uma linha de teste: o
+  // `linkAnfitriao.on('data')` mora dentro de dois callbacks aninhados do PeerJS. Com o
+  // dublê gravando ouvintes dá para dirigi-lo, e é onde entra a vista que vem de fora.
+  'linkAnfitriao',
 ], undefined, path.join(import.meta.dirname, 'built-jogo.mjs')));
 
 let falhas = 0;
@@ -1770,6 +1779,124 @@ console.log('\ntemporizador de rede que perdeu o dono');
     ok(degraus === mod.VOLTAS, `a escada devia parar em ${mod.VOLTAS} degraus e parou em ${degraus}`);
   }
   console.log('  temporizador que perdeu o dono acorda calado');
+}
+
+// A QUARTA MORDIDA DO innerHTML. A regra da casa — todo texto de fora passa pelo `escapar` —
+// está escrita no comentário do próprio `13-hud.js`, e foi aplicada às STRINGS e nunca aos
+// campos que se assume serem números. O desenho do defeito é a evidência: no mesmo template
+// literal, o NOME passa por `escapar` e o número irmão ao lado não. "Numérico" foi tratado
+// como sinônimo de "seguro".
+//
+// E eles não são seguros: no convidado, `atualizarVista(m.v)` recebe o objeto do fio sem uma
+// única validação. Como qualquer aba pode ser anfitriã, um anfitrião modificado manda um
+// placar que é uma string e roda script na máquina dos convidados.
+console.log('\nnúmero que vem do fio também é texto de fora');
+{
+  const ATAQUE = '<img src=x onerror=alert(1)>';
+  // Uma vista de VERDADE, e depois um campo envenenado de cada vez: assim a falha aponta
+  // para o campo, e não para uma vista inventada que o jogo nunca produziria.
+  const vistaViva = () => {
+    mod.encerrarRede();
+    mod.MESA.modo = 'classico'; mod.MESA.n = 2;
+    mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[1].nivel = 'normal';
+    mod.comecarLocal();
+    return JSON.parse(JSON.stringify(mod.visaoDe(mod.P, 0)));
+  };
+
+  const cru = () => els.get('placar').innerHTML + els.get('jogadores').innerHTML;
+
+  {
+    const base = vistaViva();
+    ok(base.placar && base.naMao, 'montagem: a vista tinha de ter placar e naMao');
+
+    for (const [campo, envenenar] of [
+      ['placar', v => { v.placar = [ATAQUE, 0]; }],
+      ['alvo', v => { v.alvo = ATAQUE; }],
+      ['naMao', v => { v.naMao = [ATAQUE, 3]; }],
+      ['tipo da cadeira', v => { v.cadeiras[1].tipo = ATAQUE; }],
+    ]) {
+      const v = vistaViva();
+      envenenar(v);
+      let e = null;
+      try { mod.desenharHUD(v); } catch (err) { e = err; }
+      ok(!e, `desenharHUD com ${campo} hostil estourou: ${e && e.message}`);
+      ok(!cru().includes('<img'),
+         `o ${campo} foi para o innerHTML SEM escapar — é script rodando na máquina dos convidados`);
+    }
+  }
+
+  {
+    // O `MODOS[vista.modo].rotulo` é o único ponto do arquivo que indexa `MODOS` cru. O
+    // vizinho `:141` do mesmo arquivo já faz `MODOS[vista.modo] || MODOS[MODO_PADRAO]` —
+    // guarda num lugar, esquecida no outro, que é o padrão que esta fila inteira persegue.
+    for (const modo of ['inexistente', 'constructor', 42, { mau: 1 }]) {
+      const v = vistaViva();
+      v.modo = modo;
+      let e = null;
+      try { mod.desenharHUD(v); } catch (err) { e = err; }
+      ok(!e, `um modo ${JSON.stringify(modo)} guardado derrubou o HUD inteiro: ${e && e.message}`);
+    }
+    const v = vistaViva();
+    v.modo = 'constructor';
+    try { mod.desenharHUD(v); } catch (err) { void err; }
+    ok(!els.get('placar').innerHTML.includes('undefined'),
+       'um modo de protótipo virou "undefined · até 6" na cara do jogador');
+  }
+
+  {
+    // A tela de fim de mão, que é o outro innerHTML com números do fio. O resultado sai de
+    // uma mão JOGADA ATÉ O FIM, e não escrito à mão: um `{motivo:'batida'}` sem `time` é um
+    // estado que o jogo não produz, e a falha viria de dentro do HUD falando de outra coisa.
+    // Esta casa já pagou isso — foi o bloco do prazo deixando `P.fase = 'fim'` posto à mão.
+    vistaViva();
+    for (let passo = 0; mod.P.fase !== 'fimDeMao' && mod.P.fase !== 'fim'; passo++) {
+      if (passo > 3000) break;
+      const vez = mod.P.vez;
+      mod.aplicarIntencao(vez, mod.jogadaDoBot(mod.P, vez));
+    }
+    ok(mod.P.resultado, 'montagem: a mão precisava terminar para haver resultado de verdade');
+    const v = JSON.parse(JSON.stringify(mod.visaoDe(mod.P, 0)));
+    // Agora sim, um campo de cada vez, sobre o que o jogo produziu.
+    v.resultado.somas = [ATAQUE, 3];
+    v.resultado.pontos = ATAQUE;
+    let e = null;
+    try { mod.mostrarFimDeMao(v); } catch (err) { e = err; }
+    ok(!e, `mostrarFimDeMao com somas hostis estourou: ${e && e.message}`);
+    const html = els.get('fimSobrou').innerHTML + els.get('fimTitulo').innerHTML;
+    ok(!html.includes('<img'), 'as somas do fim de mão foram para o innerHTML sem escapar');
+  }
+  {
+    // A OUTRA PONTA, e ela é o lado do fio que NUNCA teve uma linha de teste: o
+    // `linkAnfitriao.on('data')` do convidado, aninhado em dois callbacks do PeerJS.
+    // `atualizarVista(m.v)` recebia o objeto cru — e três linhas acima o mesmo handler já
+    // valida `m.cadeiras` com `Array.isArray`. O padrão existia e não tinha sido aplicado
+    // ao objeto mais pesado que atravessa a rede.
+    const boa = vistaViva();
+    mod.encerrarRede();
+    mod.conectarNaMesa('AAAA');
+    Peer.ultimo.disparar('open');
+    const link = mod.linkAnfitriao;
+    ok(link && link.ouvintes, 'montagem: o convidado devia ter aberto o link com o anfitrião');
+    const houve = link.disparar('open');
+    ok(houve === 1, `montagem: o link devia ter 1 ouvinte de 'open' e tem ${houve}`);
+    ok(link.ouvintes.has('data'), 'montagem: o handler de dados do convidado não foi instalado');
+
+    for (const [rotulo, v] of [['ausente', undefined], ['nula', null], ['número', 7],
+                               ['sem cadeiras', { linha: [], mao: [], naMao: [], placar: [] }],
+                               ['vez fora da faixa', Object.assign({}, boa, { vez: 99 })],
+                               ['mao que não é array', Object.assign({}, boa, { mao: 'oi' })]]) {
+      let e = null;
+      try { link.disparar('data', { t: 'vista', v }); } catch (err) { e = err; }
+      ok(!e, `uma vista ${rotulo} vinda do fio matou a tela do convidado: ${e && e.message}`);
+    }
+    // E a vista BOA continua passando — guarda contra o conserto virar um "recusa tudo",
+    // que deixaria as seis asserções acima verdes sem o jogo funcionar.
+    let e = null;
+    try { link.disparar('data', { t: 'vista', v: boa }); } catch (err) { e = err; }
+    ok(!e, `a vista LEGÍTIMA foi recusada ou estourou: ${e && e.message}`);
+    ok(mod.vistaAtual === boa, 'a vista boa não chegou à tela — o guarda está recusando o que devia passar');
+  }
+  console.log('  número do fio passa pelo escapar, como o nome ao lado dele');
 }
 
 console.log(falhas ? `\n${falhas} falha(s)` : '\ntudo certo');
