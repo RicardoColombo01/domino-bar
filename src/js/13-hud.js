@@ -78,24 +78,42 @@ function nomeEmPartes(nome) {
   return escapar(n.slice(0, corte)) + `<i class="resto">${escapar(n.slice(corte))}</i>`;
 }
 
+// O RÓTULO DO MODO, com a mesma guarda que o resto do arquivo já usava e esta linha não.
+// `MODOS[vista.modo].rotulo` era o único ponto que indexava `MODOS` cru — o `:141` logo
+// abaixo já fazia `MODOS[vista.modo] || MODOS[MODO_PADRAO]`, e `mesaLembrada` usa
+// `Object.hasOwn`. Guarda num lugar, esquecida no vizinho, pela enésima vez nesta fila.
+//
+// As DUAS falhas eram diferentes, e por isso `Object.hasOwn` e não `||`: um modo que não
+// existe LANÇA dentro do `desenharHUD` (o menu some, a mesa 3D aparece e o HUD não existe —
+// sem placar, sem vez, sem botões); e `'constructor'` é TRUTHY num objeto literal, então
+// passava pelo `||` e escrevia "undefined · até 6" na cara do jogador. É literalmente o
+// defeito 5 da Fila 6, no único validador que nunca foi endurecido.
+const rotuloDoModo = modo => Object.hasOwn(MODOS, modo) && modo !== MODO_PADRAO
+  ? escapar(MODOS[modo].rotulo) + ' · ' : '';
+
 function desenharHUD(vista) {
   HUD.pontas.textContent = vista.pontas ? vista.pontas.join('  ·  ') : '—';
   HUD.monte.textContent = vista.monte;
   HUD.maoN.textContent = vista.maoNum;
 
+  // NÚMERO QUE VEM DO FIO TAMBÉM É TEXTO DE FORA, e foi por aqui que a regra do `escapar`
+  // vazou pela quarta vez. Repare no desenho do defeito: o NOME ao lado já passava por
+  // `escapar` e o número irmão, no mesmo template, não — "numérico" foi tratado como
+  // sinônimo de "seguro". No convidado a `vista` chega inteira do fio, e qualquer aba pode
+  // ser anfitriã: um placar que é string vira script na máquina de quem está na mesa.
   HUD.placar.innerHTML = vista.placar
-    .map((p, i) => `<span class="time"><i>${nomeDoTime(vista, i)}</i><b>${p}</b></span>`)
+    .map((p, i) => `<span class="time"><i>${nomeDoTime(vista, i)}</i><b>${escapar(p)}</b></span>`)
     // O rótulo do modo só aparece quando não é o clássico, e é a única coisa que diz
     // ao convidado em que mesa ele sentou — ele não tem MESA nem P.regras.
     .join('<span class="x">×</span>') +
-    `<span class="ate">${vista.modo && vista.modo !== MODO_PADRAO ? MODOS[vista.modo].rotulo + ' · ' : ''}até ${vista.alvo}</span>`;
+    `<span class="ate">${rotuloDoModo(vista.modo)}até ${escapar(vista.alvo)}</span>`;
 
   // Um cartão por cadeira, na ordem em que a vez anda. O da vez acende.
   HUD.jogadores.innerHTML = vista.cadeiras.map((c, i) => `
     <div class="jog ${i === vista.vez ? 'davez' : ''} ${i === vista.cadeira ? 'euu' : ''}">
       <span class="nome">${nomeEmPartes(c.nome)}</span>
-      <span class="tipo">${ETIQUETA[c.tipo] || c.tipo}</span>
-      <span class="pecas">${'▮'.repeat(Math.min(vista.naMao[i], 9))}<i>${vista.naMao[i]}</i></span>
+      <span class="tipo">${escapar(Object.hasOwn(ETIQUETA, c.tipo) ? ETIQUETA[c.tipo] : c.tipo)}</span>
+      <span class="pecas">${'▮'.repeat(Math.max(0, Math.min(vista.naMao[i], 9) || 0))}<i>${escapar(vista.naMao[i])}</i></span>
     </div>`).join('');
 
   const minhaVez = vista.vez === vista.cadeira && vista.fase === 'mao';
@@ -374,11 +392,11 @@ function sobrouNaMao(vista) {
   const r = vista.resultado;
   if (!vista.duplas) {
     return r.somas
-      .map((s, i) => `<div><span>${escapar(vista.cadeiras[i].nome)}</span><b>${s}</b></div>`).join('');
+      .map((s, i) => `<div><span>${escapar(vista.cadeiras[i].nome)}</span><b>${escapar(s)}</b></div>`).join('');
   }
   return (r.somasPorTime || []).map((total, t) => {
-    const parcelas = r.somas.filter((_, i) => timeDe(vista, i) === t).join(' + ');
-    return `<div><span>${nomeDoTime(vista, t)}<i>${parcelas}</i></span><b>${total}</b></div>`;
+    const parcelas = r.somas.filter((_, i) => timeDe(vista, i) === t).map(escapar).join(' + ');
+    return `<div><span>${nomeDoTime(vista, t)}<i>${parcelas}</i></span><b>${escapar(total)}</b></div>`;
   }).join('');
 }
 
@@ -424,7 +442,7 @@ function mostrarFimDePartida(vista) {
   // A tela dizia quem ganhou e não de quanto. Mesmo template do placar do topo.
   el('placarFinal').innerHTML = vista.placar
     .map((p, i) => `<span class="time${i === campeao ? ' venceu' : ''}">` +
-      `<i>${nomeDoTime(vista, i)}</i><b>${p}</b></span>`)
+      `<i>${nomeDoTime(vista, i)}</i><b>${escapar(p)}</b></span>`)
     .join('<span class="x">×</span>');
   el('fimResumo').textContent = fora >= 0
     ? `Partida encerrada na mão ${vista.maoNum} — quem sai no meio perde.`

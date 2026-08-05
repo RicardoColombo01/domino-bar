@@ -149,14 +149,37 @@ function pedirAcao(intencao) {
 
 // O único lugar que mexe na partida. Vale para o seu clique, para o bot e para o que
 // chega pela rede — e valida os três do mesmo jeito.
+// Uma peça como o FIO pode entregá-la: dois números de 0 a `MAX_PINTAS`, e nada mais.
+// `mesmaPeca` (02-baralho.js) lê `b[0]` sem guarda, então uma peça ausente ou nula LANÇA
+// lá dentro — e a exceção sobe pelo `conn.on('data')` do anfitrião, que é quem tem a
+// partida. Note que isto NÃO é sobre trapaça: `jogar` valida a jogada contra
+// `acoesDe(P, cadeira)`, que sai da mão do próprio jogador, então peça inventada continua
+// devolvendo 'jogada inválida' e a fronteira do invariante 3 segue de pé. É sobre a mesa
+// dos outros parar.
+const pecaDoFio = p => Array.isArray(p) && p.length === 2 &&
+  p.every(n => Number.isInteger(n) && n >= 0 && n <= MAX_PINTAS);
+
 function aplicarIntencao(cadeira, i) {
   if (!P || P.fase !== 'mao') return;
   let r;
-  if (i.acao === 'jogar') r = jogar(P, cadeira, i.peca, i.ponta);
-  else if (i.acao === 'comprar') r = comprar(P, cadeira);
-  else r = passar(P, cadeira);
+  // A CADEIA ERA ABERTA NO FINAL, e é um defeito por si: `{t:'acao'}` sem campo nenhum
+  // caía no `else` e virava um PASSE válido — a rede conseguia passar a vez de alguém
+  // mandando uma mensagem vazia. Agora as três ações são nomeadas e o resto é recusa.
+  if (i.acao === 'jogar') {
+    if (!pecaDoFio(i.peca) || (i.ponta !== 'esq' && i.ponta !== 'dir')) r = { erro: 'jogada inválida' };
+    else r = jogar(P, cadeira, i.peca, i.ponta);
+  } else if (i.acao === 'comprar') r = comprar(P, cadeira);
+  else if (i.acao === 'passar') r = passar(P, cadeira);
+  else r = { erro: 'ação desconhecida' };
 
-  if (r.erro) { if (cadeira === euNaTela) avisar(r.erro); return; }
+  // O SILÊNCIO É O DEFEITO, NÃO A RECUSA. `avisar` fala com quem está NESTA tela, e o
+  // convidado nunca está: para ele a peça simplesmente não ia, sem uma palavra. Recusar
+  // continua certo; não dizer por quê é que não.
+  if (r.erro) {
+    if (cadeira === euNaTela) avisar(r.erro);
+    else if (modo === 'anfitriao') avisarCadeira(cadeira, r.erro);
+    return;
+  }
 
   const nome = P.cadeiras[cadeira].nome;
   if (i.acao === 'jogar') narrar(`${nome} jogou ${i.peca[0]}|${i.peca[1]}`);
@@ -243,7 +266,13 @@ function sairDaPartida() {
   if (modo === 'anfitriao' && P && P.fase !== 'fim') {
     abandonar(P, euNaTela);
     publicar();                                   // a mesa fica sabendo por que acabou
-    setTimeout(encerrarRede, 400);                // e dá tempo de a mensagem sair
+    // A QUARTA CABEÇA DA MESMA HIDRA, achada ao consertar as outras três: um `setTimeout`
+    // sem dono, sem guarda, e chamando `encerrarRede` incondicionalmente. Se o anfitrião
+    // abrir OUTRA mesa nestes 400 ms, esta chamada acorda e destrói o peer que acabou de
+    // nascer. Quem abriu já chamou `encerrarRede`, então a geração de lá é outra — e é
+    // exatamente isso que a conferência pergunta.
+    const geracao = geracaoRede;
+    setTimeout(() => { if (geracao === geracaoRede) encerrarRede(); }, 400);
     return;
   }
   encerrarRede();
@@ -289,11 +318,47 @@ function guardarPartida() {
 
 // Devolve o guardado só se ele ainda serve. Prazo porque uma partida de anteontem não é
 // mais "a partida de antes", é um estranho ocupando o botão.
+//
+// PARTIDA GUARDADA É ENTRADA DE FORA, exatamente como a mesa lembrada — e este era o único
+// validador de `localStorage` do projeto que nunca tinha sido endurecido. Ele conferia
+// quatro campos e entregava o resto CRU, enquanto o `mesaLembrada()` (14-menu.js) confere
+// campo a campo com `Object.hasOwn`. A diferença de rigor entre os dois era acidental, não
+// decidida.
+//
+// O que estava em jogo: sem `regras`, o `atualizarBotaoRetomar` desreferencia
+// `g.P.regras.modo` e LANÇA — e ele roda no TOPO do módulo, então a exceção mata o script
+// concatenado inteiro. Tela preta que volta a cada recarregamento, porque a causa está
+// guardada, e sem saída a não ser limpar o armazenamento à mão. É o defeito 5 da Fila 6
+// literalmente de novo, no arquivo vizinho.
+//
+// RECUSAR E NÃO REMENDAR, e é aqui que ele difere do `mesaLembrada`: uma preferência que
+// não fecha pode cair no padrão porque "Clássico até 6" é uma mesa boa. Uma PARTIDA que não
+// fecha não tem padrão nenhum — meia partida remendada é pior que partida nenhuma. Recusar
+// só esconde o botão de retomar, que é degradação graciosa; o jogo abre normalmente.
 function partidaGuardada() {
   const g = lido('partida', null);
-  if (!g || !g.P || !Array.isArray(g.P.cadeiras) || !Array.isArray(g.P.maos)) return null;
-  if (g.P.fase === 'fim') return null;
-  if (!g.quando || Date.now() - g.quando > HORAS_GUARDADA * 3600e3) return null;
+  if (!g || !g.P || !g.quando || Date.now() - g.quando > HORAS_GUARDADA * 3600e3) return null;
+
+  const p = g.P;
+  if (p.fase === 'fim') return null;
+  // Os continentes que os consumidores desreferenciam sem perguntar. `partidaDeVolta` faz
+  // `guardada.cadeiras.map`, `retomarPartida` lê `P.placar` e `P.maoNum`, o HUD lê tudo.
+  for (const campo of ['cadeiras', 'maos', 'placar', 'linha', 'monte'])
+    if (!Array.isArray(p[campo])) return null;
+  if (!p.cadeiras.length || p.maos.length !== p.cadeiras.length) return null;
+  if (!p.maos.every(Array.isArray)) return null;
+  // `n` manda no laço de `retomarPartida` e na faixa de `euNaTela`.
+  if (!Number.isInteger(p.n) || p.n !== p.cadeiras.length) return null;
+  if (!Number.isInteger(p.vez) || p.vez < 0 || p.vez >= p.n) return null;
+
+  // E as REGRAS, que é o campo cuja falta dava tela preta. `Object.hasOwn` e não
+  // `MODOS[m] ?` pelo motivo que o `mesaLembrada` já registra: `MODOS['constructor']` é
+  // truthy num objeto literal e passaria — deixar dois padrões de validação no mesmo
+  // projeto é como o primeiro volta.
+  if (!p.regras || typeof p.regras !== 'object') return null;
+  if (!Object.hasOwn(MODOS, p.regras.modo)) return null;
+  if (!MODOS[p.regras.modo].cadeiras.includes(p.n)) return null;
+
   return g;
 }
 

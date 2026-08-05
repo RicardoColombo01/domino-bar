@@ -242,7 +242,10 @@ el('btComecar').onclick = () => {
   else comecarLocal();
 };
 el('btEntrar').onclick = () => entrarNumaMesa();
-el('btMenu').onclick = () => { encerrarRede(); mostrarTela('telaMenu'); };
+// `recomecarAsVoltas` mora no 15-rede.js, que é concatenado DEPOIS deste arquivo — e isso
+// está certo: declaração de função é içada para o topo do escopo, e este corpo só roda no
+// clique. É o mesmo caminho que o `encerrarRede` ao lado já fazia.
+el('btMenu').onclick = () => { recomecarAsVoltas(); encerrarRede(); mostrarTela('telaMenu'); };
 
 refletirMesaNosBotoes();
 ajustarCadeirasAoModo();

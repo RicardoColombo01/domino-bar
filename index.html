@@ -647,7 +647,6 @@ function novaPartida(cadeiras, regras) {
     baralho: baralhoDoModo(modoDe({ modo: (regras || {}).modo })),
     abridor: null,
     desistiu: null,                           // cadeira que saiu no meio, se alguém saiu
-    log: [],
   };
   novaMao(P);
   return P;
@@ -680,7 +679,6 @@ function novaMao(P) {
     P.vez = P.abridor;                        // nas seguintes, abre quem bateu, com o que quiser
     P.pecaObrigatoria = null;
   }
-  P.log.push({ t: 'mao', num: P.maoNum, abre: P.vez, obrigatoria: P.pecaObrigatoria });
   return P;
 }
 
@@ -738,7 +736,6 @@ function jogar(P, cadeira, peca, ponta) {
   P.linha = aplicar(P.linha, peca, ponta);
   P.pecaObrigatoria = null;
   P.passesSeguidos = 0;
-  P.log.push({ t: 'jogou', cadeira, peca, ponta });
 
   if (ultima) return fecharMao(P, { motivo: 'batida', tipo, vencedor: cadeira });
   P.vez = (cadeira + 1) % P.n;
@@ -749,7 +746,6 @@ function comprar(P, cadeira) {
   if (!acoesDe(P, cadeira).comprar) return { erro: 'não dá para comprar agora' };
   const peca = P.monte.pop();
   P.maos[cadeira].push(peca);
-  P.log.push({ t: 'comprou', cadeira });
   return { ok: true, peca };
 }
 
@@ -760,7 +756,6 @@ function passar(P, cadeira) {
   const pt = pontas(P.linha);
   if (pt) { P.faltaNo[cadeira].add(pt[0]); P.faltaNo[cadeira].add(pt[1]); }
   P.passesSeguidos++;
-  P.log.push({ t: 'passou', cadeira });
   if (P.passesSeguidos >= P.n) return fecharMao(P, { motivo: 'tranca' });
   P.vez = (cadeira + 1) % P.n;
   return { ok: true };
@@ -804,7 +799,6 @@ function fecharMao(P, res) {
     somasPorTime: P.placar.map((_, t) => porTime[t] || 0),   // mesmo índice do placar
   };
   P.fase = P.placar.some(v => v >= P.regras.alvo) ? 'fim' : 'fimDeMao';
-  P.log.push(Object.assign({ t: 'fimDeMao' }, P.resultado));
   return { ok: true, fim: P.resultado };
 }
 
@@ -817,7 +811,6 @@ function abandonar(P, cadeira) {
   P.desistiu = cadeira;
   P.fase = 'fim';
   P.resultado = null;
-  P.log.push({ t: 'abandono', cadeira });
   return { ok: true, fim: { motivo: 'abandono', desistiu: cadeira } };
 }
 
@@ -2769,24 +2762,42 @@ function nomeEmPartes(nome) {
   return escapar(n.slice(0, corte)) + `<i class="resto">${escapar(n.slice(corte))}</i>`;
 }
 
+// O RÓTULO DO MODO, com a mesma guarda que o resto do arquivo já usava e esta linha não.
+// `MODOS[vista.modo].rotulo` era o único ponto que indexava `MODOS` cru — o `:141` logo
+// abaixo já fazia `MODOS[vista.modo] || MODOS[MODO_PADRAO]`, e `mesaLembrada` usa
+// `Object.hasOwn`. Guarda num lugar, esquecida no vizinho, pela enésima vez nesta fila.
+//
+// As DUAS falhas eram diferentes, e por isso `Object.hasOwn` e não `||`: um modo que não
+// existe LANÇA dentro do `desenharHUD` (o menu some, a mesa 3D aparece e o HUD não existe —
+// sem placar, sem vez, sem botões); e `'constructor'` é TRUTHY num objeto literal, então
+// passava pelo `||` e escrevia "undefined · até 6" na cara do jogador. É literalmente o
+// defeito 5 da Fila 6, no único validador que nunca foi endurecido.
+const rotuloDoModo = modo => Object.hasOwn(MODOS, modo) && modo !== MODO_PADRAO
+  ? escapar(MODOS[modo].rotulo) + ' · ' : '';
+
 function desenharHUD(vista) {
   HUD.pontas.textContent = vista.pontas ? vista.pontas.join('  ·  ') : '—';
   HUD.monte.textContent = vista.monte;
   HUD.maoN.textContent = vista.maoNum;
 
+  // NÚMERO QUE VEM DO FIO TAMBÉM É TEXTO DE FORA, e foi por aqui que a regra do `escapar`
+  // vazou pela quarta vez. Repare no desenho do defeito: o NOME ao lado já passava por
+  // `escapar` e o número irmão, no mesmo template, não — "numérico" foi tratado como
+  // sinônimo de "seguro". No convidado a `vista` chega inteira do fio, e qualquer aba pode
+  // ser anfitriã: um placar que é string vira script na máquina de quem está na mesa.
   HUD.placar.innerHTML = vista.placar
-    .map((p, i) => `<span class="time"><i>${nomeDoTime(vista, i)}</i><b>${p}</b></span>`)
+    .map((p, i) => `<span class="time"><i>${nomeDoTime(vista, i)}</i><b>${escapar(p)}</b></span>`)
     // O rótulo do modo só aparece quando não é o clássico, e é a única coisa que diz
     // ao convidado em que mesa ele sentou — ele não tem MESA nem P.regras.
     .join('<span class="x">×</span>') +
-    `<span class="ate">${vista.modo && vista.modo !== MODO_PADRAO ? MODOS[vista.modo].rotulo + ' · ' : ''}até ${vista.alvo}</span>`;
+    `<span class="ate">${rotuloDoModo(vista.modo)}até ${escapar(vista.alvo)}</span>`;
 
   // Um cartão por cadeira, na ordem em que a vez anda. O da vez acende.
   HUD.jogadores.innerHTML = vista.cadeiras.map((c, i) => `
     <div class="jog ${i === vista.vez ? 'davez' : ''} ${i === vista.cadeira ? 'euu' : ''}">
       <span class="nome">${nomeEmPartes(c.nome)}</span>
-      <span class="tipo">${ETIQUETA[c.tipo] || c.tipo}</span>
-      <span class="pecas">${'▮'.repeat(Math.min(vista.naMao[i], 9))}<i>${vista.naMao[i]}</i></span>
+      <span class="tipo">${escapar(Object.hasOwn(ETIQUETA, c.tipo) ? ETIQUETA[c.tipo] : c.tipo)}</span>
+      <span class="pecas">${'▮'.repeat(Math.max(0, Math.min(vista.naMao[i], 9) || 0))}<i>${escapar(vista.naMao[i])}</i></span>
     </div>`).join('');
 
   const minhaVez = vista.vez === vista.cadeira && vista.fase === 'mao';
@@ -3065,11 +3076,11 @@ function sobrouNaMao(vista) {
   const r = vista.resultado;
   if (!vista.duplas) {
     return r.somas
-      .map((s, i) => `<div><span>${escapar(vista.cadeiras[i].nome)}</span><b>${s}</b></div>`).join('');
+      .map((s, i) => `<div><span>${escapar(vista.cadeiras[i].nome)}</span><b>${escapar(s)}</b></div>`).join('');
   }
   return (r.somasPorTime || []).map((total, t) => {
-    const parcelas = r.somas.filter((_, i) => timeDe(vista, i) === t).join(' + ');
-    return `<div><span>${nomeDoTime(vista, t)}<i>${parcelas}</i></span><b>${total}</b></div>`;
+    const parcelas = r.somas.filter((_, i) => timeDe(vista, i) === t).map(escapar).join(' + ');
+    return `<div><span>${nomeDoTime(vista, t)}<i>${parcelas}</i></span><b>${escapar(total)}</b></div>`;
   }).join('');
 }
 
@@ -3115,7 +3126,7 @@ function mostrarFimDePartida(vista) {
   // A tela dizia quem ganhou e não de quanto. Mesmo template do placar do topo.
   el('placarFinal').innerHTML = vista.placar
     .map((p, i) => `<span class="time${i === campeao ? ' venceu' : ''}">` +
-      `<i>${nomeDoTime(vista, i)}</i><b>${p}</b></span>`)
+      `<i>${nomeDoTime(vista, i)}</i><b>${escapar(p)}</b></span>`)
     .join('<span class="x">×</span>');
   el('fimResumo').textContent = fora >= 0
     ? `Partida encerrada na mão ${vista.maoNum} — quem sai no meio perde.`
@@ -3405,7 +3416,10 @@ el('btComecar').onclick = () => {
   else comecarLocal();
 };
 el('btEntrar').onclick = () => entrarNumaMesa();
-el('btMenu').onclick = () => { encerrarRede(); mostrarTela('telaMenu'); };
+// `recomecarAsVoltas` mora no 15-rede.js, que é concatenado DEPOIS deste arquivo — e isso
+// está certo: declaração de função é içada para o topo do escopo, e este corpo só roda no
+// clique. É o mesmo caminho que o `encerrarRede` ao lado já fazia.
+el('btMenu').onclick = () => { recomecarAsVoltas(); encerrarRede(); mostrarTela('telaMenu'); };
 
 refletirMesaNosBotoes();
 ajustarCadeirasAoModo();
@@ -3427,6 +3441,24 @@ const OPCOES_PEER = { config: { iceServers: [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:global.stun.twilio.com:3478' },
 ] } };
+
+// TETOS DO QUE CHEGA PELO FIO. O chat já tinha os dois (`TAMANHO_FALA`, `INTERVALO_FALA`,
+// lá embaixo) e o nome não tinha nenhum — dez linhas de distância no mesmo arquivo. Era
+// isso que deixava um convidado congelar a mesa de TODOS com uma linha: `{t:'nome'}` é a
+// mensagem mais cara do protocolo (reescreve a lista da sala, espalha vista para a mesa
+// inteira e grava a partida no armazenamento, síncrono), e nada limitava o tamanho nem a
+// frequência dela.
+//
+// O teto é generoso de propósito — o corte que vale é o dos 14 do `nomeUnico`. Este aqui
+// existe só para o trabalho CARO (normalizar, colapsar espaço) não rodar sobre megabytes.
+const TAMANHO_NOME = 64;
+const INTERVALO_NOME = 600;    // ms, o mesmo do chat: trocar de nome não é coisa de rajada
+const ULTIMO_NOME = new Map(); // cadeira → quando trocou de nome pela última vez
+// O clienteId vai para `donoDaCadeira`, que é PERSISTIDO. Sem teto, um id de megabytes
+// estoura a cota do localStorage — e `guardar` (01-constantes.js) engole o erro CALADO, o
+// que faz a cadeira deixar de ser reservada: é o vazamento de mão do item 4 da Fila 5
+// voltando pela porta dos fundos. 64 é folga larga para um id sorteado.
+const TAMANHO_ID = 64;
 
 let peer = null;
 let conexoes = new Map();      // cadeira → conn (no anfitrião)
@@ -3491,6 +3523,60 @@ function erroOnline(txt) {
 // mesa fechou", que é mentira: quem fechou foi ele.
 let deixandoAMesa = false;
 
+// A GERAÇÃO DA REDE. Toda sessão — uma mesa aberta, uma tentativa de entrar numa — é uma
+// geração, e ela vira quando alguém passa a mandar na rede. Quem agenda um temporizador
+// anota a geração em que estava; quem acorda pergunta se ainda é aquela, e vai embora
+// calado se não for.
+//
+// É o `deixandoAMesa` aí em cima, generalizado: lá a pergunta do disparo é "ainda estou
+// saindo?", aqui é "esta rede ainda é a MINHA?". E é a resposta que o item 7 da Fila 5
+// manda dar sobre todo `if (x) return` — quem zera o x. Aqui o x tem dono.
+//
+// CONTADOR E NÃO BOOLEANO: um booleano diria "há rede ligada", e as três vezes em que isto
+// doeu não foram rede desligada — foram rede ligada de OUTRA mesa. A pergunta não é "ainda
+// há rede", é "ainda é a mesma".
+//
+// DECLARADO AQUI EM CIMA, e não junto de quem usa: `encerrarRede` roda em pontos do
+// carregamento, e um `let` mais abaixo estaria na zona morta — onde o `++` LANÇA, e não
+// devolve `undefined`. É a armadilha que o comentário do `pararDeConectar` já registra.
+let geracaoRede = 0;
+
+// OS DOIS TEMPORIZADORES QUE CRIAM PEER SOZINHOS, agora com nome. Eram anônimos, e era isso
+// que os tornava incanceláveis: `encerrarRede` limpa o `esperando`, que é outro mapa, e não
+// tinha o que fazer com estes. O da reserva acordava 1,5 s depois do "Voltar" e reivindicava
+// um código que já não interessava a ninguém; o da volta acordava 4 s depois e matava a
+// mesa NOVA.
+let reservaDoCodigo = null;   // o anfitrião insistindo no código que era dele (tentarAbrir)
+let voltaAgendada = null;     // o convidado tentando voltar sozinho (voltarSozinho)
+
+// PARAR DE RESERVAR O CÓDIGO — as duas camadas num lugar só, porque são duas as portas que
+// precisam disto: o `encerrarRede` (a sessão acabou) e o "Começar a partida" (a mesa é esta
+// agora; o código que se dane). Bumpar a geração duas vezes no mesmo caminho não custa
+// nada; ter a regra escrita em dois lugares custa — foi assim que a conversão de cadeira
+// online em bot durou com defeito.
+//
+// As DUAS camadas e não uma: cancelar faz o temporizador deixar de existir, a geração só o
+// faz calar. Falham de jeitos diferentes, e é por isso que são duas — item 7 da Fila 5.
+function pararDeReservar() {
+  clearTimeout(reservaDoCodigo); reservaDoCodigo = null;
+  geracaoRede++;
+}
+
+// A ESCADA DE VOLTAS RECOMEÇA DO ZERO QUANDO O DEDO AGE — e só então. `voltando` tinha dois
+// lugares que o zeravam (o `sentou`, quando dá certo, e o próprio limite, quando acaba) e
+// nenhum para o caso mais comum: o jogador desistindo pelo botão. A escada ficava em 5, e a
+// queda seguinte — noutra mesa, noutro dia — começava em 6/8, sem uma palavra explicando.
+//
+// ONDE ISTO NÃO PODE MORAR, e é a parte que custa: nem no `encerrarRede`, nem no
+// `conectarNaMesa`. O temporizador do `voltarSozinho` chama OS DOIS no próprio corpo, então
+// zerar em qualquer um deles reiniciaria a escada a cada degrau e o convidado tentaria
+// voltar PARA SEMPRE — trocaria um defeito visível por um laço eterno. Os caminhos abaixo
+// são os únicos que o temporizador nunca percorre: são CLIQUES.
+function recomecarAsVoltas() {
+  clearTimeout(voltaAgendada); voltaAgendada = null;
+  voltando = 0;
+}
+
 // O ANFITRIÃO GUARDA A MESA — o código E o mapa de quem é dono de qual cadeira. Sem o
 // mapa, reabrir com o mesmo código devolveria o código certo e as cadeiras ERRADAS:
 // `donoDaCadeira` só existia em memória, e memória morre com a página. É o item 4 um
@@ -3509,6 +3595,19 @@ function guardarMesaDoAnfitriao() {
 }
 
 function encerrarRede() {
+  // A SESSÃO MORRE AQUI, e com ela os dois temporizadores que criam peer por conta própria.
+  // `pararDeReservar` é quem carrega o `geracaoRede++` — ler o nome como "coisa do
+  // anfitrião" é engano: ele é o ponto onde a geração vira, e por isso a volta agendada
+  // logo abaixo também fica órfã.
+  pararDeReservar();
+  clearTimeout(voltaAgendada); voltaAgendada = null;
+
+  // `voltando` NÃO É ZERADO AQUI, e a tentação é grande porque tudo o mais desta função é
+  // "esqueça a mesa". O temporizador do `voltarSozinho` chama o `encerrarRede` NO PRÓPRIO
+  // CORPO, antes de tentar outra vez: zerar o contador aqui reiniciaria a escada a cada
+  // degrau e o convidado tentaria voltar para sempre. Quem zera é o clique, em
+  // `recomecarAsVoltas`.
+
   // Desarma a saída em curso: qualquer outro caminho de rede (entrar noutra mesa, abrir uma,
   // cancelar) tem de cancelar o temporizador pendente de `largarAMesa`, senão ele acorda 400
   // ms depois e destrói o peer NOVO.
@@ -3517,6 +3616,10 @@ function encerrarRede() {
   esperando.forEach(t => clearTimeout(t));
   esperando.clear();
   donoDaCadeira.clear();
+  // O carimbo do último nome é POR CADEIRA, como todos os mapas acima — e cadeira 1 de uma
+  // mesa nova é outra pessoa. Sem limpar, quem chega herda o relógio de quem sentou ali
+  // antes e leva um limite de frequência de graça no primeiro nome que manda.
+  ULTIMO_NOME.clear();
   conexoes.forEach(c => { try { c.close(); } catch (e) { void e; } });
   conexoes.clear();
   if (linkAnfitriao) { try { linkAnfitriao.close(); } catch (e) { void e; } linkAnfitriao = null; }
@@ -3565,18 +3668,20 @@ function tentarAbrir(tentativa, codigoDesejado) {
     let cadeira = -1;
 
     conn.on('data', m => {
+      // TUDO QUE ENTRA AQUI É ENTRADA DE FORA, e até a v2.1 nada nesta função supunha o
+      // contrário por escrito. `m` pode ser `null`, um número, um array — e `m.t` sobre
+      // `null` LANÇA dentro do callback do PeerJS, que derruba o processamento da conexão
+      // inteira. O `typeof` pega de quebra o array (que é objeto e passaria).
+      if (!m || typeof m !== 'object' || Array.isArray(m)) return;
       if (cadeira < 0) {
         // `ola` traz o clienteId. Um `nome` solto é convidado de versão antiga (uma
         // página em cache), e ele senta como anônimo — o comportamento de antes. Quebrar
         // quem não recarregou seria pior que a falta de identidade dele.
         if (m.t !== 'ola' && m.t !== 'nome') return;
-        cadeira = sentar(conn, m.t === 'ola' ? String(m.id || '') : '', m.nome);
+        cadeira = sentar(conn, m.t === 'ola' ? String(m.id || '').slice(0, TAMANHO_ID) : '', m.nome);
         return;
       }
-      if (m.t === 'nome') {
-        MESA.cadeiras[cadeira].nome = nomeUnico(String(m.nome).trim() || 'Visita', nomesVizinhos(cadeira));
-        listarSala(); if (P) publicar();
-      }
+      if (m.t === 'nome') trocarDeNome(cadeira, m.nome);
       if (m.t === 'acao' && P) aplicarIntencao(cadeira, m);
       if (m.t === 'chat') receberChat(cadeira, m);
       if (m.t === 'desisto') desistiuDaMesa(cadeira);
@@ -3598,7 +3703,21 @@ function tentarAbrir(tentativa, codigoDesejado) {
         peer.destroy();
         if (tentativa < 6) {
           erroOnline(`Reservando o código ${codigo}… (${tentativa + 1}/6)`);
-          setTimeout(() => tentarAbrir(tentativa + 1, codigoDesejado), 1500);
+          // A GERAÇÃO VAI JUNTO. Este é o único ponto do jogo que cria um peer sem dedo
+          // nenhum em cima, e 1,5 s é tempo de sobra para o jogador ter clicado "Voltar"
+          // (menu), "Começar a partida" (mesa local) ou ter entrado noutra mesa. Sem a
+          // conferência ele abria um peer reivindicando o código velho, e o
+          // `retomarComoAnfitriao` do 'open' arrancava a tela para a partida guardada com
+          // `modo` já 'local' — e aí `espalharVistas`, que está atrás de
+          // `if (modo === 'anfitriao')`, nunca roda: mesa parada, sem mensagem e sem botão.
+          // Ainda sobrava um peer vivo reivindicando o código, para quem o tivesse sentar
+          // e nunca receber vista nenhuma.
+          const geracao = geracaoRede;
+          reservaDoCodigo = setTimeout(() => {
+            reservaDoCodigo = null;                // disparou: o handle não vale mais nada
+            if (geracao !== geracaoRede) return;   // esta mesa não é mais a da vez
+            tentarAbrir(tentativa + 1, codigoDesejado);
+          }, 1500);
           return;
         }
         erroOnline(`O código ${codigo} ainda está ocupado. Se você acabou de fechar a mesa, ` +
@@ -3788,6 +3907,50 @@ const vagaDeVisita = c => c.tipo === 'online' || c.vagaOnline === true;
 const nomesVizinhos = cadeira =>
   MESA.cadeiras.slice(0, MESA.n).filter((c, i) => i !== cadeira).map(c => c.nome);
 
+// TROCAR DE NOME NO MEIO DA MESA, com os dois guardas que o `receberChat` já tinha dez
+// linhas abaixo e este caminho não tinha nenhum. Vale a pena dizer o que cada um evita,
+// porque os três defeitos eram diferentes:
+//
+//   tipo       `String(m.nome)` sobre `undefined` dá a string "undefined", que é TRUTHY —
+//              então o `|| 'Visita'` NUNCA disparava e a cadeira passava a se chamar
+//              literalmente "undefined". Nome que não é texto não é troca de nome: ignora.
+//              (`sentar` já fazia certo, com `if (nome !== undefined)`. O irmão é que não.)
+//   tamanho    cortar ANTES de normalizar. O trabalho caro do `nomeUnico` é o
+//              `.normalize('NFC').replace(/\s+/g,' ')`, e ele rodava sobre a string inteira.
+//   frequência sem ela, cada mensagem custa um `publicar()` para a mesa TODA — vinte
+//              mensagens viram vinte rodadas de publicação, e o anfitrião é a autoridade:
+//              quando ele para, a mesa inteira para.
+//
+// Extraída do `conn.on('data')` de propósito, pelo mesmo motivo do `desistiuDaMesa`: lá
+// dentro ela seria inalcançável para quem quiser exigir uma regra dela isoladamente.
+// A VISTA COMO O FIO PODE ENTREGÁ-LA. Ela chegava CRUA em `atualizarVista`, e três linhas
+// acima o mesmo handler já fazia `Array.isArray(m.cadeiras) && m.cadeiras.length === 4` —
+// o padrão existia no arquivo e não tinha sido aplicado justamente ao objeto mais pesado
+// que atravessa a rede. Uma vista sem `cadeiras` mata a tela do convidado no primeiro
+// `sincronizar`, e ele fica com o jogo preto sem uma palavra.
+//
+// Confere o CONTINENTE, não o conteúdo: é o que os desenhistas desreferenciam sem
+// perguntar. O conteúdo hostil (um placar que é string, por exemplo) quem trata é o
+// `escapar` do 13-hud.js — são duas defesas para dois danos diferentes, e nenhuma delas
+// faz o trabalho da outra.
+const vistaDoFio = v => !!v && typeof v === 'object' &&
+  Array.isArray(v.linha) && Array.isArray(v.mao) && Array.isArray(v.naMao) &&
+  Array.isArray(v.placar) && Array.isArray(v.cadeiras) && v.cadeiras.length > 0 &&
+  !!v.acoes && typeof v.acoes === 'object' &&
+  Number.isInteger(v.vez) && v.vez >= 0 && v.vez < v.cadeiras.length &&
+  Number.isInteger(v.cadeira) && v.cadeira >= 0 && v.cadeira < v.cadeiras.length;
+
+function trocarDeNome(cadeira, nome) {
+  if (typeof nome !== 'string') return false;
+  const agora = Date.now();
+  if (agora - (ULTIMO_NOME.get(cadeira) || 0) < INTERVALO_NOME) return false;
+  const pedido = nome.slice(0, TAMANHO_NOME).trim();
+  ULTIMO_NOME.set(cadeira, agora);
+  MESA.cadeiras[cadeira].nome = nomeUnico(pedido || 'Visita', nomesVizinhos(cadeira));
+  listarSala(); if (P) publicar();
+  return true;
+}
+
 // Quem senta onde. Chamada no aperto de mão, e não na conexão, porque é aqui que pela
 // primeira vez se sabe QUEM chegou. Devolve a cadeira, ou -1 se a mesa estiver cheia.
 function sentar(conn, id, nome) {
@@ -3938,9 +4101,13 @@ function listarSala() {
 // conversão MUDOU DE CASA e agora mora no `comecarLocal` — ela era feita aqui, certa, e
 // lá era feita errada (condicionada a `modo === 'local'`), o que travava a revanche do
 // anfitrião. Duas cópias da mesma regra, uma delas com defeito, é como o defeito dura.
-el('btIniciarOnline').onclick = () => comecarLocal();
+// E COMEÇAR A PARTIDA DESLIGA A RESERVA DO CÓDIGO. Este botão fica visível na tela de
+// reabertura, e é a ÚNICA porta de lá que não passa pelo `encerrarRede` — o "Voltar" passa.
+// Sem esta linha, o anfitrião que cansa de esperar o código e começa a jogar vê a reserva
+// acordar 1,5 s depois e trocar a partida que ele acabou de montar pela guardada.
+el('btIniciarOnline').onclick = () => { pararDeReservar(); comecarLocal(); };
 
-el('btCancelarOnline').onclick = () => { encerrarRede(); mostrarTela('telaMenu'); };
+el('btCancelarOnline').onclick = () => { recomecarAsVoltas(); encerrarRede(); mostrarTela('telaMenu'); };
 
 // ─── convidado ───────────────────────────────────────────────────────────────
 function entrarNumaMesa() {
@@ -3969,6 +4136,9 @@ function entrarNumaMesa() {
   // Aqui e não no `encerrarRede`, que roda em pontos do carregamento onde `conectando`
   // ainda estaria na zona morta — e `typeof` sobre `let` na zona morta LANÇA.
   pararDeConectar('');
+  // Trocar de mesa começa escada nova. Cobre também o "voltar para a mesa" do menu, que
+  // passa por aqui — e é clique, portanto muito depois da carga.
+  recomecarAsVoltas();
 }
 
 // O QUE A MESA RESPONDE QUANDO NÃO DÁ PARA SENTAR. Era uma frase só para os três casos, e
@@ -4021,6 +4191,13 @@ function conectarNaMesa(codigo) {
   if (!codigo || codigo.length < 3) { erroOnline('Faltou o código.'); return; }
 
   conectando = true;
+  // A GERAÇÃO TROCA AQUI TAMBÉM, e não só no `encerrarRede`. Esta é a OUTRA porta por onde
+  // nasce um peer: na tela "A mesa caiu" o botão Entrar está clicável (o `close` chama
+  // `pararDeConectar` antes de agendar a volta) e o campo do código continua lá, então dá
+  // para entrar noutra mesa sem passar pelo `encerrarRede` — e era justamente essa a volta
+  // que acordaria para matar a conexão nova. Bumpar aqui é dizer "quem manda na rede agora
+  // sou eu"; o que foi agendado antes que se cale.
+  geracaoRede++;
   el('btConectar').disabled = true;
   el('btConectar').textContent = 'Entrando…';
   erroOnline('Procurando a mesa…');
@@ -4076,7 +4253,10 @@ function conectarNaMesa(codigo) {
         salaDuplas = Array.isArray(m.cadeiras) && m.cadeiras.length === 4;
         atualizarSaguao();
       }
-      if (m.t === 'vista') { esconderTelas(); ligarMurmuro(); atualizarVista(m.v); }
+      if (m.t === 'vista' && vistaDoFio(m.v)) { esconderTelas(); ligarMurmuro(); atualizarVista(m.v); }
+      // A outra ponta do `avisarCadeira`: o convidado finalmente ouve por que a jogada
+      // dele não foi. Mesmo canal do erro local, para não haver dois jeitos de recusar.
+      if (m.t === 'erro') avisar(String(m.txt || '').slice(0, TAMANHO_FALA));
       if (m.t === 'log') anotar(m.txt);
       if (m.t === 'chat') dizer(vistaAtual, m.de, m.canal, m.txt, m.nome);
     });
@@ -4101,6 +4281,9 @@ function conectarNaMesa(codigo) {
 // caminho do campo do menu. Um segundo lugar que gravasse nome é como as duas telas passam
 // a discordar. Campo vazio não apaga nada: fica o que o menu já dizia.
 el('btConectar').onclick = () => {
+  // A porta que NÃO passa por `entrarNumaMesa`: Entrar direto, da tela "A mesa caiu". Quem
+  // digita um código e clica está começando de novo, e a escada tem de acompanhar.
+  recomecarAsVoltas();
   const nome = el('onlineNome').value.trim().slice(0, 14);
   if (nome && nome !== MESA.cadeiras[0].nome) {
     MESA.cadeiras[0].nome = nome;
@@ -4127,11 +4310,33 @@ function voltarSozinho(codigo) {
   el('onlineTitulo').textContent = 'A mesa caiu';
   el('onlineSub').textContent = 'Tentando voltar — o anfitrião pode estar recarregando.';
   erroOnline(`Tentando voltar para a mesa ${codigo}… (${voltando}/${VOLTAS})`);
-  setTimeout(() => {
-    if (modo !== 'convidado') return;      // desistiu no meio, ou entrou noutra mesa
+  // UMA VOLTA PENDENTE DE CADA VEZ, como o `largar` já faz com o relógio da cadeira: dois
+  // degraus armados ao mesmo tempo são dois peers nascendo com 4 s de diferença.
+  clearTimeout(voltaAgendada);
+  // A GERAÇÃO É A GUARDA QUE O `modo` NÃO CONSEGUIA DAR. O `modo !== 'convidado'` não separa
+  // "desistiu no meio" de "entrou noutra mesa" — quem entrou noutra mesa TAMBÉM é convidado,
+  // porque `conectarNaMesa` repõe o `modo`. O comentário que ficava nesta linha descrevia
+  // uma proteção que ela não dava. Era esse buraco que fazia o temporizador da mesa velha
+  // matar a NOVA: o `encerrarRede` derrubava o peer recém-criado e o `conectarNaMesa`
+  // seguinte batia no `if (conectando) return` e desistia CALADO — botão "Entrando…"
+  // travado para sempre, zero peers, e a tela ainda dizendo "Conectado".
+  const geracao = geracaoRede;
+  voltaAgendada = setTimeout(() => {
+    voltaAgendada = null;
+    if (geracao !== geracaoRede) return;   // outra mesa assumiu a rede: esta volta não tem dono
+    // O `modo` FICA, e não por superstição: ele pega o que a geração não pega. O
+    // `{t:'expulso'}` e o "A mesa fechou" põem `modo = 'local'` SEM passar pelo
+    // `encerrarRede`, e nesses caminhos a geração continua a mesma. Duas guardas com falhas
+    // diferentes é o desenho, não redundância.
+    if (modo !== 'convidado') return;
     // O peer VELHO tem de morrer antes: `conectarNaMesa` não o derruba (quem fazia isso
     // era o `entrarNumaMesa` da tela), e sem isto cada tentativa deixaria um peer vivo —
     // o mesmo vazamento que o item 5 consertou no botão de entrar.
+    //
+    // E este `encerrarRede` SOBE A GERAÇÃO, o que é seguro POR ORDEM: a conferência acima já
+    // passou, e o `conectarNaMesa` de baixo anota a geração nova quando for a vez dele.
+    // Trocar a conferência de lugar — pô-la depois do `encerrarRede` — mataria a escada no
+    // primeiro degrau, em silêncio.
     encerrarRede();
     conectarNaMesa(codigo);                // ele próprio devolve `modo` a 'convidado'
   }, ESPERA_VOLTAR);
@@ -4193,6 +4398,19 @@ function espalharVistas() {
 }
 function espalharLog(txt) {
   for (const conn of conexoes.values()) if (conn.open) conn.send({ t: 'log', txt });
+}
+
+// O PORQUÊ DA RECUSA, para quem está do outro lado do fio. Sem isto, a ação recusada de um
+// convidado morre EM SILÊNCIO: o `avisar` de `aplicarIntencao` só fala com quem está nesta
+// tela, e o convidado não está. Ele toca a peça, nada acontece, e o jogo não diz por quê —
+// a mesma doença que a Fila 6 inteira e o item 2 da Fila 8 passaram consertando, viva no
+// único caminho que atravessa a rede.
+//
+// Convidado de versão antiga simplesmente ignora um `t` que não conhece, então isto não
+// quebra compatibilidade nenhuma.
+function avisarCadeira(cadeira, txt) {
+  const conn = conexoes.get(cadeira);
+  if (conn && conn.open) conn.send({ t: 'erro', txt: String(txt).slice(0, TAMANHO_FALA) });
 }
 
 // ─── a conversa ──────────────────────────────────────────────────────────────
@@ -4417,14 +4635,37 @@ function pedirAcao(intencao) {
 
 // O único lugar que mexe na partida. Vale para o seu clique, para o bot e para o que
 // chega pela rede — e valida os três do mesmo jeito.
+// Uma peça como o FIO pode entregá-la: dois números de 0 a `MAX_PINTAS`, e nada mais.
+// `mesmaPeca` (02-baralho.js) lê `b[0]` sem guarda, então uma peça ausente ou nula LANÇA
+// lá dentro — e a exceção sobe pelo `conn.on('data')` do anfitrião, que é quem tem a
+// partida. Note que isto NÃO é sobre trapaça: `jogar` valida a jogada contra
+// `acoesDe(P, cadeira)`, que sai da mão do próprio jogador, então peça inventada continua
+// devolvendo 'jogada inválida' e a fronteira do invariante 3 segue de pé. É sobre a mesa
+// dos outros parar.
+const pecaDoFio = p => Array.isArray(p) && p.length === 2 &&
+  p.every(n => Number.isInteger(n) && n >= 0 && n <= MAX_PINTAS);
+
 function aplicarIntencao(cadeira, i) {
   if (!P || P.fase !== 'mao') return;
   let r;
-  if (i.acao === 'jogar') r = jogar(P, cadeira, i.peca, i.ponta);
-  else if (i.acao === 'comprar') r = comprar(P, cadeira);
-  else r = passar(P, cadeira);
+  // A CADEIA ERA ABERTA NO FINAL, e é um defeito por si: `{t:'acao'}` sem campo nenhum
+  // caía no `else` e virava um PASSE válido — a rede conseguia passar a vez de alguém
+  // mandando uma mensagem vazia. Agora as três ações são nomeadas e o resto é recusa.
+  if (i.acao === 'jogar') {
+    if (!pecaDoFio(i.peca) || (i.ponta !== 'esq' && i.ponta !== 'dir')) r = { erro: 'jogada inválida' };
+    else r = jogar(P, cadeira, i.peca, i.ponta);
+  } else if (i.acao === 'comprar') r = comprar(P, cadeira);
+  else if (i.acao === 'passar') r = passar(P, cadeira);
+  else r = { erro: 'ação desconhecida' };
 
-  if (r.erro) { if (cadeira === euNaTela) avisar(r.erro); return; }
+  // O SILÊNCIO É O DEFEITO, NÃO A RECUSA. `avisar` fala com quem está NESTA tela, e o
+  // convidado nunca está: para ele a peça simplesmente não ia, sem uma palavra. Recusar
+  // continua certo; não dizer por quê é que não.
+  if (r.erro) {
+    if (cadeira === euNaTela) avisar(r.erro);
+    else if (modo === 'anfitriao') avisarCadeira(cadeira, r.erro);
+    return;
+  }
 
   const nome = P.cadeiras[cadeira].nome;
   if (i.acao === 'jogar') narrar(`${nome} jogou ${i.peca[0]}|${i.peca[1]}`);
@@ -4511,7 +4752,13 @@ function sairDaPartida() {
   if (modo === 'anfitriao' && P && P.fase !== 'fim') {
     abandonar(P, euNaTela);
     publicar();                                   // a mesa fica sabendo por que acabou
-    setTimeout(encerrarRede, 400);                // e dá tempo de a mensagem sair
+    // A QUARTA CABEÇA DA MESMA HIDRA, achada ao consertar as outras três: um `setTimeout`
+    // sem dono, sem guarda, e chamando `encerrarRede` incondicionalmente. Se o anfitrião
+    // abrir OUTRA mesa nestes 400 ms, esta chamada acorda e destrói o peer que acabou de
+    // nascer. Quem abriu já chamou `encerrarRede`, então a geração de lá é outra — e é
+    // exatamente isso que a conferência pergunta.
+    const geracao = geracaoRede;
+    setTimeout(() => { if (geracao === geracaoRede) encerrarRede(); }, 400);
     return;
   }
   encerrarRede();
@@ -4557,11 +4804,47 @@ function guardarPartida() {
 
 // Devolve o guardado só se ele ainda serve. Prazo porque uma partida de anteontem não é
 // mais "a partida de antes", é um estranho ocupando o botão.
+//
+// PARTIDA GUARDADA É ENTRADA DE FORA, exatamente como a mesa lembrada — e este era o único
+// validador de `localStorage` do projeto que nunca tinha sido endurecido. Ele conferia
+// quatro campos e entregava o resto CRU, enquanto o `mesaLembrada()` (14-menu.js) confere
+// campo a campo com `Object.hasOwn`. A diferença de rigor entre os dois era acidental, não
+// decidida.
+//
+// O que estava em jogo: sem `regras`, o `atualizarBotaoRetomar` desreferencia
+// `g.P.regras.modo` e LANÇA — e ele roda no TOPO do módulo, então a exceção mata o script
+// concatenado inteiro. Tela preta que volta a cada recarregamento, porque a causa está
+// guardada, e sem saída a não ser limpar o armazenamento à mão. É o defeito 5 da Fila 6
+// literalmente de novo, no arquivo vizinho.
+//
+// RECUSAR E NÃO REMENDAR, e é aqui que ele difere do `mesaLembrada`: uma preferência que
+// não fecha pode cair no padrão porque "Clássico até 6" é uma mesa boa. Uma PARTIDA que não
+// fecha não tem padrão nenhum — meia partida remendada é pior que partida nenhuma. Recusar
+// só esconde o botão de retomar, que é degradação graciosa; o jogo abre normalmente.
 function partidaGuardada() {
   const g = lido('partida', null);
-  if (!g || !g.P || !Array.isArray(g.P.cadeiras) || !Array.isArray(g.P.maos)) return null;
-  if (g.P.fase === 'fim') return null;
-  if (!g.quando || Date.now() - g.quando > HORAS_GUARDADA * 3600e3) return null;
+  if (!g || !g.P || !g.quando || Date.now() - g.quando > HORAS_GUARDADA * 3600e3) return null;
+
+  const p = g.P;
+  if (p.fase === 'fim') return null;
+  // Os continentes que os consumidores desreferenciam sem perguntar. `partidaDeVolta` faz
+  // `guardada.cadeiras.map`, `retomarPartida` lê `P.placar` e `P.maoNum`, o HUD lê tudo.
+  for (const campo of ['cadeiras', 'maos', 'placar', 'linha', 'monte'])
+    if (!Array.isArray(p[campo])) return null;
+  if (!p.cadeiras.length || p.maos.length !== p.cadeiras.length) return null;
+  if (!p.maos.every(Array.isArray)) return null;
+  // `n` manda no laço de `retomarPartida` e na faixa de `euNaTela`.
+  if (!Number.isInteger(p.n) || p.n !== p.cadeiras.length) return null;
+  if (!Number.isInteger(p.vez) || p.vez < 0 || p.vez >= p.n) return null;
+
+  // E as REGRAS, que é o campo cuja falta dava tela preta. `Object.hasOwn` e não
+  // `MODOS[m] ?` pelo motivo que o `mesaLembrada` já registra: `MODOS['constructor']` é
+  // truthy num objeto literal e passaria — deixar dois padrões de validação no mesmo
+  // projeto é como o primeiro volta.
+  if (!p.regras || typeof p.regras !== 'object') return null;
+  if (!Object.hasOwn(MODOS, p.regras.modo)) return null;
+  if (!MODOS[p.regras.modo].cadeiras.includes(p.n)) return null;
+
   return g;
 }
 

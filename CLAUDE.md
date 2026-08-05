@@ -5,8 +5,8 @@ bot, na mesma tela ou pela internet. No ar em
 **https://ricardocolombo01.github.io/domino-bar/** (repo público `RicardoColombo01/domino-bar`).
 
 Sem framework, sem bundler, sem asset: madeira, pintas e sons são gerados em canvas e
-WebAudio na hora. Three.js e PeerJS vêm de CDN. **5.544 linhas** no total (`src/js` +
-`pagina.html` + `css/estilo.css`), conferido em 04/08/2026 — este número **envelhece**, e
+WebAudio na hora. Three.js e PeerJS vêm de CDN. **5.827 linhas** no total (`src/js` +
+`pagina.html` + `css/estilo.css`), conferido em 05/08/2026 — este número **envelhece**, e
 envelheceu: ficou dizendo 2.100 por três releases seguidas.
 
 **Conte com `node`, não com o PowerShell.** `Measure-Object -Line` **não conta linha em
@@ -236,14 +236,34 @@ As pontas são o primeiro e o último número; jogar na esquerda é um `unshift`
   zero, sobrando espaço dividem a folga. E `overflow: hidden` **continua rolável por
   script**: um teste que só mexe em `scrollTop` aprova uma tela que o dedo não move.
 - **Ao acrescentar uma API de navegador ao jogo, o primeiro lugar a olhar é o `harness.mjs`
-  — e o dublê do PRÓPRIO teste conta junto.** Ele já ficou para trás **nove vezes**
+  — e o dublê do PRÓPRIO teste conta junto.** Ele já ficou para trás **dez vezes**
   (`matchMedia`, captura de ponteiro, `AudioContext`, `Peer`, eventos de contexto WebGL,
   `setAttribute`, `preventDefault`, o `matchMedia` de novo — por responder SEMPRE a mesma
-  coisa — e a `conn` de mentira sem `open`, que fazia `espalharVistas` nunca mandar nada).
-  Nove não é acaso. E
+  coisa —, a `conn` de mentira sem `open`, que fazia `espalharVistas` nunca mandar nada, e
+  o `on()` que ENGOLIA o registro). A décima é a mais cara de todas: com
+  `on() { return this; }` no `Peer` e `on: () => {}` na `conn`, o `conn.on('data')` inteiro
+  era **inalcançável do Node** — nenhuma linha de teste jamais entregou uma mensagem
+  malformada à mesa, e foi por esse buraco que passaram quatro dos sete achados da Fila 11.
+  **Dublê que engole registro de ouvinte não é dublê incompleto: é uma camada inteira do
+  jogo sem teste.** O conserto é ele GRAVAR e o teste DISPARAR — assim ele continua não
+  agindo sozinho, e nenhuma suíte existente muda de comportamento.
+  Dez não é acaso. E
   a tentação, todas as vezes, é guardar no JOGO (`if (el.setAttribute)`) — isso troca um
   defeito por um ramo que o teste nunca alcança. **Dublê que responde um valor fixo é tão
   incompleto quanto dublê sem método**, e o sintoma é o mesmo: um ramo verde que nunca rodou.
+- **Asserção de TEMPO num harness com dublê mede o DUBLÊ.** O custo real de um convidado
+  mandando nome de 4 MB é o `publicar()` gravando a partida no `localStorage` a cada
+  mensagem — e o harness dubla o `localStorage`. Medido: 20 nomes de 4 MB custam **382 ms**
+  em Node contra os ~9 s do navegador. Qualquer limiar de tempo ali estaria certificando um
+  mundo que não existe. O que se mede é a **amplificação** (quantas publicações a rajada
+  gera), que é determinística e é o defeito em si.
+- **Quando o conserto tem DUAS camadas, a mutação de UMA delas sai verde — e isso é o
+  desenho, não asserção fraca.** Tirando só o `clearTimeout` ou só a guarda de geração, a
+  irmã segura o caso testado. Elas existem porque falham de jeitos diferentes: cancelar faz
+  o temporizador deixar de existir, a geração só o faz calar, e só a geração alcança
+  callback de peer, que `clearTimeout` não cancela. **A prova honesta é mutar o PAR** — e
+  quem mexer numa camada e vir a suíte verde não descobriu que ela é inútil, descobriu que
+  a irmã está de pé. Isso precisa estar escrito ao lado da asserção.
 - **Asserção que LANÇA em vez de reprovar mata o processo e trunca a suíte.** O efeito
   perverso aparece na conferência por MUTAÇÃO: ela passa a sub-relatar, e parece que a
   asserção não cobria o ramo quando na verdade a suíte morreu antes de chegar lá. Quando
@@ -471,12 +491,11 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 
 | | |
 |---|---|
-| publicado | **v2.0.0** — https://ricardocolombo01.github.io/domino-bar/ |
-| esta release | **v2.1.0** — só registro: a Fila 11, a casa de jogos, a reorganização e o caminho de app. **Nenhuma linha de jogo mudou** |
-| `main` ↔ `origin/main` | `0 ← \| 0 →` |
-| Filas 5 a 10 | **todas fechadas** |
-| **Fila 11** | **ABERTA — 6 defeitos confirmados + 1, todos reproduzidos rodando o código.** Nenhum consertado: foi decisão do Ricardo (anotar agora, decidir depois) |
-| o que vem | **1º consertar a Fila 11** · 2º adotar `git worktree` · 3º a reorganização em pastas · 4º o PWA · 5º o Truco — **ordem dada pelo Ricardo em 04/08/2026**, e está detalhada em "O QUE FAZER AMANHÃ" |
+| publicado | **v2.1.1** — https://ricardocolombo01.github.io/domino-bar/ |
+| esta release | **v2.2.0** — a Fila 11 inteira consertada: os 7 confirmados, mais S1, S3, S4, S5 e **dois defeitos novos achados ao consertar** |
+| `main` ↔ `origin/main` | conferir com `git rev-list --left-right --count origin/main...main` |
+| Filas 5 a 11 | **todas fechadas** |
+| o que vem | **1º adotar `git worktree`** · 2º a reorganização em pastas · 3º o PWA · 4º o Truco — **ordem dada pelo Ricardo em 04/08/2026** |
 
 **A fila esvaziou na v1.10.0, encheu em 03/08 pela fonte mais barata (jogar), esvaziou na
 v2.0.0 — e a v2.1.0 a encheu de novo pela OUTRA fonte: varredura.** É a segunda da história
@@ -594,28 +613,16 @@ Palavras dele: *"amanhã quando eu voltar, você leia os arquivos, já que anoto
 começar consertando isso; logo após, começar a usar o Worktree para realizar as outras tasks
 de forma organizada e limpa — inclusive, tente deixar as próprias pastas limpas e polidas."*
 
-**PASSO 0 — ler antes de mexer.** Este arquivo (a Fila 11 e as três seções do fim), e depois
-`15-rede.js` e `16-loop.js`, que é onde moram seis dos sete achados.
+~~**PASSO 0 — ler antes de mexer.**~~ ✔ feito.
 
-**PASSO 1 — CONSERTAR A FILA 11**, na branch `v3`, nesta ordem e com **teste vermelho antes
-de cada conserto** (a casa não aceita asserção que nasce verde):
+~~**PASSO 1 — CONSERTAR A FILA 11.**~~ ✔ **feito em 05/08/2026, e saiu na `v2.2.0`** (e não
+na `v3`: nada quebrou compatibilidade de dado guardado, e isso deixa o nome `v3` livre para
+a reorganização, que é a mudança grande de verdade). Ver a Fila 11, agora fechada, para o
+que a implementação corrigiu no diagnóstico — inclusive que a cena de teste **não era
+escrevível** como este passo mandava, porque o despachante era inalcançável do Node.
 
-1. **C1 e C2** (`15-rede.js`) — o que um jogador encontra **sozinho**. Os dois são
-   `setTimeout` sem dono e sem guarda no disparo, e o irmão certo (`voltarSozinho`) está no
-   mesmo arquivo. Consertar os **dois de uma vez**, porque são a mesma doença: guardar o
-   handle **e** pôr a guarda no disparo.
-2. **C4** — um convidado congela a mesa de todos com uma linha. **O conserto é copiar os dois
-   guardas que o `receberChat` já tem dez linhas abaixo**, e cortar em 14 ANTES de normalizar.
-3. **C6** — campos "numéricos" indo para `innerHTML` sem `escapar`. Quarta mordida da classe.
-4. **C5, C3, C7** — guardas de entrada. O C5 é tela preta permanente e o modelo a copiar é o
-   `mesaLembrada()`.
-5. **A cena de teste que falta, e ela vem PRIMEIRO na prática**: dirigir o `conn.on('data')`
-   com uma `conn` de mentira mandando `null`, `{}`, `{t:'acao',acao:'jogar'}` e um nome
-   gigante. **Ela nasce vermelha e pega quatro dos sete de uma vez.**
-
-Fecha como `v3.0.0`, ou `v2.2.0` se nada quebrar compatibilidade de dado guardado.
-
-**PASSO 2 — passar a trabalhar com `git worktree`.** Ver a seção própria, na Reorganização.
+**PASSO 2 — passar a trabalhar com `git worktree`.** ← **É AQUI QUE SE RETOMA.**
+Ver a seção própria, na Reorganização.
 O arranjo sugerido, uma frente por diretório:
 
 ```
@@ -720,6 +727,10 @@ npm test               # as três suítes de lógica, segundos
 
 **Hoje `npm test` tem de passar inteiro** — a fila está vazia e não há vermelha esperada.
 Qualquer reprovação é regressão.
+
+**Estado em 05/08/2026, conferido rodando:** `npm test`, `npm run lembrar`, `npm run online`,
+`npm run textura` e o `telas` nas duas metades — **todos verdes**. A Fila 11 está fechada e
+não há defeito conhecido em aberto.
 
 **Suíte pesada roda sozinha** — o `test-telas` renderiza WebGL por software e o `test-online`
 tem prazo de navegação de 45 s; duas ao mesmo tempo viram falha que parece da rede. E o
@@ -2183,7 +2194,77 @@ entrada de fora com validação própria. Custo maior que o caso.
   reprovaria o tablet por um defeito que não existe; exigir zero deixaria a asserção virar
   decoração no dia em que a carta encolher. O rodapé cobra `mediu > 0` no conjunto.
 
-## Fila 11 — a varredura de 04/08/2026 (ABERTA)
+## Fila 11 — a varredura de 04/08/2026 ✔ fechada (v2.2.0)
+
+**Fechada em 05/08/2026.** Os sete confirmados, mais as suspeitas S1, S3, S4 e S5 que o
+Ricardo mandou levar junto — e **dois defeitos que só apareceram ao consertar os outros**.
+Cada conserto com asserção vermelha antes; onde a asserção nasceu depois do conserto, a prova
+foi por **mutação**.
+
+### O que a implementação corrigiu no diagnóstico desta própria fila
+
+Três coisas escritas aqui embaixo estavam erradas, e valem mais que os consertos:
+
+| o que esta fila dizia | o que era |
+|---|---|
+| `aplicarIntencao` e `atualizarVista` em `04-partida.js` | estão em **`16-loop.js:152`** e **`:91`** |
+| "escrever a cena que dirige o `conn.on('data')`" | **aquele código era inalcançável do Node** — o dublê `Peer` tinha `on() { return this; }`. A cena não era escrevível como anotado |
+| C2: bastava consertar a guarda `modo !== 'convidado'` | checar `modo` **nunca poderia** funcionar: `conectarNaMesa:615` repõe `modo`. Precisava de identidade da tentativa |
+
+**Oitavo diagnóstico de leitura que esta base perde para a medição.**
+
+### Os dois defeitos que só apareceram consertando
+
+- **A QUARTA CABEÇA DA HIDRA**, em `16-loop.js`: `setTimeout(encerrarRede, 400)`, sem dono e
+  sem guarda, chamando `encerrarRede` incondicionalmente. Abrir outra mesa nesses 400 ms
+  destruía o peer que acabou de nascer. Não estava na fila porque a varredura procurou os
+  `setTimeout` de `15-rede.js`.
+- **`ULTIMO_NOME` não era limpo no `encerrarRede`** — nasceu com o conserto do C4, e é da
+  família de `conexoes`/`esperando`/`donoDaCadeira`, que já eram limpos. Chaveado por
+  CADEIRA: a cadeira 1 de uma mesa nova é outra pessoa, e herdava o relógio de quem sentou
+  ali antes, levando um limite de frequência de graça no primeiro nome que mandasse.
+
+E **duas portas que criam peer sem passar pelo `encerrarRede`**, que o desenho inicial não
+previa e sem as quais o conserto ficaria pela metade: **"Começar a partida"** (a única saída
+da tela de reabertura que não passa por lá) e o **botão Entrar da tela "A mesa caiu"**, que
+fica clicável porque o `close` destrava antes de agendar a volta.
+
+### O que a conferência por mutação ensinou aqui
+
+- **Duas camadas se cobrem, e isso não é asserção fraca — é o desenho.** Removendo só o
+  `clearTimeout` **ou** só a guarda de geração, a suíte continua verde: a irmã segura o caso.
+  A prova honesta é mutar o **par** (C1 cai com 3 falhas, C2 com 2), e isso está escrito no
+  teste para quem mexer numa camada não concluir que ela é inútil.
+- **A mutação cobrou duas asserções que faltavam.** O bump do `conectarNaMesa` e o corte de
+  tamanho do nome estavam **sem prova nenhuma** — o primeiro porque a cena entrava sempre
+  pela porta que já cancela o timer, o segundo porque o limite de frequência mascarava
+  (só 1 das 20 mensagens era processada). Guarda sem asserção é código que ninguém prova.
+- **A guarda de casamento provou o próprio valor**: uma das mutações usou `\n` num arquivo
+  CRLF, não casou, e foi **reportada como não aplicada** em vez de passar por verde.
+
+### Duas armadilhas pagas ao escrever as cenas
+
+- **Asserção de TEMPO mediria o DUBLÊ, não o jogo.** O custo real do C4 é o `publicar()`
+  gravando a partida no `localStorage` a cada mensagem — e o harness dubla o `localStorage`.
+  Medido: os 20 nomes de 4 MB custam **382 ms** em Node contra os ~9 s do navegador. Trocada
+  pela **amplificação** (quantas publicações a rajada gera), que é determinística.
+- **O bloco do C3 nasceu VERDE.** `acoesDe` devolve `jogadas: []` fora da vez **e** quando a
+  peça obrigatória não está na mão, e aí o `.some` de `jogar` curto-circuita antes de chegar
+  em `mesmaPeca` — seis asserções verdes sem ter exercitado nada. A guarda de montagem passou
+  a exigir **jogada válida**, que é a única forma de afirmar que o ramo perigoso rodou.
+
+### O que ficou de ferramenta
+
+- **O dublê `Peer` grava os ouvintes** e o teste é quem dispara — com `Peer.ultimo` e
+  `Peer.todos`. Continua não disparando nada sozinho, que é o que preserva a intenção
+  original ("abre e não fala") e garante que nenhuma suíte existente mudou de comportamento.
+- **O lado CONVIDADO do fio ficou alcançável** (`linkAnfitriao.on('data')`, aninhado em dois
+  callbacks do PeerJS). Ele não tinha uma linha de teste.
+- **`{t:'erro'}` no protocolo** (S3), para a recusa deixar de morrer calada.
+
+<details><summary>o texto original da fila, de quando estava aberta</summary>
+
+## Fila 11 — a varredura de 04/08/2026
 
 Pedido do Ricardo depois de a v2.0.0 subir: *"valide tudo para mim, procure por erros ou
 melhorias, e anote, principalmente no CLAUDE.md, assim outro dia você consegue pegar o
@@ -2371,6 +2452,9 @@ sete de uma vez.
   módulo. Não há um único dentro de função.
 - **O único `JSON.parse`** (`01-constantes.js:112`) está em `try/catch` com padrão de volta.
 - **`mesaLembrada()` é sólido** — e é o **modelo** que falta ao `partidaGuardada` (C5).
+
+</details>
+
 
 ### As lacunas de teste que a varredura mediu
 

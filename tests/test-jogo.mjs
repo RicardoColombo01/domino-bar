@@ -44,6 +44,26 @@ const mod = await import(buildModule([
   // que põe o defeito relatado (sair e não conseguir voltar) dentro da suíte rápida.
   'desistiuDaMesa',
   'ajustarCompraAoModo', 'sobraDoBaralho',
+  // `acoesDe` entra para a cena do despachante PODER PROVAR que alcançou o ramo perigoso:
+  // fora da vez (ou com peça obrigatória de fora da mão) ela devolve `jogadas: []`, o
+  // `.some` de `jogar` curto-circuita e o TypeError do C3 nunca acontece — seis asserções
+  // verdes sem ter exercitado nada. Foi exatamente o que aconteceu na primeira rodada.
+  'acoesDe',
+  // O ENCANAMENTO DA REDE que vive dentro dos callbacks do PeerJS, e que por isso era
+  // inalcançável daqui — a mesma justificativa do `desistiuDaMesa`. É onde moram os três
+  // `setTimeout` sem dono (C1, C2, S5 da Fila 11): o defeito é um temporizador acordando
+  // depois de o jogador já ter mudado de ideia, e isso só se enxerga drenando os timers.
+  'modo', 'peer', 'conectando', 'voltando', 'codigoDaSala', 'VOLTAS',
+  'tentarAbrir', 'conectarNaMesa', 'voltarSozinho', 'pararDeConectar', 'entrarNumaMesa',
+  // `desenharHUD` e `mostrarFimDeMao` escrevem `innerHTML` a partir da VISTA, e a vista do
+  // convidado vem inteira do fio. Chamá-los direto é o que permite envenenar um campo de
+  // cada vez numa vista de verdade — pela `atualizarVista` o teste mediria de quebra a mão,
+  // o tabuleiro e o monte, e uma falha ali falaria de outra coisa.
+  'desenharHUD', 'mostrarFimDeMao', 'escapar',
+  // `linkAnfitriao` é o lado CONVIDADO do fio, e ele não tinha uma linha de teste: o
+  // `linkAnfitriao.on('data')` mora dentro de dois callbacks aninhados do PeerJS. Com o
+  // dublê gravando ouvintes dá para dirigi-lo, e é onde entra a vista que vem de fora.
+  'linkAnfitriao',
 ], undefined, path.join(import.meta.dirname, 'built-jogo.mjs')));
 
 let falhas = 0;
@@ -756,8 +776,16 @@ console.log('\nquem pediu menos movimento');
 // esta casa já pagou com o matchMedia, a captura de ponteiro, o AudioContext, o Peer, os
 // eventos de contexto WebGL, o setAttribute, o preventDefault e o matchMedia de novo: quem
 // estava incompleto era o dublê, não o jogo.
-const novaConn = () => { const c = { enviadas: [], fechada: false, open: true }; Object.assign(c, {
-  send: m => c.enviadas.push(m), close: () => { c.fechada = true; c.open = false; }, on: () => {} }); return c; };
+// E o `on` também GRAVA, pelo mesmo motivo do parágrafo acima levado até o fim: ele era
+// `() => {}` e engolia o registro, então o `conn.on('data')` que o anfitrião instala dentro
+// do `peer.on('connection')` não tinha como ser dirigido daqui. Era esse o buraco por onde
+// entraram o C3, o C4 e o C7 da Fila 11 — nenhuma linha de teste jamais entregou uma
+// mensagem malformada à mesa. Quem dispara é o teste, nunca o dublê sozinho.
+const novaConn = () => { const c = { enviadas: [], fechada: false, open: true, ouvintes: new Map() }; Object.assign(c, {
+  send: m => c.enviadas.push(m), close: () => { c.fechada = true; c.open = false; },
+  on(evento, cb) { if (!c.ouvintes.has(evento)) c.ouvintes.set(evento, []); c.ouvintes.get(evento).push(cb); return c; },
+  disparar(evento, ...args) { const cbs = c.ouvintes.get(evento) || []; cbs.forEach(cb => cb(...args)); return cbs.length; },
+}); return c; };
 
 const montarMesaOnline = () => {
   mod.encerrarRede();
@@ -1451,6 +1479,469 @@ console.log('\na conversa existe antes da partida');
   // E o importante: chamar sem vista não pode estourar. Era isso que faltava.
   ok(true, 'atualizarConversa(undefined) não estourou');
   console.log('  atualizarConversa roda sem vista, que é o que o saguão precisa');
+}
+
+// O DESPACHANTE, com mensagem malformada. Este bloco existe porque NENHUMA linha de teste
+// jamais entregou uma mensagem torta ao anfitrião: o `conn.on('data')` mora dentro do
+// `peer.on('connection')`, e o dublê `Peer` engolia o registro. As suítes chamavam
+// `sentar`/`largar`/`receberChat` DIRETO, ou seja, sempre por dentro do despachante e nunca
+// através dele — e era por ali que passavam o C3, o C4 e o C7 da Fila 11.
+//
+// Tudo aqui é entrada de fora: quem manda é o convidado, e um convidado pode ser uma aba
+// modificada. A pergunta de cada asserção é a mesma — "isto derruba a mesa dos OUTROS?".
+console.log('\nmensagem torta não derruba a mesa');
+{
+  // Monta a mesa e passa pelo caminho REAL: o peer do anfitrião registra 'connection',
+  // e o teste é quem dispara. `Peer.ultimo` é o dublê do harness — o jogo não expõe o
+  // peer, e expô-lo pela ponte seria mudar produção por causa de teste.
+  const abrirMesa = () => {
+    mod.encerrarRede();
+    mod.MESA.modo = 'classico'; mod.MESA.n = 3;
+    mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[1].nivel = 'normal';
+    mod.MESA.cadeiras[2].tipo = 'bot'; mod.MESA.cadeiras[2].nivel = 'normal';
+    mod.comecarLocal();
+    mod.MESA.cadeiras[1].tipo = 'online'; mod.MESA.cadeiras[1].nome = 'Visita';
+    mod.MESA.cadeiras[1].vagaOnline = false;
+    mod.abrirMesaOnline();
+    const conn = novaConn();
+    const houve = Peer.ultimo.disparar('connection', conn);
+    // Guarda do DUBLÊ, não do jogo: zero ouvintes quer dizer que o registro não chegou, e
+    // sem esta linha tudo abaixo ficaria verde por não ter rodado nada. É a lição da
+    // "asserção sobre uma coleção que primeiro exige que a coleção não esteja vazia".
+    ok(houve === 1, `o anfitrião devia ter registrado 1 ouvinte de 'connection', e foram ${houve}`);
+    ok(conn.ouvintes.has('data'), 'o despachante não foi instalado na conn — o resto do bloco não testaria nada');
+    return conn;
+  };
+
+  // Entregar uma mensagem NUNCA pode lançar: uma exceção aqui sobe pelo callback do PeerJS
+  // e mata o processamento da conexão inteira. Devolve o erro em vez de deixá-lo subir,
+  // porque asserção que LANÇA trunca a suíte e faz a conferência por mutação sub-relatar.
+  const entregar = (conn, m) => {
+    try { conn.disparar('data', m); return null; } catch (e) { return e; }
+  };
+
+  {
+    const conn = abrirMesa();
+    // Sem sentar ainda: o primeiro ramo (`cadeira < 0`) tem de aguentar lixo.
+    for (const m of [null, undefined, {}, 42, 'oi', []]) {
+      const e = entregar(conn, m);
+      ok(!e, `mensagem ${JSON.stringify(m)} antes de sentar derrubou o despachante: ${e && e.message}`);
+    }
+  }
+
+  {
+    // C7 — a cadeira passando a se chamar "undefined". `String(undefined)` é a string
+    // "undefined", que é TRUTHY, então o `|| 'Visita'` nunca dispara.
+    const conn = abrirMesa();
+    entregar(conn, { t: 'ola', id: 'cliente-Z', nome: 'Zé' });
+    ok(mod.MESA.cadeiras[1].nome === 'Zé', `montagem: a visita devia sentar como Zé e é ${mod.MESA.cadeiras[1].nome}`);
+
+    for (const [rotulo, m] of [['sem campo', { t: 'nome' }], ['nulo', { t: 'nome', nome: null }],
+                               ['número', { t: 'nome', nome: 42 }], ['objeto', { t: 'nome', nome: {} }]]) {
+      const e = entregar(conn, m);
+      ok(!e, `{t:'nome'} ${rotulo} derrubou o despachante: ${e && e.message}`);
+      const nome = mod.MESA.cadeiras[1].nome;
+      ok(nome !== 'undefined' && nome !== 'null' && nome !== '[object Object]' && nome !== '42',
+         `{t:'nome'} ${rotulo} rebatizou a cadeira de "${nome}" — é o defeito da foto da Fila 10 por outra porta`);
+    }
+  }
+
+  {
+    // C4 — congelar a mesa de todos com uma linha. O nome não tinha limite de TAMANHO nem
+    // de FREQUÊNCIA, e é a mensagem mais cara do protocolo: `listarSala()` mais `publicar()`,
+    // que espalha vista para todo mundo e grava a partida no localStorage, síncrono.
+    const conn = abrirMesa();
+    entregar(conn, { t: 'ola', id: 'cliente-Z', nome: 'Zé' });
+
+    const gigante = 'x'.repeat(4e6);
+    let erro = null;
+    for (let i = 0; i < 20; i++) erro = entregar(conn, { t: 'nome', nome: gigante + i }) || erro;
+    ok(!erro, `a rajada de nomes gigantes derrubou o despachante: ${erro && erro.message}`);
+    ok(mod.MESA.cadeiras[1].nome.length <= 14,
+       `o nome ficou com ${mod.MESA.cadeiras[1].nome.length} caracteres — o corte tem de valer também aqui`);
+
+    // NÃO SE MEDE TEMPO AQUI, e a tentação era grande. O custo real do C4 em produção é o
+    // `publicar()` de cada mensagem gravando a partida inteira no localStorage, síncrono —
+    // e o harness dubla o localStorage, então essa parte não existe em Node. Medido: os 20
+    // nomes de 4 MB custam 382 ms aqui contra os ~9 s relatados no navegador. Um limiar de
+    // tempo estaria medindo o DUBLÊ, não o jogo.
+    //
+    // O que se mede é a AMPLIFICAÇÃO, que é determinística e é o defeito em si: cada
+    // `{t:'nome'}` espalha vista para a mesa toda. Vinte mensagens não podem virar vinte
+    // rodadas de publicação.
+    const vistas = m => m.enviadas.filter(x => x.t === 'vista').length;
+    ok(vistas(conn) <= 2,
+       `20 nomes viraram ${vistas(conn)} publicações para a mesa — é a amplificação que congela todo mundo`);
+
+    // E a FREQUÊNCIA, que é o guarda irmão do `INTERVALO_FALA` do chat.
+    const conn2 = abrirMesa();
+    entregar(conn2, { t: 'ola', id: 'cliente-Y', nome: 'Ana' });
+    entregar(conn2, { t: 'nome', nome: 'Bia' });
+    entregar(conn2, { t: 'nome', nome: 'Cida' });
+    ok(mod.MESA.cadeiras[1].nome !== 'Cida',
+       'dois {t:\'nome\'} colados: o segundo tinha de ser recusado por frequência, como o chat já faz');
+
+    // O CORTE ACONTECE ANTES DE NORMALIZAR, e esta asserção existe porque a mutação a
+    // cobrou: tirando o `.slice(0, TAMANHO_NOME)` a suíte continuava verde, porque o limite
+    // de FREQUÊNCIA já descartava 19 das 20 mensagens da rajada e o `nomeUnico` corta em 14
+    // no fim de qualquer jeito. Ou seja: o guarda existia sem ninguém provar que existia.
+    //
+    // O jeito de enxergar a ordem é um nome cujos primeiros 64 caracteres são espaço: com o
+    // corte antes, sobra string vazia e a cadeira vira 'Visita'; sem ele, o `trim` alcança o
+    // "Zé" lá no fim e o nome passa. É a mesma pergunta do `receberChat`, onde `slice` vem
+    // antes de `trim` — só que aqui dá para reprovar por ela.
+    const conn3 = abrirMesa();
+    entregar(conn3, { t: 'ola', id: 'cliente-X', nome: 'Ivo' });
+    entregar(conn3, { t: 'nome', nome: ' '.repeat(200) + 'Zé' });
+    ok(mod.MESA.cadeiras[1].nome !== 'Zé',
+       'o nome foi normalizado ANTES do corte — é sobre essa string inteira que roda o trabalho caro');
+  }
+
+  {
+    // C3 — `{t:'acao'}` sem `peca`. `mesmaPeca` (02-baralho.js:9) lê `b[0]` sem guarda, e o
+    // TypeError sobe pelo `conn.on('data')`. NÃO é trapaça: `jogar` valida contra
+    // `acoesDe(P, cadeira)`, que sai da mão do próprio jogador, então a fronteira do
+    // invariante 3 continua de pé. O dano é o `publicar()` não rodar e a vez não andar.
+    const conn = abrirMesa();
+    entregar(conn, { t: 'ola', id: 'cliente-Z', nome: 'Zé' });
+    mod.comecarLocal();                     // a partida com a cadeira online de pé
+    // A VEZ TEM DE SER DELE, e sem isto o bloco inteiro é decoração: `acoesDe` (04-partida.js:68)
+    // devolve `jogadas: []` fora da vez, e aí o `.some` de `jogar` curto-circuita antes de
+    // chegar em `mesmaPeca` — o TypeError nunca acontece e as seis asserções nascem verdes
+    // sem ter exercitado nada. Foi assim que este bloco passou na primeira rodada.
+    mod.P.vez = 1;
+    // E a peça obrigatória sai: ela só existe na PRIMEIRA jogada da primeira mão (04-partida.js:56,
+    // limpa em :117), e se o 6|6 não estiver na mão desta cadeira ela filtra `jogadas` para
+    // vazio — o mesmo curto-circuito por outra porta. Este é um estado que o jogo produz
+    // sozinho em toda mão seguinte, não um estado inventado.
+    mod.P.pecaObrigatoria = null;
+    // A GUARDA QUE VALE: não "a vez é dele", e sim "existe jogada válida". É a única forma
+    // de o teste afirmar que `mesmaPeca` vai mesmo ser chamada.
+    const podeJogar = mod.acoesDe(mod.P, 1).jogadas.length;
+    ok(podeJogar > 0,
+       `montagem do C3: a cadeira 1 precisa ter jogada válida e tem ${podeJogar} — sem isso o ramo perigoso não roda`);
+
+    for (const [rotulo, m] of [['sem peça', { t: 'acao', acao: 'jogar' }],
+                               ['peça nula', { t: 'acao', acao: 'jogar', peca: null }],
+                               ['peça string', { t: 'acao', acao: 'jogar', peca: '66' }],
+                               ['peça curta', { t: 'acao', acao: 'jogar', peca: [3] }],
+                               ['ação desconhecida', { t: 'acao', acao: 'voar' }],
+                               ['sem ação', { t: 'acao' }]]) {
+      const e = entregar(conn, m);
+      ok(!e, `{t:'acao'} ${rotulo} derrubou o despachante: ${e && e.message}`);
+    }
+
+    // S3 — A RECUSA TEM DE CHEGAR NO CONVIDADO. `avisar` fala com quem está NESTA tela, e
+    // ele nunca está: a peça simplesmente não ia, sem uma palavra. É a doença do silêncio
+    // que a Fila 6 e o item 2 da Fila 8 passaram consertando, viva no único caminho que
+    // atravessa a rede.
+    // A jogada recusada é PROCURADA, não escolhida a dedo: uma peça fixa como a `6|6` pode
+    // por acaso ser válida naquela mão, e a asserção passaria a medir o sorteio.
+    const validas = new Set(mod.acoesDe(mod.P, 1).jogadas.map(j => mod.chave(j.peca) + j.ponta));
+    let ruim = null;
+    for (let a = 0; a <= 6 && !ruim; a++)
+      for (let b = a; b <= 6 && !ruim; b++)
+        for (const ponta of ['esq', 'dir'])
+          if (!validas.has(mod.chave([a, b]) + ponta)) { ruim = { peca: [a, b], ponta }; break; }
+    ok(ruim, 'montagem: não achei uma jogada inválida para recusar');
+
+    conn.enviadas.length = 0;
+    entregar(conn, { t: 'acao', acao: 'jogar', peca: ruim.peca, ponta: ruim.ponta });
+    const erros = conn.enviadas.filter(x => x.t === 'erro');
+    ok(erros.length === 1,
+       `uma jogada recusada devia render 1 recado ao convidado e rendeu ${erros.length} — ele fica sem saber por quê`);
+    ok(erros[0] && typeof erros[0].txt === 'string' && erros[0].txt.length > 0,
+       'o recado da recusa chegou vazio, que é o mesmo silêncio com outro nome');
+
+    // E o contrário: jogada BOA não pode render recado de erro nenhum. Sem esta, um
+    // conserto que mandasse 'erro' sempre deixaria a de cima verde.
+    const boa = mod.acoesDe(mod.P, 1).jogadas[0];
+    conn.enviadas.length = 0;
+    entregar(conn, { t: 'acao', acao: 'jogar', peca: boa.peca, ponta: boa.ponta });
+    ok(conn.enviadas.filter(x => x.t === 'erro').length === 0,
+       'uma jogada VÁLIDA rendeu recado de erro — o guarda está recusando o que devia passar');
+  }
+
+  {
+    // S4 — o `P.log` crescia sem teto (347 entradas / 18,7 KB numa partida de 12 mãos), era
+    // serializado a cada `publicar()` — 334 gravações síncronas por partida — e não tinha
+    // UM ÚNICO LEITOR em `src/` nem em `tests/`. Peso morto puro. Esta asserção é o que
+    // impede alguém de ressuscitá-lo por engano ao mexer no motor.
+    mod.encerrarRede();
+    mod.MESA.modo = 'classico'; mod.MESA.n = 2;
+    mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[1].nivel = 'normal';
+    mod.comecarLocal();
+    for (let passo = 0; mod.P.fase === 'mao' && passo < 200; passo++)
+      mod.aplicarIntencao(mod.P.vez, mod.jogadaDoBot(mod.P, mod.P.vez));
+    ok(mod.P.log === undefined,
+       'o P.log voltou — ele não tem leitor nenhum e é serializado em toda publicação');
+  }
+  console.log('  o despachante aguenta lixo do fio — e a mesa não para');
+}
+
+// TEMPORIZADOR QUE ACORDA DEPOIS DE O JOGADOR MUDAR DE IDEIA. Os três defeitos deste bloco
+// são a MESMA doença, e este arquivo já tinha a regra escrita desde o item 7 da Fila 5:
+// "para todo `if (x) return`, perguntar as duas coisas — quem zera o x, e o que acontece se
+// esse alguém não vier". São três `setTimeout` sem dono e sem guarda no disparo — e o padrão
+// certo já existia DUAS vezes no mesmo arquivo (`esperando`, e o `deixandoAMesa` dos 400 ms).
+//
+// O QUE A MUTAÇÃO PROVA AQUI, dito de frente porque é diferente do resto da suíte: o
+// conserto tem DUAS camadas por defeito (cancelar o handle e conferir a geração no
+// disparo), e removendo UMA delas isolada a suíte continua verde — a outra segura o caso.
+// Isso não é asserção fraca, é o desenho: as camadas existem porque falham de jeitos
+// diferentes (cancelar faz o temporizador deixar de existir; a geração só o faz calar, e é
+// a única que alcança callback de peer, que `clearTimeout` não cancela). Conferido
+// removendo os PARES: C1 cai com 3 falhas, C2 com 2. Quem mexer numa camada e a suíte
+// continuar verde não descobriu que ela é inútil — descobriu que a irmã está de pé.
+console.log('\ntemporizador de rede que perdeu o dono');
+{
+  // Cada bloco diz o que quer e devolve como encontrou — a mesma regra das cenas do
+  // `test-telas` e do `test-online`, aqui dentro do harness. O `voltarSozinho('')` é o
+  // caminho que o PRÓPRIO jogo usa para zerar a escada (código vazio cai no ramo de
+  // desistência), e não um estado inventado: `encerrarRede` não a zera, e é exatamente esse
+  // o defeito S5 — sem isto, o bloco seguinte herda a contagem do anterior e reprova com uma
+  // mensagem que fala de outra coisa. O teste sofria do bug que testa.
+  const zerar = () => { mod.encerrarRede(); mod.voltarSozinho(''); mod.pararDeConectar(''); Peer.todos.length = 0; };
+
+  {
+    // C1 — o anfitrião reivindicando o código que era dele desiste, e a reserva acorda
+    // assim mesmo: 1,5 s depois o menu some sozinho e ele cai numa partida antiga com a
+    // mesa parada, porque `retomarComoAnfitriao` roda com `modo` já 'local' e o
+    // `espalharVistas` está atrás de `if (modo === 'anfitriao')`.
+    zerar();
+    mod.abrirMesaOnline();
+    mod.tentarAbrir(0, 'ABCD');
+    Peer.ultimo.disparar('error', { type: 'unavailable-id' });
+    ok(els.get('onlineErro').textContent.includes('1/6'),
+       `montagem: a reserva devia estar insistindo e o erro diz "${els.get('onlineErro').textContent}"`);
+
+    const antes = Peer.todos.length;
+    els.get('btCancelarOnline').onclick();          // o jogador desiste — "Voltar"
+    ok(mod.modo === 'local', 'montagem: o Voltar devia ter desligado a rede');
+    correrTimers();
+    ok(Peer.todos.length === antes,
+       `a reserva acordou depois do Voltar e abriu ${Peer.todos.length - antes} peer(s) novo(s)`);
+    ok(mod.peer === null, 'sobrou peer vivo reivindicando o código de uma mesa abandonada');
+  }
+
+  {
+    // A VARIANTE, e ela é o que prova que a guarda não pode morar só no `encerrarRede`:
+    // "Começar a partida" é a única porta daquela tela que NÃO passa por ele. Sem uma
+    // desligada própria, a reserva acorda e troca a partida recém-montada pela guardada.
+    zerar();
+    mod.abrirMesaOnline();
+    mod.tentarAbrir(0, 'ABCD');
+    Peer.ultimo.disparar('error', { type: 'unavailable-id' });
+    const antes = Peer.todos.length;
+    els.get('btIniciarOnline').onclick();
+    correrTimers();
+    ok(Peer.todos.length === antes,
+       `"Começar a partida" não desligou a reserva: nasceram ${Peer.todos.length - antes} peer(s) depois`);
+  }
+
+  {
+    // C2 — o convidado cuja mesa caiu entra NOUTRA nos 4 s seguintes, e o temporizador da
+    // mesa velha acorda e mata a nova. A guarda `modo !== 'convidado'` do disparo não
+    // separa "desistiu" de "entrou noutra mesa": quem entrou noutra mesa TAMBÉM é
+    // convidado, e `conectarNaMesa` repõe `modo`. O comentário daquela linha descrevia uma
+    // proteção que ela não dava.
+    zerar();
+    mod.entrarNumaMesa(); mod.conectarNaMesa('AAAA');
+    mod.pararDeConectar();                          // é o que o `close` faz antes de agendar
+    ok(mod.voltarSozinho('AAAA') === true, 'montagem: a volta devia ter sido agendada');
+
+    mod.entrarNumaMesa(); mod.conectarNaMesa('BBBB');
+    const daNova = mod.peer;
+    ok(daNova, 'montagem: a mesa nova devia ter peer');
+
+    correrTimers();
+    ok(!daNova.destruido, 'a volta da mesa velha destruiu o peer da mesa NOVA');
+    ok(mod.peer === daNova, 'a mesa nova ficou sem peer nenhum');
+    ok(mod.codigoDaSala === 'BBBB',
+       `a tela ficou apontando para a mesa velha (código "${mod.codigoDaSala}")`);
+    ok(mod.conectando === false || mod.peer === daNova,
+       'o botão Entrar ficou travado em "Entrando…" para sempre — nenhum clique volta a funcionar');
+  }
+
+  {
+    // A OUTRA PORTA DO C2, e ela existe porque a conferência por MUTAÇÃO a cobrou: tirando o
+    // `geracaoRede++` do `conectarNaMesa`, a suíte continuava verde. O bloco acima entra
+    // sempre por `entrarNumaMesa`, que chama `encerrarRede` e já cancela o temporizador —
+    // então ele nunca exercitava a guarda de geração daquele caminho.
+    //
+    // Aqui é o caminho de verdade da tela "A mesa caiu": o botão Entrar está clicável (o
+    // `close` chamou `pararDeConectar` ANTES de agendar a volta) e o campo do código está
+    // lá. Dá para entrar noutra mesa sem passar pelo `encerrarRede` uma única vez.
+    zerar();
+    mod.entrarNumaMesa(); mod.conectarNaMesa('AAAA');
+    mod.pararDeConectar();
+    ok(mod.voltarSozinho('AAAA') === true, 'montagem: a volta devia ter sido agendada');
+
+    els.get('onlineEntrada').value = 'BBBB';
+    els.get('onlineNome').value = '';
+    els.get('btConectar').onclick();                  // Entrar DIRETO, sem passar pelo menu
+    const daNova = mod.peer;
+    ok(daNova && mod.codigoDaSala === 'BBBB',
+       `montagem: o Entrar direto devia ter aberto a mesa BBBB e o código é "${mod.codigoDaSala}"`);
+
+    correrTimers();
+    ok(!daNova.destruido, 'a volta da mesa velha matou a mesa nova aberta pelo Entrar direto');
+    ok(mod.peer === daNova, 'a mesa nova ficou sem peer — o Entrar direto não desligou a volta velha');
+  }
+
+  {
+    // S5 — desistir pelo botão não zerava a escada, e a próxima queda começava no meio.
+    zerar();
+    mod.entrarNumaMesa(); mod.conectarNaMesa('AAAA');
+    mod.pararDeConectar(); mod.voltarSozinho('AAAA');
+    mod.pararDeConectar(); mod.voltarSozinho('AAAA');
+    ok(mod.voltando === 2, `montagem: a escada devia estar em 2 e está em ${mod.voltando}`);
+
+    els.get('btCancelarOnline').onclick();
+    ok(mod.voltando === 0, 'o Voltar não zerou a escada: a próxima queda começa em 3/8');
+  }
+
+  {
+    // E A ESCADA TEM FIM. Esta asserção PASSA hoje, e está aqui dita como o que é: guarda
+    // contra o conserto ser feito no lugar errado. Zerar `voltando` dentro do `encerrarRede`
+    // ou do `conectarNaMesa` deixaria a asserção do S5 verde por acidente — e como o
+    // temporizador do `voltarSozinho` chama OS DOIS no próprio corpo, a escada reiniciaria a
+    // cada degrau e o convidado tentaria voltar PARA SEMPRE. É o único jeito de a suíte
+    // enxergar esse laço.
+    zerar();
+    mod.entrarNumaMesa(); mod.conectarNaMesa('CCCC');
+    let degraus = 0;
+    for (let i = 0; i < 20; i++) {
+      // O `pararDeConectar` vem antes de propósito: é a ordem do jogo. Quem chama
+      // `voltarSozinho` é o `linkAnfitriao.on('close')`, e ele destrava o botão ANTES. Sem
+      // esse passo `conectando` fica de pé, o `conectarNaMesa` do degrau desiste calado e a
+      // escada morre no primeiro — que é o C2 aparecendo dentro do teste do S5.
+      mod.pararDeConectar();
+      if (!mod.voltarSozinho('CCCC')) break;
+      degraus++;
+      correrTimers();
+    }
+    ok(degraus === mod.VOLTAS, `a escada devia parar em ${mod.VOLTAS} degraus e parou em ${degraus}`);
+  }
+  console.log('  temporizador que perdeu o dono acorda calado');
+}
+
+// A QUARTA MORDIDA DO innerHTML. A regra da casa — todo texto de fora passa pelo `escapar` —
+// está escrita no comentário do próprio `13-hud.js`, e foi aplicada às STRINGS e nunca aos
+// campos que se assume serem números. O desenho do defeito é a evidência: no mesmo template
+// literal, o NOME passa por `escapar` e o número irmão ao lado não. "Numérico" foi tratado
+// como sinônimo de "seguro".
+//
+// E eles não são seguros: no convidado, `atualizarVista(m.v)` recebe o objeto do fio sem uma
+// única validação. Como qualquer aba pode ser anfitriã, um anfitrião modificado manda um
+// placar que é uma string e roda script na máquina dos convidados.
+console.log('\nnúmero que vem do fio também é texto de fora');
+{
+  const ATAQUE = '<img src=x onerror=alert(1)>';
+  // Uma vista de VERDADE, e depois um campo envenenado de cada vez: assim a falha aponta
+  // para o campo, e não para uma vista inventada que o jogo nunca produziria.
+  const vistaViva = () => {
+    mod.encerrarRede();
+    mod.MESA.modo = 'classico'; mod.MESA.n = 2;
+    mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[1].nivel = 'normal';
+    mod.comecarLocal();
+    return JSON.parse(JSON.stringify(mod.visaoDe(mod.P, 0)));
+  };
+
+  const cru = () => els.get('placar').innerHTML + els.get('jogadores').innerHTML;
+
+  {
+    const base = vistaViva();
+    ok(base.placar && base.naMao, 'montagem: a vista tinha de ter placar e naMao');
+
+    for (const [campo, envenenar] of [
+      ['placar', v => { v.placar = [ATAQUE, 0]; }],
+      ['alvo', v => { v.alvo = ATAQUE; }],
+      ['naMao', v => { v.naMao = [ATAQUE, 3]; }],
+      ['tipo da cadeira', v => { v.cadeiras[1].tipo = ATAQUE; }],
+    ]) {
+      const v = vistaViva();
+      envenenar(v);
+      let e = null;
+      try { mod.desenharHUD(v); } catch (err) { e = err; }
+      ok(!e, `desenharHUD com ${campo} hostil estourou: ${e && e.message}`);
+      ok(!cru().includes('<img'),
+         `o ${campo} foi para o innerHTML SEM escapar — é script rodando na máquina dos convidados`);
+    }
+  }
+
+  {
+    // O `MODOS[vista.modo].rotulo` é o único ponto do arquivo que indexa `MODOS` cru. O
+    // vizinho `:141` do mesmo arquivo já faz `MODOS[vista.modo] || MODOS[MODO_PADRAO]` —
+    // guarda num lugar, esquecida no outro, que é o padrão que esta fila inteira persegue.
+    for (const modo of ['inexistente', 'constructor', 42, { mau: 1 }]) {
+      const v = vistaViva();
+      v.modo = modo;
+      let e = null;
+      try { mod.desenharHUD(v); } catch (err) { e = err; }
+      ok(!e, `um modo ${JSON.stringify(modo)} guardado derrubou o HUD inteiro: ${e && e.message}`);
+    }
+    const v = vistaViva();
+    v.modo = 'constructor';
+    try { mod.desenharHUD(v); } catch (err) { void err; }
+    ok(!els.get('placar').innerHTML.includes('undefined'),
+       'um modo de protótipo virou "undefined · até 6" na cara do jogador');
+  }
+
+  {
+    // A tela de fim de mão, que é o outro innerHTML com números do fio. O resultado sai de
+    // uma mão JOGADA ATÉ O FIM, e não escrito à mão: um `{motivo:'batida'}` sem `time` é um
+    // estado que o jogo não produz, e a falha viria de dentro do HUD falando de outra coisa.
+    // Esta casa já pagou isso — foi o bloco do prazo deixando `P.fase = 'fim'` posto à mão.
+    vistaViva();
+    for (let passo = 0; mod.P.fase !== 'fimDeMao' && mod.P.fase !== 'fim'; passo++) {
+      if (passo > 3000) break;
+      const vez = mod.P.vez;
+      mod.aplicarIntencao(vez, mod.jogadaDoBot(mod.P, vez));
+    }
+    ok(mod.P.resultado, 'montagem: a mão precisava terminar para haver resultado de verdade');
+    const v = JSON.parse(JSON.stringify(mod.visaoDe(mod.P, 0)));
+    // Agora sim, um campo de cada vez, sobre o que o jogo produziu.
+    v.resultado.somas = [ATAQUE, 3];
+    v.resultado.pontos = ATAQUE;
+    let e = null;
+    try { mod.mostrarFimDeMao(v); } catch (err) { e = err; }
+    ok(!e, `mostrarFimDeMao com somas hostis estourou: ${e && e.message}`);
+    const html = els.get('fimSobrou').innerHTML + els.get('fimTitulo').innerHTML;
+    ok(!html.includes('<img'), 'as somas do fim de mão foram para o innerHTML sem escapar');
+  }
+  {
+    // A OUTRA PONTA, e ela é o lado do fio que NUNCA teve uma linha de teste: o
+    // `linkAnfitriao.on('data')` do convidado, aninhado em dois callbacks do PeerJS.
+    // `atualizarVista(m.v)` recebia o objeto cru — e três linhas acima o mesmo handler já
+    // valida `m.cadeiras` com `Array.isArray`. O padrão existia e não tinha sido aplicado
+    // ao objeto mais pesado que atravessa a rede.
+    const boa = vistaViva();
+    mod.encerrarRede();
+    mod.conectarNaMesa('AAAA');
+    Peer.ultimo.disparar('open');
+    const link = mod.linkAnfitriao;
+    ok(link && link.ouvintes, 'montagem: o convidado devia ter aberto o link com o anfitrião');
+    const houve = link.disparar('open');
+    ok(houve === 1, `montagem: o link devia ter 1 ouvinte de 'open' e tem ${houve}`);
+    ok(link.ouvintes.has('data'), 'montagem: o handler de dados do convidado não foi instalado');
+
+    for (const [rotulo, v] of [['ausente', undefined], ['nula', null], ['número', 7],
+                               ['sem cadeiras', { linha: [], mao: [], naMao: [], placar: [] }],
+                               ['vez fora da faixa', Object.assign({}, boa, { vez: 99 })],
+                               ['mao que não é array', Object.assign({}, boa, { mao: 'oi' })]]) {
+      let e = null;
+      try { link.disparar('data', { t: 'vista', v }); } catch (err) { e = err; }
+      ok(!e, `uma vista ${rotulo} vinda do fio matou a tela do convidado: ${e && e.message}`);
+    }
+    // E a vista BOA continua passando — guarda contra o conserto virar um "recusa tudo",
+    // que deixaria as seis asserções acima verdes sem o jogo funcionar.
+    let e = null;
+    try { link.disparar('data', { t: 'vista', v: boa }); } catch (err) { e = err; }
+    ok(!e, `a vista LEGÍTIMA foi recusada ou estourou: ${e && e.message}`);
+    ok(mod.vistaAtual === boa, 'a vista boa não chegou à tela — o guarda está recusando o que devia passar');
+  }
+  console.log('  número do fio passa pelo escapar, como o nome ao lado dele');
 }
 
 console.log(falhas ? `\n${falhas} falha(s)` : '\ntudo certo');

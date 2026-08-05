@@ -226,6 +226,47 @@ try {
     }
   }
 
+  // A PARTIDA guardada é entrada de fora tanto quanto a MESA — e era o único validador de
+  // armazenamento do projeto que nunca tinha sido endurecido. `partidaGuardada` conferia
+  // quatro campos e entregava o resto cru, enquanto o `mesaLembrada` do bloco acima confere
+  // campo a campo. A diferença de rigor entre os dois era acidental, não decidida.
+  //
+  // O dano é o pior que este projeto conhece: `atualizarBotaoRetomar` roda no TOPO do
+  // módulo, então um `g.P.regras` faltando lança e mata o script concatenado inteiro. Tela
+  // preta que VOLTA a cada recarregamento, porque a causa está guardada — e sem saída a não
+  // ser limpar o armazenamento à mão. É o defeito 5 da Fila 6 no arquivo vizinho.
+  console.log('\npartida guardada corrompida não dá tela preta');
+  {
+    const CASOS = [
+      ['sem regras', { cadeiras: [{}, {}], maos: [[], []], placar: [0, 0], linha: [], monte: [], n: 2, vez: 0 }],
+      ['modo que não existe mais', { regras: { modo: 'buraco', alvo: 6 }, cadeiras: [{}, {}], maos: [[], []], placar: [0, 0], linha: [], monte: [], n: 2, vez: 0 }],
+      ['chave de protótipo no modo', { regras: { modo: 'constructor', alvo: 6 }, cadeiras: [{}, {}], maos: [[], []], placar: [0, 0], linha: [], monte: [], n: 2, vez: 0 }],
+      ['cadeiras que não é array', { regras: { modo: 'classico', alvo: 6 }, cadeiras: 'oi', maos: [], placar: [], linha: [], monte: [], n: 2, vez: 0 }],
+      ['vez fora da faixa', { regras: { modo: 'classico', alvo: 6 }, cadeiras: [{}, {}], maos: [[], []], placar: [0, 0], linha: [], monte: [], n: 2, vez: 9 }],
+      ['n discordando das cadeiras', { regras: { modo: 'classico', alvo: 6 }, cadeiras: [{}, {}], maos: [[], []], placar: [0, 0], linha: [], monte: [], n: 4, vez: 0 }],
+      ['Trio com 4 jogadores', { regras: { modo: 'trio', alvo: 6 }, cadeiras: [{}, {}, {}, {}], maos: [[], [], [], []], placar: [0, 0, 0, 0], linha: [], monte: [], n: 4, vez: 0 }],
+    ];
+    for (const [rotulo, P] of CASOS) {
+      await pagina.evaluate(g => {
+        localStorage.setItem('dominobar.partida', JSON.stringify(g));
+      }, { quando: Date.now(), euNaTela: 0, P });
+      await recarregar();
+      // Se o script tivesse morrido, `window.__jogo` nem existiria — é esta a asserção que
+      // separa "recusou o guardado" de "não abriu". A mesma do bloco da chave de protótipo.
+      const vivo = await pagina.evaluate(() => !!(window.__jogo && window.__jogo.pronto));
+      ok(vivo, `partida guardada ${rotulo}: o jogo não carregou — tela preta que volta a cada recarregamento`);
+      if (!vivo) continue;
+      const oferece = await pagina.evaluate(
+        () => !document.getElementById('btRetomar').classList.contains('oculta'));
+      ok(!oferece, `partida guardada ${rotulo}: o jogo oferece retomar uma partida que não fecha`);
+      // E o jogo continua JOGÁVEL: recusar o guardado é degradação graciosa, não avaria.
+      const jogou = await pagina.evaluate(() => { soBots('classico', 2); return !!(j.P && j.P.fase === 'mao'); });
+      ok(jogou, `partida guardada ${rotulo}: depois de recusar o guardado a partida não começou`);
+    }
+    await pagina.evaluate(() => { try { localStorage.removeItem('dominobar.partida'); } catch (e) { void e; } });
+    console.log(`  ${CASOS.length} formas de guardado corrompido, e o jogo abre em todas`);
+  }
+
   // ─── 3. voltar para a mesma partida ────────────────────────────────────────
   console.log('\na partida volta igual depois de recarregar');
   {
