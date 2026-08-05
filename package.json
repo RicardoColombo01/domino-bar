@@ -13,6 +13,8 @@
     "online": "node build.mjs && node tests/test-online.mjs",
     "fechamento": "node build.mjs && cd tests && npm run fechamento",
     "servir": "npx --yes serve .",
+    "app": "node build.mjs && node tests/test-app.mjs",
+    "icones": "node tests/gerar-icones.mjs",
     "textura": "node build.mjs && node tests/test-textura.mjs"
   }
 }

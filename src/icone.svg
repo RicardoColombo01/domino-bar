@@ -1,0 +1,27 @@
+<!-- A FONTE do ícone do aplicativo. É daqui que saem `icone-192.png` e `icone-512.png`,
+     por `npm run icones` — a loja e o manifest exigem PNG em arquivo, e este projeto não
+     tinha um único binário versionado (tudo é canvas e WebAudio na hora).
+
+     A peça é a 6|6, que é a que ABRE a primeira mão pela regra da casa.
+
+     ZONA SEGURA de ícone maskable: o sistema pode recortar em círculo, e só os 80% centrais
+     são garantidos. A peça mede 300×180 e sua diagonal é 350, dentro dos 409 do círculo de
+     80% — então nenhum recorte come pinta. Por isso o fundo é uma cor chapada e a peça não
+     encosta na borda. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" fill="#241a16"/>
+  <!-- o clarão da lâmpada de boteco, que é o que o jogo tem de mais reconhecível -->
+  <circle cx="256" cy="200" r="230" fill="#ffd7a0" opacity="0.13"/>
+  <g transform="rotate(-8 256 256)">
+    <rect x="106" y="166" width="300" height="180" rx="26" fill="#f4ecd9" stroke="#241a12" stroke-width="10"/>
+    <path d="M256 176 V336" stroke="#241a12" stroke-width="8"/>
+    <g fill="#191512">
+      <circle cx="147" cy="206" r="15"/><circle cx="215" cy="206" r="15"/>
+      <circle cx="147" cy="256" r="15"/><circle cx="215" cy="256" r="15"/>
+      <circle cx="147" cy="306" r="15"/><circle cx="215" cy="306" r="15"/>
+      <circle cx="297" cy="206" r="15"/><circle cx="365" cy="206" r="15"/>
+      <circle cx="297" cy="256" r="15"/><circle cx="365" cy="256" r="15"/>
+      <circle cx="297" cy="306" r="15"/><circle cx="365" cy="306" r="15"/>
+    </g>
+  </g>
+</svg>

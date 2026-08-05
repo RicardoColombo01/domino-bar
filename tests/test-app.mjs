@@ -1,0 +1,150 @@
+// O JOGO COMO APLICATIVO: manifest, ícones e o service worker.
+//
+//   npm run app        (~30 s)
+//
+// Por que esta suíte existe. O `#semCarga` promete, em português, na tela do jogador:
+// "depois de carregar uma vez, o jogo abre offline". Até agora isso dependia SÓ do cache
+// HTTP, que o navegador esvazia quando quer — era promessa, não garantia. O service worker
+// a torna verdadeira, e uma promessa sem asserção volta a ser promessa na primeira mexida.
+//
+// A asserção que vale por todas é a última: DESLIGA A REDE e recarrega. Se o jogo ficar
+// pronto assim, o resto é detalhe.
+import fs from 'node:fs';
+import path from 'node:path';
+import http from 'node:http';
+import puppeteer from 'puppeteer-core';
+
+const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+const RAIZ = path.resolve(import.meta.dirname, '..');
+const PORTA = 8124;
+const TIPOS = {
+  '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
+  '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml',
+};
+
+let falhas = 0;
+const ok = (cond, msg) => { if (!cond) { console.error('  ✗ ' + msg); falhas++; } };
+
+// ─── o que dá para conferir sem navegador ────────────────────────────────────
+console.log('o manifest e os ícones');
+const manifesto = JSON.parse(fs.readFileSync(path.join(RAIZ, 'manifest.webmanifest'), 'utf8'));
+
+// CAMINHO RELATIVO NÃO É ESTILO: o jogo mora numa project page
+// (`ricardocolombo01.github.io/domino-bar/`), e um `start_url` absoluto apontaria para a
+// raiz do domínio — 404, e o aplicativo instalado abriria numa página que não existe.
+for (const campo of ['start_url', 'scope'])
+  ok(manifesto[campo].startsWith('./'), `${campo} tem de ser relativo (é "${manifesto[campo]}")`);
+
+ok(manifesto.icons.length >= 2, 'o manifest precisa de pelo menos dois tamanhos de ícone');
+// A instalação em Android EXIGE 192 e 512. Faltando um, o navegador simplesmente não
+// oferece instalar — e não diz por quê, que é o que torna isto caro de descobrir depois.
+for (const n of ['192x192', '512x512'])
+  ok(manifesto.icons.some(i => i.sizes === n), `falta o ícone ${n}, e sem ele não dá para instalar`);
+// MASKABLE é o que impede o sistema de recortar o ícone num círculo e comer as pintas.
+ok(manifesto.icons.some(i => (i.purpose || '').includes('maskable')),
+  'nenhum ícone é maskable — o Android recorta e come a peça');
+
+// Ícone que o manifest promete e não existe é 404 na instalação, e ninguém olha o console
+// da tela inicial do celular.
+for (const i of manifesto.icons) {
+  const arq = path.join(RAIZ, i.src);
+  ok(fs.existsSync(arq), `o manifest aponta ${i.src} e o arquivo não existe`);
+}
+console.log(`  ${manifesto.icons.length} ícones declarados, todos em disco · start_url ${manifesto.start_url}`);
+
+// ─── a versão do cache acompanha o bundle ────────────────────────────────────
+// Cache de service worker que não troca de nome é o defeito mais cruel desta família: o
+// jogador fica preso numa versão antiga para sempre. Aqui se cobra o mecanismo que impede
+// isso — o nome do cache é um resumo do index.html, então publicar correção JÁ é publicar
+// cache novo, e "esquecer de bumpar" deixa de existir como categoria de erro.
+console.log('\na versão do cache');
+const sw = fs.readFileSync(path.join(RAIZ, 'sw.js'), 'utf8');
+const versao = (sw.match(/const VERSAO = '([^']*)'/) || [])[1];
+ok(versao && /^[a-f0-9]{12}$/.test(versao), `o sw.js não tem versão carimbada (achei "${versao}")`);
+ok(!sw.includes('__VERSAO__'), 'o marcador __VERSAO__ sobrou no sw.js — o build não carimbou');
+
+const crypto = await import('node:crypto');
+const esperada = crypto.createHash('sha256')
+  .update(fs.readFileSync(path.join(RAIZ, 'index.html'), 'utf8')).digest('hex').slice(0, 12);
+ok(versao === esperada,
+  `a versão do sw.js (${versao}) não é o resumo do index.html publicado (${esperada}) — rode npm run build`);
+console.log(`  cache dominobar-${versao}, amarrado ao index.html`);
+
+// ─── e agora o navegador ─────────────────────────────────────────────────────
+const servidor = http.createServer((req, res) => {
+  const rel = decodeURIComponent(req.url.split('?')[0]);
+  const arq = path.join(RAIZ, rel === '/' ? 'index.html' : rel);
+  if (!arq.startsWith(RAIZ) || !fs.existsSync(arq) || fs.statSync(arq).isDirectory()) {
+    res.writeHead(404); res.end(); return;
+  }
+  res.writeHead(200, { 'content-type': TIPOS[path.extname(arq)] || 'application/octet-stream' });
+  res.end(fs.readFileSync(arq));
+});
+await new Promise(r => servidor.listen(PORTA, r));
+
+const nav = await puppeteer.launch({
+  executablePath: CHROME, headless: true,
+  args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--mute-audio'],
+});
+const pag = await nav.newPage();
+const URL_JOGO = `http://localhost:${PORTA}/index.html`;
+const pronto = (prazo = 30000) =>
+  pag.waitForFunction('window.__jogo && window.__jogo.pronto', { timeout: prazo, polling: 300 });
+
+try {
+  console.log('\no service worker assume a página');
+  await pag.goto(URL_JOGO, { waitUntil: 'networkidle2', timeout: 45000 });
+  await pronto();
+
+  // O worker só passa a INTERCEPTAR na carga seguinte à instalação. É por isso que a
+  // primeira visita não enche o cache das bibliotecas: quem as busca é a página, e naquele
+  // momento ainda não há ninguém no meio. A segunda carga é a que guarda — e é também a
+  // razão de o `install` não baixar as bibliotecas por conta própria: seriam 763 KB
+  // baixados DUAS vezes na visita em que o jogador está esperando para jogar.
+  await pag.waitForFunction('navigator.serviceWorker.controller !== null || true', { timeout: 5000 });
+  await pag.reload({ waitUntil: 'networkidle2', timeout: 45000 });
+  await pronto();
+
+  const mandando = await pag.evaluate(() => !!navigator.serviceWorker.controller);
+  ok(mandando, 'o service worker não assumiu a página nem depois de recarregar');
+
+  const guardado = await pag.evaluate(async () => {
+    const nomes = await caches.keys();
+    const c = await caches.open(nomes[0]);
+    return { caches: nomes, urls: (await c.keys()).map(r => r.url) };
+  });
+  ok(guardado.caches.length === 1,
+    `devia haver UM cache e há ${guardado.caches.length}: ${guardado.caches.join(', ')}`);
+  const tem = t => guardado.urls.some(u => u.includes(t));
+  ok(tem('index.html'), 'o index.html não está no cache');
+  ok(tem('three.module.min.js'), 'o three não está no cache — offline não abre');
+  // ESTA nasceria VERMELHA sem o `crossorigin` no <script> do PeerJS: sem ele a resposta é
+  // OPACA, o worker recusa guardar (não dá para conferir se deu certo), e o jogo abriria
+  // offline SEM o online. O sintoma seria "o botão de mesa online sumiu depois que instalei".
+  ok(tem('peerjs'), 'o peerjs não está no cache — offline abriria sem o online');
+  console.log(`  ${guardado.urls.length} respostas guardadas em ${guardado.caches[0]}`);
+
+  // ─── a asserção que vale por todas ─────────────────────────────────────────
+  console.log('\ncom a rede desligada');
+  await pag.setOfflineMode(true);
+  await pag.reload({ waitUntil: 'domcontentloaded', timeout: 45000 });
+  await pronto(20000);
+  const offline = await pag.evaluate(() => ({
+    pronto: !!(window.__jogo && window.__jogo.pronto),
+    peer: typeof Peer !== 'undefined',
+    // O #semCarga é o recado de "não carregou". Ele aparecendo aqui seria a contradição
+    // exata desta suíte: o jogo pronto e a tela dizendo que não carregou.
+    recado: !document.getElementById('semCarga').classList.contains('oculta'),
+  }));
+  ok(offline.pronto, 'o jogo NÃO abriu offline — é a promessa que o #semCarga faz na tela');
+  ok(offline.peer, 'offline o PeerJS sumiu: dava para jogar, mas não dava para abrir mesa');
+  ok(!offline.recado, 'o jogo abriu offline e mesmo assim mostrou o recado de "não carregou"');
+  console.log('  o jogo abriu sem rede, com o PeerJS junto');
+  await pag.setOfflineMode(false);
+} finally {
+  await nav.close();
+  servidor.close();
+}
+
+console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntudo certo');
+process.exit(falhas ? 1 : 0);

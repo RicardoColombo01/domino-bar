@@ -1,0 +1,20 @@
+{
+  "name": "Dominó de Bar",
+  "short_name": "Dominó",
+  "description": "Dominó dupla-seis em 3D. De 2 a 4 jogadores, em qualquer mistura de gente e bot, na mesma tela ou pela internet.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "id": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#241a16",
+  "theme_color": "#241a16",
+  "categories": ["games"],
+  "icons": [
+    { "src": "./icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

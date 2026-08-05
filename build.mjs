@@ -12,6 +12,7 @@
 //   node build.mjs --check  só confere se o index.html está em dia
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { execFileSync } from 'child_process';
 
 const raiz = import.meta.dirname;
@@ -19,6 +20,8 @@ const DIR_JS = path.join(raiz, 'src', 'js');
 const MOLDE = path.join(raiz, 'src', 'pagina.html');
 const CSS = path.join(raiz, 'src', 'css', 'estilo.css');
 const SAIDA = path.join(raiz, 'index.html');
+const MOLDE_SW = path.join(raiz, 'src', 'sw.js');
+const SAIDA_SW = path.join(raiz, 'sw.js');
 
 // As fontes vivem em PASTAS POR DONO (`10-casa/`, `30-domino/`, e amanhã `40-truco/`), mas
 // a ORDEM continua saindo do NÚMERO do arquivo — nunca do caminho. Isso não é preferência
@@ -135,15 +138,35 @@ try {
   if (fs.existsSync(tmp)) fs.unlinkSync(tmp);
 }
 
+// ─── o service worker, com a versão amarrada ao bundle ───────────────────────
+// O nome do cache é um resumo do `index.html` publicado. Cache de service worker que não
+// troca de nome é o defeito mais cruel desta família: o jogador fica preso numa versão
+// antiga para sempre. Amarrando o nome ao conteúdo, publicar correção JÁ é publicar cache
+// novo — e "esquecer de bumpar a versão" deixa de ser uma coisa que existe.
+const versao = crypto.createHash('sha256').update(html).digest('hex').slice(0, 12);
+const moldeSW = ler(MOLDE_SW);
+// EXIGE UMA ocorrência, e o motivo é uma cicatriz: `String.replace` troca a PRIMEIRA, e
+// bastou o marcador aparecer também num comentário para o comentário ficar com o resumo e o
+// `const VERSAO` ficar com o marcador — cache chamado `dominobar-__VERSAO__`, o mesmo nome
+// para sempre, que é exatamente o defeito que este mecanismo existe para impedir. Contar
+// antes de trocar é a mesma disciplina que este projeto já exige das mutações de teste.
+const quantos = moldeSW.split('__VERSAO__').length - 1;
+if (quantos !== 1)
+  throw new Error(`src/sw.js tem ${quantos} marcadores __VERSAO__ e precisa de exatamente 1`);
+const sw = moldeSW.replace('__VERSAO__', versao);
+
+const saidas = [[SAIDA, html, 'index.html'], [SAIDA_SW, sw, 'sw.js']];
+
 if (process.argv.includes('--check')) {
-  const atual = fs.existsSync(SAIDA) ? fs.readFileSync(SAIDA, 'utf8') : '';
-  if (atual !== html) {
-    console.error('index.html está desatualizado em relação a src/ — rode `npm run build`.');
+  const velhos = saidas.filter(([arq, novo]) =>
+    (fs.existsSync(arq) ? fs.readFileSync(arq, 'utf8') : '') !== novo);
+  if (velhos.length) {
+    console.error(`${velhos.map(s => s[2]).join(' e ')} desatualizado em relação a src/ — rode \`npm run build\`.`);
     process.exit(1);
   }
-  console.log('index.html está em dia com src/');
+  console.log('index.html e sw.js estão em dia com src/');
 } else {
-  fs.writeFileSync(SAIDA, html);
+  saidas.forEach(([arq, txt]) => fs.writeFileSync(arq, txt));
   const linhas = html.split('\n').length;
-  console.log(`index.html gerado de ${partes.length} arquivos (${linhas} linhas)`);
+  console.log(`index.html gerado de ${partes.length} arquivos (${linhas} linhas) · sw.js versão ${versao}`);
 }

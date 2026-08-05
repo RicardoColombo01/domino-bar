@@ -8,6 +8,7 @@
     "shots": "node shots.mjs",
     "online": "node test-online.mjs",
     "fechamento": "node test-fechamento.mjs",
+    "app": "node test-app.mjs",
     "textura": "node test-textura.mjs"
   },
   "dependencies": {

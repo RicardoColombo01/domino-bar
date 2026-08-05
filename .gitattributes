@@ -10,3 +10,10 @@
 # Exige uma vez por clone (o git não versiona a definição do driver):
 #     git config merge.ours.driver true
 index.html   merge=ours   linguist-generated=true
+
+# O sw.js entrou na mesma regra, e pelo mesmo motivo elevado ao quadrado: além de ser
+# gerado, o nome do cache dentro dele é um RESUMO do index.html. Duas branches que mexam em
+# src/ produzem dois resumos diferentes, então ele conflita SEMPRE — e resolver isso à mão
+# significa escolher um hash, ou seja, escolher o cache errado. O arquivo certo sai do
+# `npm run build` dentro do merge, junto do index.html, e `npm run check` cobra os dois.
+sw.js        merge=ours   linguist-generated=true
