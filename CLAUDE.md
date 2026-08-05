@@ -5,8 +5,8 @@ bot, na mesma tela ou pela internet. No ar em
 **https://ricardocolombo01.github.io/domino-bar/** (repo público `RicardoColombo01/domino-bar`).
 
 Sem framework, sem bundler, sem asset: madeira, pintas e sons são gerados em canvas e
-WebAudio na hora. Three.js e PeerJS vêm de CDN. **5.544 linhas** no total (`src/js` +
-`pagina.html` + `css/estilo.css`), conferido em 04/08/2026 — este número **envelhece**, e
+WebAudio na hora. Three.js e PeerJS vêm de CDN. **5.827 linhas** no total (`src/js` +
+`pagina.html` + `css/estilo.css`), conferido em 05/08/2026 — este número **envelhece**, e
 envelheceu: ficou dizendo 2.100 por três releases seguidas.
 
 **Conte com `node`, não com o PowerShell.** `Measure-Object -Line` **não conta linha em
@@ -251,6 +251,19 @@ As pontas são o primeiro e o último número; jogar na esquerda é um `unshift`
   a tentação, todas as vezes, é guardar no JOGO (`if (el.setAttribute)`) — isso troca um
   defeito por um ramo que o teste nunca alcança. **Dublê que responde um valor fixo é tão
   incompleto quanto dublê sem método**, e o sintoma é o mesmo: um ramo verde que nunca rodou.
+- **Asserção de TEMPO num harness com dublê mede o DUBLÊ.** O custo real de um convidado
+  mandando nome de 4 MB é o `publicar()` gravando a partida no `localStorage` a cada
+  mensagem — e o harness dubla o `localStorage`. Medido: 20 nomes de 4 MB custam **382 ms**
+  em Node contra os ~9 s do navegador. Qualquer limiar de tempo ali estaria certificando um
+  mundo que não existe. O que se mede é a **amplificação** (quantas publicações a rajada
+  gera), que é determinística e é o defeito em si.
+- **Quando o conserto tem DUAS camadas, a mutação de UMA delas sai verde — e isso é o
+  desenho, não asserção fraca.** Tirando só o `clearTimeout` ou só a guarda de geração, a
+  irmã segura o caso testado. Elas existem porque falham de jeitos diferentes: cancelar faz
+  o temporizador deixar de existir, a geração só o faz calar, e só a geração alcança
+  callback de peer, que `clearTimeout` não cancela. **A prova honesta é mutar o PAR** — e
+  quem mexer numa camada e vir a suíte verde não descobriu que ela é inútil, descobriu que
+  a irmã está de pé. Isso precisa estar escrito ao lado da asserção.
 - **Asserção que LANÇA em vez de reprovar mata o processo e trunca a suíte.** O efeito
   perverso aparece na conferência por MUTAÇÃO: ela passa a sub-relatar, e parece que a
   asserção não cobria o ramo quando na verdade a suíte morreu antes de chegar lá. Quando
@@ -714,6 +727,10 @@ npm test               # as três suítes de lógica, segundos
 
 **Hoje `npm test` tem de passar inteiro** — a fila está vazia e não há vermelha esperada.
 Qualquer reprovação é regressão.
+
+**Estado em 05/08/2026, conferido rodando:** `npm test`, `npm run lembrar`, `npm run online`,
+`npm run textura` e o `telas` nas duas metades — **todos verdes**. A Fila 11 está fechada e
+não há defeito conhecido em aberto.
 
 **Suíte pesada roda sozinha** — o `test-telas` renderiza WebGL por software e o `test-online`
 tem prazo de navegação de 45 s; duas ao mesmo tempo viram falha que parece da rede. E o

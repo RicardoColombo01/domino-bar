@@ -193,7 +193,7 @@ existe mais.
 
 Sem framework, sem bundler, sem asset. Madeira, piso, as pintas das peças e todos os sons
 são gerados em código na hora — não há um único `.png` ou `.mp3` no repositório. Three.js
-e PeerJS vêm de CDN. São **5.544 linhas** entre `src/` e o CSS.
+e PeerJS vêm de CDN. São **5.827 linhas** entre `src/` e o CSS.
 
 ```
 src/js/01-05   regras puras: baralho, encaixes, turnos, placar, bot
@@ -271,7 +271,7 @@ versão que ela vai lançar — `v2`, `v3` —, que nasce de `main`, volta para 
 apagada. A tag é o que fica.
 
 ```
-main   v1.0.0 ── v1.0.1 ── … ── v1.9.0 ── v1.10.0 ─────────── v2.0.0 ─────────── v3.0.0
+main   v1.0.0 ── v1.0.1 ── … ── v1.10.0 ── v2.0.0 ── v2.1.1 ── v2.2.0 ─────────── v3.0.0
                                                   ╲          ╱      ╲          ╱
                                                    ●──●──●──●         ●──●──●──●
                                                        v2                  v3
@@ -298,6 +298,18 @@ pedaço que o cartão mostra em tela estreita. Junto foram dois defeitos de camp
 texto **voltam ao topo** quando você rola (a carta mais alta que a tela ficava com o começo
 fora do alcance), e o convidado que **sai consegue voltar** — sair entrega a partida, não a
 mesa, e a cadeira que virou bot por falta de gente volta a ser dele.
+
+A **v2.2.0** fechou a **Fila 11**, a segunda varredura da história do projeto — e a primeira
+release inteira feita de coisas que **nenhum jogador tinha relatado**, porque nenhuma delas
+aparece jogando normalmente. Elas aparecem quando alguém desiste no meio de um clique, ou
+quando alguém do outro lado do fio não está de boa-fé: um temporizador de rede que acordava
+depois de você mudar de ideia e reabria uma mesa sozinho, um convidado capaz de **congelar a
+mesa de todos** mandando um nome de 4 MB, campos numéricos indo para a tela sem escape, e uma
+partida guardada corrompida que dava **tela preta a cada recarregamento**.
+
+O que ela deixou de mais valioso não é conserto nenhum: é que o `conn.on('data')` — a porta
+por onde entra tudo o que vem da rede — **não era alcançável por teste nenhum**, porque o
+dublê do PeerJS engolia o registro de ouvintes. Quatro dos sete defeitos moravam ali.
 
 O dia a dia: `git switch -c v2` a partir de `main`, commits normais na branch, e no fim ela
 sobe a `version` do `package.json`, roda `npm test`, e volta para `main` com `--no-ff` e a
