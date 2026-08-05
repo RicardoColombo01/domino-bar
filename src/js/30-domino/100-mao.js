@@ -47,7 +47,7 @@ function porFileira(n) {
 // força, cada um desses reconstruía a mão e apagava a peça que você tinha levantado.
 // Assim, resize que não muda a largura é no-op.
 //
-// `vistaAtual` mora em 16-loop.js, e é por isso que a primeira chamada de enquadrar()
+// `vistaAtual` mora em 160-loop.js, e é por isso que a primeira chamada de enquadrar()
 // vem de lá: aqui ela ainda estaria na zona morta do `let`.
 function redesenharMao() {
   if (vistaAtual && vistaAtual.mao) sincronizarMao(vistaAtual);
@@ -266,7 +266,7 @@ function esconderMao() {
 }
 
 // Onde os adversários sentam e quanto a fileira deles mede sai inteiro de
-// `assentosDaMesa()` (07-cena.js) — aqui só se monta o que ele decidiu. O `apertoDaMesa`
+// `assentosDaMesa()` (070-cena.js) — aqui só se monta o que ele decidiu. O `apertoDaMesa`
 // que morava nesta linha media a tela na profundidade do assento DE CIMA e apertava todos
 // por ela, o que deixava o de lado (mais perto da câmera, onde a tela é mais estreita)
 // sobrando por fora e ainda por cima dentro da linha da mesa.

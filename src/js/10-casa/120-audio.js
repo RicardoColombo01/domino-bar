@@ -26,7 +26,7 @@ function ligarAudio() {
 // mudo no começo da partida e o primeiro toque na mesa desfazia.
 //
 // Ler `mudo` daqui é seguro pela mesma razão explicada em `ligarMurmuro`: ele mora no
-// 13-hud, concatenado DEPOIS, mas o corpo desta função só roda a um clique de distância.
+// 130-hud, concatenado DEPOIS, mas o corpo desta função só roda a um clique de distância.
 addEventListener('pointerdown', () => { ligarAudio(); if (ac && ac.state === 'suspended' && !mudo) ac.resume(); });
 
 function estalo({ dur = 0.09, freq = 1500, q = 1.1, vol = 0.3, tipo = 'bandpass' }) {
@@ -78,12 +78,12 @@ function ligarMurmuro() {
   s.start();
   murmuro = g;
   // O silêncio lembrado só pode ser aplicado agora: o AudioContext nasce no primeiro som,
-  // e antes dele não existe o que suspender. `mudo` mora no 13-hud e já está de pé aqui,
+  // e antes dele não existe o que suspender. `mudo` mora no 130-hud e já está de pé aqui,
   // porque esta função só roda depois de um clique do jogador.
   if (mudo) silenciar(true);
 }
 
-// O parâmetro chama-se `calado` e não `mudo` de propósito: `mudo` é uma global (13-hud) que
+// O parâmetro chama-se `calado` e não `mudo` de propósito: `mudo` é uma global (130-hud) que
 // o listener de pointerdown lá em cima consulta, e um parâmetro de mesmo nome sombreando-a
 // aqui dentro é o tipo de coisa que faz o defeito de cima ser difícil de enxergar.
 function silenciar(calado) {

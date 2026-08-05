@@ -265,7 +265,7 @@ function guardarFala(de, canal, txt, para) {
   falasGuardadas.push({ de, canal, txt, para });
 }
 
-// Chamada quando o hotseat entrega a tela a `cadeira` (btPronto, em 16-loop.js).
+// Chamada quando o hotseat entrega a tela a `cadeira` (btPronto, em 160-loop.js).
 //
 // Solta as TRÊS últimas. O limite é sobre ATENÇÃO e não sobre memória — `porNaConversa`
 // já corta a lista em 40 —: quem volta de três rodadas de hotseat estaria lendo parede de
@@ -348,7 +348,7 @@ el('cortina').onclick = () => { tocarClique(); fecharGavetas(); };
 // Girar o aparelho pode cruzar o limiar dos 560px nos dois sentidos, e aí a mesma
 // conversa aberta deixa de ser gaveta (ou passa a ser). Sem isto sobra um vidro fosco por
 // cima do jogo, ou a gaveta abre sem cortina. Listener próprio e não um gancho no
-// `agendarEnquadre` do 07-cena.js: aquilo é sobre a câmera, isto é sobre o HUD.
+// `agendarEnquadre` do 070-cena.js: aquilo é sobre a câmera, isto é sobre o HUD.
 addEventListener('resize', atualizarCortina);
 addEventListener('orientationchange', atualizarCortina);
 

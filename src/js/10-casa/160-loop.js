@@ -150,7 +150,7 @@ function pedirAcao(intencao) {
 // O único lugar que mexe na partida. Vale para o seu clique, para o bot e para o que
 // chega pela rede — e valida os três do mesmo jeito.
 // Uma peça como o FIO pode entregá-la: dois números de 0 a `MAX_PINTAS`, e nada mais.
-// `mesmaPeca` (02-baralho.js) lê `b[0]` sem guarda, então uma peça ausente ou nula LANÇA
+// `mesmaPeca` (020-baralho.js) lê `b[0]` sem guarda, então uma peça ausente ou nula LANÇA
 // lá dentro — e a exceção sobe pelo `conn.on('data')` do anfitrião, que é quem tem a
 // partida. Note que isto NÃO é sobre trapaça: `jogar` valida a jogada contra
 // `acoesDe(P, cadeira)`, que sai da mão do próprio jogador, então peça inventada continua
@@ -295,7 +295,7 @@ const HORAS_GUARDADA = 12;
 // `P.faltaNo` é um array de Set, e Set NÃO sobrevive a JSON: `JSON.stringify(new Set())`
 // dá `{}` — um objeto sem `.has` e sem `.indexOf`. Sem estas duas conversões a partida
 // retomada perdia calada quem passou em qual número (a marca da Fila 4) e o bot estourava
-// na primeira consulta, em `05-bot.js`. É a MESMA conversão que `visaoDe` faz para o fio,
+// na primeira consulta, em `050-bot.js`. É a MESMA conversão que `visaoDe` faz para o fio,
 // e pela mesma razão: o que não sobrevive à serialização não existe do outro lado.
 const partidaParaGuardar = () =>
   Object.assign({}, P, { faltaNo: P.faltaNo.map(s => Array.from(s)) });
@@ -321,7 +321,7 @@ function guardarPartida() {
 //
 // PARTIDA GUARDADA É ENTRADA DE FORA, exatamente como a mesa lembrada — e este era o único
 // validador de `localStorage` do projeto que nunca tinha sido endurecido. Ele conferia
-// quatro campos e entregava o resto CRU, enquanto o `mesaLembrada()` (14-menu.js) confere
+// quatro campos e entregava o resto CRU, enquanto o `mesaLembrada()` (140-menu.js) confere
 // campo a campo com `Object.hasOwn`. A diferença de rigor entre os dois era acidental, não
 // decidida.
 //
@@ -510,8 +510,8 @@ addEventListener('keydown', ev => {
 });
 
 // ─── loop ────────────────────────────────────────────────────────────────────
-// Primeiro enquadramento. Fica aqui, e não no fim de 07-cena.js, porque enquadrar() lê
-// a profundidade da mão (10-mao.js) e manda refazer o leque — nada disso existe ainda
+// Primeiro enquadramento. Fica aqui, e não no fim de 070-cena.js, porque enquadrar() lê
+// a profundidade da mão (100-mao.js) e manda refazer o leque — nada disso existe ainda
 // quando o arquivo da cena termina de rodar.
 enquadrar();
 

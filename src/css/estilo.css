@@ -376,7 +376,7 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
 .regras b { color: var(--ambar); }
 
 /* ── quem pediu menos movimento ───────────────────────────────────────────────
-   O outro lado do `movimentoReduzido()` do 01-constantes.js, que cuida do 3D — a lâmpada
+   O outro lado do `movimentoReduzido()` do 010-constantes.js, que cuida do 3D — a lâmpada
    que respira e as peças que deslizam. Aqui ficam os três movimentos de HTML que existem
    no projeto: a barra de confirmar subindo, o aviso crescendo e o hover dos botões.
 

@@ -389,7 +389,7 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
 .regras b { color: var(--ambar); }
 
 /* ── quem pediu menos movimento ───────────────────────────────────────────────
-   O outro lado do `movimentoReduzido()` do 01-constantes.js, que cuida do 3D — a lâmpada
+   O outro lado do `movimentoReduzido()` do 010-constantes.js, que cuida do 3D — a lâmpada
    que respira e as peças que deslizam. Aqui ficam os três movimentos de HTML que existem
    no projeto: a barra de confirmar subindo, o aviso crescendo e o hover dos botões.
 
@@ -939,7 +939,7 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
 
 <script type="module">
 /* GERADO por build.mjs a partir de src/ — não edite este bloco à mão. */
-/* ····· 10-casa/01-constantes.js ····· */
+/* ····· 10-casa/010-constantes.js ····· */
 const MAX_PINTAS = 6;            // dupla-seis → 28 peças
 
 // Os modos da casa. Um modo é só quantas peças cada um recebe, com quantas cadeiras
@@ -950,7 +950,7 @@ const MAX_PINTAS = 6;            // dupla-seis → 28 peças
 // usava, sem uma linha de regra nova. E o 27 do Trio não é coincidência: tirar a
 // bucha de zero é justamente o que faz o baralho dividir exato entre três.
 //
-// `carrocasDemais` é a munição de maoRuim() (02-baralho.js): a partir de quantas
+// `carrocasDemais` é a munição de maoRuim() (020-baralho.js): a partir de quantas
 // carroças a mesa embaralha de novo.
 const MODOS = {
   classico: { rotulo: 'Clássico', nota: '7 peças',  pecasPorMao: 7,  cadeiras: [2, 3, 4], semZeroZero: false, carrocasDemais: 5 },
@@ -980,7 +980,7 @@ const movimentoReduzido = () => MQ_MOVIMENTO.matches;
 
 // Medidas da peça em unidades de mundo. O comprimento é EXATAMENTE o dobro da
 // largura — é isso que faz uma carroça atravessada ocupar meia peça no braço e
-// o tabuleiro fechar sem sobra em 06-layout.js. Mexer num, mexer no outro.
+// o tabuleiro fechar sem sobra em 060-layout.js. Mexer num, mexer no outro.
 const PECA_C = 1.0;
 const PECA_L = 0.5;
 const PECA_E = 0.18;
@@ -997,7 +997,7 @@ const ESPALHA_X = 4.0;
 const ESPALHA_Z = 2.2;
 
 // O tabuleiro é empurrado meio corpo para o fundo, para a mão caber embaixo dele. Era um
-// literal 0.4 escrito em dois pontos de 09-tabuleiro.js, e virou constante porque quem
+// literal 0.4 escrito em dois pontos de 090-tabuleiro.js, e virou constante porque quem
 // confere sobreposição no tampo precisa saber onde a caixa do tabuleiro realmente está.
 const TABULEIRO_Z = 0.4;
 
@@ -1028,7 +1028,7 @@ const CORES = {
 };
 
 // ─── o que o navegador lembra ────────────────────────────────────────────────
-// Mora aqui, no primeiro arquivo, porque o 13-hud lê preferência na hora em que é
+// Mora aqui, no primeiro arquivo, porque o 130-hud lê preferência na hora em que é
 // concatenado — quem chama tem de já existir.
 //
 // Um lugar só para falar com o localStorage. Ele falha de quatro jeitos e todos
@@ -1057,9 +1057,9 @@ function esquecer(chave) {
   try { localStorage.removeItem(GUARDA + chave); } catch (e) { void e; }
 }
 
-/* ····· 30-domino/02-baralho.js ····· */
+/* ····· 30-domino/020-baralho.js ····· */
 // O baralho: as peças, o embaralho e quem abre a mão. Quantas peças e quantas na mão
-// depende do modo da mesa (MODOS, em 01-constantes.js).
+// depende do modo da mesa (MODOS, em 010-constantes.js).
 // (parte de src/js — mesmo escopo, concatenado por build.mjs)
 
 const chave = p => p[0] + '|' + p[1];
@@ -1089,7 +1089,7 @@ function baralhoDoModo(modo) {
 }
 
 // QUANTAS PEÇAS SOBRAM PARA O MONTE nesta combinação de modo e jogadores. Mora aqui, junto
-// do `baralhoDoModo`, porque aritmética de baralho fora do motor apodrece — o `14-menu.js`
+// do `baralhoDoModo`, porque aritmética de baralho fora do motor apodrece — o `140-menu.js`
 // já teve um `28 - 7 * MESA.n` escrito à mão, e foi a primeira linha a quebrar quando os
 // modos chegaram.
 //
@@ -1158,7 +1158,7 @@ function quemAbre(maos) {
   return melhor;
 }
 
-/* ····· 30-domino/03-regras.js ····· */
+/* ····· 30-domino/030-regras.js ····· */
 // As regras propriamente ditas. Tudo aqui é função pura sobre a linha da mesa:
 // nenhum estado guardado, nenhum Three.js — é o que permite rodar mil partidas
 // no terminal em segundos e achar erro de regra antes de existir um pixel.
@@ -1231,7 +1231,7 @@ function pontasDepois(linha, peca, ponta) {
 // que deixou, os outros passam, a vez volta e você joga de novo. Isso é jogar sozinho —
 // jogo bom, não manobra —, e não pode ser barrado.
 //
-// Quem chama decide o resto (é `acoesDe`, em 04-partida.js): a regra não vale na sua
+// Quem chama decide o resto (é `acoesDe`, em 040-partida.js): a regra não vale na sua
 // última peça (jogar a última é bater), e só barra se sobrar jogada que não seja também
 // um fechamento — senão as duas se barrariam, você ficaria sem jogada, e o motor te
 // mandaria passar: a tranca aconteceria igual, pela porta dos fundos.
@@ -1250,7 +1250,7 @@ function fechamentosArmados(linha, jogadas, mao, baralho) {
   // invertidas, e a regra errava sempre para menos.
   //
   // Só aqui dentro: `chave` continua sensível à orientação de propósito, porque em
-  // 09-tabuleiro.js e 10-mao.js ela é o identificador do objeto 3D.
+  // 090-tabuleiro.js e 100-mao.js ela é o identificador do objeto 3D.
   const kc = p => Math.min(p[0], p[1]) + '|' + Math.max(p[0], p[1]);
 
   const vistas = new Set(linha.map(kc));
@@ -1298,7 +1298,7 @@ function tipoDaBatida(peca, linha) {
   return e !== d && serve(e) && serve(d) ? 'laelo' : 'simples';
 }
 
-/* ····· 30-domino/04-partida.js ····· */
+/* ····· 30-domino/040-partida.js ····· */
 //
 // A IDEIA QUE SEGURA O PROJETO INTEIRO: uma cadeira é só
 //     { nome, tipo: 'voce' | 'local' | 'bot' | 'online', nivel }
@@ -1482,7 +1482,7 @@ function fecharMao(P, res) {
 // Alguém saiu da mesa no meio. A partida acaba aqui, e acaba PERDIDA para quem saiu —
 // senão fechar a aba viraria a saída de emergência de toda partida mal encaminhada.
 // Não mexe no placar: quem saiu simplesmente não leva, e quem decide o campeão é a tela
-// (13-hud.js), que tira o time do desistente da conta.
+// (130-hud.js), que tira o time do desistente da conta.
 function abandonar(P, cadeira) {
   if (P.fase === 'fim') return { erro: 'a partida já acabou' };
   P.desistiu = cadeira;
@@ -1525,7 +1525,7 @@ function visaoDe(P, cadeira) {
   };
 }
 
-/* ····· 30-domino/05-bot.js ····· */
+/* ····· 30-domino/050-bot.js ····· */
 //
 // A dificuldade aqui NÃO é um algoritmo diferente por nível — é QUANTA INFORMAÇÃO o
 // bot recebe e quanto ele erra no impulso. O bot fácil não presta atenção em quem
@@ -1692,7 +1692,7 @@ function jogadaDoBot(P, cadeira) {
   return { acao: 'jogar', peca: escolha.peca, ponta: escolha.ponta };
 }
 
-/* ····· 30-domino/06-layout.js ····· */
+/* ····· 30-domino/060-layout.js ····· */
 // Onde cada peça fica na mesa. Puro cálculo — nada de Three.js aqui, o que deixa
 // o serpenteio testável no terminal.
 // (parte de src/js — mesmo escopo, concatenado por build.mjs)
@@ -1801,7 +1801,7 @@ function escalaDoTabuleiro(caixa, larguraUtil = ESPALHA_X * 2.1) {
 // ─── quem mais está sentado à mesa ───────────────────────────────────────────
 // Onde cada cadeira fica, vista de quem joga: você em 0, o resto em volta no sentido
 // da vez. Mora aqui porque é trigonometria pura e porque o orçamento do tabuleiro,
-// logo abaixo, precisa dela — 10-mao.js só a consumia.
+// logo abaixo, precisa dela — 100-mao.js só a consumia.
 const anguloDaCadeira = (i, eu, n) => ((i - eu + n) % n) * Math.PI * 2 / n;
 
 // A caixa que o monte de um adversário ocupa no tampo. Ele nasce girado -a e as peças
@@ -1830,7 +1830,7 @@ function caixaDoMonte(a, x, z, quantas, espaco) {
 // primeiros tetos — um passo só, sem laço, e o erro é sempre para o lado seguro (faixa
 // larga demais conta assentos demais e o orçamento sai menor, nunca maior).
 //
-// Continua PURA: recebe onde os assentos ficaram; quem mede a tela é 07-cena.js.
+// Continua PURA: recebe onde os assentos ficaram; quem mede a tela é 070-cena.js.
 function larguraUtilDoTabuleiro(caixa, tela = Infinity, montes = [], folga = FOLGA_VIZINHO) {
   const semVizinhos = Math.min(ESPALHA_X * 2.1, tela);
   if (!caixa.l) return semVizinhos;
@@ -1845,7 +1845,7 @@ function larguraUtilDoTabuleiro(caixa, tela = Infinity, montes = [], folga = FOL
   return Math.max(PECA_C, Math.min(semVizinhos, corredor));
 }
 
-/* ····· 10-casa/07-cena.js ····· */
+/* ····· 10-casa/070-cena.js ····· */
 //
 // Nenhum arquivo de imagem no projeto: madeira, piso e as pintas das peças são
 // desenhados em canvas na hora. Textura procedural custa ~40 linhas e economiza
@@ -2032,7 +2032,7 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
 // próximo restore. O retorno da aba é o único momento em que dá para PERGUNTAR, e a
 // pergunta custa três pixels.
 //
-// O `visibilitychange` do 11-interacao.js trata a SAÍDA (document.hidden) e é sobre gesto
+// O `visibilitychange` do 110-interacao.js trata a SAÍDA (document.hidden) e é sobre gesto
 // preso; este é o outro lado, e mora aqui, junto do assunto dele.
 document.addEventListener('visibilitychange', () => { if (!document.hidden) conferirTexturas(); });
 
@@ -2096,7 +2096,7 @@ parede.position.set(0, 7.6, -13);
 scene.add(parede);
 
 // A mesa é redonda e o jogo cabe nela: o tabuleiro pode ir a ~8.4 de largura e o
-// tampo tem 12 de diâmetro. Quando não cabe, quem encolhe é o tabuleiro (06-layout).
+// tampo tem 12 de diâmetro. Quando não cabe, quem encolhe é o tabuleiro (060-layout).
 const MESA_R = 6.1;
 const tampo = new THREE.Mesh(
   new THREE.CylinderGeometry(MESA_R, MESA_R, 0.34, 64),
@@ -2185,8 +2185,8 @@ scene.add(cinzeiro);
 tralhas.push(cinzeiro);
 
 // ─── quem senta onde ─────────────────────────────────────────────────────────
-// A conta ÚNICA do que está no tampo. Antes eram duas: 10-mao.js apertava o círculo dos
-// adversários por um lado e 09-tabuleiro.js media o orçamento do tabuleiro por outro, em
+// A conta ÚNICA do que está no tampo. Antes eram duas: 100-mao.js apertava o círculo dos
+// adversários por um lado e 090-tabuleiro.js media o orçamento do tabuleiro por outro, em
 // profundidades diferentes (z = -3.05 contra z = 0.4) e com divisores mágicos diferentes
 // (13.5 contra 0.86), sem uma saber da outra. Que os dois dessem quase o mesmo número era
 // coincidência aritmética — e a coincidência era justamente o que garantia a colisão.
@@ -2246,14 +2246,14 @@ function enquadrar() {
   const fovX = 2 * Math.atan((MAO_CHEIA / 2) / profundidadeDe(MAO_Y, MAO_Z));
   const preciso = 2 * Math.atan(Math.tan(fovX / 2) / aspect) * 180 / Math.PI;
   // Em retrato o "preciso" passa de 90°, e aí é melhor a mão em mais fileiras do que a
-  // mesa entortada de perspectiva: o teto corta, e 10-mao.js quebra o leque.
+  // mesa entortada de perspectiva: o teto corta, e 100-mao.js quebra o leque.
   camera.fov = Math.min(FOV_TETO, Math.max(FOV_BASE, preciso));
   camera.updateProjectionMatrix();
 
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.setSize(innerWidth, innerHeight);
   // A largura disponível mudou: o leque tem de ser refeito. Quem decide se vale a pena
-  // é a assinatura da mão, em 10-mao.js — resize que não mexe na largura é no-op.
+  // é a assinatura da mão, em 100-mao.js — resize que não mexe na largura é no-op.
   redesenharMao();
 }
 
@@ -2274,7 +2274,7 @@ if (typeof visualViewport !== 'undefined' && visualViewport) {
   visualViewport.addEventListener('resize', agendarEnquadre);
 }
 
-/* ····· 30-domino/08-peca3d.js ····· */
+/* ····· 30-domino/080-peca3d.js ····· */
 //
 // As 28 peças saem de UMA textura só. Em vez de desenhar 28 combinações, o atlas tem
 // as sete meias-faces (0 a 6) lado a lado, e cada metade da peça é um plano cuja UV
@@ -2398,7 +2398,7 @@ function porNaMesa(obj, posta) {
   obj.rotation.set(0, posta.rotY, 0);
 }
 
-/* ····· 30-domino/09-tabuleiro.js ····· */
+/* ····· 30-domino/090-tabuleiro.js ····· */
 //
 // Não existe "animar a jogada X". A cada mudança o tabuleiro é RECONCILIADO com a
 // visão: cria o que falta, tira o que sobra, e manda todo mundo deslizar para o novo
@@ -2566,7 +2566,7 @@ function animarTabuleiro(dt) {
   }
 }
 
-/* ····· 30-domino/10-mao.js ····· */
+/* ····· 30-domino/100-mao.js ····· */
 //
 // Quem está na sua frente depende de quem é "você": a cadeira mostrada vai sempre
 // para a beirada de baixo da tela e as outras se distribuem em volta da mesa. É o que
@@ -2614,7 +2614,7 @@ function porFileira(n) {
 // força, cada um desses reconstruía a mão e apagava a peça que você tinha levantado.
 // Assim, resize que não muda a largura é no-op.
 //
-// `vistaAtual` mora em 16-loop.js, e é por isso que a primeira chamada de enquadrar()
+// `vistaAtual` mora em 160-loop.js, e é por isso que a primeira chamada de enquadrar()
 // vem de lá: aqui ela ainda estaria na zona morta do `let`.
 function redesenharMao() {
   if (vistaAtual && vistaAtual.mao) sincronizarMao(vistaAtual);
@@ -2833,7 +2833,7 @@ function esconderMao() {
 }
 
 // Onde os adversários sentam e quanto a fileira deles mede sai inteiro de
-// `assentosDaMesa()` (07-cena.js) — aqui só se monta o que ele decidiu. O `apertoDaMesa`
+// `assentosDaMesa()` (070-cena.js) — aqui só se monta o que ele decidiu. O `apertoDaMesa`
 // que morava nesta linha media a tela na profundidade do assento DE CIMA e apertava todos
 // por ela, o que deixava o de lado (mais perto da câmera, onde a tela é mais estreita)
 // sobrando por fora e ainda por cima dentro da linha da mesa.
@@ -2907,7 +2907,7 @@ function animarMao(dt, apontada) {
   });
 }
 
-/* ····· 30-domino/11-interacao.js ····· */
+/* ····· 30-domino/110-interacao.js ····· */
 //
 // SEMPRE dois passos, inclusive quando só existe uma ponta possível. Antes o clique na
 // peça já a jogava nesses casos, e um deslize do mouse virava jogada — num jogo em que
@@ -3269,7 +3269,7 @@ function porQueNaoDa(peca) {
   return encaixa ? 'Essa peça fecharia o jogo de propósito.' : 'Essa peça não encaixa em nenhuma ponta.';
 }
 
-/* ····· 10-casa/12-audio.js ····· */
+/* ····· 10-casa/120-audio.js ····· */
 //
 // Uma peça batendo na madeira é um estalo curto de ruído filtrado somado a um baque
 // grave — dá para descrever isso em dez linhas, e aí o jogo continua sendo um arquivo
@@ -3296,7 +3296,7 @@ function ligarAudio() {
 // mudo no começo da partida e o primeiro toque na mesa desfazia.
 //
 // Ler `mudo` daqui é seguro pela mesma razão explicada em `ligarMurmuro`: ele mora no
-// 13-hud, concatenado DEPOIS, mas o corpo desta função só roda a um clique de distância.
+// 130-hud, concatenado DEPOIS, mas o corpo desta função só roda a um clique de distância.
 addEventListener('pointerdown', () => { ligarAudio(); if (ac && ac.state === 'suspended' && !mudo) ac.resume(); });
 
 function estalo({ dur = 0.09, freq = 1500, q = 1.1, vol = 0.3, tipo = 'bandpass' }) {
@@ -3348,19 +3348,19 @@ function ligarMurmuro() {
   s.start();
   murmuro = g;
   // O silêncio lembrado só pode ser aplicado agora: o AudioContext nasce no primeiro som,
-  // e antes dele não existe o que suspender. `mudo` mora no 13-hud e já está de pé aqui,
+  // e antes dele não existe o que suspender. `mudo` mora no 130-hud e já está de pé aqui,
   // porque esta função só roda depois de um clique do jogador.
   if (mudo) silenciar(true);
 }
 
-// O parâmetro chama-se `calado` e não `mudo` de propósito: `mudo` é uma global (13-hud) que
+// O parâmetro chama-se `calado` e não `mudo` de propósito: `mudo` é uma global (130-hud) que
 // o listener de pointerdown lá em cima consulta, e um parâmetro de mesmo nome sombreando-a
 // aqui dentro é o tipo de coisa que faz o defeito de cima ser difícil de enxergar.
 function silenciar(calado) {
   if (ac) ac[calado ? 'suspend' : 'resume']();
 }
 
-/* ····· 10-casa/13-hud.js ····· */
+/* ····· 10-casa/130-hud.js ····· */
 //
 // Tudo aqui lê a VISÃO, nunca a partida. É o mesmo objeto que chega pela rede no
 // modo online, então a tela do convidado não tem como mostrar mais do que ele pode
@@ -3626,7 +3626,7 @@ function guardarFala(de, canal, txt, para) {
   falasGuardadas.push({ de, canal, txt, para });
 }
 
-// Chamada quando o hotseat entrega a tela a `cadeira` (btPronto, em 16-loop.js).
+// Chamada quando o hotseat entrega a tela a `cadeira` (btPronto, em 160-loop.js).
 //
 // Solta as TRÊS últimas. O limite é sobre ATENÇÃO e não sobre memória — `porNaConversa`
 // já corta a lista em 40 —: quem volta de três rodadas de hotseat estaria lendo parede de
@@ -3709,7 +3709,7 @@ el('cortina').onclick = () => { tocarClique(); fecharGavetas(); };
 // Girar o aparelho pode cruzar o limiar dos 560px nos dois sentidos, e aí a mesma
 // conversa aberta deixa de ser gaveta (ou passa a ser). Sem isto sobra um vidro fosco por
 // cima do jogo, ou a gaveta abre sem cortina. Listener próprio e não um gancho no
-// `agendarEnquadre` do 07-cena.js: aquilo é sobre a câmera, isto é sobre o HUD.
+// `agendarEnquadre` do 070-cena.js: aquilo é sobre a câmera, isto é sobre o HUD.
 addEventListener('resize', atualizarCortina);
 addEventListener('orientationchange', atualizarCortina);
 
@@ -3850,7 +3850,7 @@ pintarBotaoSom();
 // adiantaria nada; quem aplica o silêncio guardado é `ligarMurmuro`, que roda quando o
 // áudio de fato começa.
 
-/* ····· 10-casa/14-menu.js ····· */
+/* ····· 10-casa/140-menu.js ····· */
 //
 // Esta tela é a interface da ideia central do projeto: não se escolhe um "modo de
 // jogo", escolhe-se quem ocupa cada cadeira. Solo é uma mesa em que as outras são
@@ -3859,7 +3859,7 @@ pintarBotaoSom();
 
 // A CADEIRA 0 É SUA E POR ISSO NÃO SE CHAMA "VOCÊ". Quem é você já está dito em dois
 // lugares que não dependem do nome: o rótulo da cadeira, no `montarCadeiras()` aqui
-// embaixo, e a etiqueta "você" do cartão do HUD (`ETIQUETA`, 13-hud.js). O campo guarda um
+// embaixo, e a etiqueta "você" do cartão do HUD (`ETIQUETA`, 130-hud.js). O campo guarda um
 // NOME, e nome existe para os OUTROS — no online ele viaja para o anfitrião e vira o
 // placar, a lista da sala e o começo de toda linha da conversa.
 //
@@ -3867,7 +3867,7 @@ pintarBotaoSom();
 // duas falas da conversa começando igual: ninguém sabia quem era quem. E repare que trocar
 // só este literal NÃO consertaria o online — os dois lados leem o mesmo NOMES[0], então
 // viraria "Careca × Careca". Quem conserta a colisão é o campo de nome do saguão
-// (pagina.html) e o desempate do anfitrião (`nomeUnico`, 15-rede.js); este literal conserta
+// (pagina.html) e o desempate do anfitrião (`nomeUnico`, 150-rede.js); este literal conserta
 // a semântica, que é o campo guardar um nome em vez de um pronome.
 const NOMES = ['Careca', 'Zé', 'Dona Cida', 'Tião', 'Bigode'];
 const TIPOS = [
@@ -3950,16 +3950,16 @@ function lembrarMesa() {
   });
 }
 
-// O `escapar` no `value=` foi a TERCEIRA mordida da mesma classe. `listarSala` (15-rede)
+// O `escapar` no `value=` foi a TERCEIRA mordida da mesma classe. `listarSala` (150-rede)
 // punha `c.nome` direto em innerHTML e foi consertado; esta linha ficou para trás, e é pior
 // por ser dentro de um ATRIBUTO — basta uma aspa para sair dele.
 //
-// E `c.nome` vem de fora: o convidado manda o nome dele pela rede e `15-rede.js` escreve em
+// E `c.nome` vem de fora: o convidado manda o nome dele pela rede e `150-rede.js` escreve em
 // `MESA.cadeiras[cadeira].nome`; `lembrarMesa()` persiste as quatro cadeiras, então o valor
 // sobrevive à recarga. Sem escape, um convidado com nome `"><img src=x onerror=…>` roda
 // script na máquina do ANFITRIÃO assim que ele mexe no modo ou no número de jogadores.
 //
-// Sem risco de zona morta: 13-hud é concatenado ANTES de 14-menu, então `escapar` já está
+// Sem risco de zona morta: 130-hud é concatenado ANTES de 140-menu, então `escapar` já está
 // de pé quando `montarCadeiras()` roda no fim deste arquivo.
 function montarCadeiras() {
   el('cadeiras').innerHTML = MESA.cadeiras.slice(0, MESA.n).map((c, i) => {
@@ -4030,7 +4030,7 @@ function ajustarCadeirasAoModo() {
 // `refletirMesaNosBotoes` existe para impedir: o jogo está certo e a tela mente.
 //
 // A pergunta NÃO é "qual modo": o Clássico tem monte com 2 ou 3 jogadores e nenhum com 4.
-// Quem responde é `sobraDoBaralho`, em 02-baralho.js, pelo mesmo motivo de sempre —
+// Quem responde é `sobraDoBaralho`, em 020-baralho.js, pelo mesmo motivo de sempre —
 // aritmética de baralho escrita à mão no menu já quebrou uma vez.
 //
 // A preferência guardada NÃO é apagada quando o botão desliga: quem jogava Clássico de 2 com
@@ -4093,7 +4093,7 @@ el('btComecar').onclick = () => {
   else comecarLocal();
 };
 el('btEntrar').onclick = () => entrarNumaMesa();
-// `recomecarAsVoltas` mora no 15-rede.js, que é concatenado DEPOIS deste arquivo — e isso
+// `recomecarAsVoltas` mora no 150-rede.js, que é concatenado DEPOIS deste arquivo — e isso
 // está certo: declaração de função é içada para o topo do escopo, e este corpo só roda no
 // clique. É o mesmo caminho que o `encerrarRede` ao lado já fazia.
 el('btMenu').onclick = () => { recomecarAsVoltas(); encerrarRede(); mostrarTela('telaMenu'); };
@@ -4102,7 +4102,7 @@ refletirMesaNosBotoes();
 ajustarCadeirasAoModo();
 montarCadeiras();
 
-/* ····· 10-casa/15-rede.js ····· */
+/* ····· 10-casa/150-rede.js ····· */
 //
 // O ANFITRIÃO É A AUTORIDADE. Ele embaralha, guarda o estado e valida tudo. O
 // convidado não tem partida nenhuma na memória: ele manda INTENÇÃO ("quero jogar 3|5
@@ -4132,7 +4132,7 @@ const TAMANHO_NOME = 64;
 const INTERVALO_NOME = 600;    // ms, o mesmo do chat: trocar de nome não é coisa de rajada
 const ULTIMO_NOME = new Map(); // cadeira → quando trocou de nome pela última vez
 // O clienteId vai para `donoDaCadeira`, que é PERSISTIDO. Sem teto, um id de megabytes
-// estoura a cota do localStorage — e `guardar` (01-constantes.js) engole o erro CALADO, o
+// estoura a cota do localStorage — e `guardar` (010-constantes.js) engole o erro CALADO, o
 // que faz a cadeira deixar de ser reservada: é o vazamento de mão do item 4 da Fila 5
 // voltando pela porta dos fundos. 64 é folga larga para um id sorteado.
 const TAMANHO_ID = 64;
@@ -4484,7 +4484,7 @@ function desistiuDaMesa(cadeira) {
 // casa:
 //
 //   · O NÚMERO VAI NO PRIMEIRO NOME — "Ricardo2 Neves", nunca "Ricardo Neves 2".
-//     `nomeEmPartes` (13-hud.js) corta na PALAVRA em tela estreita: some tudo depois do
+//     `nomeEmPartes` (130-hud.js) corta na PALAVRA em tela estreita: some tudo depois do
 //     primeiro espaço. Um sufixo no fim desapareceria justamente no retrato de quatro
 //     cartões, que é onde a confusão dói.
 //   · QUEM ENCOLHE PARA CABER É A BASE, NUNCA O DESEMPATE. O nome é cortado em 14 (é o
@@ -4522,7 +4522,7 @@ function nomeUnico(nome, ocupados) {
     (Array.isArray(ocupados) ? ocupados : []).map(chaveDoNome).filter(Boolean));
 
   // O nome vai NORMALIZADO para a mesa, e não só para a comparação: quem o fatia depois é
-  // o `nomeEmPartes` (13-hud.js), no primeiro espaço, e os dois têm de achar o mesmo.
+  // o `nomeEmPartes` (130-hud.js), no primeiro espaço, e os dois têm de achar o mesmo.
   const base = String(nome == null ? '' : nome).normalize('NFC').replace(/\s+/g, ' ').trim();
   const corte = base.indexOf(' ');
   const primeiro = corte < 0 ? base : base.slice(0, corte);
@@ -4566,7 +4566,7 @@ function nomeUnico(nome, ocupados) {
 }
 
 // UMA CADEIRA É VAGA DE VISITANTE se está marcada `online`, ou se virou bot por falta de
-// gente e guardou a marca (`comecarLocal`, 16-loop.js). A marca é o que separa "bot que a
+// gente e guardou a marca (`comecarLocal`, 160-loop.js). A marca é o que separa "bot que a
 // mesa escolheu" de "bot que a mesa improvisou": um "Bot · difícil" posto de propósito no
 // menu continua fechado a quem tem o código, e a cadeira de quem saiu volta a ser dele.
 const vagaDeVisita = c => c.tipo === 'online' || c.vagaOnline === true;
@@ -4608,7 +4608,7 @@ const nomesVizinhos = cadeira =>
 //
 // Confere o CONTINENTE, não o conteúdo: é o que os desenhistas desreferenciam sem
 // perguntar. O conteúdo hostil (um placar que é string, por exemplo) quem trata é o
-// `escapar` do 13-hud.js — são duas defesas para dois danos diferentes, e nenhuma delas
+// `escapar` do 130-hud.js — são duas defesas para dois danos diferentes, e nenhuma delas
 // faz o trabalho da outra.
 const vistaDoFio = v => !!v && typeof v === 'object' &&
   Array.isArray(v.linha) && Array.isArray(v.mao) && Array.isArray(v.naMao) &&
@@ -4828,7 +4828,7 @@ const RECUSA = {
   semvaga: 'Essa mesa não tem cadeira de visitante agora — quem abriu a mesa precisa deixar uma vaga.',
 };
 
-// LARGAR A MESA, do lado de quem é convidado. Mora aqui e não no 16-loop porque conhece o
+// LARGAR A MESA, do lado de quem é convidado. Mora aqui e não no 160-loop porque conhece o
 // `codigoDaSala` e o `linkAnfitriao`.
 //
 // O CÓDIGO FICA GUARDADO, e é a mudança de fundo: sair entrega a PARTIDA, não a MESA. A
@@ -5162,7 +5162,7 @@ function receberChat(cadeira, m) {
   return true;
 }
 
-/* ····· 10-casa/16-loop.js ····· */
+/* ····· 10-casa/160-loop.js ····· */
 //
 // Existe UM caminho para uma jogada acontecer, venha ela de onde vier:
 //
@@ -5313,7 +5313,7 @@ function pedirAcao(intencao) {
 // O único lugar que mexe na partida. Vale para o seu clique, para o bot e para o que
 // chega pela rede — e valida os três do mesmo jeito.
 // Uma peça como o FIO pode entregá-la: dois números de 0 a `MAX_PINTAS`, e nada mais.
-// `mesmaPeca` (02-baralho.js) lê `b[0]` sem guarda, então uma peça ausente ou nula LANÇA
+// `mesmaPeca` (020-baralho.js) lê `b[0]` sem guarda, então uma peça ausente ou nula LANÇA
 // lá dentro — e a exceção sobe pelo `conn.on('data')` do anfitrião, que é quem tem a
 // partida. Note que isto NÃO é sobre trapaça: `jogar` valida a jogada contra
 // `acoesDe(P, cadeira)`, que sai da mão do próprio jogador, então peça inventada continua
@@ -5458,7 +5458,7 @@ const HORAS_GUARDADA = 12;
 // `P.faltaNo` é um array de Set, e Set NÃO sobrevive a JSON: `JSON.stringify(new Set())`
 // dá `{}` — um objeto sem `.has` e sem `.indexOf`. Sem estas duas conversões a partida
 // retomada perdia calada quem passou em qual número (a marca da Fila 4) e o bot estourava
-// na primeira consulta, em `05-bot.js`. É a MESMA conversão que `visaoDe` faz para o fio,
+// na primeira consulta, em `050-bot.js`. É a MESMA conversão que `visaoDe` faz para o fio,
 // e pela mesma razão: o que não sobrevive à serialização não existe do outro lado.
 const partidaParaGuardar = () =>
   Object.assign({}, P, { faltaNo: P.faltaNo.map(s => Array.from(s)) });
@@ -5484,7 +5484,7 @@ function guardarPartida() {
 //
 // PARTIDA GUARDADA É ENTRADA DE FORA, exatamente como a mesa lembrada — e este era o único
 // validador de `localStorage` do projeto que nunca tinha sido endurecido. Ele conferia
-// quatro campos e entregava o resto CRU, enquanto o `mesaLembrada()` (14-menu.js) confere
+// quatro campos e entregava o resto CRU, enquanto o `mesaLembrada()` (140-menu.js) confere
 // campo a campo com `Object.hasOwn`. A diferença de rigor entre os dois era acidental, não
 // decidida.
 //
@@ -5673,8 +5673,8 @@ addEventListener('keydown', ev => {
 });
 
 // ─── loop ────────────────────────────────────────────────────────────────────
-// Primeiro enquadramento. Fica aqui, e não no fim de 07-cena.js, porque enquadrar() lê
-// a profundidade da mão (10-mao.js) e manda refazer o leque — nada disso existe ainda
+// Primeiro enquadramento. Fica aqui, e não no fim de 070-cena.js, porque enquadrar() lê
+// a profundidade da mão (100-mao.js) e manda refazer o leque — nada disso existe ainda
 // quando o arquivo da cena termina de rodar.
 enquadrar();
 

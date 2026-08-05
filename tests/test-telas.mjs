@@ -48,7 +48,7 @@ const CASOS = [
   { nome: 'mesa online', montar: `mesa('classico', 4); contar(true); auto(11); window.__jogo.pintarSala('XJCR');` },
   // NOMES NO LIMITE — item 8. Todas as cenas até aqui usavam os nomes padrão ("Você",
   // "Bot 1"), que cabem em qualquer coisa: é por isso que a suíte nunca viu o nome cortado
-  // que o Ricardo relatou jogando. 14 é o `maxlength` do campo no menu (14-menu.js), então
+  // que o Ricardo relatou jogando. 14 é o `maxlength` do campo no menu (140-menu.js), então
   // este é o pior caso que o jogo DEIXA existir, e não um exagero inventado para o teste.
   // Em duplas o placar ainda soma dois deles ("Fulano e Sicrano"), que é onde o topo cresce.
   { nome: 'nomes longos', montar:
@@ -328,7 +328,7 @@ const MEDIR = `(() => {
   // ignorar — tabuleiro, mãos, monte e o pé dos copos nascem todos no tampo.
   const B = j.THREE.Box3;
   // A MARCA DA ÚLTIMA JOGADA fica de fora: é um disco de raio PECA_C*0.72 colado embaixo
-  // da peça (09-tabuleiro.js), e incluí-lo infla a caixa do tabuleiro em 0.22 — a medida
+  // da peça (090-tabuleiro.js), e incluí-lo infla a caixa do tabuleiro em 0.22 — a medida
   // passaria a ser do clarão, não da madeira.
   const corpo = o => (o.userData && o.userData.corpo) || o;
   const caixasDe = (filhos, nome, pular) => filhos
@@ -478,7 +478,7 @@ for (const tela of TELAS_ESCOLHIDAS) {
     await pagina.evaluate(() => new Promise(pronto => {
       const j = window.__jogo;
       // A posição do GRUPO entra junto com a das peças, e não é detalhe: o `grupoMesa`
-      // faz o próprio easing em z para manter o tabuleiro centrado (`09-tabuleiro.js`).
+      // faz o próprio easing em z para manter o tabuleiro centrado (`090-tabuleiro.js`).
       // Olhando só os filhos, a foto ficaria parada enquanto o mundo inteiro ainda
       // deslizava — e a medida é em coordenadas de MUNDO, então é o grupo que manda.
       // A mão vem do `naMao`, e não de um `grupoMao`: a ponte nunca expôs esse grupo.
@@ -593,7 +593,7 @@ for (const tela of TELAS_ESCOLHIDAS) {
       `${onde}: ${m.pior.a} e ${m.pior.b} ocupam o mesmo tampo (folga ${m.pior.folga.toFixed(2)})`);
 
     // 6. nada do jogo POR BAIXO de painel — a pergunta que faltava, e a família de defeito
-    //    que já reincidiu (o comentário do 07-cena.js registra o copo movido à mão uma vez
+    //    que já reincidiu (o comentário do 070-cena.js registra o copo movido à mão uma vez
     //    pelo mesmo motivo).
     //
     //    MAS a exigência muda com o estado, e essa distinção é o coração do conserto: uma

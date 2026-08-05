@@ -24,8 +24,8 @@ const SAIDA = path.join(raiz, 'index.html');
 // a ORDEM continua saindo do NÚMERO do arquivo — nunca do caminho. Isso não é preferência
 // de estilo, é o invariante 1 sobrevivendo à mudança de pastas:
 //
-// `14-menu.js` (casa) chama `mesaLembrada()` no TOPO do módulo, e ela valida o nível de bot
-// contra a tabela `NIVEIS`, que mora em `05-bot.js` (dominó). Ordenando por CAMINHO, toda a
+// `140-menu.js` (casa) chama `mesaLembrada()` no TOPO do módulo, e ela valida o nível de bot
+// contra a tabela `NIVEIS`, que mora em `050-bot.js` (dominó). Ordenando por CAMINHO, toda a
 // `10-casa/` viria antes de toda a `30-domino/`, o `NIVEIS` estaria na zona morta e a linha
 // estouraria com ReferenceError na carga — tela preta, e do tipo que não depende de dado
 // guardado nenhum para acontecer.

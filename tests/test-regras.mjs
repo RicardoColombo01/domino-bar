@@ -374,7 +374,7 @@ secao('compra voluntária');
   // `sobraDoBaralho` seria conferir a função contra ela mesma. E o caso que a leitura
   // apressada erra é o terceiro — "modo com monte" não existe: o CLÁSSICO tem monte com 2
   // ou 3 jogadores e nenhum com 4. É por isso que a pergunta leva o `n` junto, e é por isso
-  // que ela mora em 02-baralho.js e não numa propriedade da tabela MODOS.
+  // que ela mora em 020-baralho.js e não numa propriedade da tabela MODOS.
   for (const [modo, n, sobra] of [
     ['classico', 2, 14],    // 28 − 2×7
     ['classico', 3, 7],     // 28 − 3×7

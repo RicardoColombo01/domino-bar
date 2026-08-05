@@ -106,7 +106,7 @@ function escalaDoTabuleiro(caixa, larguraUtil = ESPALHA_X * 2.1) {
 // ─── quem mais está sentado à mesa ───────────────────────────────────────────
 // Onde cada cadeira fica, vista de quem joga: você em 0, o resto em volta no sentido
 // da vez. Mora aqui porque é trigonometria pura e porque o orçamento do tabuleiro,
-// logo abaixo, precisa dela — 10-mao.js só a consumia.
+// logo abaixo, precisa dela — 100-mao.js só a consumia.
 const anguloDaCadeira = (i, eu, n) => ((i - eu + n) % n) * Math.PI * 2 / n;
 
 // A caixa que o monte de um adversário ocupa no tampo. Ele nasce girado -a e as peças
@@ -135,7 +135,7 @@ function caixaDoMonte(a, x, z, quantas, espaco) {
 // primeiros tetos — um passo só, sem laço, e o erro é sempre para o lado seguro (faixa
 // larga demais conta assentos demais e o orçamento sai menor, nunca maior).
 //
-// Continua PURA: recebe onde os assentos ficaram; quem mede a tela é 07-cena.js.
+// Continua PURA: recebe onde os assentos ficaram; quem mede a tela é 070-cena.js.
 function larguraUtilDoTabuleiro(caixa, tela = Infinity, montes = [], folga = FOLGA_VIZINHO) {
   const semVizinhos = Math.min(ESPALHA_X * 2.1, tela);
   if (!caixa.l) return semVizinhos;

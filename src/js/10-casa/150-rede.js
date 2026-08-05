@@ -29,7 +29,7 @@ const TAMANHO_NOME = 64;
 const INTERVALO_NOME = 600;    // ms, o mesmo do chat: trocar de nome não é coisa de rajada
 const ULTIMO_NOME = new Map(); // cadeira → quando trocou de nome pela última vez
 // O clienteId vai para `donoDaCadeira`, que é PERSISTIDO. Sem teto, um id de megabytes
-// estoura a cota do localStorage — e `guardar` (01-constantes.js) engole o erro CALADO, o
+// estoura a cota do localStorage — e `guardar` (010-constantes.js) engole o erro CALADO, o
 // que faz a cadeira deixar de ser reservada: é o vazamento de mão do item 4 da Fila 5
 // voltando pela porta dos fundos. 64 é folga larga para um id sorteado.
 const TAMANHO_ID = 64;
@@ -381,7 +381,7 @@ function desistiuDaMesa(cadeira) {
 // casa:
 //
 //   · O NÚMERO VAI NO PRIMEIRO NOME — "Ricardo2 Neves", nunca "Ricardo Neves 2".
-//     `nomeEmPartes` (13-hud.js) corta na PALAVRA em tela estreita: some tudo depois do
+//     `nomeEmPartes` (130-hud.js) corta na PALAVRA em tela estreita: some tudo depois do
 //     primeiro espaço. Um sufixo no fim desapareceria justamente no retrato de quatro
 //     cartões, que é onde a confusão dói.
 //   · QUEM ENCOLHE PARA CABER É A BASE, NUNCA O DESEMPATE. O nome é cortado em 14 (é o
@@ -419,7 +419,7 @@ function nomeUnico(nome, ocupados) {
     (Array.isArray(ocupados) ? ocupados : []).map(chaveDoNome).filter(Boolean));
 
   // O nome vai NORMALIZADO para a mesa, e não só para a comparação: quem o fatia depois é
-  // o `nomeEmPartes` (13-hud.js), no primeiro espaço, e os dois têm de achar o mesmo.
+  // o `nomeEmPartes` (130-hud.js), no primeiro espaço, e os dois têm de achar o mesmo.
   const base = String(nome == null ? '' : nome).normalize('NFC').replace(/\s+/g, ' ').trim();
   const corte = base.indexOf(' ');
   const primeiro = corte < 0 ? base : base.slice(0, corte);
@@ -463,7 +463,7 @@ function nomeUnico(nome, ocupados) {
 }
 
 // UMA CADEIRA É VAGA DE VISITANTE se está marcada `online`, ou se virou bot por falta de
-// gente e guardou a marca (`comecarLocal`, 16-loop.js). A marca é o que separa "bot que a
+// gente e guardou a marca (`comecarLocal`, 160-loop.js). A marca é o que separa "bot que a
 // mesa escolheu" de "bot que a mesa improvisou": um "Bot · difícil" posto de propósito no
 // menu continua fechado a quem tem o código, e a cadeira de quem saiu volta a ser dele.
 const vagaDeVisita = c => c.tipo === 'online' || c.vagaOnline === true;
@@ -505,7 +505,7 @@ const nomesVizinhos = cadeira =>
 //
 // Confere o CONTINENTE, não o conteúdo: é o que os desenhistas desreferenciam sem
 // perguntar. O conteúdo hostil (um placar que é string, por exemplo) quem trata é o
-// `escapar` do 13-hud.js — são duas defesas para dois danos diferentes, e nenhuma delas
+// `escapar` do 130-hud.js — são duas defesas para dois danos diferentes, e nenhuma delas
 // faz o trabalho da outra.
 const vistaDoFio = v => !!v && typeof v === 'object' &&
   Array.isArray(v.linha) && Array.isArray(v.mao) && Array.isArray(v.naMao) &&
@@ -725,7 +725,7 @@ const RECUSA = {
   semvaga: 'Essa mesa não tem cadeira de visitante agora — quem abriu a mesa precisa deixar uma vaga.',
 };
 
-// LARGAR A MESA, do lado de quem é convidado. Mora aqui e não no 16-loop porque conhece o
+// LARGAR A MESA, do lado de quem é convidado. Mora aqui e não no 160-loop porque conhece o
 // `codigoDaSala` e o `linkAnfitriao`.
 //
 // O CÓDIGO FICA GUARDADO, e é a mudança de fundo: sair entrega a PARTIDA, não a MESA. A

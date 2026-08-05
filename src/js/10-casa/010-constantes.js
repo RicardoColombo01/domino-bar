@@ -11,7 +11,7 @@ const MAX_PINTAS = 6;            // dupla-seis → 28 peças
 // usava, sem uma linha de regra nova. E o 27 do Trio não é coincidência: tirar a
 // bucha de zero é justamente o que faz o baralho dividir exato entre três.
 //
-// `carrocasDemais` é a munição de maoRuim() (02-baralho.js): a partir de quantas
+// `carrocasDemais` é a munição de maoRuim() (020-baralho.js): a partir de quantas
 // carroças a mesa embaralha de novo.
 const MODOS = {
   classico: { rotulo: 'Clássico', nota: '7 peças',  pecasPorMao: 7,  cadeiras: [2, 3, 4], semZeroZero: false, carrocasDemais: 5 },
@@ -41,7 +41,7 @@ const movimentoReduzido = () => MQ_MOVIMENTO.matches;
 
 // Medidas da peça em unidades de mundo. O comprimento é EXATAMENTE o dobro da
 // largura — é isso que faz uma carroça atravessada ocupar meia peça no braço e
-// o tabuleiro fechar sem sobra em 06-layout.js. Mexer num, mexer no outro.
+// o tabuleiro fechar sem sobra em 060-layout.js. Mexer num, mexer no outro.
 const PECA_C = 1.0;
 const PECA_L = 0.5;
 const PECA_E = 0.18;
@@ -58,7 +58,7 @@ const ESPALHA_X = 4.0;
 const ESPALHA_Z = 2.2;
 
 // O tabuleiro é empurrado meio corpo para o fundo, para a mão caber embaixo dele. Era um
-// literal 0.4 escrito em dois pontos de 09-tabuleiro.js, e virou constante porque quem
+// literal 0.4 escrito em dois pontos de 090-tabuleiro.js, e virou constante porque quem
 // confere sobreposição no tampo precisa saber onde a caixa do tabuleiro realmente está.
 const TABULEIRO_Z = 0.4;
 
@@ -89,7 +89,7 @@ const CORES = {
 };
 
 // ─── o que o navegador lembra ────────────────────────────────────────────────
-// Mora aqui, no primeiro arquivo, porque o 13-hud lê preferência na hora em que é
+// Mora aqui, no primeiro arquivo, porque o 130-hud lê preferência na hora em que é
 // concatenado — quem chama tem de já existir.
 //
 // Um lugar só para falar com o localStorage. Ele falha de quatro jeitos e todos

@@ -102,7 +102,7 @@ export function installStubs() {
   // o ramo ligado fica inalcançável e um verde não quer dizer nada.
   //
   // A `MediaQueryList` devolvida é VIVA de propósito: o jogo guarda o objeto uma vez
-  // (01-constantes.js) e lê `.matches` a cada quadro, que é como o navegador funciona.
+  // (010-constantes.js) e lê `.matches` a cada quadro, que é como o navegador funciona.
   // Um dublê que congelasse o valor na primeira leitura faria `preferir()` não ter efeito
   // e mentiria sobre o jogo.
   global.matchMedia = consulta => ({
