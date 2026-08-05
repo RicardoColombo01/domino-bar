@@ -86,10 +86,6 @@ function meuId() {
   return idCliente;
 }
 
-function erroOnline(txt) {
-  el('onlineErro').textContent = txt;
-}
-
 // SAIR DE PROPÓSITO É UM ESTADO, e ele dura os 400 ms entre o `desisto` sair e o peer
 // morrer. Nessa janela o anfitrião ainda publica — a vista do abandono, justamente —, o
 // peer ainda dispara o próprio `close`, e o jogador já está no menu. Sem esta marca a vista
@@ -206,14 +202,7 @@ function abrirMesaOnline() {
   if (!temPeerJS()) { avisar('A biblioteca de rede não carregou — sem internet, só dá para jogar local.'); return; }
   encerrarRede();
   modo = 'anfitriao';
-  mostrarTela('telaOnline');
-  el('onlineTitulo').textContent = 'Mesa aberta';
-  el('onlineSub').textContent = 'Passe este código para quem vai jogar.';
-  el('onlineEntrada').classList.add('oculta');
-  el('onlineNome').classList.add('oculta');     // quem abre a mesa nomeia as cadeiras no menu
-  el('btConectar').classList.add('oculta');
-  el('btIniciarOnline').classList.remove('oculta');
-  el('onlineCodigo').textContent = '····';
+  saguaoDeAnfitriao('Mesa aberta', 'Passe este código para quem vai jogar.', '····');
   erroOnline('');
   tentarAbrir(0);
 }
@@ -227,7 +216,7 @@ function tentarAbrir(tentativa, codigoDesejado) {
   peer = new Peer(PREFIXO + codigo, OPCOES_PEER);
 
   peer.on('open', () => {
-    el('onlineCodigo').textContent = codigo;
+    saguaoCodigo(codigo);
     usarCodigo(codigo);
     guardarMesaDoAnfitriao();
     listarSala();
@@ -313,14 +302,7 @@ function reabrirMesaOnline() {
   if (!temPeerJS()) { avisar('A biblioteca de rede não carregou — sem internet, só dá para jogar local.'); return; }
   encerrarRede();
   modo = 'anfitriao';
-  mostrarTela('telaOnline');
-  el('onlineTitulo').textContent = 'Reabrindo a sua mesa';
-  el('onlineSub').textContent = 'Quem estava na mesa volta com o mesmo código.';
-  el('onlineEntrada').classList.add('oculta');
-  el('onlineNome').classList.add('oculta');
-  el('btConectar').classList.add('oculta');
-  el('btIniciarOnline').classList.remove('oculta');
-  el('onlineCodigo').textContent = g.codigo;
+  saguaoDeAnfitriao('Reabrindo a sua mesa', 'Quem estava na mesa volta com o mesmo código.', g.codigo);
   erroOnline('Reservando o código…');
   // O mapa ANTES de abrir: a primeira conexão pode chegar no mesmo instante do 'open', e
   // um `sentar()` sem os donos daria a primeira vaga livre — o bug do item 4 de volta,
@@ -657,16 +639,18 @@ function largar(cadeira, conn) {
   listarSala();
 }
 
+// QUEM É CADA CADEIRA, que é a única parte disto que depende da rede: só ela sabe quem
+// conectou. Como isso aparece na tela — e o escape do nome, que é entrada de fora — é do
+// `145-saguao.js`.
 function listarSala() {
-  const faltam = MESA.cadeiras.slice(0, MESA.n).filter((c, i) => c.tipo === 'online' && !conexoes.has(i)).length;
-  el('onlineLista').innerHTML = MESA.cadeiras.slice(0, MESA.n).map((c, i) => {
-    const estado = c.tipo === 'online' ? (conexoes.has(i) ? 'chegou' : 'esperando…') : (ETIQUETA[c.tipo] || c.tipo);
-    // ESCAPADO: este nome foi escrito pelo convidado (`m.nome`, ali em cima) e ia direto
-    // para innerHTML. É o mesmo buraco do texto do chat, na tela ao lado — e mais antigo
-    // que ele. Um nome com <img onerror> rodava script na máquina do anfitrião.
-    return `<div><span>${escapar(c.nome)}</span><b>${estado}</b></div>`;
-  }).join('');
-  el('btIniciarOnline').textContent = faltam ? `Faltam ${faltam} · começar assim mesmo` : 'Começar a partida';
+  const cadeiras = MESA.cadeiras.slice(0, MESA.n);
+  const faltam = cadeiras.filter((c, i) => c.tipo === 'online' && !conexoes.has(i)).length;
+  saguaoLista(
+    cadeiras.map((c, i) => ({
+      nome: c.nome,
+      estado: c.tipo === 'online' ? (conexoes.has(i) ? 'chegou' : 'esperando…') : (ETIQUETA[c.tipo] || c.tipo),
+    })),
+    faltam ? `Faltam ${faltam} · começar assim mesmo` : 'Começar a partida');
   salaDuplas = MESA.n === 4;
   atualizarSaguao();
 }
@@ -675,37 +659,15 @@ function listarSala() {
 // conversão MUDOU DE CASA e agora mora no `comecarLocal` — ela era feita aqui, certa, e
 // lá era feita errada (condicionada a `modo === 'local'`), o que travava a revanche do
 // anfitrião. Duas cópias da mesma regra, uma delas com defeito, é como o defeito dura.
-// E COMEÇAR A PARTIDA DESLIGA A RESERVA DO CÓDIGO. Este botão fica visível na tela de
-// reabertura, e é a ÚNICA porta de lá que não passa pelo `encerrarRede` — o "Voltar" passa.
-// Sem esta linha, o anfitrião que cansa de esperar o código e começa a jogar vê a reserva
-// acordar 1,5 s depois e trocar a partida que ele acabou de montar pela guardada.
-el('btIniciarOnline').onclick = () => { pararDeReservar(); comecarLocal(); };
-
-el('btCancelarOnline').onclick = () => { recomecarAsVoltas(); encerrarRede(); mostrarTela('telaMenu'); };
+// O clique que a executa mora em `145-saguao.js`, junto dos outros três — e é lá que está
+// escrito por que ele tem de desligar a reserva do código antes de começar.
 
 // ─── convidado ───────────────────────────────────────────────────────────────
 function entrarNumaMesa() {
   if (!temPeerJS()) { avisar('A biblioteca de rede não carregou — sem internet, só dá para jogar local.'); return; }
   encerrarRede();
-  mostrarTela('telaOnline');
-  el('onlineTitulo').textContent = 'Entrar numa mesa';
-  el('onlineSub').textContent = 'Digite o código que o anfitrião passou.';
-  el('onlineCodigo').textContent = '';
-  el('onlineEntrada').classList.remove('oculta');
-  // O NOME, que só o convidado precisa dizer. Pré-preenchido com o do menu — que é
-  // exatamente o que ele já mandava calado —, então o campo não inventa caminho novo: ele
-  // torna visível e editável o que sempre viajou. Era esta ausência que fazia a mesa de
-  // dois virar "Você × Você" sem que ninguém soubesse onde mudar.
-  el('onlineNome').classList.remove('oculta');
-  el('onlineNome').value = MESA.cadeiras[0].nome;
-  // Pré-preenchido com a última mesa em que você sentou: quem volta quase sempre volta
-  // para a mesma, e antes o campo era zerado justamente aqui.
   const guardada = salaGuardada();
-  el('onlineEntrada').value = guardada ? guardada.codigo : '';
-  el('onlineEntrada').focus();
-  el('btConectar').classList.remove('oculta');
-  el('btIniciarOnline').classList.add('oculta');
-  el('onlineLista').innerHTML = '';
+  saguaoDeConvidado(MESA.cadeiras[0].nome, guardada ? guardada.codigo : '');
   // Destrava o botão: a tentativa anterior pode ter deixado 'Entrando…' ou 'Na mesa'.
   // Aqui e não no `encerrarRede`, que roda em pontos do carregamento onde `conectando`
   // ainda estaria na zona morta — e `typeof` sobre `let` na zona morta LANÇA.
@@ -754,8 +716,7 @@ let conectando = false;
 
 function pararDeConectar(recado) {
   conectando = false;
-  el('btConectar').disabled = false;
-  el('btConectar').textContent = 'Entrar';
+  saguaoEntrar('solto');
   if (recado !== undefined) erroOnline(recado);
 }
 
@@ -772,8 +733,7 @@ function conectarNaMesa(codigo) {
   // que acordaria para matar a conexão nova. Bumpar aqui é dizer "quem manda na rede agora
   // sou eu"; o que foi agendado antes que se cale.
   geracaoRede++;
-  el('btConectar').disabled = true;
-  el('btConectar').textContent = 'Entrando…';
+  saguaoEntrar('entrando');
   erroOnline('Procurando a mesa…');
   modo = 'convidado';
   usarCodigo(codigo);
@@ -803,12 +763,9 @@ function conectarNaMesa(codigo) {
       if (m.t === 'sentou') {
         euNaTela = m.cadeira;
         voltando = 0;                      // sentou: a próxima queda começa a contar do zero
-        // Sentado NÃO é ocioso: `conectando` fica de pé e o botão fica travado. Solto,
-        // ele reconectaria — e como o clienteId é o mesmo, o jogador faria take-over da
-        // própria cadeira. O texto muda porque a tela não muda até o anfitrião começar, e
-        // era essa espera muda que convidava ao segundo clique.
-        el('btConectar').disabled = true;
-        el('btConectar').textContent = 'Na mesa';
+        // Sentado NÃO é ocioso: `conectando` fica de pé e o botão fica travado (o porquê
+        // está no `saguaoEntrar`, em 145-saguao.js).
+        saguaoEntrar('namesa');
         // A ESPERA TEM DE TER NOME. Sentar entre duas partidas é o caso de quem sai e
         // volta: o anfitrião de propósito não manda vista de partida acabada (ela levaria
         // o convidado direto para a tela da derrota que ele já aceitou), então a tela fica
@@ -850,23 +807,6 @@ function conectarNaMesa(codigo) {
   peer.on('error', e => pararDeConectar(explicarErroDeRede(e)));
 }
 
-// O NOME VALE PARA A MESA E PARA O MENU. Quem se apresentou como "Lia" aqui não quer voltar
-// a ser "Careca" na próxima partida local — e é `lembrarMesa()` que faz isso durar, o mesmo
-// caminho do campo do menu. Um segundo lugar que gravasse nome é como as duas telas passam
-// a discordar. Campo vazio não apaga nada: fica o que o menu já dizia.
-el('btConectar').onclick = () => {
-  // A porta que NÃO passa por `entrarNumaMesa`: Entrar direto, da tela "A mesa caiu". Quem
-  // digita um código e clica está começando de novo, e a escada tem de acompanhar.
-  recomecarAsVoltas();
-  const nome = el('onlineNome').value.trim().slice(0, 14);
-  if (nome && nome !== MESA.cadeiras[0].nome) {
-    MESA.cadeiras[0].nome = nome;
-    lembrarMesa();
-    montarCadeiras();                     // o menu atrás desta tela mostra o nome novo
-  }
-  conectarNaMesa(el('onlineEntrada').value.trim().toUpperCase());
-};
-
 // ─── o convidado voltando sozinho ────────────────────────────────────────────
 // Quantas vezes e de quanto em quanto tempo. O anfitrião recarregando leva alguns
 // segundos para reivindicar o código de volta (o servidor de sinalização só larga o id
@@ -880,9 +820,7 @@ let voltando = 0;
 function voltarSozinho(codigo) {
   if (modo !== 'convidado' || !codigo || voltando >= VOLTAS) { voltando = 0; return false; }
   voltando++;
-  mostrarTela('telaOnline');
-  el('onlineTitulo').textContent = 'A mesa caiu';
-  el('onlineSub').textContent = 'Tentando voltar — o anfitrião pode estar recarregando.';
+  saguaoDeQueda();
   erroOnline(`Tentando voltar para a mesa ${codigo}… (${voltando}/${VOLTAS})`);
   // UMA VOLTA PENDENTE DE CADA VEZ, como o `largar` já faz com o relógio da cadeira: dois
   // degraus armados ao mesmo tempo são dois peers nascendo com 4 s de diferença.
@@ -934,23 +872,9 @@ function salaGuardada() {
   return g;
 }
 
-function atualizarBotaoVoltarMesa() {
-  const g = salaGuardada();
-  el('btVoltarMesa').classList.toggle('oculta', !g);
-  // REABRIR e VOLTAR são coisas diferentes, e o botão tem de dizer qual é: no anfitrião a
-  // mesa nasce de novo dele; no convidado ele vai bater na porta de alguém.
-  if (g) el('btVoltarMesa').textContent = g.anfitriao
-    ? `Reabrir a sua mesa ${g.codigo}` : `Voltar para a mesa ${g.codigo}`;
-}
-
-el('btVoltarMesa').onclick = () => {
-  const g = salaGuardada();
-  if (!g) { avisar('O código daquela mesa venceu.'); atualizarBotaoVoltarMesa(); return; }
-  tocarClique();
-  if (g.anfitriao) { reabrirMesaOnline(); return; }
-  entrarNumaMesa();                       // prepara a tela; ela já pré-preenche o campo
-  conectarNaMesa(g.codigo);
-};
+// `atualizarBotaoVoltarMesa` e o clique dele são apresentação, e moram em `145-saguao.js`.
+// O que fica aqui é `salaGuardada()`, que os dois consultam: saber se aquele código ainda
+// vale é regra de rede, não desenho de botão.
 
 function explicarErroDeRede(e) {
   const t = e && e.type;
