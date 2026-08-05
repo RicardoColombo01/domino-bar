@@ -193,7 +193,7 @@ existe mais.
 
 Sem framework, sem bundler, sem asset. Madeira, piso, as pintas das peças e todos os sons
 são gerados em código na hora — não há um único `.png` ou `.mp3` no repositório. Three.js
-e PeerJS vêm de CDN. São **~5.100 linhas** entre `src/` e o CSS.
+e PeerJS vêm de CDN. São **5.544 linhas** entre `src/` e o CSS.
 
 ```
 src/js/01-05   regras puras: baralho, encaixes, turnos, placar, bot
@@ -212,10 +212,10 @@ sintaxe vira mensagem no terminal em vez de tela preta.
 ### Comandos
 
 ```
-npm run build       junta src/ num index.html autossuficiente
+npm run build       junta src/js/ num index.html (o CSS continua externo)
 npm run check       avisa se o index.html está desatualizado
 npm test            build + as três suítes de lógica (segundos)
-npm run telas       build + o jogo em seis tamanhos de tela, nove situações cada
+npm run telas       build + o jogo em seis tamanhos de tela, dez situações cada
 npm run textura     build + as texturas sobrevivem a sair do jogo e voltar (~40 s)
 npm run lembrar     build + o que sobrevive a RECARREGAR a página
 npm run shots       build + screenshots do jogo no Chrome de verdade
@@ -243,7 +243,7 @@ O que os testes cobrem:
 - **A força do bot** — a única asserção do projeto que mede *qualidade*: o difícil tem de
   ganhar do fácil acima do acaso, em 600 partidas. É um **limiar** (`> 2σ`) e não um número
   fixo, de propósito: mudança de regra move a porcentagem sem quebrar a asserção.
-- **A tela**, no Chrome de verdade: seis tamanhos × nove situações. Reprova se a página
+- **A tela**, no Chrome de verdade: seis tamanhos × dez situações. Reprova se a página
   transbordar, se um painel sair da viewport, se dois painéis se sobrepuserem, se um alvo
   de toque for menor que 40 px, se **uma peça cair fora do quadro**, se uma peça ficar
   **por baixo de um painel**, ou se **duas coisas do 3D se atravessarem** — a mão do
@@ -284,11 +284,20 @@ dois merges e dois rebuilds do bundle por release. **Um dia inteiro se perdeu po
 disso**, com a `develop` em dia e a `main` três releases atrás. Hoje há um lugar a menos
 para o trabalho ficar preso.
 
-Doze releases até aqui, e três delas dizem bem o que este repositório é: a **v1.6.0** foi a
+Quinze releases até aqui, e três delas dizem bem o que este repositório é: a **v1.6.0** foi a
 primeira cujos itens vieram quase todos de **jogo de verdade, no celular**, e não de leitura
 de código; a **v1.7.1** veio do contrário — uma varredura atrás do que ainda não tinha
 incomodado ninguém; e a **v1.10.0** fechou os ramos que **existiam e nunca tinham rodado**.
 São três jeitos diferentes de achar trabalho, e nenhum substitui os outros.
+
+A **v2.0.0** trouxe o que a mesa online precisava para saber quem é quem: cada cadeira nasce
+com um nome próprio (era "Você" para todo mundo, inclusive no placar do online), quem entra
+pelo código **diz o seu nome** num campo do saguão, e o anfitrião **desempata nomes iguais** —
+dois "Ricardo" viram "Ricardo" e "Ricardo2", com o número no primeiro nome porque é o único
+pedaço que o cartão mostra em tela estreita. Junto foram dois defeitos de campo: as telas de
+texto **voltam ao topo** quando você rola (a carta mais alta que a tela ficava com o começo
+fora do alcance), e o convidado que **sai consegue voltar** — sair entrega a partida, não a
+mesa, e a cadeira que virou bot por falta de gente volta a ser dele.
 
 O dia a dia: `git switch -c v2` a partir de `main`, commits normais na branch, e no fim ela
 sobe a `version` do `package.json`, roda `npm test`, e volta para `main` com `--no-ff` e a
