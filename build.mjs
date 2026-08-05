@@ -55,6 +55,45 @@ partes.forEach((f, i) => {
 
 const ler = f => fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n');
 
+// ─── nome de topo repetido entre arquivos ────────────────────────────────────
+// O escopo é UM SÓ, então dois arquivos que declaram o mesmo nome estão brigando pela
+// mesma gaveta. Isto passa a ser reprovado aqui porque a linguagem só reclama de PARTE
+// dos casos, e a parte de que ela não reclama é a perigosa:
+//
+//   const naMao … const naMao   → SyntaxError, o `node --check` abaixo já pega
+//   function f() … function f() → SILENCIOSO: a segunda vence, e some uma implementação
+//   var x … var x               → SILENCIOSO: viram a mesma variável
+//
+// Ou seja, o risco real de um segundo jogo (`40-truco/`) não é o que estava anotado — é
+// `function` e `var`. Vinte linhas aqui fecham a família inteira e devolvem o nome do
+// culpado e os dois donos, que é o que faltava para o erro ser diagnosticável.
+//
+// Só olha a COLUNA 0, que é onde mora declaração de topo neste projeto. Nome dentro de
+// função é escopo de função e não colide com nada.
+const declaracoesDeTopo = fonte => {
+  const nomes = new Set();
+  const anotar = n => { if (/^[A-Za-z_$][\w$]*$/.test(n)) nomes.add(n); };
+  for (const m of fonte.matchAll(/^(?:async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)/gm)) anotar(m[1]);
+  for (const m of fonte.matchAll(/^class\s+([A-Za-z_$][\w$]*)/gm)) anotar(m[1]);
+  for (const m of fonte.matchAll(/^(?:const|let|var)\s+([A-Za-z_$][\w$]*)/gm)) anotar(m[1]);
+  // desestruturação: `const { a, b: c } = …` e `const [ a, b ] = …`
+  for (const m of fonte.matchAll(/^(?:const|let|var)\s*[{[]([^}\]]*)[}\]]/gm))
+    m[1].split(',').forEach(p => anotar(p.split(':').pop().split('=')[0].trim()));
+  return nomes;
+};
+
+const donoDoNome = new Map();
+const brigas = [];
+for (const f of partes) {
+  const curto = path.relative(DIR_JS, f).split(path.sep).join('/');
+  for (const n of declaracoesDeTopo(ler(f))) {
+    if (donoDoNome.has(n)) brigas.push(`  ${n} — ${donoDoNome.get(n)} e ${curto}`);
+    else donoDoNome.set(n, curto);
+  }
+}
+if (brigas.length)
+  throw new Error(`nome de topo declarado em dois arquivos (o escopo é um só):\n${brigas.join('\n')}`);
+
 const corpo = partes.map(f => {
   // o cabeçalho de cada fonte vira o separador aqui, para não duplicar
   const txt = ler(f).replace(/^\/\/ [^\n]*\n\/\/ \(parte de[^\n]*\n+/, '');
