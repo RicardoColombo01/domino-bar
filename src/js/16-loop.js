@@ -172,7 +172,14 @@ function aplicarIntencao(cadeira, i) {
   else if (i.acao === 'passar') r = passar(P, cadeira);
   else r = { erro: 'ação desconhecida' };
 
-  if (r.erro) { if (cadeira === euNaTela) avisar(r.erro); return; }
+  // O SILÊNCIO É O DEFEITO, NÃO A RECUSA. `avisar` fala com quem está NESTA tela, e o
+  // convidado nunca está: para ele a peça simplesmente não ia, sem uma palavra. Recusar
+  // continua certo; não dizer por quê é que não.
+  if (r.erro) {
+    if (cadeira === euNaTela) avisar(r.erro);
+    else if (modo === 'anfitriao') avisarCadeira(cadeira, r.erro);
+    return;
+  }
 
   const nome = P.cadeiras[cadeira].nome;
   if (i.acao === 'jogar') narrar(`${nome} jogou ${i.peca[0]}|${i.peca[1]}`);
@@ -311,11 +318,47 @@ function guardarPartida() {
 
 // Devolve o guardado só se ele ainda serve. Prazo porque uma partida de anteontem não é
 // mais "a partida de antes", é um estranho ocupando o botão.
+//
+// PARTIDA GUARDADA É ENTRADA DE FORA, exatamente como a mesa lembrada — e este era o único
+// validador de `localStorage` do projeto que nunca tinha sido endurecido. Ele conferia
+// quatro campos e entregava o resto CRU, enquanto o `mesaLembrada()` (14-menu.js) confere
+// campo a campo com `Object.hasOwn`. A diferença de rigor entre os dois era acidental, não
+// decidida.
+//
+// O que estava em jogo: sem `regras`, o `atualizarBotaoRetomar` desreferencia
+// `g.P.regras.modo` e LANÇA — e ele roda no TOPO do módulo, então a exceção mata o script
+// concatenado inteiro. Tela preta que volta a cada recarregamento, porque a causa está
+// guardada, e sem saída a não ser limpar o armazenamento à mão. É o defeito 5 da Fila 6
+// literalmente de novo, no arquivo vizinho.
+//
+// RECUSAR E NÃO REMENDAR, e é aqui que ele difere do `mesaLembrada`: uma preferência que
+// não fecha pode cair no padrão porque "Clássico até 6" é uma mesa boa. Uma PARTIDA que não
+// fecha não tem padrão nenhum — meia partida remendada é pior que partida nenhuma. Recusar
+// só esconde o botão de retomar, que é degradação graciosa; o jogo abre normalmente.
 function partidaGuardada() {
   const g = lido('partida', null);
-  if (!g || !g.P || !Array.isArray(g.P.cadeiras) || !Array.isArray(g.P.maos)) return null;
-  if (g.P.fase === 'fim') return null;
-  if (!g.quando || Date.now() - g.quando > HORAS_GUARDADA * 3600e3) return null;
+  if (!g || !g.P || !g.quando || Date.now() - g.quando > HORAS_GUARDADA * 3600e3) return null;
+
+  const p = g.P;
+  if (p.fase === 'fim') return null;
+  // Os continentes que os consumidores desreferenciam sem perguntar. `partidaDeVolta` faz
+  // `guardada.cadeiras.map`, `retomarPartida` lê `P.placar` e `P.maoNum`, o HUD lê tudo.
+  for (const campo of ['cadeiras', 'maos', 'placar', 'linha', 'monte'])
+    if (!Array.isArray(p[campo])) return null;
+  if (!p.cadeiras.length || p.maos.length !== p.cadeiras.length) return null;
+  if (!p.maos.every(Array.isArray)) return null;
+  // `n` manda no laço de `retomarPartida` e na faixa de `euNaTela`.
+  if (!Number.isInteger(p.n) || p.n !== p.cadeiras.length) return null;
+  if (!Number.isInteger(p.vez) || p.vez < 0 || p.vez >= p.n) return null;
+
+  // E as REGRAS, que é o campo cuja falta dava tela preta. `Object.hasOwn` e não
+  // `MODOS[m] ?` pelo motivo que o `mesaLembrada` já registra: `MODOS['constructor']` é
+  // truthy num objeto literal e passaria — deixar dois padrões de validação no mesmo
+  // projeto é como o primeiro volta.
+  if (!p.regras || typeof p.regras !== 'object') return null;
+  if (!Object.hasOwn(MODOS, p.regras.modo)) return null;
+  if (!MODOS[p.regras.modo].cadeiras.includes(p.n)) return null;
+
   return g;
 }
 

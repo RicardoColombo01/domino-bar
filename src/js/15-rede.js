@@ -828,6 +828,9 @@ function conectarNaMesa(codigo) {
         atualizarSaguao();
       }
       if (m.t === 'vista' && vistaDoFio(m.v)) { esconderTelas(); ligarMurmuro(); atualizarVista(m.v); }
+      // A outra ponta do `avisarCadeira`: o convidado finalmente ouve por que a jogada
+      // dele não foi. Mesmo canal do erro local, para não haver dois jeitos de recusar.
+      if (m.t === 'erro') avisar(String(m.txt || '').slice(0, TAMANHO_FALA));
       if (m.t === 'log') anotar(m.txt);
       if (m.t === 'chat') dizer(vistaAtual, m.de, m.canal, m.txt, m.nome);
     });
@@ -969,6 +972,19 @@ function espalharVistas() {
 }
 function espalharLog(txt) {
   for (const conn of conexoes.values()) if (conn.open) conn.send({ t: 'log', txt });
+}
+
+// O PORQUÊ DA RECUSA, para quem está do outro lado do fio. Sem isto, a ação recusada de um
+// convidado morre EM SILÊNCIO: o `avisar` de `aplicarIntencao` só fala com quem está nesta
+// tela, e o convidado não está. Ele toca a peça, nada acontece, e o jogo não diz por quê —
+// a mesma doença que a Fila 6 inteira e o item 2 da Fila 8 passaram consertando, viva no
+// único caminho que atravessa a rede.
+//
+// Convidado de versão antiga simplesmente ignora um `t` que não conhece, então isto não
+// quebra compatibilidade nenhuma.
+function avisarCadeira(cadeira, txt) {
+  const conn = conexoes.get(cadeira);
+  if (conn && conn.open) conn.send({ t: 'erro', txt: String(txt).slice(0, TAMANHO_FALA) });
 }
 
 // ─── a conversa ──────────────────────────────────────────────────────────────

@@ -1630,6 +1630,51 @@ console.log('\nmensagem torta não derruba a mesa');
       const e = entregar(conn, m);
       ok(!e, `{t:'acao'} ${rotulo} derrubou o despachante: ${e && e.message}`);
     }
+
+    // S3 — A RECUSA TEM DE CHEGAR NO CONVIDADO. `avisar` fala com quem está NESTA tela, e
+    // ele nunca está: a peça simplesmente não ia, sem uma palavra. É a doença do silêncio
+    // que a Fila 6 e o item 2 da Fila 8 passaram consertando, viva no único caminho que
+    // atravessa a rede.
+    // A jogada recusada é PROCURADA, não escolhida a dedo: uma peça fixa como a `6|6` pode
+    // por acaso ser válida naquela mão, e a asserção passaria a medir o sorteio.
+    const validas = new Set(mod.acoesDe(mod.P, 1).jogadas.map(j => mod.chave(j.peca) + j.ponta));
+    let ruim = null;
+    for (let a = 0; a <= 6 && !ruim; a++)
+      for (let b = a; b <= 6 && !ruim; b++)
+        for (const ponta of ['esq', 'dir'])
+          if (!validas.has(mod.chave([a, b]) + ponta)) { ruim = { peca: [a, b], ponta }; break; }
+    ok(ruim, 'montagem: não achei uma jogada inválida para recusar');
+
+    conn.enviadas.length = 0;
+    entregar(conn, { t: 'acao', acao: 'jogar', peca: ruim.peca, ponta: ruim.ponta });
+    const erros = conn.enviadas.filter(x => x.t === 'erro');
+    ok(erros.length === 1,
+       `uma jogada recusada devia render 1 recado ao convidado e rendeu ${erros.length} — ele fica sem saber por quê`);
+    ok(erros[0] && typeof erros[0].txt === 'string' && erros[0].txt.length > 0,
+       'o recado da recusa chegou vazio, que é o mesmo silêncio com outro nome');
+
+    // E o contrário: jogada BOA não pode render recado de erro nenhum. Sem esta, um
+    // conserto que mandasse 'erro' sempre deixaria a de cima verde.
+    const boa = mod.acoesDe(mod.P, 1).jogadas[0];
+    conn.enviadas.length = 0;
+    entregar(conn, { t: 'acao', acao: 'jogar', peca: boa.peca, ponta: boa.ponta });
+    ok(conn.enviadas.filter(x => x.t === 'erro').length === 0,
+       'uma jogada VÁLIDA rendeu recado de erro — o guarda está recusando o que devia passar');
+  }
+
+  {
+    // S4 — o `P.log` crescia sem teto (347 entradas / 18,7 KB numa partida de 12 mãos), era
+    // serializado a cada `publicar()` — 334 gravações síncronas por partida — e não tinha
+    // UM ÚNICO LEITOR em `src/` nem em `tests/`. Peso morto puro. Esta asserção é o que
+    // impede alguém de ressuscitá-lo por engano ao mexer no motor.
+    mod.encerrarRede();
+    mod.MESA.modo = 'classico'; mod.MESA.n = 2;
+    mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[1].nivel = 'normal';
+    mod.comecarLocal();
+    for (let passo = 0; mod.P.fase === 'mao' && passo < 200; passo++)
+      mod.aplicarIntencao(mod.P.vez, mod.jogadaDoBot(mod.P, mod.P.vez));
+    ok(mod.P.log === undefined,
+       'o P.log voltou — ele não tem leitor nenhum e é serializado em toda publicação');
   }
   console.log('  o despachante aguenta lixo do fio — e a mesa não para');
 }

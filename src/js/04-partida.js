@@ -25,7 +25,6 @@ function novaPartida(cadeiras, regras) {
     baralho: baralhoDoModo(modoDe({ modo: (regras || {}).modo })),
     abridor: null,
     desistiu: null,                           // cadeira que saiu no meio, se alguém saiu
-    log: [],
   };
   novaMao(P);
   return P;
@@ -58,7 +57,6 @@ function novaMao(P) {
     P.vez = P.abridor;                        // nas seguintes, abre quem bateu, com o que quiser
     P.pecaObrigatoria = null;
   }
-  P.log.push({ t: 'mao', num: P.maoNum, abre: P.vez, obrigatoria: P.pecaObrigatoria });
   return P;
 }
 
@@ -116,7 +114,6 @@ function jogar(P, cadeira, peca, ponta) {
   P.linha = aplicar(P.linha, peca, ponta);
   P.pecaObrigatoria = null;
   P.passesSeguidos = 0;
-  P.log.push({ t: 'jogou', cadeira, peca, ponta });
 
   if (ultima) return fecharMao(P, { motivo: 'batida', tipo, vencedor: cadeira });
   P.vez = (cadeira + 1) % P.n;
@@ -127,7 +124,6 @@ function comprar(P, cadeira) {
   if (!acoesDe(P, cadeira).comprar) return { erro: 'não dá para comprar agora' };
   const peca = P.monte.pop();
   P.maos[cadeira].push(peca);
-  P.log.push({ t: 'comprou', cadeira });
   return { ok: true, peca };
 }
 
@@ -138,7 +134,6 @@ function passar(P, cadeira) {
   const pt = pontas(P.linha);
   if (pt) { P.faltaNo[cadeira].add(pt[0]); P.faltaNo[cadeira].add(pt[1]); }
   P.passesSeguidos++;
-  P.log.push({ t: 'passou', cadeira });
   if (P.passesSeguidos >= P.n) return fecharMao(P, { motivo: 'tranca' });
   P.vez = (cadeira + 1) % P.n;
   return { ok: true };
@@ -182,7 +177,6 @@ function fecharMao(P, res) {
     somasPorTime: P.placar.map((_, t) => porTime[t] || 0),   // mesmo índice do placar
   };
   P.fase = P.placar.some(v => v >= P.regras.alvo) ? 'fim' : 'fimDeMao';
-  P.log.push(Object.assign({ t: 'fimDeMao' }, P.resultado));
   return { ok: true, fim: P.resultado };
 }
 
@@ -195,7 +189,6 @@ function abandonar(P, cadeira) {
   P.desistiu = cadeira;
   P.fase = 'fim';
   P.resultado = null;
-  P.log.push({ t: 'abandono', cadeira });
   return { ok: true, fim: { motivo: 'abandono', desistiu: cadeira } };
 }
 
