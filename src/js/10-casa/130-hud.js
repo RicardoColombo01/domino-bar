@@ -25,7 +25,21 @@ const HUD = {
 // que já são o verdadeiro e o falso que interessam. Quem jogava antes não perde a escolha.
 let contando = !!lido('contagem', false);
 
-const ETIQUETA = { voce: 'você', local: 'nesta tela', bot: 'bot', online: 'online' };
+// ─── o encaixe do painel do jogo ─────────────────────────────────────────────
+// A gaveta, o botão que a abre e o "lembrar se estava aberta" são da CASA — qualquer jogo
+// de mesa quer um painel de apoio. O CONTEÚDO é do jogo: no dominó é quantas peças de cada
+// número já apareceram, e essa é uma frase que só faz sentido com pinta e monte.
+//
+// Estava tudo aqui dentro (`desenharContagem`), que era a última regra de dominó morando na
+// pasta que promete não conhecer o jogo. Agora a casa reserva o lugar e chama; quem sabe as
+// regras pendura o seu em `30-domino/135-contagem.js`, e o truco pendura o dele sem que um
+// precise saber do outro.
+//
+// Nasce sem fazer nada de propósito: um jogo que não tenha painel não paga nada por isso, e
+// a casa não fica com um `if` perguntando qual jogo está na mesa.
+let painelDoJogo = () => {};
+
+const ETIQUETA ={ voce: 'você', local: 'nesta tela', bot: 'bot', online: 'online' };
 
 // Tudo que vem de fora passa por aqui antes de virar innerHTML. Até agora o único texto
 // alheio era o nome, cortado em 14 caracteres — o texto do chat é o primeiro campo
@@ -143,39 +157,10 @@ function desenharHUD(vista) {
   // Quando a única saída é comprar, o botão precisa gritar: o jogador está travado.
   HUD.comprar.classList.toggle('principal', a.comprar && !a.jogadas.length);
 
-  desenharContagem(vista);
+  painelDoJogo(vista);
   desenharConversa(vista);
   // Depois das duas, porque é a visibilidade DELAS que decide se há gaveta aberta.
   atualizarCortina();
-}
-
-// Quantas peças de cada número já apareceram — as da mesa MAIS as da sua mão, como o
-// Ricardo pediu. Sai inteiro de `vista`: é exatamente o que o jogador enxerga, então não
-// vaza nada e não precisou de nada novo no motor.
-function desenharContagem(vista) {
-  HUD.contagem.classList.toggle('oculta', !contando || !vista.mao);
-  if (!contando || !vista.mao) return;
-
-  const baralho = baralhoDoModo(MODOS[vista.modo] || MODOS[MODO_PADRAO]);
-  const aparecidas = vista.linha.concat(vista.mao);
-  const linhas = [];
-  for (let n = 0; n <= MAX_PINTAS; n++) {
-    // O total NÃO é 7 fixo: no Trio o 0|0 sai do baralho e o zero mora em 6 peças.
-    const total = baralho.filter(p => p[0] === n || p[1] === n).length;
-    if (!total) continue;
-    const visto = aparecidas.filter(p => p[0] === n || p[1] === n).length;
-    // Quem passou numa ponta provou não ter aquele número. É informação pública — a
-    // mesa inteira viu o passe —, e até agora só o bot usava.
-    const semEle = (vista.faltaNo || [])
-      .map((nums, i) => (i !== vista.cadeira && nums.indexOf(n) >= 0 ? escapar(vista.cadeiras[i].nome) : null))
-      .filter(Boolean);
-    linhas.push(`<div${visto === total ? ' class="zerado"' : ''}>` +
-      `<b>${n}</b>` +
-      `<i>${'▮'.repeat(visto)}${'▯'.repeat(total - visto)}</i>` +
-      `<s>${total - visto || '—'}</s>` +
-      `<em>${semEle.join(', ')}</em></div>`);
-  }
-  HUD.contagem.innerHTML = '<span class="rot">faltam aparecer</span>' + linhas.join('');
 }
 
 // A barra de confirmação. O rótulo diz o NÚMERO da ponta, não "esquerda/direita" sozinho:

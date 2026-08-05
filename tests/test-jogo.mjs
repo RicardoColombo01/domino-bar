@@ -25,7 +25,15 @@ const mod = await import(buildModule([
   'apontada', 'porQueNaoDa',
   // O painel de contagem só era testado por FORA (se cobre a mesa, nas suítes de tela).
   // Ele é ferramenta de decisão: contar errado é pior que não contar.
-  'desenharContagem',
+  // O painel de apoio é chamado pelo ENCAIXE da casa, não pela função do jogo: quem o
+  // desenha de verdade é `painelDoJogo`, que `30-domino/135-contagem.js` preenche na carga.
+  // Testar `desenharContagem` direto deixaria a linha do encaixe sem uma única asserção —
+  // e sem ela o painel simplesmente não aparece, calado. Conferido por mutação: tirando o
+  // `painelDoJogo = desenharContagem`, três asserções reprovam e a QUARTA mata a suíte, ao
+  // ler `t['3'].vistos` de um painel que ficou vazio. Reprovar MENOS do que devia é o
+  // sintoma que este projeto já registra — aqui a causa é conhecida e está escrita, e não
+  // uma asserção fraca.
+  'painelDoJogo',
   // `bulbo` é a lâmpada, e é a única maneira de perguntar se ela parou de respirar — a
   // preferência não pode ser testada por uma variável de configuração, tem de ser pelo
   // MOVIMENTO que ela promete tirar da tela.
@@ -540,7 +548,7 @@ console.log('\no painel de contagem conta certo');
       modo: 'trio', cadeira: 0, linha: [], mao: [], faltaNo: [[], [], []],
       cadeiras: [{ nome: 'eu' }, { nome: 'Zé' }, { nome: 'Ana' }],
     };
-    mod.desenharContagem(vista);
+    mod.painelDoJogo(vista);
     const t = ler();
     ok(t['0'] && t['0'].total === 6,
       `no Trio o zero mora em 6 peças (o 0|0 sai do baralho) e o painel disse ${t['0'] && t['0'].total}`);
@@ -559,7 +567,7 @@ console.log('\no painel de contagem conta certo');
       faltaNo: [[], [], []],
       cadeiras: [{ nome: 'eu' }, { nome: 'Zé' }, { nome: 'Ana' }],
     };
-    mod.desenharContagem(vista);
+    mod.painelDoJogo(vista);
     const t = ler();
     // Peças com o 3: 3|3, 3|5, 3|0 = três peças. O 3|3 é UMA peça, não duas — contar por
     // metade daria quatro e o painel mentiria a favor do jogador.
@@ -578,7 +586,7 @@ console.log('\no painel de contagem conta certo');
       modo: 'classico', cadeira: 0, linha: todosOs2, mao: [], faltaNo: [[], [], []],
       cadeiras: [{ nome: 'eu' }, { nome: 'Zé' }, { nome: 'Ana' }],
     };
-    mod.desenharContagem(vista);
+    mod.painelDoJogo(vista);
     const t = ler();
     ok(t['2'].zerado, 'o número que apareceu inteiro tinha de vir marcado como zerado');
     ok(t['2'].faltam === '—', `zerado, o "faltam" vira um traço, e veio "${t['2'].faltam}"`);
@@ -594,7 +602,7 @@ console.log('\no painel de contagem conta certo');
       faltaNo: [[4], [4], [4]],              // os TRÊS passaram no 4, inclusive você
       cadeiras: [{ nome: 'eu' }, { nome: 'Zé' }, { nome: 'Ana' }],
     };
-    mod.desenharContagem(vista);
+    mod.painelDoJogo(vista);
     const t = ler();
     ok(t['4'].quemPassou === 'Zé, Ana',
       `deviam aparecer só os outros dois, e o painel disse "${t['4'].quemPassou}"`);
@@ -609,7 +617,7 @@ console.log('\no painel de contagem conta certo');
       modo: 'classico', cadeira: 0, linha: [], mao: [], faltaNo: [[], [6], []],
       cadeiras: [{ nome: 'eu' }, { nome: '<img src=x onerror=alert(1)>' }, { nome: 'Ana' }],
     };
-    mod.desenharContagem(vista);
+    mod.painelDoJogo(vista);
     ok(painel.innerHTML.indexOf('<img') < 0,
       'o nome do convidado virou um elemento dentro do painel de contagem');
     ok(painel.innerHTML.indexOf('&lt;img') >= 0, 'o nome devia ter saído escapado, e não sumido');
