@@ -27,9 +27,12 @@
 // pergunta tem duas respostas. O arranque é o instante em que ela passa a ter uma.
 const JOGOS = {};
 let JOGO = null;
+// O ID do jogo na mesa — a chave dele em `JOGOS`, não o nome que aparece na tela. `JOGO.nome`
+// é 'Dominó de Bar' e serve para o jogador ler; isto aqui é o que vai para a URL e para o
+// armazenamento, então tem de ser curto, estável e sem acento.
+let JOGO_ID = '';
 
-// Trocar o jogo da mesa. Hoje é chamada uma vez, no arranque; a aba que deixa o jogador
-// escolher entra por aqui.
+// Trocar o jogo da mesa. É por aqui que a aba passa, e é por aqui que o arranque escolhe.
 //
 // `Object.hasOwn` e não `JOGOS[nome]`: o nome pode vir do armazenamento ou da URL, ou seja
 // é ENTRADA DE FORA, e `JOGOS['constructor']` é truthy — foi exatamente esse buraco que deu
@@ -37,8 +40,15 @@ let JOGO = null;
 function trocarDeJogo(nome) {
   if (!Object.hasOwn(JOGOS, nome)) return false;
   JOGO = JOGOS[nome];
+  JOGO_ID = nome;
   return true;
 }
+
+// Um jogo REGISTRADO ainda não é um jogo JOGÁVEL. O truco aparece na aba desde a v4.1 e só
+// ganha motor na v6 — enquanto isso ele tem nome, resumo e regras, e nada mais. A pergunta
+// mora aqui, e não num `if (id === 'truco')` espalhado: quem sabe se um jogo está pronto é o
+// registro dele.
+const jogavel = j => !!j && !j.emBreve;
 
 // ─── quem pediu menos movimento ──────────────────────────────────────────────
 // Sensibilidade vestibular não é preferência estética: para quem tem, movimento na tela
@@ -97,4 +107,50 @@ function lido(chave, padrao) {
 
 function esquecer(chave) {
   try { localStorage.removeItem(GUARDA + chave); } catch (e) { void e; }
+}
+
+// ─── o que é guardado POR JOGO ───────────────────────────────────────────────
+// A maior parte do que o navegador lembra é da casa e vale para a mesa toda: quem você é no
+// online (`cliente`), o som, o painel aberto, a última sala. Duas coisas NÃO são:
+//
+//   mesa      quantas cadeiras, quem senta nelas, e o MODO — e modo do dominó não é modo do
+//             truco. Um 'classico' guardado não quer dizer nada numa mesa de truco.
+//   partida   a partida em andamento. Uma só, e do jogo em que ela começou.
+//
+// Sem isto, trocar de aba apagaria a partida guardada EM SILÊNCIO — que é exatamente o que
+// esta fase existe para não fazer. O jogador que está no meio de uma partida de dominó, dá
+// uma espiada no truco e volta, tem de achar a mesa dele lá.
+const CHAVES_DO_JOGO = ['mesa', 'partida'];
+
+const chaveDoJogo = chave => `${chave}.${JOGO_ID}`;
+const guardarNoJogo = (chave, valor) => guardar(chaveDoJogo(chave), valor);
+const lidoDoJogo = (chave, padrao) => lido(chaveDoJogo(chave), padrao);
+const esquecerDoJogo = chave => esquecer(chaveDoJogo(chave));
+
+// O QUE JÁ ESTAVA GUARDADO ERA DO DOMINÓ, porque até aqui não havia outro jogo. Sem esta
+// migração o conserto seria invisível justamente para quem jogou o bastante para ter
+// preferência guardada: a mesa dele voltaria ao padrão e a partida de antes sumiria do menu.
+// É a mesma lição que o "Você" gravado pagou na v2.0.0.
+//
+// MIGRA E APAGA, e não "lê a antiga quando a nova falta". A leitura preguiçosa parece mais
+// barata e arma uma cilada: `esquecerDoJogo('partida')` roda no fim de toda partida, e na
+// leitura seguinte a chave antiga — intacta — ressuscitaria a partida que acabou de acabar.
+// Copiar uma vez e apagar a origem não tem esse estado intermediário.
+//
+// QUEM DIZ QUE HERDA É O JOGO, e não um `if (JOGO_ID === 'domino')` aqui. A primeira versão
+// tinha o literal, e ele passava batido pela varredura de acoplamento — que mede
+// IDENTIFICADORES — sendo exatamente a mesma coisa que ela existe para impedir: a casa
+// sabendo o nome de um jogo. Hoje o dominó declara `herdaOGuardadoSemSufixo` no registro dele,
+// e a casa só pergunta. Nenhum jogo novo pode declarar isso: as chaves sem sufixo são de
+// antes de existir mais de um jogo, e portanto só de quem estava aqui.
+function migrarOGuardadoSemSufixo() {
+  if (!JOGO || !JOGO.herdaOGuardadoSemSufixo) return;
+  for (const chave of CHAVES_DO_JOGO) {
+    const antigo = lido(chave, null);
+    if (antigo === null) continue;
+    // Se a chave nova já existe, ela é a verdadeira — a antiga é sobra de uma versão que
+    // ficou aberta noutra aba. Apaga do mesmo jeito, senão ela migra de novo amanhã.
+    if (lido(chaveDoJogo(chave), null) === null) guardar(chaveDoJogo(chave), antigo);
+    esquecer(chave);
+  }
 }

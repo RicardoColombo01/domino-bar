@@ -16,7 +16,44 @@
 
 JOGOS.domino = {
   nome: 'Dominó de Bar',
+  // O NOME QUE CABE NA ABA. Mesma razão do `short_name` do manifest: em 360px de tela a faixa
+  // tem ~320px para todas as abas, e dois nomes cheios já não cabem — sem isto a faixa
+  // transborda numa tela que o `test-telas` mede.
+  curto: 'Dominó',
   sub: 'Dupla-seis, regras de bar. Você escolhe quem senta em cada cadeira.',
+
+  // O QUE ESTAVA GUARDADO SEM SUFIXO É MEU. Até a v4.0 havia um jogo só, então as chaves
+  // `dominobar.mesa` e `dominobar.partida` só podiam ser de dominó. Da v4.1 em diante cada
+  // jogo guarda a sua (`…​.domino`, `…​.truco`), e esta marca é o que autoriza a casa a
+  // migrar o acervo antigo — ver `migrarOGuardadoSemSufixo`, em 010-constantes.js.
+  //
+  // JOGO NOVO NÃO PODE DECLARAR ISTO. Não é uma opção de contrato: é um fato histórico de
+  // um jogo só, e dois donos para o mesmo acervo seria uma corrida para ver quem migra
+  // primeiro.
+  herdaOGuardadoSemSufixo: true,
+
+  // ─── as regras, escritas onde elas valem ───────────────────────────────────
+  // Estavam em `src/pagina.html`, dentro do `<details>` do menu — doze linhas de regra de
+  // dominó no HTML da CASA, que é o arquivo que promete não saber que jogo está na mesa. É o
+  // mesmo vazamento que a Fase 1 tirou do JavaScript, sobrevivendo no HTML porque a varredura
+  // por AST não enxerga marcação.
+  //
+  // A casa fica com a MOLDURA (o `<details>`, o "As regras desta casa", o `<li>`) e o jogo
+  // entrega o texto de dentro.
+  regras: [
+    '<b>Clássico:</b> 28 peças, 7 para cada, de 2 a 4 jogadores.',
+    '<b>Duelo:</b> 1v1 com o baralho inteiro na mão — 14 para cada, sem monte.',
+    '<b>Trio:</b> a bucha de zero sai do baralho, sobram 27 e dão 9 para cada um dos três, sem monte.',
+    '<b>Sem monte</b> (Duelo, Trio e o Clássico de 4): quem não pode jogar, passa.',
+    '<b>Com monte</b> (Clássico de 2 ou 3): quem não pode jogar <b>compra até conseguir</b>; só passa se o monte secar.',
+    'No Clássico de 4, duplas em cruz (1&amp;3 × 2&amp;4).',
+    'Mão carroçuda demais volta para a mesa e todo mundo embaralha de novo.',
+    'A primeira mão abre com o <b>6|6</b> — ou, se ele estiver no monte, com a maior carroça. Depois, abre quem bateu.',
+    'Batida: simples <b>1</b> · carroça <b>2</b> · lá-e-lô <b>2</b> · cruzada <b>4</b>.',
+    'Trancou: marca 1 ponto quem tiver a mão mais leve. Empatou, a mão morre.',
+    '<b>Não dá para trancar de propósito:</b> a jogada que você sabe que trava a mesa — <b>você inclusive</b> — fica proibida enquanto houver outra. Se você ainda responde às pontas, o jogo não trava e a jogada vale. Carroça não conta: ela não muda o número da ponta.',
+    'Sair no meio <b>conta como derrota</b>. Quem cai no online tem 30 s para voltar.',
+  ],
 
   // ─── o motor ───────────────────────────────────────────────────────────────
   // Turnos, pontuação e a fronteira de segurança. `visao` é o invariante 3: é literalmente o

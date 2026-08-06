@@ -58,7 +58,10 @@ function mostrarTela(id) {
   // O botão de retomar é recalculado a cada vez que o menu aparece, e não uma vez no
   // início: entre um e outro você pode ter acabado a partida guardada, ou o prazo dela
   // pode ter vencido com a aba aberta.
-  if (id === 'telaMenu') { atualizarBotaoRetomar(); atualizarBotaoVoltarMesa(); }
+  // `pintarAbas` pelo mesmo motivo, e ele é mais forte: entre uma vinda ao menu e a outra a
+  // mesa pode ter ficado OCUPADA, e mesa ocupada não troca de jogo (ver `pintarAbas`, em
+  // 141-abas.js). Sem esta chamada a faixa continuaria oferecendo o que ela já sabe recusar.
+  if (id === 'telaMenu') { atualizarBotaoRetomar(); atualizarBotaoVoltarMesa(); pintarAbas(); }
   // A conversa do saguão vive por cima desta tela, então quem abre e fecha a tela é quem
   // liga e desliga aquilo.
   atualizarSaguao(id === 'telaOnline');

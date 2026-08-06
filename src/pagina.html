@@ -97,17 +97,35 @@ __ESTILO__
 
 <!-- ─── montagem da mesa ─────────────────────────────────────────────────── -->
 <div class="tela" id="telaMenu">
-  <div class="carta">
-    <h1>Dominó de Bar</h1>
-    <p class="sub">Dupla-seis, regras de bar. Você escolhe quem senta em cada cadeira.</p>
+  <!-- A FAIXA DE ABAS é montada por `montarAbas()` a partir de quem se registrou em JOGOS.
+       Escrever "Dominó | Truco" aqui seria a casa sabendo o nome dos jogos — o acoplamento
+       que a v4.0.0 tirou do JavaScript e que o `test-acoplamento` agora guarda.
+       `role="tablist"` com o cartão de `tabpanel` porque isto É uma aba: é assim que o leitor
+       de tela anuncia "aba 1 de 2". A seta que o papel promete entra em `montarAbas`.
 
+       O `.balcao` existe porque `.tela` é um flex EM LINHA: a faixa como irmã da carta
+       ficaria AO LADO dela. Envolver os dois também preserva o `margin: auto` que conserta o
+       topo inalcançável (o comentário longo do `.carta`, em estilo.css) — quem precisa da
+       margem automática é o item flex, e agora o item flex é este. -->
+  <div class="balcao">
+  <nav class="abas" id="abasJogos" role="tablist" aria-label="Escolha o jogo"></nav>
+
+  <div class="carta" id="cartaDoJogo" role="tabpanel">
+    <!-- Título, resumo, modos e regras vinham escritos à mão aqui, todos falando de dominó.
+         Hoje saem do registro do jogo — ver `pintarOJogoNoMenu`, em 141-abas.js. -->
+    <h1 id="tituloJogo"></h1>
+    <p class="sub" id="subJogo"></p>
+
+    <!-- Jogo REGISTRADO e ainda não JOGÁVEL: diz o que falta, em vez de mostrar uma montagem
+         de mesa com um "Sentar e jogar" que não senta. -->
+    <p class="vemAi oculta" id="vemAi"></p>
+
+    <div id="montagemDaMesa">
     <div class="linha">
       <span class="rot">Mesa</span>
-      <div class="grupo" id="modoMesa">
-        <button class="btn peq on" data-modo="classico">Clássico <i>7 peças</i></button>
-        <button class="btn peq" data-modo="duelo">Duelo <i>14, 1v1</i></button>
-        <button class="btn peq" data-modo="trio">Trio <i>9, sem 0|0</i></button>
-      </div>
+      <!-- Vazio: `montarModos()` gera os botões a partir de `JOGO.menu.MODOS`, que já
+           carregava `rotulo` e `nota` exatamente para esta tela. -->
+      <div class="grupo" id="modoMesa"></div>
     </div>
 
     <div class="linha">
@@ -155,25 +173,18 @@ __ESTILO__
     <div class="linha acoesMenu">
       <button class="btn retomar oculta" id="btVoltarMesa">Voltar para a mesa</button>
     </div>
+    </div><!-- /montagemDaMesa -->
 
-    <details class="regras">
+    <!-- A casa fica com a MOLDURA; os itens saem de `JOGO.regras`. As doze linhas de dominó
+         que moravam aqui foram para `30-domino/300-registro.js` — regra de um jogo dentro do
+         HTML da casa é o mesmo vazamento da Fase 1, sobrevivendo na marcação porque a
+         varredura por AST não enxerga HTML. -->
+    <details class="regras" id="regrasJogo">
       <summary>As regras desta casa</summary>
-      <ul>
-        <li><b>Clássico:</b> 28 peças, 7 para cada, de 2 a 4 jogadores.</li>
-        <li><b>Duelo:</b> 1v1 com o baralho inteiro na mão — 14 para cada, sem monte.</li>
-        <li><b>Trio:</b> a bucha de zero sai do baralho, sobram 27 e dão 9 para cada um dos três, sem monte.</li>
-        <li><b>Sem monte</b> (Duelo, Trio e o Clássico de 4): quem não pode jogar, passa.</li>
-        <li><b>Com monte</b> (Clássico de 2 ou 3): quem não pode jogar <b>compra até conseguir</b>; só passa se o monte secar.</li>
-        <li>No Clássico de 4, duplas em cruz (1&amp;3 × 2&amp;4).</li>
-        <li>Mão carroçuda demais volta para a mesa e todo mundo embaralha de novo.</li>
-        <li>A primeira mão abre com o <b>6|6</b> — ou, se ele estiver no monte, com a maior carroça. Depois, abre quem bateu.</li>
-        <li>Batida: simples <b>1</b> · carroça <b>2</b> · lá-e-lô <b>2</b> · cruzada <b>4</b>.</li>
-        <li>Trancou: marca 1 ponto quem tiver a mão mais leve. Empatou, a mão morre.</li>
-        <li><b>Não dá para trancar de propósito:</b> a jogada que você sabe que trava a mesa — <b>você inclusive</b> — fica proibida enquanto houver outra. Se você ainda responde às pontas, o jogo não trava e a jogada vale. Carroça não conta: ela não muda o número da ponta.</li>
-        <li>Sair no meio <b>conta como derrota</b>. Quem cai no online tem 30 s para voltar.</li>
-      </ul>
+      <ul id="regrasLista"></ul>
     </details>
   </div>
+  </div><!-- /balcao -->
 </div>
 
 <!-- ─── fim de mão / fim de partida ──────────────────────────────────────── -->

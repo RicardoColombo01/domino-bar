@@ -177,7 +177,12 @@ const AJUDA = `
   // "Continuar a partida de antes" aceso na cena seguinte — mais uma linha de carta, na
   // única cena que mede altura de carta. Cada cena diz o que quer.
   const semGuardado = () => {
-    try { localStorage.removeItem('dominobar.partida'); } catch (e) { void e; }
+    // A chave é POR JOGO desde a v4.1. A antiga sai junto porque ela MIGRA na carga: deixá-la
+    // aqui devolveria na próxima cena a partida que esta acabou de apagar.
+    try {
+      localStorage.removeItem('dominobar.partida.domino');
+      localStorage.removeItem('dominobar.partida');
+    } catch (e) { void e; }
     window.__jogo.atualizarBotaoRetomar();
   };
   // A carta mais alta que o menu sabe ficar, e toda ela DECLARADA — quatro cadeiras (a
@@ -384,7 +389,12 @@ const MEDIR = `(() => {
   const aberta = [...document.querySelectorAll('.tela')].find(t => vis(t));
   let carta = null;
   if (aberta) {
-    const alvo = aberta.querySelector('.carta');
+    // O ALVO É O ITEM FLEX DA TELA, e não a \`.carta\` sempre. No menu a carta ganhou uma
+    // irmã acima — a faixa de abas —, e as duas vivem dentro de um \`.balcao\` que passou a
+    // ser o item flex. Medindo a carta, a coisa mais alta da tela ficaria FORA da medida, e
+    // a asserção continuaria verde com a faixa inalcançável: é a mesma cegueira que fez o
+    // quarto cartão de jogador nascer fora da tela com a suíte verde.
+    const alvo = aberta.querySelector('.balcao') || aberta.querySelector('.carta');
     const cs = getComputedStyle(aberta);
     const padT = parseFloat(cs.paddingTop) || 0, padB = parseFloat(cs.paddingBottom) || 0;
     const estava = aberta.scrollTop;

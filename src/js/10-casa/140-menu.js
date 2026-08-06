@@ -37,7 +37,9 @@ const TIPOS_VALIDOS = new Set(['local', 'bot', 'online']);   // a cadeira 0 é s
 // Valor que não fecha volta ao padrão em silêncio: aqui não há nada que valha assustar
 // quem só quer jogar, e o menu mostra na tela o que ficou valendo.
 function mesaLembrada() {
-  const g = lido('mesa', null) || {};
+  // `lidoDoJogo` e não `lido`: a mesa é DO JOGO — um 'classico' guardado não quer dizer nada
+  // numa mesa de truco, e ler a chave comum faria trocar de aba levar a mesa junto.
+  const g = lidoDoJogo('mesa', null) || {};
   // `Object.hasOwn` e não `MODOS[g.modo] ?`, e a diferença é uma TELA PRETA PERMANENTE.
   // MODOS é objeto literal, então `MODOS['constructor']` é truthy e passava no teste — e
   // `MODOS['constructor'].cadeiras` é undefined, logo a linha de baixo lançava TypeError.
@@ -102,7 +104,7 @@ const MESA = {};
 // Guarda as quatro cadeiras, e não só as `n` em uso: quem joga em três e volta para
 // quatro esperava o nome do quarto de volta, não "Tião" outra vez.
 function lembrarMesa() {
-  guardar('mesa', {
+  guardarNoJogo('mesa', {
     n: MESA.n, modo: MESA.modo, alvo: MESA.alvo, compraVoluntaria: MESA.compraVoluntaria,
     cadeiras: MESA.cadeiras.map(c => ({ nome: c.nome, tipo: c.tipo, nivel: c.nivel })),
   });
@@ -221,7 +223,30 @@ function grupo(id, attr, aplicar) {
     };
   });
 }
-grupo('modoMesa', 'modo', v => { MESA.modo = v; ajustarCadeirasAoModo(); montarCadeiras(); lembrarMesa(); });
+
+// OS BOTÕES DE MODO SAEM DA TABELA DO JOGO. Estavam escritos à mão no `src/pagina.html`
+// ("Clássico <i>7 peças</i>"), e um Clássico no HTML da casa é a casa sabendo que o jogo é
+// dominó — o mesmo vazamento que a Fase 1 tirou do JavaScript e que sobrevivia na marcação.
+// Repare que `MODOS` já carregava `rotulo` e `nota`: os dois campos existiam para esta tela e
+// eram copiados à mão para o outro arquivo, que é como duas metades passam a discordar.
+//
+// E o `grupo(...)` MUDOU DE LUGAR JUNTO, o que não é detalhe: ele liga `onclick` percorrendo
+// os botões, então rodando no topo do módulo — como rodava — ele encontraria a faixa vazia e
+// nenhum modo responderia ao clique. Quem gera os botões liga os cliques deles.
+// `modos` minúsculo de propósito: um `const MODOS` aqui sombrearia a tabela do dominó dentro
+// desta função, e sombra é como um dia alguém apaga a linha local e o código continua
+// funcionando pelo global — que é o acoplamento de volta, calado.
+//
+// O `<i>` só sai quando há nota: `escapar` faz `String(txt)`, então um modo sem ela
+// escreveria `<i>undefined</i>` na tela. É o C7 da Fila 11 na sua forma mais boba.
+function montarModos() {
+  const modos = JOGO.menu.MODOS;
+  el('modoMesa').innerHTML = Object.keys(modos).map(k =>
+    `<button class="btn peq" data-modo="${escapar(k)}">${escapar(modos[k].rotulo)}`
+    + `${modos[k].nota ? `<i>${escapar(modos[k].nota)}</i>` : ''}</button>`).join('');
+  grupo('modoMesa', 'modo', v => { MESA.modo = v; ajustarCadeirasAoModo(); montarCadeiras(); lembrarMesa(); });
+}
+
 // `ajustarCompraAoModo` entra aqui também, e não só no modo: o Clássico tem monte com 2 ou
 // 3 jogadores e NENHUM com 4, então trocar só o número de jogadores muda a resposta.
 grupo('qtdJogadores', 'n', v => { MESA.n = +v; montarCadeiras(); ajustarCompraAoModo(); lembrarMesa(); });

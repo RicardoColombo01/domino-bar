@@ -215,7 +215,21 @@ export function installStubs() {
   // uma cena anterior.
   global.Peer.ultimo = null;
   global.Peer.todos = [];
-  global.location = { protocol: 'file:', href: '' };
+  // `search` e `history` entram na DÉCIMA PRIMEIRA vez que este dublê fica para trás
+  // (matchMedia, captura de ponteiro, AudioContext, Peer, contexto WebGL, setAttribute,
+  // preventDefault, matchMedia de novo, conn.open, o `on()` que engolia registro — e agora a
+  // URL). A aba de escolher o jogo lê `?jogo=` e reescreve a barra de endereço; sem estas
+  // duas linhas o ramo da URL seria inalcançável do Node e o `replaceState` estouraria com
+  // TypeError apontando para o teste em vez de para o dublê.
+  //
+  // E ele GRAVA, como o `Peer` passou a gravar os ouvintes: um `replaceState` que não deixa
+  // rastro faz a asserção "a URL passou a dizer qual jogo está na mesa" ser inescrevível. O
+  // teste enche `location.search` antes de carregar e lê `history.trocas` depois.
+  global.location = { protocol: 'file:', href: '', search: '', pathname: '/index.html' };
+  global.history = {
+    trocas: [],
+    replaceState(estado, titulo, url) { this.trocas.push(url); global.location.search = String(url).replace(/^[^?]*/, ''); },
+  };
 }
 
 // Math.random determinístico: sem isso o mesmo teste passa numa rodada e falha na

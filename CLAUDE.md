@@ -1,14 +1,15 @@
 # Dominó de Bar — guia do projeto
 
-Dominó dupla-seis em 3D no navegador. De 2 a 4 jogadores em qualquer mistura de gente e
-bot, na mesma tela ou pela internet. No ar em
+Uma **casa de jogos** de boteco em 3D no navegador. O dominó dupla-seis está pronto — de 2 a
+4 jogadores em qualquer mistura de gente e bot, na mesma tela ou pela internet —, e o **Truco
+Paulista** já tem aba, nome e regras à mostra, faltando o motor. No ar em
 **https://ricardocolombo01.github.io/domino-bar/** (repo público `RicardoColombo01/domino-bar`).
 
 Sem framework, sem bundler, e **dois binários** — os ícones do aplicativo, exigidos pelo
 manifest: madeira, pintas e sons continuam gerados em canvas e WebAudio na hora. Three.js e
 PeerJS vêm de CDN, e o **service worker os guarda**, então depois de uma partida o jogo abre
-sem internet. **6.061 linhas** no total (`src/js` + `src/pagina.html` + `src/css/estilo.css`
-+ `src/sw.js`), conferido em 05/08/2026 — este número **envelhece**, e envelheceu: ficou
+sem internet. **6.669 linhas** no total (`src/js` + `src/pagina.html` + `src/css/estilo.css`
++ `src/sw.js`), conferido em 06/08/2026 — este número **envelhece**, e envelheceu: ficou
 dizendo 2.100 por três releases seguidas.
 
 **Conte com `node`, não com o PowerShell.** `Measure-Object -Line` **não conta linha em
@@ -20,7 +21,8 @@ investigação. `node -e "…split('\n').length"` é a que bate com o `wc -l`.
 ```
 npm run build     junta src/ num index.html autossuficiente, e carimba o sw.js
 npm run check     avisa se o index.html OU o sw.js estão desatualizados
-npm test          build + as três suítes de lógica
+npm test          build + o acoplamento e as três suítes de lógica
+npm run acoplamento  a casa alcança ZERO nomes de jogo (varredura por AST, instantânea)
 npm run app       build + manifest, ícones e o jogo abrindo COM A REDE DESLIGADA (~30 s)
 npm run icones    regera icone-192.png e icone-512.png a partir de src/icone.svg
 npm run telas     build + o jogo em seis tamanhos de tela (retrato, paisagem, tablet, wide)
@@ -133,7 +135,11 @@ intercalamento que torna o número, e não o caminho, a fonte da ordem.
 **Os números vão de dez em dez desde a v3.0.0**, e é o que permite encaixar arquivo novo
 entre dois velhos. Consecutivo quer dizer LOTADO: as constantes de dominó não tinham para
 onde ir porque precisavam rodar antes do `140-menu` e não havia inteiro livre em todo o
-intervalo. As nove vagas entre cada par são o espaço do `40-truco/`.
+intervalo. As nove vagas entre cada par já pagaram duas vezes — o `141-abas` entrou numa
+delas, sem renumerar nada.
+
+**A carga tem TRÊS TEMPOS** (010…160 declara a casa · 300, 500… cada jogo se registra ·
+900 arranca), e é isso que faz o terceiro e o quarto jogo serem baratos.
 
 ```
 src/css/estilo.css               entra no bundle como <style>
@@ -141,7 +147,9 @@ src/pagina.html                  o molde, com __ESTILO__ e __JOGO__
 src/sw.js                        o molde do service worker, com __VERSAO__
 src/icone.svg                    a fonte dos dois PNG do manifest
 
-10-casa/010-constantes   cores do boteco, movimento reduzido, guardar/lido/esquecer
+— 1º tempo: A CASA DECLARA ————————————————————————————————————————————————
+10-casa/010-constantes   JOGOS/JOGO/jogavel, cores, movimento reduzido, guardar/lido/
+                         esquecer — e as chaves POR JOGO (mesa, partida) mais a migração
 30-domino/015-constantes peça, MODOS, pontuação, medidas do tabuleiro
 30-domino/020-baralho    embaralhar, distribuir (com re-embaralho), quem abre, sobraDoBaralho
 30-domino/030-regras     encaixes, pontas, jogadas válidas, tipo de batida     ← puro
@@ -156,18 +164,32 @@ src/icone.svg                    a fonte dos dois PNG do manifest
 10-casa/120-audio        WebAudio puro, sem arquivo
 10-casa/130-hud          placar, vez, botões, telas de fim, o encaixe painelDoJogo
 30-domino/135-contagem   o que vai DENTRO do painel: quantas peças faltam aparecer
-10-casa/140-menu         montagem da mesa (as cadeiras)
+10-casa/140-menu         montagem da mesa (as cadeiras) + os modos, gerados de JOGO.menu
+10-casa/141-abas         QUAL JOGO está na mesa: a faixa, a URL, a preferência, a ponte
 10-casa/145-saguao       a tela do online: código, quem chegou, os quatro cliques
 10-casa/150-rede         PeerJS, anfitrião autoritativo — ZERO chamadas ao DOM
 10-casa/160-loop         estado do app, turno, hotseat, render loop
+
+— 2º tempo: CADA JOGO SE REGISTRA ——————————————————————————————————————————
+30-domino/300-registro   o contrato do dominó: motor, mesa, toque, bot, menu, painel,
+                         regras (o texto que o menu mostra) e a ponte das suítes
+50-truco/500-registro    nome, resumo e regras — e `emBreve`, que o separa de JOGÁVEL
+
+— 3º tempo: ARRANCAR ———————————————————————————————————————————————————————
+10-casa/900-arranque     monta as abas, abre o jogo escolhido, enquadra, liga o loop
 ```
 
-**A pasta é uma AFIRMAÇÃO, não uma gaveta:** o que está em `10-casa/` promete não saber que
-o jogo é dominó, e é o que o Truco vai herdar de graça. Hoje a promessa ainda não é
-verdadeira em dois pontos, e eles estão nomeados na seção da Reorganização: `150-rede.js`
-escreve na tela por id (45 chamadas `el(...)`, mais que o próprio HUD) e `130-hud.js` tem o
-`desenharContagem`, que é regra de dominó. **Enquanto isso durar, a pasta é uma promessa a
-cumprir, não um fato.**
+**A pasta é uma AFIRMAÇÃO, e desde a v4.0.0 ela é um FATO com asserção:** a casa alcança
+**zero** nomes de jogo, e `npm run acoplamento` (`tests/test-acoplamento.mjs`) reprova se
+deixar de ser. As duas dívidas que a tornavam promessa — a rede escrevendo na tela e o
+`desenharContagem` dentro do HUD — fecharam na v3.0.0.
+
+**A varredura é por AST e não por `grep`, e a diferença é o que ela mede:**
+`JOGO.mesa.naMao` é o contrato, `naMao` solto é acoplamento, e um `const naMao` local numa
+função da casa não é nem uma coisa nem outra. Os três têm o mesmo texto. O analisador tem
+pilha de escopos, entende acesso a propriedade e entende **atalho de objeto** (`{ jogadaDoBot }`,
+onde chave e valor são o mesmo nó de AST — foi exatamente o que tropeçou na Fase 1). Conferido
+por mutação nas quatro direções, inclusive as duas de falso positivo.
 
 ### Armadilhas já pagas (não repetir)
 
@@ -278,7 +300,12 @@ cumprir, não um fato.**
   zero, sobrando espaço dividem a folga. E `overflow: hidden` **continua rolável por
   script**: um teste que só mexe em `scrollTop` aprova uma tela que o dedo não move.
 - **Ao acrescentar uma API de navegador ao jogo, o primeiro lugar a olhar é o `harness.mjs`
-  — e o dublê do PRÓPRIO teste conta junto.** Ele já ficou para trás **dez vezes**
+  — e o dublê do PRÓPRIO teste conta junto.** Ele já ficou para trás **onze vezes**. A
+  décima primeira foi `location.search` e `history.replaceState`, na aba de escolher o jogo:
+  `location` existia com `protocol` e `href` e nada mais. E o `history` novo **grava** as
+  trocas (`history.trocas`), pela mesma razão que fez o `Peer` passar a gravar ouvintes —
+  um `replaceState` que não deixa rastro torna inescrevível a asserção "a URL passou a dizer
+  qual jogo está na mesa". As dez anteriores
   (`matchMedia`, captura de ponteiro, `AudioContext`, `Peer`, eventos de contexto WebGL,
   `setAttribute`, `preventDefault`, o `matchMedia` de novo — por responder SEMPRE a mesma
   coisa —, a `conn` de mentira sem `open`, que fazia `espalharVistas` nunca mandar nada, e
@@ -389,6 +416,59 @@ cumprir, não um fato.**
   e uma sonda mostrou o `goto` variando de **6 a 18 segundos** contra um prazo de 45.
   **Corolário do PWA:** com o service worker guardando as bibliotecas, essa fragilidade cai
   junto.
+- **O que sai de um `pagina.evaluate()` tem de ser DADO PURO.** `dataset` é um `DOMStringMap`
+  e atravessa o CDP como `{}` — uma asserção que o devolva compara contra objeto vazio e
+  reprova com o valor certíssimo na tela. É a armadilha do "comparado contra um dublê vazio"
+  num meio novo, e o sintoma engana ao contrário dos outros: aqui ela reprova de graça em vez
+  de passar de graça. Leia a propriedade DENTRO da página e devolva a string.
+- **Guarda que só é repintada quando o estado não pode acontecer é código morto.** A trava de
+  "mesa ocupada não troca de jogo" nasceu dentro do `abrirJogo` — que só roda AO trocar de
+  jogo, ou seja nunca com a mesa ocupada. Ela não protegia nada e a suíte teria concordado.
+  O lugar de repintar é onde a tela APARECE (`mostrarTela`), que é onde o
+  `atualizarBotaoRetomar` já morava pelo mesmo motivo, escrito no comentário dele desde a
+  v1.5.0. **Ao escrever uma guarda, pergunte quem a repinta — e quando.**
+- **A migração pode ESCONDER o defeito que a chave nova existe para consertar, e com isso
+  cegar a asserção.** Mutando `guardarNoJogo('mesa', …)` de volta para `guardar('mesa', …)`,
+  a suíte quase não se mexeu: toda carga migra a chave antiga de volta, então o
+  comportamento observável é idêntico enquanto houver **um jogo jogável só**. Nenhuma
+  asserção de comportamento consegue distinguir as duas escritas hoje — quem distingue é
+  medir a CHAVE (`dominobar.mesa.domino` existe, `dominobar.mesa` não). É um caso raro em que
+  gravar a implementação na asserção é o certo, e o motivo fica escrito ao lado dela.
+- **Migração de chave guardada MIGRA E APAGA; ler a antiga "quando a nova falta" arma uma
+  cilada.** A leitura preguiçosa é mais curta e sobrevive a `esquecer`: no fim de toda
+  partida o jogo apaga a chave nova, e a leitura seguinte ressuscita da antiga a partida que
+  acabou de acabar. Copiar uma vez e apagar a origem não tem esse estado intermediário.
+- **Quem GERA os botões liga os cliques deles.** `grupo(id, …)` percorre
+  `el(id).querySelectorAll('button')` no topo do módulo; no dia em que aqueles botões passaram
+  a ser gerados de `JOGO.menu.MODOS`, a chamada solta encontrou a faixa vazia e nenhum modo
+  respondia ao clique. Ela foi para dentro do `montarModos`.
+- **Acoplamento também se escreve em TEXTO, e uma varredura de identificadores não o vê.**
+  `if (JOGO_ID === 'domino')` não alcança nome nenhum e é exatamente a casa decidindo por um
+  jogo em particular. Havia um caso real — a migração das chaves guardadas —, e ele passou
+  batido pela primeira versão do `test-acoplamento`, que media só identificadores. Hoje ela
+  cobra os literais e os pedaços de template também, e o conserto é o de sempre: **quem sabe
+  o nome do jogo é o jogo** (`JOGO.herdaOGuardadoSemSufixo`, declarado no registro dele).
+  **Toda ferramenta de medição tem uma pergunta, e a pergunta tem borda** — a do AST era
+  "identificadores"; a do HTML continua fora (ver o item abaixo).
+- **Regra de jogo sobrevive no HTML porque a varredura por AST não enxerga marcação.** Depois
+  de a v4.0.0 zerar o acoplamento no JavaScript, o `src/pagina.html` — que é da casa —
+  continuava com o `<h1>Dominó de Bar</h1>`, os três botões de modo escritos à mão e as doze
+  linhas de regra. **O teste dizia zero e estava certo; a pergunta é que era estreita.**
+  Ao auditar a fronteira casa/jogo, olhe também o HTML e o CSS.
+- **`var(--que-nao-existe)` NÃO pinta de errado — ele invalida a declaração inteira, e a
+  propriedade cai na herança.** A faixa de abas nasceu com `color: var(--marfim)`, que é uma
+  cor do 3D (`CORES.marfim`, em JS) e nunca existiu no CSS; o texto ficou com a cor certa por
+  acidente, porque o que ela herda calha de ser `--texto`. Defeito escondido atrás de um
+  acidente é o que dura. A conferência custa uma linha e vale como hábito:
+  ```
+  grep -o "var(--[a-z-]*)" src/css/estilo.css | sed 's/.*var(//;s/)//' | sort -u \
+    | while read v; do grep -q -- "  $v:" src/css/estilo.css || echo "NAO DECLARADA: $v"; done
+  ```
+- **Uma tela que é `display: flex` em LINHA não aceita um irmão novo sem mudar de layout.**
+  Pôr a faixa de abas ao lado da `.carta` a jogaria para a esquerda dela — e trocar o
+  `flex-direction` do `.tela` teria mexido no `margin: auto` que conserta o topo inalcançável
+  (Fila 10, item 2). O que não mexe em nada é ENVOLVER os dois num item só, e mudar o dono da
+  margem automática.
 
 ---
 
@@ -564,58 +644,142 @@ campo acha o que está escrito certo e mesmo assim não funciona.
 **Leia isto primeiro ao retomar.** É o estado real do trabalho, o que ele produziu, o que
 fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numerados mais abaixo.
 
-#### ESTADO EM UMA OLHADA (05/08/2026)
+#### ESTADO EM UMA OLHADA (06/08/2026)
 
 | | |
 |---|---|
-| publicado | **v4.0.0** — https://ricardocolombo01.github.io/domino-bar/ |
-| esta release | **v4.0.0** — a Fase 1 da casa de jogos: a casa deixa de conhecer o dominó (46 nomes → **zero**) |
-| `main` ↔ `origin/main` | `0 0` em 05/08 — conferir com `git rev-list --left-right --count origin/main...main` |
+| **PUBLICADO** | ⚠ **v3.0.1** — o Pages parou de disparar deploy; ver "O DEPLOY QUE NÃO ACONTECEU" |
+| commitado | **v4.1.0** — a Fase 2: a faixa de abas, as chaves por jogo, o `?jogo=` na URL |
+| `main` ↔ `origin/main` | conferir com `git rev-list --left-right --count origin/main...main` |
 | Filas 5 a 11 | **todas fechadas**, e não há defeito conhecido em aberto |
-| o que vem | **Fase 2 da v4: a aba de escolher o jogo** — ver "ONDE PAROU", logo abaixo |
+| o que vem | **Fase 3 da v4: `40-cartas/`** — o baralho de 40 e a carta 3D |
 
 ---
 
-#### ONDE PAROU — fim da sessão de 05/08/2026
+#### O DEPLOY QUE NÃO ACONTECEU — o recado 1, respondido em 06/08/2026
+
+**O site no ar é a v3.0.1, e não é defeito do jogo nem espera de propagação.** Medido:
+
+```
+publicado  sw.js VERSAO a8107950668b   ← é o da v3.0.1 / v3.1.0
+local      sw.js VERSAO 2c8757513944   ← v4.0.0
+publicado  index.html com "JOGOS": 0 ocorrências (local: 10)
+```
+
+O código **está** no GitHub (`origin/main` = `1674cbc` = v4.0.1). O que não aconteceu foi o
+build do Pages: das 15 rodadas de *"pages build and deployment"*, a última é `c7c25b8`
+(**Merge v3.1 em main**, 05/08 21:38 local). Os dois pushes seguintes — v4.0.0 às 22:41 e
+v4.0.1 às 22:46 — **não dispararam rodada nenhuma**. Não há falha para investigar: não há
+rodada. Todos os pushes anteriores, de 28/07 a 05/08, dispararam.
+
+**A lição, e ela é nova neste projeto:** *commitado ≠ enviado ≠ publicado* ganhou um quarto
+lugar. Até aqui "enviado" implicava "publicado em minutos", e `git rev-list --left-right`
+respondia tudo. Ele continua respondendo `0 0` com o site três releases atrás. **A régua de
+"publicado" é o conteúdo servido**, e é barata:
+
+```
+curl -s https://ricardocolombo01.github.io/domino-bar/sw.js | grep VERSAO   # compare com o local
+```
+
+**O que fazer:** o próximo push deve disparar um build — é o teste mais barato. Se não
+disparar, é decisão de conta e não de código: **Settings → Pages**, reconfirmar a origem
+(*Deploy from a branch → main → / (root)*), ou reexecutar a última rodada em **Actions**.
+`gh` não está instalado nesta máquina; a API pública responde sem autenticação:
+`https://api.github.com/repos/RicardoColombo01/domino-bar/actions/runs?per_page=5`.
+
+---
+
+#### ONDE PAROU — fim da sessão de 06/08/2026
 
 **LEIA ISTO PRIMEIRO.** É o ponto exato de retomada.
 
-**O estado, conferido:**
-
 ```
-main            v4.0.0, empurrada, árvore limpa, 0 0 contra origin
-worktree        ../domino-bar-jogos   branch v4   (já mergeada em main, limpa)
-suítes          as sete verdes na v4.0.0, rodadas uma de cada vez
+main            v4.0.1
+worktree        ../domino-bar-jogos   branch v4.1   ← o trabalho desta sessão
 ```
 
 **Feito nesta sessão** (as fases estão descritas em "O PLANO DA v4", mais abaixo):
 
 | | |
 |---|---|
-| ✔ Fase 0 | o plano gravado aqui (v3.1.0) e o worktree `../domino-bar-jogos` aberto |
-| ✔ Fase 1 | o contrato `JOGOS`/`JOGO`, a carga em três tempos, e a casa zerando o acoplamento (v4.0.0) |
-| ⏳ Fase 2 | **a aba de escolher o jogo — É AQUI QUE SE RETOMA** |
-| ⏳ Fase 3 | `40-cartas/` — baralho de 40 e a carta 3D |
-| ⏳ Fase 4 | `50-truco/` — o Paulista, com a `barraDoJogo` que ficou de fora da Fase 1 de propósito |
+| ✔ Fase 0 | o plano gravado (v3.1.0) e o worktree aberto |
+| ✔ Fase 1 | o contrato `JOGOS`/`JOGO`, a carga em três tempos, acoplamento zero (v4.0.0) |
+| ✔ recado 2 | a varredura por AST virou **`tests/test-acoplamento.mjs`**, dentro do `npm test` |
+| ✔ Fase 2 | **a aba de escolher o jogo** (v4.1.0) |
+| ⏳ Fase 3 | `40-cartas/` — baralho de 40 e a carta 3D — **É AQUI QUE SE RETOMA** |
+| ⏳ Fase 4 | `50-truco/` — o Paulista, com a `barraDoJogo` que ficou de fora da Fase 1 |
 | ⏳ Fase 5 | o aplicativo: APK no GitHub Releases + Amazon Appstore |
 
-**Dois recados para o primeiro dia:**
+**O que a Fase 2 entregou, e o que ela obrigou a decidir:**
 
-1. **A propagação da v4.0.0 no GitHub Pages NÃO chegou a ser confirmada** — a espera de
-   ~3,5 min terminou sem o `sw.js` novo aparecer, e a sessão parou antes de investigar.
-   **Conferir antes de qualquer outra coisa:**
-   ```
-   curl -s https://ricardocolombo01.github.io/domino-bar/sw.js | grep VERSAO
-   ```
-   e comparar com o `sw.js` local. Se não bater, olhar a aba Actions do repositório: o
-   deploy do Pages pode ter falhado, e aí o site no ar ainda é a v3.0.1. **Não é sintoma de
-   defeito no jogo** — as sete suítes passaram contra o bundle local.
-2. **As ferramentas de medição desta sessão viviam no scratchpad e SUMIRAM.** Eram duas: a
-   varredura por AST (com pilha de escopos) que mediu o acoplamento casa→jogo, e o migrador
-   por offset. A varredura merece virar teste de verdade — *"a casa alcança zero nomes de
-   jogo"* é um invariante que hoje não tem asserção nenhuma, e é justamente o que a Fase 4
-   pode quebrar sem ninguém ver. Ela precisa do `acorn`, que **não** está em
-   `tests/package.json`.
+| | |
+|---|---|
+| a faixa | `10-casa/141-abas.js`, montada de `JOGOS` — escrever "Dominó \| Truco" no HTML seria o acoplamento voltando pela marcação |
+| o truco | `50-truco/500-registro.js`: nome, resumo, regras e `emBreve`. **REGISTRADO ≠ JOGÁVEL** (`jogavel()`, em 010) |
+| a URL | `?jogo=truco` abre o truco. O padrão SAI da URL, para o endereço limpo continuar sendo o de sempre |
+| a escada | URL → preferência → primeiro do balcão. **Os três degraus, e os dois primeiros com `Object.hasOwn`** |
+| as chaves | `mesa` e `partida` viraram `mesa.domino` e `partida.domino` — espiar a aba não custa a partida |
+| a migração | o guardado da v4.0 é **copiado e a origem apagada**. Ver por que não é leitura preguiçosa, abaixo |
+| o HTML da casa | título, resumo, modos e as 12 regras saíram de `pagina.html` e foram para o registro do jogo |
+| o último literal | `JOGO_ID !== 'domino'` virou `JOGO.herdaOGuardadoSemSufixo`, declarado pelo jogo |
+| de brinde | com o menu vindo do registro, **CDN caído deixa a carta VAZIA** em vez de um menu inteiro que não responde a clique nenhum — o defeito 4 da Fila 6 fica mais fácil de reconhecer, e o `#semCarga` continua sendo quem explica |
+| a trava | **mesa ocupada não troca de jogo** — e a aba diz por quê |
+
+**Três coisas que só apareceram fazendo, e valem mais que o código:**
+
+1. **A migração MIGRA E APAGA, e não "lê a antiga quando a nova falta".** A leitura preguiçosa
+   é mais curta e arma uma cilada: `esquecerDoJogo('partida')` roda no fim de toda partida, e
+   na leitura seguinte a chave antiga — intacta — **ressuscitaria a partida que acabou de
+   acabar**. Copiar uma vez e apagar a origem não tem esse estado intermediário. Há asserção,
+   e ela cai quando o `esquecer(chave)` sai.
+2. **Trocar de jogo com uma partida VIVA na memória corrompe duas coisas ao mesmo tempo:** o
+   `guardarPartida()` do próximo `publicar()` grava a partida de dominó sob a chave do truco,
+   e o `desenharHUD` lê `JOGO.menu.MODOS[vista.modo].rotulo` numa tabela que não tem aquele
+   modo. Hoje o caminho é estreito (só o `btMenu` mostra o menu sem zerar `P`), e "estreito
+   hoje" é exatamente como o `!temMonte` da Fila 5 durou três releases. A faixa trava, e diz
+   por quê — travar calado é o defeito que quatro filas passaram consertando.
+3. **`pintarAbas()` entrou no `mostrarTela('telaMenu')`**, ao lado do `atualizarBotaoRetomar`,
+   e não só no `abrirJogo`. Sem isso a trava acima seria **código morto**: `pintarAbas` só
+   rodava ao trocar de jogo, ou seja nunca com a mesa ocupada.
+
+#### O que esta sessão deixou de FERRAMENTA
+
+- **`tests/test-acoplamento.mjs`** (`npm run acoplamento`, e dentro do `npm test`). Instantâneo,
+  sem navegador, e é a única asserção do projeto que mede ARQUITETURA em vez de comportamento.
+  Precisou de `acorn` em `tests/package.json` — a única dependência nova desde o puppeteer.
+  Ele cobra cinco coisas: a casa não alcança nome de jogo; **a casa não escreve o id de um
+  jogo nem em texto** (literal ou pedaço de template — foi por aí que a migração escapou na
+  primeira versão); um jogo não alcança o nome de outro (hoje de graça, e é de propósito que
+  a asserção nasça antes de valer); a casa CITA `JOGO` em pelo menos três arquivos e cada jogo
+  se registra em `JOGOS` — sem essas duas últimas, o zero poderia ser zero por não haver
+  ligação nenhuma, que é zero pelo motivo errado; e ele imprime quantos nomes achou de cada
+  lado, porque **conferência que acusa TUDO, ou que não acha NADA, é instrumento quebrado**.
+
+  **O que ele NÃO vê, e está escrito para ninguém confiar demais nele:** HTML e CSS. A Fase 2
+  achou doze linhas de regra de dominó dentro do `src/pagina.html` com a suíte dizendo zero, e
+  ela estava certa — a pergunta é que era estreita.
+- **O dublê do harness ganhou `location.search` e `history`** — e o `history` **grava** as
+  trocas. Ver a armadilha do dublê, lá em cima: é a décima primeira.
+- **As mutações desta sessão estão em dois scripts de uma vez só** (scratchpad, e portanto
+  perdidos amanhã — como os da Fase 1). O que fica é o registro: o `test-acoplamento` foi
+  conferido em 4 mutações (2 de acoplamento real, 2 de falso positivo) e as asserções da
+  Fase 2 em 5, cada uma matando exatamente a sua.
+
+#### O que a Fase 3 herda pronto
+
+Quando o `40-cartas/` chegar, estas coisas **já existem** e não devem ser reinventadas:
+
+- **A carta 3D não precisa de encaixe novo no menu.** Título, resumo, regras e os botões de
+  modo já saem do registro; um jogo de carta preenche os mesmos campos.
+- **O `emBreve` sai do `50-truco/500-registro.js` quando o motor entrar**, e é a linha que
+  transforma a aba de vitrine em mesa. Enquanto ela existir, `jogavel()` é falso e a casa não
+  monta mesa nenhuma — nada mais precisa mudar.
+- **`CHAVES_DO_JOGO` já cobre o truco:** a mesa e a partida dele vão para `mesa.truco` e
+  `partida.truco` sem uma linha nova.
+- **O que AINDA falta e está previsto:** a `barraDoJogo` (o `#acoes` tem "Comprar" e "Passar"
+  escritos à mão, e truco precisa de trucar/aceitar/correr/aumentar) e o segundo atalho do
+  manifest. Os dois entram junto com o motor, e não antes: sem o truco escrito, a forma deles
+  seria chute.
 
 ---
 
@@ -750,9 +914,12 @@ a reorganização, que é a mudança grande de verdade). Ver a Fila 11, agora fe
 que a implementação corrigiu no diagnóstico — inclusive que a cena de teste **não era
 escrevível** como este passo mandava, porque o despachante era inalcançável do Node.
 
-**PASSO 2 — passar a trabalhar com `git worktree`.** ← **É AQUI QUE SE RETOMA.**
+**PASSO 2 — passar a trabalhar com `git worktree`.** ✔ **feito, e é o que se usa desde a
+v2.3.0.** Este ponteiro dizia "É AQUI QUE SE RETOMA" e ficou apontando para trabalho já feito
+por três releases — **ponteiro de retomada é o item que mais apodrece neste arquivo**, e há um
+só que vale: o de "ONDE PAROU", lá em cima. Hoje o worktree em uso é `../domino-bar-jogos`.
 Ver a seção própria, na Reorganização.
-O arranjo sugerido, uma frente por diretório:
+O arranjo sugerido na época, uma frente por diretório:
 
 ```
 ../domino-bar          main          (o que está no ar; para conferir e publicar)
@@ -849,17 +1016,21 @@ Registrado para não ser redescoberto do zero — e com o motivo de não ser pri
 
 ```
 git fetch origin && git rev-list --left-right --count origin/main...main   # tem de dar 0 0
-git branch -a          # hoje só main; a próxima onda nasce numa v3
+git branch -a          # a próxima onda nasce numa branch com o nome da versão
 npm run check          # o bundle está em dia com src/?
-npm test               # as três suítes de lógica, segundos
+npm test               # o acoplamento + as três suítes de lógica, segundos
+
+# E A QUARTA RÉGUA, que a v4.1 aprendeu do jeito caro: o que está NO AR.
+curl -s https://ricardocolombo01.github.io/domino-bar/sw.js | grep VERSAO
 ```
 
 **Hoje `npm test` tem de passar inteiro** — a fila está vazia e não há vermelha esperada.
 Qualquer reprovação é regressão.
 
-**Estado em 05/08/2026, conferido rodando:** `npm test`, `npm run lembrar`, `npm run online`,
-`npm run textura` e o `telas` nas duas metades — **todos verdes**. A Fila 11 está fechada e
-não há defeito conhecido em aberto.
+**Estado em 06/08/2026, conferido rodando:** `npm test` (com o acoplamento novo),
+`npm run lembrar`, `npm run app`, `npm run textura`, `npm run online` e o `telas` nas duas
+metades. Não há defeito conhecido em aberto **no jogo**; o que está aberto é o deploy do
+Pages, que é conta e não código — ver "O DEPLOY QUE NÃO ACONTECEU".
 
 **Suíte pesada roda sozinha** — o `test-telas` renderiza WebGL por software e o `test-online`
 tem prazo de navegação de 45 s; duas ao mesmo tempo viram falha que parece da rede. E o
@@ -2710,8 +2881,9 @@ isso a ordem é boa: **o truco paga o baralho e a carta, e o pife e o 21 depois 
 
 ## O PLANO DA v4 — o Truco na mesma casa, e o jogo virando aplicativo
 
-**É AQUI QUE SE RETOMA.** Plano fechado com o Ricardo em **05/08/2026**, com as três decisões
-que só ele podia tomar já respondidas. Pedido dele, literal: *"criar um truco dentro desse
+**É AQUI QUE O PLANO ESTÁ ESCRITO** — o ponto de retomada é o "ONDE PAROU", lá em cima; esta
+seção é o mapa das cinco fases. Plano fechado com o Ricardo em **05/08/2026**, com as três
+decisões que só ele podia tomar já respondidas. Pedido dele, literal: *"criar um truco dentro desse
 mesmo site, ou seja, só mudando a aba… deixe cada item separado sem misturar nos códigos, ou
 seja, cada pasta separada… e pense também em um jeito de poder baixar tipo um aplicativo,
 porém realmente transformar em um aplicativo de jogo… dando para jogar tanto no site quanto no
@@ -2841,10 +3013,35 @@ O que a implementação acrescentou ao plano:
   `080-peca3d.js` já tinha uma. Era exatamente o caso silencioso que ela existe para pegar —
   duas `function` de mesmo nome, a segunda vencendo calada.
 
-**FASE 2 — a aba.** Faixa **Dominó | Truco** no topo do `telaMenu`; `?jogo=truco` na URL (é o
-que a torna compartilhável e o que os atalhos do manifest usam); `shortcuts` no manifest;
-preferência guardada e **validada com `Object.hasOwn`** (defeito 5 da Fila 6). E: **trocar de
-aba não pode apagar a partida guardada em silêncio** — cada jogo guarda a sua sob chave própria.
+**FASE 2 — a aba ✔ FEITA (v4.1.0).** Tudo o que estava previsto entrou: a faixa
+**Dominó | Truco** (montada de `JOGOS`, não escrita no HTML), `?jogo=truco` na URL,
+`shortcuts` no manifest, a preferência validada com `Object.hasOwn`, e cada jogo guardando a
+mesa e a partida sob chave própria — com **migração** do que a v4.0 tinha gravado sem sufixo.
+
+O que a implementação acrescentou ao plano:
+
+- **`emBreve` separa REGISTRADO de JOGÁVEL** (`jogavel()`, em `010-constantes.js`). O truco
+  aparece na faixa, abre, mostra as regras que vão valer e diz o que falta — e **não** mostra
+  montagem de mesa, porque um "Sentar e jogar" que não senta é a espécie de defeito que o
+  `refletirMesaNosBotoes` existe para impedir.
+- **O HTML da casa também tinha dominó dentro.** Título, resumo, os três botões de modo e as
+  doze linhas de regra estavam escritos à mão em `src/pagina.html`. Hoje saem do registro do
+  jogo; os modos são gerados de `JOGO.menu.MODOS`, que já carregava `rotulo` e `nota`
+  exatamente para essa tela e era copiado à mão para o outro arquivo.
+- **A escada de precedência é URL → preferência → primeiro do balcão**, e os dois primeiros
+  degraus são entrada de fora. A URL vem primeiro porque é o único dos três que alguém acabou
+  de digitar ou de receber: preferência é o que você fez ontem, URL é o que estão te pedindo
+  agora. **O padrão SAI da URL** em vez de entrar, para o endereço limpo continuar sendo o
+  endereço de sempre.
+- **DECISÃO DO RICARDO (06/08/2026), e nenhuma leitura de código chega a ela:** abrir um link
+  `?jogo=truco` **guarda** o truco como sua preferência — a URL e o clique na aba valem a
+  mesma coisa. A outra saída era defensável e está registrada porque foi pesada: link é
+  visita, clique é escolha, e aí o link de um amigo não mexeria no seu padrão. Ele escolheu a
+  primeira; quem chega pelo link e quer ficar não precisa fazer mais nada. É a mesma espécie
+  de regra de casa que a cruzada valer 4.
+- **`shortcuts` leva só o dominó.** Um atalho de lançador que cai em "vem aí" promete o que
+  não existe. A entrada do truco entra junto com o motor dele.
+- **A faixa trava com a mesa ocupada** — ver os três achados em "ONDE PAROU".
 
 **FASE 3 — `40-cartas/`.** Baralho de 40 puro, e a carta 3D com atlas de naipes e valores em
 canvas. **As regras que a Fila 7 pagou valem aqui:** a receita de `pintar()` fica guardada para

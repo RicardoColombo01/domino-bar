@@ -35,7 +35,11 @@ const AUTO = `
   // A partida agora fica guardada, e pelo mesmo motivo do contar(): uma cena que jogou
   // deixa "Continuar a partida de antes" aparecendo na foto do menu da cena seguinte.
   const semGuardado = () => {
-    try { localStorage.removeItem('dominobar.partida'); } catch (e) { void e; }
+    // Por jogo desde a v4.1; a antiga sai junto porque ela migra na carga seguinte.
+    try {
+      localStorage.removeItem('dominobar.partida.domino');
+      localStorage.removeItem('dominobar.partida');
+    } catch (e) { void e; }
     window.__jogo.atualizarBotaoRetomar();
   };
   const soBots = (n) => {

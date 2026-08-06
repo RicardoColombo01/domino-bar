@@ -2,7 +2,8 @@
   "name": "domino-bar-tests",
   "private": true,
   "scripts": {
-    "test": "node test-regras.mjs && node test-mesa.mjs && node test-jogo.mjs",
+    "test": "node test-acoplamento.mjs && node test-regras.mjs && node test-mesa.mjs && node test-jogo.mjs",
+    "acoplamento": "node test-acoplamento.mjs",
     "telas": "node test-telas.mjs",
     "lembrar": "node test-lembrar.mjs",
     "shots": "node shots.mjs",
@@ -12,6 +13,7 @@
     "textura": "node test-textura.mjs"
   },
   "dependencies": {
+    "acorn": "^8.18.0",
     "puppeteer-core": "^25.3.0",
     "three": "^0.160.0"
   }

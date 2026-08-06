@@ -319,6 +319,56 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
 
    De brinde, o `padding` do scroller volta a valer: hoje ele não protegia nada, porque a
    carta transbordava ACIMA dele. */
+/* O BALCÃO é o item flex de `#telaMenu`: a faixa de abas mais o cartão do jogo. Quem carrega
+   o `margin: auto` do parágrafo acima passa a ser ele — a carta continua com o dela porque as
+   outras seis telas não têm balcão nenhum, e ali ela ainda é o item flex. */
+.balcao { margin: auto; max-width: 620px; width: 100%; }
+
+/* A FAIXA DE ABAS. Encostada no topo do cartão, com a aba ativa se emendando nele: é o que
+   diz, sem legenda, que o cartão é o conteúdo daquela aba.
+
+   LIMITE CONHECIDO: em 360px a faixa tem ~320px, e é por isso que a aba mostra o nome CURTO
+   do jogo ("Dominó", e não "Dominó de Bar"). Com dois jogos sobra folga; com os quatro do
+   plano — dominó, truco, pife, vinte-e-um — ela chega no limite, e aí o conserto é rolagem
+   horizontal e não quebra de linha: a aba ativa se emenda ao cartão, e numa segunda fileira
+   ela se emendaria ao nada. */
+.abas { display: flex; gap: 4px; padding: 0 10px; }
+.abas .aba {
+  /* `var(--texto)` e não `--marfim`: aquele é do 3D (`CORES.marfim`, em 010-constantes.js) e
+     NÃO existe no CSS. A referência quebrada não pinta de errado — ela invalida a declaração
+     e `color` cai na herança, que aqui calha de ser a cor certa. Defeito que se esconde
+     atrás de um acidente é o que dura. */
+  font: inherit; font-size: 13.5px; font-weight: 600; color: var(--texto);
+  background: rgba(22, 14, 9, .72); border: 1px solid var(--borda); border-bottom: none;
+  border-radius: 11px 11px 0 0; padding: 9px 16px 8px; cursor: pointer;
+  opacity: var(--fraco); transition: opacity .12s, background .12s;
+}
+.abas .aba:hover { opacity: .85; }
+/* A aba ativa se funde ao cartão: mesmo fundo do topo do gradiente, e um pixel a mais de
+   altura para tapar a borda de cima dele. */
+.abas .aba.on {
+  opacity: 1; color: var(--ambar-forte);
+  background: rgba(38, 25, 16, .97); border-color: var(--borda);
+  margin-bottom: -1px; padding-bottom: 9px;
+}
+/* O "em breve" é a etiqueta do jogo que ainda não senta, e ela NÃO tem opacidade própria.
+   OPACIDADE DENTRO DE OPACIDADE MULTIPLICA: a aba inativa já está em `--fraco` (.58), e um
+   `.58` aqui dentro daria .34 na tela — abaixo do piso do projeto, e num texto que é
+   informação e não decoração. O que separa a etiqueta do nome é o tamanho e a caixa alta,
+   que não custam contraste nenhum. */
+.abas .aba i {
+  font-style: normal; font-size: 10px; text-transform: uppercase; letter-spacing: .09em;
+  margin-left: 7px;
+}
+
+/* O recado do jogo registrado e ainda não jogável. Cor de aviso e não de erro — não há nada
+   quebrado aqui, há uma coisa que ainda não chegou. */
+.vemAi {
+  margin: 0 0 6px; font-size: 13.5px; line-height: 1.5;
+  border-left: 3px solid var(--ambar); padding: 10px 0 10px 13px;
+  background: rgba(240, 194, 116, .07); border-radius: 0 8px 8px 0;
+}
+
 .carta {
   margin: auto;
   background: linear-gradient(180deg, rgba(38, 25, 16, .97), rgba(22, 14, 9, .97));
@@ -774,17 +824,35 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
 
 <!-- ─── montagem da mesa ─────────────────────────────────────────────────── -->
 <div class="tela" id="telaMenu">
-  <div class="carta">
-    <h1>Dominó de Bar</h1>
-    <p class="sub">Dupla-seis, regras de bar. Você escolhe quem senta em cada cadeira.</p>
+  <!-- A FAIXA DE ABAS é montada por `montarAbas()` a partir de quem se registrou em JOGOS.
+       Escrever "Dominó | Truco" aqui seria a casa sabendo o nome dos jogos — o acoplamento
+       que a v4.0.0 tirou do JavaScript e que o `test-acoplamento` agora guarda.
+       `role="tablist"` com o cartão de `tabpanel` porque isto É uma aba: é assim que o leitor
+       de tela anuncia "aba 1 de 2". A seta que o papel promete entra em `montarAbas`.
 
+       O `.balcao` existe porque `.tela` é um flex EM LINHA: a faixa como irmã da carta
+       ficaria AO LADO dela. Envolver os dois também preserva o `margin: auto` que conserta o
+       topo inalcançável (o comentário longo do `.carta`, em estilo.css) — quem precisa da
+       margem automática é o item flex, e agora o item flex é este. -->
+  <div class="balcao">
+  <nav class="abas" id="abasJogos" role="tablist" aria-label="Escolha o jogo"></nav>
+
+  <div class="carta" id="cartaDoJogo" role="tabpanel">
+    <!-- Título, resumo, modos e regras vinham escritos à mão aqui, todos falando de dominó.
+         Hoje saem do registro do jogo — ver `pintarOJogoNoMenu`, em 141-abas.js. -->
+    <h1 id="tituloJogo"></h1>
+    <p class="sub" id="subJogo"></p>
+
+    <!-- Jogo REGISTRADO e ainda não JOGÁVEL: diz o que falta, em vez de mostrar uma montagem
+         de mesa com um "Sentar e jogar" que não senta. -->
+    <p class="vemAi oculta" id="vemAi"></p>
+
+    <div id="montagemDaMesa">
     <div class="linha">
       <span class="rot">Mesa</span>
-      <div class="grupo" id="modoMesa">
-        <button class="btn peq on" data-modo="classico">Clássico <i>7 peças</i></button>
-        <button class="btn peq" data-modo="duelo">Duelo <i>14, 1v1</i></button>
-        <button class="btn peq" data-modo="trio">Trio <i>9, sem 0|0</i></button>
-      </div>
+      <!-- Vazio: `montarModos()` gera os botões a partir de `JOGO.menu.MODOS`, que já
+           carregava `rotulo` e `nota` exatamente para esta tela. -->
+      <div class="grupo" id="modoMesa"></div>
     </div>
 
     <div class="linha">
@@ -832,25 +900,18 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
     <div class="linha acoesMenu">
       <button class="btn retomar oculta" id="btVoltarMesa">Voltar para a mesa</button>
     </div>
+    </div><!-- /montagemDaMesa -->
 
-    <details class="regras">
+    <!-- A casa fica com a MOLDURA; os itens saem de `JOGO.regras`. As doze linhas de dominó
+         que moravam aqui foram para `30-domino/300-registro.js` — regra de um jogo dentro do
+         HTML da casa é o mesmo vazamento da Fase 1, sobrevivendo na marcação porque a
+         varredura por AST não enxerga HTML. -->
+    <details class="regras" id="regrasJogo">
       <summary>As regras desta casa</summary>
-      <ul>
-        <li><b>Clássico:</b> 28 peças, 7 para cada, de 2 a 4 jogadores.</li>
-        <li><b>Duelo:</b> 1v1 com o baralho inteiro na mão — 14 para cada, sem monte.</li>
-        <li><b>Trio:</b> a bucha de zero sai do baralho, sobram 27 e dão 9 para cada um dos três, sem monte.</li>
-        <li><b>Sem monte</b> (Duelo, Trio e o Clássico de 4): quem não pode jogar, passa.</li>
-        <li><b>Com monte</b> (Clássico de 2 ou 3): quem não pode jogar <b>compra até conseguir</b>; só passa se o monte secar.</li>
-        <li>No Clássico de 4, duplas em cruz (1&amp;3 × 2&amp;4).</li>
-        <li>Mão carroçuda demais volta para a mesa e todo mundo embaralha de novo.</li>
-        <li>A primeira mão abre com o <b>6|6</b> — ou, se ele estiver no monte, com a maior carroça. Depois, abre quem bateu.</li>
-        <li>Batida: simples <b>1</b> · carroça <b>2</b> · lá-e-lô <b>2</b> · cruzada <b>4</b>.</li>
-        <li>Trancou: marca 1 ponto quem tiver a mão mais leve. Empatou, a mão morre.</li>
-        <li><b>Não dá para trancar de propósito:</b> a jogada que você sabe que trava a mesa — <b>você inclusive</b> — fica proibida enquanto houver outra. Se você ainda responde às pontas, o jogo não trava e a jogada vale. Carroça não conta: ela não muda o número da ponta.</li>
-        <li>Sair no meio <b>conta como derrota</b>. Quem cai no online tem 30 s para voltar.</li>
-      </ul>
+      <ul id="regrasLista"></ul>
     </details>
   </div>
+  </div><!-- /balcao -->
 </div>
 
 <!-- ─── fim de mão / fim de partida ──────────────────────────────────────── -->
@@ -992,9 +1053,12 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
 // pergunta tem duas respostas. O arranque é o instante em que ela passa a ter uma.
 const JOGOS = {};
 let JOGO = null;
+// O ID do jogo na mesa — a chave dele em `JOGOS`, não o nome que aparece na tela. `JOGO.nome`
+// é 'Dominó de Bar' e serve para o jogador ler; isto aqui é o que vai para a URL e para o
+// armazenamento, então tem de ser curto, estável e sem acento.
+let JOGO_ID = '';
 
-// Trocar o jogo da mesa. Hoje é chamada uma vez, no arranque; a aba que deixa o jogador
-// escolher entra por aqui.
+// Trocar o jogo da mesa. É por aqui que a aba passa, e é por aqui que o arranque escolhe.
 //
 // `Object.hasOwn` e não `JOGOS[nome]`: o nome pode vir do armazenamento ou da URL, ou seja
 // é ENTRADA DE FORA, e `JOGOS['constructor']` é truthy — foi exatamente esse buraco que deu
@@ -1002,8 +1066,15 @@ let JOGO = null;
 function trocarDeJogo(nome) {
   if (!Object.hasOwn(JOGOS, nome)) return false;
   JOGO = JOGOS[nome];
+  JOGO_ID = nome;
   return true;
 }
+
+// Um jogo REGISTRADO ainda não é um jogo JOGÁVEL. O truco aparece na aba desde a v4.1 e só
+// ganha motor na v6 — enquanto isso ele tem nome, resumo e regras, e nada mais. A pergunta
+// mora aqui, e não num `if (id === 'truco')` espalhado: quem sabe se um jogo está pronto é o
+// registro dele.
+const jogavel = j => !!j && !j.emBreve;
 
 // ─── quem pediu menos movimento ──────────────────────────────────────────────
 // Sensibilidade vestibular não é preferência estética: para quem tem, movimento na tela
@@ -1062,6 +1133,52 @@ function lido(chave, padrao) {
 
 function esquecer(chave) {
   try { localStorage.removeItem(GUARDA + chave); } catch (e) { void e; }
+}
+
+// ─── o que é guardado POR JOGO ───────────────────────────────────────────────
+// A maior parte do que o navegador lembra é da casa e vale para a mesa toda: quem você é no
+// online (`cliente`), o som, o painel aberto, a última sala. Duas coisas NÃO são:
+//
+//   mesa      quantas cadeiras, quem senta nelas, e o MODO — e modo do dominó não é modo do
+//             truco. Um 'classico' guardado não quer dizer nada numa mesa de truco.
+//   partida   a partida em andamento. Uma só, e do jogo em que ela começou.
+//
+// Sem isto, trocar de aba apagaria a partida guardada EM SILÊNCIO — que é exatamente o que
+// esta fase existe para não fazer. O jogador que está no meio de uma partida de dominó, dá
+// uma espiada no truco e volta, tem de achar a mesa dele lá.
+const CHAVES_DO_JOGO = ['mesa', 'partida'];
+
+const chaveDoJogo = chave => `${chave}.${JOGO_ID}`;
+const guardarNoJogo = (chave, valor) => guardar(chaveDoJogo(chave), valor);
+const lidoDoJogo = (chave, padrao) => lido(chaveDoJogo(chave), padrao);
+const esquecerDoJogo = chave => esquecer(chaveDoJogo(chave));
+
+// O QUE JÁ ESTAVA GUARDADO ERA DO DOMINÓ, porque até aqui não havia outro jogo. Sem esta
+// migração o conserto seria invisível justamente para quem jogou o bastante para ter
+// preferência guardada: a mesa dele voltaria ao padrão e a partida de antes sumiria do menu.
+// É a mesma lição que o "Você" gravado pagou na v2.0.0.
+//
+// MIGRA E APAGA, e não "lê a antiga quando a nova falta". A leitura preguiçosa parece mais
+// barata e arma uma cilada: `esquecerDoJogo('partida')` roda no fim de toda partida, e na
+// leitura seguinte a chave antiga — intacta — ressuscitaria a partida que acabou de acabar.
+// Copiar uma vez e apagar a origem não tem esse estado intermediário.
+//
+// QUEM DIZ QUE HERDA É O JOGO, e não um `if (JOGO_ID === 'domino')` aqui. A primeira versão
+// tinha o literal, e ele passava batido pela varredura de acoplamento — que mede
+// IDENTIFICADORES — sendo exatamente a mesma coisa que ela existe para impedir: a casa
+// sabendo o nome de um jogo. Hoje o dominó declara `herdaOGuardadoSemSufixo` no registro dele,
+// e a casa só pergunta. Nenhum jogo novo pode declarar isso: as chaves sem sufixo são de
+// antes de existir mais de um jogo, e portanto só de quem estava aqui.
+function migrarOGuardadoSemSufixo() {
+  if (!JOGO || !JOGO.herdaOGuardadoSemSufixo) return;
+  for (const chave of CHAVES_DO_JOGO) {
+    const antigo = lido(chave, null);
+    if (antigo === null) continue;
+    // Se a chave nova já existe, ela é a verdadeira — a antiga é sobra de uma versão que
+    // ficou aberta noutra aba. Apaga do mesmo jeito, senão ela migra de novo amanhã.
+    if (lido(chaveDoJogo(chave), null) === null) guardar(chaveDoJogo(chave), antigo);
+    esquecer(chave);
+  }
 }
 
 /* ····· 30-domino/015-constantes.js ····· */
@@ -3506,7 +3623,10 @@ function mostrarTela(id) {
   // O botão de retomar é recalculado a cada vez que o menu aparece, e não uma vez no
   // início: entre um e outro você pode ter acabado a partida guardada, ou o prazo dela
   // pode ter vencido com a aba aberta.
-  if (id === 'telaMenu') { atualizarBotaoRetomar(); atualizarBotaoVoltarMesa(); }
+  // `pintarAbas` pelo mesmo motivo, e ele é mais forte: entre uma vinda ao menu e a outra a
+  // mesa pode ter ficado OCUPADA, e mesa ocupada não troca de jogo (ver `pintarAbas`, em
+  // 141-abas.js). Sem esta chamada a faixa continuaria oferecendo o que ela já sabe recusar.
+  if (id === 'telaMenu') { atualizarBotaoRetomar(); atualizarBotaoVoltarMesa(); pintarAbas(); }
   // A conversa do saguão vive por cima desta tela, então quem abre e fecha a tela é quem
   // liga e desliga aquilo.
   atualizarSaguao(id === 'telaOnline');
@@ -4005,7 +4125,9 @@ const TIPOS_VALIDOS = new Set(['local', 'bot', 'online']);   // a cadeira 0 é s
 // Valor que não fecha volta ao padrão em silêncio: aqui não há nada que valha assustar
 // quem só quer jogar, e o menu mostra na tela o que ficou valendo.
 function mesaLembrada() {
-  const g = lido('mesa', null) || {};
+  // `lidoDoJogo` e não `lido`: a mesa é DO JOGO — um 'classico' guardado não quer dizer nada
+  // numa mesa de truco, e ler a chave comum faria trocar de aba levar a mesa junto.
+  const g = lidoDoJogo('mesa', null) || {};
   // `Object.hasOwn` e não `MODOS[g.modo] ?`, e a diferença é uma TELA PRETA PERMANENTE.
   // MODOS é objeto literal, então `MODOS['constructor']` é truthy e passava no teste — e
   // `MODOS['constructor'].cadeiras` é undefined, logo a linha de baixo lançava TypeError.
@@ -4070,7 +4192,7 @@ const MESA = {};
 // Guarda as quatro cadeiras, e não só as `n` em uso: quem joga em três e volta para
 // quatro esperava o nome do quarto de volta, não "Tião" outra vez.
 function lembrarMesa() {
-  guardar('mesa', {
+  guardarNoJogo('mesa', {
     n: MESA.n, modo: MESA.modo, alvo: MESA.alvo, compraVoluntaria: MESA.compraVoluntaria,
     cadeiras: MESA.cadeiras.map(c => ({ nome: c.nome, tipo: c.tipo, nivel: c.nivel })),
   });
@@ -4189,7 +4311,30 @@ function grupo(id, attr, aplicar) {
     };
   });
 }
-grupo('modoMesa', 'modo', v => { MESA.modo = v; ajustarCadeirasAoModo(); montarCadeiras(); lembrarMesa(); });
+
+// OS BOTÕES DE MODO SAEM DA TABELA DO JOGO. Estavam escritos à mão no `src/pagina.html`
+// ("Clássico <i>7 peças</i>"), e um Clássico no HTML da casa é a casa sabendo que o jogo é
+// dominó — o mesmo vazamento que a Fase 1 tirou do JavaScript e que sobrevivia na marcação.
+// Repare que `MODOS` já carregava `rotulo` e `nota`: os dois campos existiam para esta tela e
+// eram copiados à mão para o outro arquivo, que é como duas metades passam a discordar.
+//
+// E o `grupo(...)` MUDOU DE LUGAR JUNTO, o que não é detalhe: ele liga `onclick` percorrendo
+// os botões, então rodando no topo do módulo — como rodava — ele encontraria a faixa vazia e
+// nenhum modo responderia ao clique. Quem gera os botões liga os cliques deles.
+// `modos` minúsculo de propósito: um `const MODOS` aqui sombrearia a tabela do dominó dentro
+// desta função, e sombra é como um dia alguém apaga a linha local e o código continua
+// funcionando pelo global — que é o acoplamento de volta, calado.
+//
+// O `<i>` só sai quando há nota: `escapar` faz `String(txt)`, então um modo sem ela
+// escreveria `<i>undefined</i>` na tela. É o C7 da Fila 11 na sua forma mais boba.
+function montarModos() {
+  const modos = JOGO.menu.MODOS;
+  el('modoMesa').innerHTML = Object.keys(modos).map(k =>
+    `<button class="btn peq" data-modo="${escapar(k)}">${escapar(modos[k].rotulo)}`
+    + `${modos[k].nota ? `<i>${escapar(modos[k].nota)}</i>` : ''}</button>`).join('');
+  grupo('modoMesa', 'modo', v => { MESA.modo = v; ajustarCadeirasAoModo(); montarCadeiras(); lembrarMesa(); });
+}
+
 // `ajustarCompraAoModo` entra aqui também, e não só no modo: o Clássico tem monte com 2 ou
 // 3 jogadores e NENHUM com 4, então trocar só o número de jogadores muda a resposta.
 grupo('qtdJogadores', 'n', v => { MESA.n = +v; montarCadeiras(); ajustarCompraAoModo(); lembrarMesa(); });
@@ -4227,6 +4372,206 @@ el('btMenu').onclick = () => { recomecarAsVoltas(); encerrarRede(); mostrarTela(
 // As três chamadas que montavam o menu na carga foram para `900-arranque.js`, junto com o
 // `mesaLembrada()` que enche a MESA. Todas dependem de saber QUAL jogo está na mesa, e no
 // primeiro tempo da carga ninguém sabe ainda.
+
+/* ····· 10-casa/141-abas.js ····· */
+//
+// É a interface do contrato que a Fase 1 comprou. A casa já sabia falar com `JOGO.x` sem
+// saber que jogo era; faltava alguém dizer QUAL. São três respostas possíveis, em ordem:
+// a URL, a preferência guardada, e o primeiro do balcão.
+//
+// POR QUE ARQUIVO PRÓPRIO, e não mais um pedaço do 140-menu. O menu responde "quem senta em
+// cada cadeira"; isto responde "que jogo é". São perguntas de donos diferentes — e no dia em
+// que o truco tiver montagem própria, é este arquivo que continua igual.
+//
+// O NÚMERO 141 o põe depois do menu (140) e antes do saguão (145). Nada aqui roda na carga:
+// são declarações de função, e quem as chama é o `900-arranque.js`. Chamar `montarCadeiras`
+// daqui é seguro pelo mesmo motivo que o `140-menu.js` já registra — declaração de função é
+// içada para o topo do escopo concatenado, e estes corpos só rodam depois de tudo existir.
+
+// O jogo que abre quando ninguém disse nada. É o PRIMEIRO registrado, e não um literal
+// 'domino': um literal aqui seria a casa sabendo o nome de um jogo, que é o acoplamento que
+// a v4.0.0 gastou uma release inteira tirando — e que agora tem teste (`test-acoplamento`).
+const jogoPadrao = () => Object.keys(JOGOS)[0];
+
+// ─── qual jogo abrir ─────────────────────────────────────────────────────────
+// A URL ganha da preferência, e a preferência ganha do padrão.
+//
+// A URL VEM PRIMEIRO porque ela é o único dos três que alguém acabou de digitar ou de
+// receber: um link `?jogo=truco` mandado no grupo tem de abrir o truco, mesmo que a última
+// coisa que você jogou tenha sido dominó. Preferência é o que você fez ontem; URL é o que
+// estão te pedindo agora.
+//
+// OS DOIS SÃO ENTRADA DE FORA, e por isso os dois passam por `Object.hasOwn` — o da URL
+// obviamente (qualquer um digita), mas o guardado também: pode ter sido escrito por uma
+// versão em que existia um jogo que não existe mais. `JOGOS['constructor']` é truthy num
+// objeto literal, e foi esse buraco exato que deu tela preta permanente no defeito 5 da
+// Fila 6.
+function jogoEscolhido() {
+  const daURL = new URLSearchParams(location.search).get('jogo');
+  if (typeof daURL === 'string' && Object.hasOwn(JOGOS, daURL)) return daURL;
+  const guardado = lido('jogo', '');
+  if (typeof guardado === 'string' && Object.hasOwn(JOGOS, guardado)) return guardado;
+  return jogoPadrao();
+}
+
+// A barra de endereço passa a dizer a verdade — e é o que torna a escolha COMPARTILHÁVEL,
+// que é a metade do motivo de a URL existir neste mecanismo.
+//
+// O padrão SAI da URL em vez de entrar: o endereço limpo tem de continuar sendo o endereço
+// do jogo de sempre, senão todo link que alguém já mandou passa a parecer incompleto.
+//
+// `replaceState` e não `pushState`: trocar de aba não é navegar, e com `pushState` o botão
+// Voltar do celular passaria a desfazer cliques de aba em vez de sair do jogo.
+function urlDoJogo(id) {
+  const p = new URLSearchParams(location.search);
+  if (id === jogoPadrao()) p.delete('jogo'); else p.set('jogo', id);
+  const busca = p.toString();
+  // `file://` é o jeito como este jogo abre por duplo-clique, e ali o `replaceState` pode
+  // recusar — não é motivo para o menu não montar.
+  try { history.replaceState(null, '', location.pathname + (busca ? '?' + busca : '')); } catch (e) { void e; }
+}
+
+// ─── a faixa ─────────────────────────────────────────────────────────────────
+// Montada a partir de `JOGOS`, e não escrita no HTML: o quarto jogo aparece na aba pelo só
+// fato de se registrar, sem ninguém lembrar de mexer aqui.
+function montarAbas() {
+  const nav = el('abasJogos');
+  nav.innerHTML = Object.keys(JOGOS).map(id => {
+    const j = JOGOS[id];
+    // `escapar` num nome que é NOSSO, escrito no registro, é cinto sobre suspensório — e
+    // fica porque a regra da casa é "todo texto que vai para innerHTML passa por ele", e
+    // exceção justificada é como a terceira mordida aconteceu.
+    return `<button class="aba" role="tab" id="aba-${escapar(id)}" data-jogo="${escapar(id)}"`
+      + ` aria-controls="cartaDoJogo" aria-selected="false" tabindex="-1"`
+      // O `aria-label` leva o nome INTEIRO: a aba mostra o curto porque a faixa é estreita,
+      // e quem ouve a tela não tem essa limitação. "Dominó" e "Dominó de Bar" são a mesma
+      // aba; o que o olho perde por espaço o ouvido não precisa perder.
+      + ` aria-label="${escapar(j.nome + (j.emBreve ? ' — em breve' : ''))}">`
+      + `${escapar(j.curto || j.nome)}${j.emBreve ? '<i>em breve</i>' : ''}</button>`;
+  }).join('');
+
+  nav.querySelectorAll('button').forEach(b => {
+    b.onclick = () => { if (abrirJogo(b.dataset.jogo)) tocarClique(); };
+  });
+
+  // `role="tab"` PROMETE seta, e promessa de acessibilidade não cumprida é pior que
+  // semântica nenhuma: o leitor de tela anuncia "aba 1 de 2" e a seta não anda. Ativação
+  // automática (a seta já troca de jogo) porque são duas abas de conteúdo instantâneo —
+  // não há o que carregar que justifique separar mover de escolher.
+  nav.onkeydown = ev => {
+    const botoes = [...nav.querySelectorAll('button')];
+    const i = botoes.indexOf(document.activeElement);
+    if (i < 0) return;
+    const passo = { ArrowRight: 1, ArrowLeft: -1, Home: -i, End: botoes.length - 1 - i }[ev.key];
+    if (passo === undefined) return;
+    ev.preventDefault();
+    const alvo = botoes[(i + passo + botoes.length) % botoes.length];
+    alvo.focus();
+    alvo.click();
+  };
+}
+
+// A marca da aba ativa. `aria-selected` E `tabindex` juntos: o segundo é o tabindex
+// itinerante que o padrão de abas exige — Tab entra na faixa pela aba ativa, e as setas
+// andam dentro dela, em vez de a faixa comer quatro paradas do Tab.
+//
+// MESA OCUPADA NÃO TROCA DE JOGO, e o motivo não é etiqueta. Com uma partida viva na
+// memória, trocar de jogo faria duas coisas erradas ao mesmo tempo: o `guardarPartida()` do
+// próximo `publicar()` gravaria a partida de dominó sob a chave do truco, e o `desenharHUD`
+// leria `JOGO.menu.MODOS[vista.modo].rotulo` numa tabela que não tem aquele modo. Hoje o
+// caminho é estreito — só o `btMenu` mostra o menu sem zerar `P` —, e "estreito hoje" é
+// exatamente como o `!temMonte` da Fila 5 durou três releases.
+//
+// Barrar CALADO seria o defeito que esta casa passou quatro filas consertando, então o botão
+// diz por quê. Partida ACABADA (`fase === 'fim'`) não ocupa nada: você está olhando o menu.
+function pintarAbas() {
+  const ocupada = !!(P && P.fase !== 'fim');
+  el('abasJogos').querySelectorAll('button').forEach(b => {
+    const minha = b.dataset.jogo === JOGO_ID;
+    b.classList.toggle('on', minha);
+    b.setAttribute('aria-selected', minha ? 'true' : 'false');
+    b.setAttribute('tabindex', minha ? '0' : '-1');
+    b.disabled = ocupada && !minha;
+    b.title = b.disabled ? 'Termine ou saia da partida para trocar de jogo' : '';
+  });
+}
+
+// ─── o cartão do jogo ────────────────────────────────────────────────────────
+// Título, resumo e regras saem do REGISTRO. Estavam escritos à mão no `src/pagina.html`, que
+// é da casa — o mesmo vazamento que a Fase 1 tirou do JavaScript, sobrevivendo no HTML porque
+// a varredura por AST não enxerga marcação.
+function pintarOJogoNoMenu() {
+  el('tituloJogo').textContent = JOGO.nome;
+  el('subJogo').textContent = JOGO.sub;
+
+  // As regras vão CRUAS para o innerHTML, e é decidido: elas são marcação de propósito
+  // (`<b>`, `&amp;`), escritas por nós no registro do jogo, e nunca vêm da rede nem do
+  // armazenamento. É a diferença entre este `innerHTML` e os quatro que já morderam esta
+  // casa — todos eles carregavam texto de um convidado.
+  const regras = JOGO.regras || [];
+  el('regrasLista').innerHTML = regras.map(r => `<li>${r}</li>`).join('');
+  el('regrasJogo').classList.toggle('oculta', !regras.length);
+
+  // REGISTRADO não é JOGÁVEL. Sem motor não há mesa para montar — e mostrar a montagem de
+  // cadeiras com um botão "Sentar e jogar" que não senta seria a espécie de defeito que o
+  // `refletirMesaNosBotoes` existe para impedir: o jogo está certo e a tela mente.
+  const pronto = jogavel(JOGO);
+  el('montagemDaMesa').classList.toggle('oculta', !pronto);
+  el('vemAi').classList.toggle('oculta', pronto);
+  if (!pronto) el('vemAi').textContent = JOGO.emBreve;
+}
+
+// ─── o que as suítes alcançam ────────────────────────────────────────────────
+// `window.__jogo` (160-loop.js) nasce com o que é da casa e recebe o resto do jogo por cima.
+// Isto rodava uma vez, no arranque; com aba, ele TROCA — e trocar sem tirar o que estava
+// deixaria `grupoMonte` pendurado numa mesa de truco, que é uma ponte mentindo.
+//
+// `defineProperties` com os DESCRITORES, e não `Object.assign`: assign INVOCA os getters da
+// origem e copia o valor. O `get maoNaTela()` virava uma fotografia da mão vazia tirada no
+// arranque, e retomar uma partida guardada mostrava "0 na sua mão". Custou uma reprovação na
+// Fase 1 e está escrito aqui para não custar duas.
+let chavesDaPonteDoJogo = [];
+function porAPonteDoJogo() {
+  for (const k of chavesDaPonteDoJogo) delete window.__jogo[k];
+  const ponte = JOGO.ponte || {};
+  Object.defineProperties(window.__jogo, Object.getOwnPropertyDescriptors(ponte));
+  chavesDaPonteDoJogo = Object.keys(ponte);
+}
+
+// ─── sentar noutro jogo ──────────────────────────────────────────────────────
+// O caminho único: o arranque entra por aqui e a aba entra por aqui. Duas cópias da mesma
+// sequência, uma delas esquecendo um passo, é literalmente como o defeito 3 da Fila 6 durou.
+function abrirJogo(id) {
+  if (!trocarDeJogo(id)) return false;
+
+  // ANTES de qualquer leitura: o acervo guardado sem sufixo é de quem declarou herdá-lo, e a
+  // partida de antes tem de sobreviver à chegada da aba.
+  migrarOGuardadoSemSufixo();
+
+  if (jogavel(JOGO)) {
+    // `Object.assign` e não `MESA = …`: a referência tem de continuar a mesma, porque o
+    // projeto inteiro lê `MESA.n` direto. Mesma razão do arranque.
+    montarModos();
+    Object.assign(MESA, mesaLembrada());
+    refletirMesaNosBotoes();
+    ajustarCadeirasAoModo();
+    montarCadeiras();
+  }
+
+  atualizarBotaoRetomar();
+  porAPonteDoJogo();
+  pintarOJogoNoMenu();
+  pintarAbas();
+
+  // GUARDA SEMPRE, inclusive quando a escolha veio da URL — decisão do Ricardo em 06/08/2026,
+  // e nenhuma leitura de código chega a ela. A outra saída era defensável e foi pesada: "link
+  // é visita, clique é escolha", e aí o `?jogo=truco` que um amigo mandou não mexeria no seu
+  // padrão. Ele escolheu que a URL e o clique valem a mesma coisa — quem chega pelo link e
+  // quer ficar não precisa fazer mais nada. É regra de casa, como a cruzada valer 4.
+  guardar('jogo', id);
+  urlDoJogo(id);
+  return true;
+}
 
 /* ····· 10-casa/145-saguao.js ····· */
 //
@@ -5670,8 +6015,10 @@ function guardarPartida() {
   if (!P || modo === 'convidado') return;
   // Partida acabada não é partida para voltar — e deixá-la guardada faria o menu oferecer
   // para sempre a revanche de uma final que você já viu.
-  if (P.fase === 'fim') { esquecer('partida'); return; }
-  guardar('partida', { quando: Date.now(), euNaTela, P: partidaParaGuardar() });
+  if (P.fase === 'fim') { esquecerDoJogo('partida'); return; }
+  // POR JOGO, e não numa chave só: uma partida de dominó em andamento não pode sumir porque
+  // alguém deu uma espiada na aba do truco. Ver `CHAVES_DO_JOGO`, em 010-constantes.js.
+  guardarNoJogo('partida', { quando: Date.now(), euNaTela, P: partidaParaGuardar() });
 }
 
 // Devolve o guardado só se ele ainda serve. Prazo porque uma partida de anteontem não é
@@ -5694,7 +6041,10 @@ function guardarPartida() {
 // fecha não tem padrão nenhum — meia partida remendada é pior que partida nenhuma. Recusar
 // só esconde o botão de retomar, que é degradação graciosa; o jogo abre normalmente.
 function partidaGuardada() {
-  const g = lido('partida', null);
+  // Jogo sem motor não tem partida para retomar, e nem tabela de modos contra a qual validar
+  // — sem esta linha, a aba do truco derrubaria o menu em `JOGO.menu.MODOS` indefinido.
+  if (!jogavel(JOGO)) return null;
+  const g = lidoDoJogo('partida', null);
   if (!g || !g.P || !g.quando || Date.now() - g.quando > HORAS_GUARDADA * 3600e3) return null;
 
   const p = g.P;
@@ -5983,7 +6333,44 @@ window.__jogo = {
 
 JOGOS.domino = {
   nome: 'Dominó de Bar',
+  // O NOME QUE CABE NA ABA. Mesma razão do `short_name` do manifest: em 360px de tela a faixa
+  // tem ~320px para todas as abas, e dois nomes cheios já não cabem — sem isto a faixa
+  // transborda numa tela que o `test-telas` mede.
+  curto: 'Dominó',
   sub: 'Dupla-seis, regras de bar. Você escolhe quem senta em cada cadeira.',
+
+  // O QUE ESTAVA GUARDADO SEM SUFIXO É MEU. Até a v4.0 havia um jogo só, então as chaves
+  // `dominobar.mesa` e `dominobar.partida` só podiam ser de dominó. Da v4.1 em diante cada
+  // jogo guarda a sua (`…​.domino`, `…​.truco`), e esta marca é o que autoriza a casa a
+  // migrar o acervo antigo — ver `migrarOGuardadoSemSufixo`, em 010-constantes.js.
+  //
+  // JOGO NOVO NÃO PODE DECLARAR ISTO. Não é uma opção de contrato: é um fato histórico de
+  // um jogo só, e dois donos para o mesmo acervo seria uma corrida para ver quem migra
+  // primeiro.
+  herdaOGuardadoSemSufixo: true,
+
+  // ─── as regras, escritas onde elas valem ───────────────────────────────────
+  // Estavam em `src/pagina.html`, dentro do `<details>` do menu — doze linhas de regra de
+  // dominó no HTML da CASA, que é o arquivo que promete não saber que jogo está na mesa. É o
+  // mesmo vazamento que a Fase 1 tirou do JavaScript, sobrevivendo no HTML porque a varredura
+  // por AST não enxerga marcação.
+  //
+  // A casa fica com a MOLDURA (o `<details>`, o "As regras desta casa", o `<li>`) e o jogo
+  // entrega o texto de dentro.
+  regras: [
+    '<b>Clássico:</b> 28 peças, 7 para cada, de 2 a 4 jogadores.',
+    '<b>Duelo:</b> 1v1 com o baralho inteiro na mão — 14 para cada, sem monte.',
+    '<b>Trio:</b> a bucha de zero sai do baralho, sobram 27 e dão 9 para cada um dos três, sem monte.',
+    '<b>Sem monte</b> (Duelo, Trio e o Clássico de 4): quem não pode jogar, passa.',
+    '<b>Com monte</b> (Clássico de 2 ou 3): quem não pode jogar <b>compra até conseguir</b>; só passa se o monte secar.',
+    'No Clássico de 4, duplas em cruz (1&amp;3 × 2&amp;4).',
+    'Mão carroçuda demais volta para a mesa e todo mundo embaralha de novo.',
+    'A primeira mão abre com o <b>6|6</b> — ou, se ele estiver no monte, com a maior carroça. Depois, abre quem bateu.',
+    'Batida: simples <b>1</b> · carroça <b>2</b> · lá-e-lô <b>2</b> · cruzada <b>4</b>.',
+    'Trancou: marca 1 ponto quem tiver a mão mais leve. Empatou, a mão morre.',
+    '<b>Não dá para trancar de propósito:</b> a jogada que você sabe que trava a mesa — <b>você inclusive</b> — fica proibida enquanto houver outra. Se você ainda responde às pontas, o jogo não trava e a jogada vale. Carroça não conta: ela não muda o número da ponta.',
+    'Sair no meio <b>conta como derrota</b>. Quem cai no online tem 30 s para voltar.',
+  ],
 
   // ─── o motor ───────────────────────────────────────────────────────────────
   // Turnos, pontuação e a fronteira de segurança. `visao` é o invariante 3: é literalmente o
@@ -6081,6 +6468,47 @@ JOGOS.domino = {
   },
 };
 
+/* ····· 50-truco/500-registro.js ····· */
+//
+// POR QUE ELE EXISTE ANTES DE EXISTIR. A aba de escolher o jogo é o mecanismo desta fase, e
+// mecanismo com uma opção só não é mecanismo: a URL, a preferência guardada, a validação
+// contra entrada de fora e as chaves de armazenamento por jogo ficariam todas sem uma linha
+// de teste até a v6. Com este arquivo, `JOGOS` tem duas entradas de verdade e cada uma dessas
+// coisas passa a ser exercitável hoje.
+//
+// `emBreve: true` é o que separa REGISTRADO de JOGÁVEL (ver `jogavel`, em 010-constantes.js).
+// A casa lista este jogo na faixa de abas e o abre; o que ela não faz é montar mesa, porque
+// não há motor para sentar nela. Quando a Fase 4 chegar, esta linha sai e as outras entram —
+// `motor`, `mesa`, `toque`, `bot`, `menu` —, exatamente como o dominó tem em 300-registro.js.
+//
+// O número 500 põe o truco depois do dominó (300) e antes do arranque (900): ele é o segundo
+// dos três tempos de carga, como todo registro.
+
+JOGOS.truco = {
+  nome: 'Truco Paulista',
+  curto: 'Truco',                 // o que cabe na aba; ver o do dominó para o motivo
+  sub: '40 cartas, vira e manilha corrida. Sem envido e sem flor — o truco de bar.',
+
+  // O QUE FALTA, dito na tela em vez de escondido. Botão apagado sem explicação é o jogo
+  // emudecendo, e esta casa já pagou por isso duas vezes (a compra livre no Duelo, o
+  // `selecionarPeca` que desistia calado).
+  emBreve: 'O truco ainda não senta nesta mesa. As cartas e as regras vêm nas próximas duas '
+    + 'ondas; o online, a conversa e as cadeiras já estão prontos e ele herda os três.',
+
+  // As regras que VÃO valer. Ficam aqui, e não no HTML da casa, pelo mesmo motivo que as do
+  // dominó saíram de lá: `src/pagina.html` é da casa, e a casa não sabe que jogo está na mesa.
+  regras: [
+    '<b>Baralho de 40:</b> saem o 8, o 9 e o 10.',
+    '<b>Força:</b> 4 · 5 · 6 · 7 · Q · J · K · A · 2 · 3, da mais fraca para a mais forte.',
+    '<b>A vira:</b> uma carta é virada a cada mão, e a <b>manilha</b> é a seguinte dela nessa ordem — virou 3, a manilha é o 4.',
+    '<b>Entre manilhas</b> manda o naipe: ouros &lt; espadas &lt; copas &lt; paus.',
+    '<b>A mão:</b> 3 cartas para cada, melhor de 3 vazas.',
+    '<b>A aposta:</b> truco vale 3 · seis · nove · doze.',
+    '<b>Mão de 11:</b> quem chega a 11 vê as cartas e decide jogar ou entregar 1 ponto.',
+    '<b>A partida</b> vai até 12.',
+  ],
+};
+
 /* ····· 10-casa/900-arranque.js ····· */
 //
 // Os outros dois tempos estão descritos em `010-constantes.js`. Este arquivo é o último de
@@ -6097,42 +6525,21 @@ JOGOS.domino = {
 // depois de tudo existir. Mover o que não precisa ser movido seria trocar risco por nada.
 
 function arrancar() {
-  // 1. QUEM ESTÁ NA MESA. Hoje é sempre o dominó; a aba que deixa o jogador escolher entra
-  //    aqui, e é por isso que a escolha já passa por `trocarDeJogo` em vez de uma atribuição.
-  if (!trocarDeJogo('domino')) throw new Error('nenhum jogo se registrou em JOGOS');
+  // 1. A FAIXA DE ABAS, montada a partir de quem se registrou. Antes de escolher, porque
+  //    `abrirJogo` marca a aba ativa e ela precisa existir para receber a marca.
+  montarAbas();
 
-  // 2. A MESA GUARDADA. Só agora `mesaLembrada()` sabe contra qual tabela de modos validar.
-  //    `Object.assign` e não `MESA = …`: a referência tem de continuar a mesma, porque o
-  //    projeto inteiro lê `MESA.n` direto.
-  Object.assign(MESA, mesaLembrada());
+  // 2. QUEM ESTÁ NA MESA: a URL, senão a preferência, senão o primeiro do balcão. Tudo o que
+  //    era feito aqui — a mesa guardada, os modos, as cadeiras, o botão de retomar e a ponte
+  //    das suítes — mora dentro de `abrirJogo` (141-abas.js), porque a aba faz exatamente a
+  //    mesma coisa e duas cópias da mesma sequência é como o defeito 3 da Fila 6 durou.
+  if (!abrirJogo(jogoEscolhido())) throw new Error('nenhum jogo se registrou em JOGOS');
 
-  // 3. A TELA. Os botões nascem marcados no HTML com o padrão, então sem `refletir` o jogo
-  //    começaria num Trio até 10 enquanto a tela promete Clássico até 6.
-  refletirMesaNosBotoes();
-  ajustarCadeirasAoModo();
-  montarCadeiras();
-
-  // 4. O ENQUADRAMENTO. Depois da mão existir: `enquadrar()` lê a profundidade dela e manda
+  // 3. O ENQUADRAMENTO. Depois de a mão existir: `enquadrar()` lê a profundidade dela e manda
   //    refazer o leque.
   enquadrar();
 
-  // 5. O BOTÃO DE RETOMAR. O menu já nasce visível pelo HTML, então `mostrarTela` nunca roda
-  //    na carga — sem esta chamada o botão só apareceria depois da primeira volta ao menu,
-  //    que é justamente quando ele não serve mais para nada.
-  atualizarBotaoRetomar();
-
-  // 6. O QUE AS SUÍTES ALCANÇAM. A ponte da casa (`window.__jogo`) nasce com o que é da
-  //    casa; o jogo despeja o resto por cima, com as MESMAS chaves de antes — foi assim que
-  //    `grupoMonte` e `naMao` saíram de `160-loop.js` sem uma linha de teste mudar.
-  //
-  //    NÃO É `Object.assign`, e a diferença custou uma reprovação: `Object.assign` INVOCA os
-  //    getters da origem e copia o VALOR. O `get maoNaTela()` da ponte virava uma fotografia
-  //    tirada neste instante — a mão vazia, porque ainda não há partida —, e depois de
-  //    retomar uma partida guardada a suíte via "23 peças na mesa, 0 na sua mão". Copiar os
-  //    DESCRITORES leva o getter inteiro, e ele continua sendo consultado na hora.
-  Object.defineProperties(window.__jogo, Object.getOwnPropertyDescriptors(JOGO.ponte));
-
-  // 7. E O LOOP.
+  // 4. E O LOOP.
   requestAnimationFrame(quadro);
 }
 
