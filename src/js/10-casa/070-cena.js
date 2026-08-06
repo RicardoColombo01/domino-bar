@@ -357,7 +357,9 @@ function assentosDaMesa(vista) {
   const crus = [];
   for (let i = 0; i < n; i++) {
     if (i === vista.cadeira) continue;
-    const a = JOGO.mesa.anguloDaCadeira(i, vista.cadeira, n);
+    // `anguloDaCadeira` é da CASA desde a v4.4 — vinha pelo contrato só porque o nome morava
+    // no dominó, e quem senta à sua frente está à sua frente em qualquer jogo.
+    const a = anguloDaCadeira(i, vista.cadeira, n);
     crus.push({ cadeira: i, a, x: Math.sin(a) * RAIO_ASSENTO, z: Math.cos(a) * RAIO_ASSENTO,
       quantas: vista.naMao[i] });
   }

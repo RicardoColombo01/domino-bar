@@ -66,6 +66,19 @@ function embaralhar(lista) {
   return lista;
 }
 
+// O ÂNGULO DE UMA CADEIRA, vista de quem senta em `eu`, numa mesa de `n`. Zero é a SUA
+// direção; cresce no sentido da mesa.
+//
+// Morava em `30-domino/060-layout.js`, e o comentário ao lado dela já dizia "é da mesa e não
+// do jogo" — ninguém tinha tirado a conclusão porque havia um jogo só. Quem tirou foi o
+// `test-acoplamento`, no dia em que o layout do truco precisou dela: um jogo alcançando o
+// nome do outro, reprovado com razão.
+//
+// Vindo para cá, ela sai do CONTRATO junto: `070-cena.js` chamava `JOGO.mesa.anguloDaCadeira`
+// só porque o nome morava no jogo. Um encaixe a menos, e a casa passa a saber o que sempre
+// foi dela.
+const anguloDaCadeira = (i, eu, n) => ((i - eu + n) % n) * Math.PI * 2 / n;
+
 // ─── quem pediu menos movimento ──────────────────────────────────────────────
 // Sensibilidade vestibular não é preferência estética: para quem tem, movimento na tela
 // dá enjoo de verdade. Este jogo era o pior conjunto possível — a lâmpada respira PARA

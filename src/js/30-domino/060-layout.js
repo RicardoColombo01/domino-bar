@@ -104,10 +104,15 @@ function escalaDoTabuleiro(caixa, larguraUtil = ESPALHA_X * 2.1) {
 }
 
 // ─── quem mais está sentado à mesa ───────────────────────────────────────────
-// Onde cada cadeira fica, vista de quem joga: você em 0, o resto em volta no sentido
-// da vez. Mora aqui porque é trigonometria pura e porque o orçamento do tabuleiro,
-// logo abaixo, precisa dela — 100-mao.js só a consumia.
-const anguloDaCadeira = (i, eu, n) => ((i - eu + n) % n) * Math.PI * 2 / n;
+// `anguloDaCadeira` SAIU DAQUI e foi para `10-casa/010-constantes.js`. O comentário que
+// ficava neste lugar dizia "mora aqui porque é trigonometria pura" — e trigonometria pura
+// sobre CADEIRAS é da mesa, não do dominó. Quem senta à sua frente está à sua frente em
+// qualquer jogo.
+//
+// Ninguém tinha tirado essa conclusão porque havia um jogo só. Quem tirou foi o
+// `test-acoplamento`, no dia em que o layout do truco precisou dela: um jogo alcançando o
+// nome do outro, reprovado com razão. O orçamento do tabuleiro, logo abaixo, continua
+// chamando — só que agora um nome da casa.
 
 // A caixa que o monte de um adversário ocupa no tampo. Ele nasce girado -a e as peças
 // entram ATRAVESSADAS, então a fileira cresce pela LARGURA da peça e cada uma deita o

@@ -6,10 +6,10 @@ de gente e bot, na mesma tela ou pela internet.
 ### ▶ Jogar agora: **https://ricardocolombo01.github.io/domino-bar/**
 
 **Isto está virando uma casa de jogos.** Há uma faixa de abas no alto do menu, e o **Truco
-Paulista** já está lá — com as regras à mostra e o motor escrito, mas ainda **sem mesa em 3D,
-sem bot e sem a barra de apostas**, então não dá para sentar nele. O link `?jogo=truco` abre
-direto. Cada jogo guarda a mesa e a partida **na chave dele**, então espiar a aba do lado não
-custa a partida que está em andamento.
+Paulista** já está lá — com as regras à mostra, o motor, o bot e o layout escritos e
+testados, mas ainda **sem a mesa em 3D e sem a barra de apostas**, então não dá para sentar
+nele. O link `?jogo=truco` abre direto. Cada jogo guarda a mesa e a partida **na chave dele**,
+então espiar a aba do lado não custa a partida que está em andamento.
 
 **Dá para instalar como aplicativo**, e depois de uma partida ele **abre sem internet** — o
 service worker guarda o jogo e as duas bibliotecas. Também abre por duplo-clique no
@@ -202,7 +202,7 @@ existe mais.
 Sem framework, sem bundler. Madeira, piso, as pintas das peças e todos os sons são gerados
 em código na hora — não há um único `.mp3` no repositório, e os únicos binários são os dois
 ícones do aplicativo, que o manifest exige em arquivo. Three.js e PeerJS vêm de CDN. São
-**7.499 linhas** em `src/`.
+**7.917 linhas** em `src/`.
 
 ```
 src/pagina.html      o molde
@@ -215,9 +215,9 @@ src/js/30-domino/    o que é DOMINÓ: constantes, baralho, regras, partida, bot
                      layout, peça 3D, tabuleiro, mão, interação, painel de contagem
 src/js/40-cartas/    BIBLIOTECA: naipes, valores, o baralho de 40 e a carta 3D —
                      o truco paga, o pife e o vinte-e-um herdam
-src/js/50-truco/     o que é TRUCO: as regras (força, manilha, o melou) e o motor
-                     (vazas, aposta, mão de 11). Falta o corpo — 3D, bot e a barra
-                     de apostas —, então ele ainda não senta na mesa
+src/js/50-truco/     o que é TRUCO: regras, motor, bot e layout — tudo o que dá para
+                     provar no terminal. Falta a mesa em 3D e a barra de apostas,
+                     então ele ainda não senta na mesa
 ```
 
 São **três espécies de pasta**, e o `test-acoplamento` cobra a diferença: a **casa** não
@@ -257,7 +257,7 @@ npm test            build + o acoplamento e as três suítes de lógica (segundo
 npm run acoplamento a casa alcança ZERO nomes de jogo — varredura por AST, instantânea
                     (traz o `acorn`: rode `cd tests && npm install` uma vez)
 npm run cartas      o baralho de 40 e a carta 3D, no terminal
-npm run truco       as regras e o motor do truco, no terminal
+npm run truco       as regras, o motor, o bot e o layout do truco, no terminal
 npm run app         build + manifest, ícones, e o jogo abrindo COM A REDE DESLIGADA
 npm run icones      regera os dois PNG a partir de src/icone.svg
 npm run telas       build + o jogo em seis tamanhos de tela, dez situações cada

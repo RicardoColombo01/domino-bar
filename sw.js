@@ -14,7 +14,7 @@
 // preso numa versão antiga para sempre, e nem limpar a aba resolve. Amarrando o nome ao
 // conteúdo, publicar uma correção JÁ é publicar um cache novo. Esquecer de bumpar deixa de
 // ser possível.
-const VERSAO = '48a0fe771dc5';
+const VERSAO = '992d6c03bd48';
 const CACHE = `dominobar-${VERSAO}`;
 
 // Os arquivos que são NOSSOS. O CSS e o JS não estão aqui porque não existem como arquivo:
