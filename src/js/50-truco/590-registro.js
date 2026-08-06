@@ -12,8 +12,15 @@
 // não há motor para sentar nela. Quando a Fase 4 chegar, esta linha sai e as outras entram —
 // `motor`, `mesa`, `toque`, `bot`, `menu` —, exatamente como o dominó tem em 300-registro.js.
 //
-// O número 500 põe o truco depois do dominó (300) e antes do arranque (900): ele é o segundo
-// dos três tempos de carga, como todo registro.
+// O NÚMERO MUDOU DE 500 PARA 590 quando o motor chegou, e a razão é a ZONA MORTA. Um registro
+// é executado NA HORA em que é concatenado, e a partir da Fase 4 ele cita `MODOS_TRUCO`, que
+// é um `const` declarado no `510-regras.js`. `const` antes da declaração é `ReferenceError`,
+// não `undefined` — tela preta na carga, e o `node --check` do build não pega, porque a
+// sintaxe está perfeita.
+//
+// A regra que fica, e que o dominó já obedecia sem ninguém ter escrito: **o registro é o
+// ÚLTIMO arquivo do jogo.** O do dominó é 300 e os arquivos dele vão até 135. Função é içada
+// e sobrevive à ordem; tabela não.
 
 JOGOS.truco = {
   nome: 'Truco Paulista',

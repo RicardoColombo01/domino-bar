@@ -9,6 +9,17 @@
 // naipe, valor e o desenho; a FORÇA é daqui, porque no pife e no vinte-e-um ela é outra. O
 // `test-acoplamento` cobra a seta nesse sentido — biblioteca não alcança jogo.
 
+// OS MODOS DA MESA, no formato que o menu da casa já sabe desenhar (`rotulo` e `nota` viram
+// o botão, `cadeiras` diz quantas pessoas cabem). Um modo só, porque no truco a variação não
+// é de baralho nem de mão: é de quantos sentam.
+//
+// TRÊS NÃO EXISTE, e não é esquecimento — o truco é de times, e três cadeiras não fecham dois
+// times. O menu da casa apaga sozinho o botão que não está em `cadeiras`, então isto basta.
+const MODOS_TRUCO = {
+  paulista: { rotulo: 'Paulista', nota: '3 cartas, até 12', cartasPorMao: 3, cadeiras: [2, 4] },
+};
+const MODO_PADRAO_TRUCO = 'paulista';
+
 // A ORDEM DO TRUCO, do mais fraco para o mais forte, em índices de `VALORES`.
 //
 //   VALORES  A  2  3  4  5  6  7  Q  J  K      (a ordem de baralho, em 045-baralho.js)
