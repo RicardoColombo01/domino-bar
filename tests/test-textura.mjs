@@ -181,6 +181,39 @@ const AJUDA = `
   // colunas do desenho, dita AQUI e não lida do jogo: um teste que importasse a tabela do
   // próprio código conferiria a tabela contra ela mesma e passaria com qualquer desenho.
   const GRADE = [0.28, 0.5, 0.72];
+  // O ATLAS DAS CARTAS, que é a mesma pergunta noutra pasta: 40 células, e cada uma tem de
+  // desenhar o naipe da SUA linha. Elas têm todas a mesma forma, então um naipe trocado de
+  // linha é invisível a olho — e como a pasta das cartas ainda não tem jogo que a consuma,
+  // isto é a única coisa que olha o desenho.
+  //
+  // Vem de window.__jogo.texturas (a ponte da CASA, por nome) e não do grafo: nenhuma carta
+  // está na cena ainda, então caçar material com map não acharia nada.
+  //
+  // O que se amostra é a COR do naipe grande no centro. A forma exata (coração, folha) não
+  // dá para afirmar por amostragem sem virar um teste de pixel frágil; a FAMÍLIA da cor dá,
+  // e é ela que pega uma linha inteira trocada — que é o defeito que importa.
+  const atlasDasCartas = () => {
+    const t = (window.__jogo.texturas || []).find(x => x.nome === 'cartas');
+    if (!t) return { erro: 'não achei o atlas de cartas' };
+    const im = t.canvas;
+    const cols = 10, lins = 4;
+    const cel = im.width / cols;
+    if (im.height !== cel * lins) return { erro: 'atlas ' + im.width + 'x' + im.height + ' não fecha ' + cols + 'x' + lins };
+    const cx = im.getContext('2d');
+    const celulas = [];
+    for (let n = 0; n < lins; n++) {
+      const linha = [];
+      for (let v = 0; v < cols; v++) {
+        // O centro do naipe grande — 0.52 da célula, que é onde o desenho o põe.
+        const d = cx.getImageData(Math.round((v + 0.5) * cel), Math.round((n + 0.52) * cel), 1, 1).data;
+        const claro = d[0] > 200 && d[1] > 200 && d[2] > 200;
+        linha.push(claro ? 'papel' : (d[0] - d[2] > 60 ? 'vermelho' : 'preto'));
+      }
+      celulas.push(linha);
+    }
+    return { celulas, cel, largura: im.width, altura: im.height };
+  };
+
   const atlasDeVerdade = () => {
     const t = texturas().find(x => x.nome === 'pintas');
     if (!t) return { erro: 'não achei o atlas de pintas' };
@@ -323,6 +356,30 @@ if (!atlas.erro) {
   });
   console.log(`    ${atlas.largura}px em 7 células de ${atlas.cel}: ` +
     atlas.celulas.map(c => c.split(' ').filter(Boolean).length).join(''));
+}
+
+// ─── e o atlas das CARTAS ────────────────────────────────────────────────────
+// A cor de cada naipe está escrita aqui, à mão, pelo motivo de sempre: ler `NAIPES` do jogo
+// para conferir `NAIPES` aprovaria qualquer desenho. A ordem é a de `40-cartas/045-baralho.js`
+// — ouros, espadas, copas, paus —, e é a linha do atlas.
+console.log('\n  o atlas de cartas');
+const FAMILIA = ['vermelho', 'preto', 'vermelho', 'preto'];
+const cartas = await pagina.evaluate(naPagina('atlasDasCartas()'));
+ok(!cartas.erro, `não deu para ler o atlas de cartas: ${cartas.erro}`);
+if (!cartas.erro) {
+  ok(cartas.celulas.length === 4, `o atlas tem ${cartas.celulas.length} linhas, e são 4 naipes`);
+  ok(cartas.celulas.every(l => l.length === 10), 'alguma linha não tem as 10 colunas de valor');
+  // NENHUMA célula pode estar em branco: uma coluna vazia é o laço parando cedo, e o
+  // `test-cartas` do terminal não enxerga desenho nenhum.
+  const vazias = cartas.celulas.flat().filter(x => x === 'papel').length;
+  ok(vazias === 0, `${vazias} célula(s) do atlas não desenham naipe nenhum no centro`);
+  cartas.celulas.forEach((linha, n) => {
+    const erradas = linha.filter(x => x !== FAMILIA[n]).length;
+    ok(erradas === 0,
+      `a linha ${n} do atlas tinha de ser ${FAMILIA[n]} (é o naipe ${n}) e ${erradas} célula(s) não são: ${linha.join()}`);
+  });
+  console.log(`    ${cartas.largura}×${cartas.altura} em 40 células de ${cartas.cel}: ` +
+    cartas.celulas.map((l, i) => `${i}=${l[0]}`).join(' '));
 }
 
 // A UV, que é quem escolhe a célula. O atlas pode estar perfeito e a peça mostrar os
