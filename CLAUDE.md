@@ -714,19 +714,52 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 
 | | |
 |---|---|
-| **PUBLICADO** | **v4.2.0** — conferido: `sw.js` no ar bate com o local, e o `test-online` passou contra o site |
-| esta release | **v4.2.0** — a Fase 3: `40-cartas/`, o baralho de 40 e a carta 3D |
-| a anterior | **v4.1.0** — a Fase 2: a faixa de abas, as chaves por jogo, o `?jogo=` na URL |
+| enviado | **v4.3.0** — empurrada, `0 0` contra o origin, árvore limpa |
+| **PUBLICADO** | ⚠ **v4.2.1** — o push da v4.3.0 não disparou build; ver "O DEPLOY INTERMITENTE" |
+| esta release | **v4.3.0** — a Fase 4 ao meio: as regras e o motor do truco |
+| as anteriores | v4.2.0 (`40-cartas/`) · v4.1.0 (a faixa de abas) · v4.0.0 (o contrato) |
 | Filas 5 a 11 | **todas fechadas**, e não há defeito conhecido em aberto |
-| o que vem | **Fase 3 da v4: `40-cartas/`** — o baralho de 40 e a carta 3D |
+| o que vem | **o CORPO do truco** — 3D, bot e a barra de apostas |
+
+**Nada que um jogador use está atrás do deploy pendente:** o truco não senta na mesa, e o
+dominó publicado é o mesmo.
 
 ---
 
-#### O DEPLOY QUE NÃO ACONTECEU — e voltou a acontecer (06/08/2026)
+#### O DEPLOY INTERMITENTE — cinco pushes, três comportamentos (06/08/2026)
 
-**RESOLVIDO.** O site no ar é a **v4.2.0**: `sw.js` publicado `d0b4c9bb11d2`, idêntico ao
-local, com 21 ocorrências de `JOGOS`, o `abasJogos`, o `baralho40` e o "Truco Paulista" no
-HTML servido. **Não houve conserto do nosso lado** — a fila do Pages destravou sozinha.
+**NÃO ESTÁ RESOLVIDO, e a palavra certa é INTERMITENTE.** Esta seção já disse "resolvido"
+uma vez e teve de ser desdita duas horas depois — o que é a lição em si: **um push que
+funcionou não prova que o gatilho está de pé.**
+
+| push | o que aconteceu |
+|---|---|
+| v4.0.0, v4.0.1 (05/08 22:41 e 22:46) | **nenhuma rodada** |
+| v4.1.x (06/08 20:44) | rodada disparou, ficou **20 min `queued`** e foi **cancelada** |
+| v4.2.0 (21:57) e v4.2.1 (22:04) | rodaram e **publicaram em ~1 min** |
+| v4.3.0 (22:5x) | **nenhuma rodada** em mais de 10 minutos |
+
+O que dá para afirmar: **não é gatilho desconfigurado** (dois pushes dispararam sozinhos),
+**não é conta** (nada mudou em Settings entre um caso e outro) e **não é o jogo**. É o Pages
+do lado do GitHub, e o comportamento varia de push para push.
+
+Dois corolários práticos, os dois pagos:
+
+1. **Fila travada ENGOLE o push seguinte** — o Pages não enfileira duas rodadas, então
+   "empurrei de novo e não adiantou" não quer dizer gatilho quebrado.
+2. **A régua de PUBLICADO é o conteúdo SERVIDO.** `git rev-list --left-right` responde `0 0`
+   com o site releases atrás. Custa um `curl` conferir de verdade.
+
+**O que fazer quando isto acontecer:** esperar (destravou sozinho duas vezes), e se depois de
+algumas horas não tiver ido, **Actions → re-run** na última rodada, ou **Settings → Pages**
+reconfirmando *Deploy from a branch → main → / (root)*. É conta, não código.
+
+<details><summary>o registro do dia em que pareceu resolvido</summary>
+
+O site no ar era a **v4.2.0**: `sw.js` publicado `d0b4c9bb11d2`, idêntico ao local, com 21
+ocorrências de `JOGOS`, o `abasJogos`, o `baralho40` e o "Truco Paulista" no HTML servido, e
+o `test-online` passando contra o `github.io`. **Não houve conserto do nosso lado** — a fila
+do Pages destravou sozinha.
 
 O que aconteceu, na ordem, porque a sequência é a informação:
 
@@ -791,10 +824,11 @@ Se depois de algumas horas a rodada continuar `queued` ou tiver sumido, aí sim 
 / (root)*. `gh` não está instalado nesta máquina; a API pública responde sem autenticação.
 
 </details>
+</details>
 
 **E o jogo nunca dependeu disso para ser testado:** o `index.html` abre por duplo-clique, com
 tudo dentro. Só o modo online precisa de `http(s)` — para isso, `npm run servir`. Foi por isso
-que as oito suítes rodaram inteiras com o site no ar três releases atrás.
+que as suítes rodaram inteiras com o site no ar três releases atrás.
 
 ---
 
