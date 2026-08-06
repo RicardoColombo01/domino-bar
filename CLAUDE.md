@@ -8,7 +8,7 @@ Paulista** já tem aba, nome e regras à mostra, faltando o motor. No ar em
 Sem framework, sem bundler, e **dois binários** — os ícones do aplicativo, exigidos pelo
 manifest: madeira, pintas e sons continuam gerados em canvas e WebAudio na hora. Three.js e
 PeerJS vêm de CDN, e o **service worker os guarda**, então depois de uma partida o jogo abre
-sem internet. **7.058 linhas** no total (`src/js` + `src/pagina.html` + `src/css/estilo.css`
+sem internet. **7.499 linhas** no total (`src/js` + `src/pagina.html` + `src/css/estilo.css`
 + `src/sw.js`), conferido em 06/08/2026 — este número **envelhece**, e envelheceu: ficou
 dizendo 2.100 por três releases seguidas.
 
@@ -24,6 +24,7 @@ npm run check     avisa se o index.html OU o sw.js estão desatualizados
 npm test          build + o acoplamento, as cartas e as três suítes de lógica
 npm run acoplamento  a casa alcança ZERO nomes de jogo (varredura por AST, instantânea)
 npm run cartas    o baralho de 40 e a carta 3D, no terminal
+npm run truco     as regras e o motor do truco, no terminal (185 asserções)
 npm run app       build + manifest, ícones e o jogo abrindo COM A REDE DESLIGADA (~30 s)
 npm run icones    regera icone-192.png e icone-512.png a partir de src/icone.svg
 npm run telas     build + o jogo em seis tamanhos de tela (retrato, paisagem, tablet, wide)
@@ -166,6 +167,8 @@ src/icone.svg                    a fonte dos dois PNG do manifest
 10-casa/070-cena         renderer, câmera, luz de boteco, mesa, tralhas
 30-domino/080-peca3d     geometria + atlas de pintas em canvas + fantasma
 40-cartas/085-carta3d    a carta 3D: atlas de 40 células (10 valores × 4 naipes)  ← BIBLIOTECA
+50-truco/510-regras      força, manilha, quem ganha a vaza, o melou, a aposta   ← puro
+50-truco/520-partida     vazas, aposta, mão de 11, placar, visaoDoTruco
 30-domino/090-tabuleiro  reconcilia o tabuleiro com a visão; prévia da jogada
 30-domino/100-mao        sua mão em leque, mãos dos outros, monte
 30-domino/110-interacao  raycast: escolher → ver → confirmar
@@ -181,7 +184,14 @@ src/icone.svg                    a fonte dos dois PNG do manifest
 — 2º tempo: CADA JOGO SE REGISTRA ——————————————————————————————————————————
 30-domino/300-registro   o contrato do dominó: motor, mesa, toque, bot, menu, painel,
                          regras (o texto que o menu mostra) e a ponte das suítes
-50-truco/500-registro    nome, resumo e regras — e `emBreve`, que o separa de JOGÁVEL
+50-truco/590-registro    nome, resumo e regras — e `emBreve`, que o separa de JOGÁVEL
+
+**O REGISTRO É O ÚLTIMO ARQUIVO DO JOGO**, e o número 590 (era 500) é o preço de descobrir
+isso: registro é executado NA HORA em que é concatenado, e a partir da Fase 4 ele cita
+`MODOS_TRUCO`, um `const` do `510-regras.js`. `const` antes da declaração é `ReferenceError`,
+não `undefined` — tela preta na carga, e o `node --check` do build não pega, porque a sintaxe
+está perfeita. O dominó já obedecia à regra sem ninguém tê-la escrito (registro em 300,
+arquivos até 135). **Função é içada e sobrevive à ordem; tabela não.**
 
 — 3º tempo: ARRANCAR ———————————————————————————————————————————————————————
 10-casa/900-arranque     monta as abas, abre o jogo escolhido, enquadra, liga o loop
@@ -476,6 +486,22 @@ por mutação nas quatro direções, inclusive as duas de falso positivo.
   continuava com o `<h1>Dominó de Bar</h1>`, os três botões de modo escritos à mão e as doze
   linhas de regra. **O teste dizia zero e estava certo; a pergunta é que era estreita.**
   Ao auditar a fronteira casa/jogo, olhe também o HTML e o CSS.
+- **O REGISTRO DE UM JOGO É O ÚLTIMO ARQUIVO DELE.** Registro executa na hora em que é
+  concatenado; um `const` citado antes da declaração é `ReferenceError`, e o `node --check`
+  do build **não pega** porque a sintaxe está perfeita. Tela preta na carga. Função é içada e
+  sobrevive à ordem — tabela não. O do truco foi de 500 para 590 no dia em que passou a citar
+  `MODOS_TRUCO`.
+- **Asserção vermelha nem sempre acusa o CÓDIGO.** Duas desta sessão reprovaram por causa do
+  teste: uma pedia truco fora da vez (o motor recusou, e recusar estava certo) e a outra media
+  o abridor DEPOIS do giro. Antes de consertar o jogo, pergunte se o teste olhou na hora certa
+  e pelo caminho certo — é a mesma disciplina de "medir antes de consertar", virada para
+  dentro.
+- **Asserção que desreferencia campo opcional trunca a suíte sob MUTAÇÃO.** `P.resultado.motivo`
+  é seguro no caminho feliz e explode quando a mutação faz a mão não fechar — e aí a
+  conferência sub-relata, exatamente como o arquivo já registrava. O conserto é barato
+  (`(P.resultado || {}).motivo`) e a regra é: **em suíte que vai ser mutada, toda asserção tem
+  de sobreviver ao objeto ausente.** Duas mutações desta sessão só mostraram o número certo
+  depois disso.
 - **"Está desenhado" não é "está desenhado CERTO", e a diferença some no antialiasing.** O
   naipe de paus nasceu com as três folhas se tocando exatamente no centro — um furo de um
   pixel bem no meio da figura. A olho não aparece; quem viu foi a asserção do atlas
@@ -810,7 +836,7 @@ está. Um `Set-Location` que falhou fez o comando seguinte criar a branch no wor
 | ✔ Fase 2 | **a aba de escolher o jogo** (v4.1.0) |
 | ✔ Fase 3 | **`40-cartas/`** — o baralho de 40 e a carta 3D (v4.2.0) |
 | ✔ o melou | decidido: empataram as três vazas, **a mão morre** |
-| ⏳ Fase 4 | `50-truco/` — o Paulista, com a `barraDoJogo` que ficou de fora da Fase 1 — **É AQUI QUE SE RETOMA** |
+| ◐ Fase 4 | `50-truco/` — **o CÉREBRO está pronto** (regras + motor, v4.3.0); falta o CORPO |
 | ⏳ Fase 5 | o aplicativo: APK no GitHub Releases + Amazon Appstore |
 
 **O que a Fase 2 entregou, e o que ela obrigou a decidir:**
@@ -867,6 +893,38 @@ está. Um `Set-Location` que falhou fez o comando seguinte criar a branch no wor
   perdidos amanhã — como os da Fase 1). O que fica é o registro: o `test-acoplamento` foi
   conferido em 4 mutações (2 de acoplamento real, 2 de falso positivo) e as asserções da
   Fase 2 em 5, cada uma matando exatamente a sua.
+
+#### A FASE 4, ao meio — o que está pronto e o que falta
+
+**É AQUI QUE SE RETOMA.** O truco tem cérebro e não tem corpo, e a divisão é de propósito: o
+que dá para provar no terminal foi escrito e provado primeiro, porque é onde um erro custa
+segundos. O `emBreve` do registro **continua lá**, e tem de continuar — não dá para sentar.
+
+| | |
+|---|---|
+| ✔ `510-regras.js` | força, manilha (com a volta cíclica), o melou, a escada da aposta — **puro** |
+| ✔ `520-partida.js` | vazas, pedido/aceita/corre, mão de 11, placar, `visaoDoTruco` |
+| ✔ `tests/test-truco.mjs` | **185 asserções**, dez mutações, 60 partidas de varredura |
+| ⏳ `530-bot.js` | jogar E apostar. A decisão de aposta é a parte nova e a mais difícil |
+| ⏳ `540-layout.js` | onde cada carta cai — **puro**, como o `060-layout` do dominó |
+| ⏳ `550-mesa.js` | sincronizar/animar em 3D, usando o `40-cartas/` que já existe |
+| ⏳ `560-interacao.js` | escolher → ver → confirmar |
+| ⏳ `barraDoJogo` | o encaixe do HUD para trucar/aceitar/correr. **Agora dá para desenhá-lo** |
+| ⏳ o registro | tirar o `emBreve` e pendurar motor/mesa/toque/bot/menu — é a última linha |
+
+**A `barraDoJogo` deixou de ser chute**, que era o motivo de ela ter ficado de fora da Fase 1:
+`acoesDoTruco` já diz exatamente o que o botão precisa saber — `trucar` é um número ou `null`,
+`aceitar` e `correr` são booleanos, e `NOME_DA_APOSTA[valor]` é o texto ("truco", "seis"). O
+encaixe pode ser tão pequeno quanto *"o jogo devolve uma lista de botões; a casa desenha"*.
+
+**Duas armadilhas já mapeadas para quando o corpo chegar:**
+
+1. **A vira é PÚBLICA e precisa aparecer na mesa.** Ela não é a mão de ninguém — é a única
+   carta que a `visaoDe` de todos carrega. O 3D tem de desenhá-la, senão o jogador não sabe
+   qual é a manilha e o jogo fica ilegível.
+2. **A mesa do truco ESVAZIA a cada vaza.** No dominó a linha só cresce; aqui as cartas saem
+   da mesa três vezes por mão. O `sincronizar` tem de tratar remoção, que é um caminho que o
+   `090-tabuleiro.js` nunca precisou ter.
 
 #### O que a Fase 4 herda pronto
 
