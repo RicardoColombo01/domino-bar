@@ -154,10 +154,10 @@ src/sw.js                        o molde do service worker, com __VERSAO__
 src/icone.svg                    a fonte dos dois PNG do manifest
 
 — 1º tempo: A CASA DECLARA ————————————————————————————————————————————————
-10-casa/010-constantes   JOGOS/JOGO/jogavel, cores, movimento reduzido, guardar/lido/
-                         esquecer — e as chaves POR JOGO (mesa, partida) mais a migração
+10-casa/010-constantes   JOGOS/JOGO/jogavel, cores, movimento reduzido, EMBARALHAR,
+                         guardar/lido/esquecer — e as chaves POR JOGO mais a migração
 30-domino/015-constantes peça, MODOS, pontuação, medidas do tabuleiro
-30-domino/020-baralho    embaralhar, distribuir (com re-embaralho), quem abre, sobraDoBaralho
+30-domino/020-baralho    distribuir (com re-embaralho), quem abre, sobraDoBaralho
 30-domino/030-regras     encaixes, pontas, jogadas válidas, tipo de batida     ← puro
 30-domino/040-partida    turnos, compra, passe, placar, visaoDe()
 40-cartas/045-baralho    naipes, valores, o baralho de 40, distribuir       ← puro, BIBLIOTECA
