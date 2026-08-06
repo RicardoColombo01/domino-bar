@@ -10,12 +10,14 @@ import { installStubs, seedRandom, buildModule } from './harness.mjs';
 installStubs();
 seedRandom(11);
 const mod = await import(buildModule([
-  'VALORES', 'NAIPES', 'baralho40', 'chaveCarta', 'nomeDaCarta',
+  'VALORES', 'NAIPES', 'baralho40', 'chaveCarta', 'nomeDaCarta', 'mesmaCarta',
   'ORDEM_TRUCO', 'manilhaDaVira', 'forcaDaCarta', 'compararCartas', 'postoDaCarta',
   'vencedorDaVaza', 'donoDaMao', 'VALORES_DA_APOSTA', 'proximaAposta', 'NOME_DA_APOSTA',
   'MODOS_TRUCO', 'MODO_PADRAO_TRUCO',
   'novaPartidaDoTruco', 'novaMaoDoTruco', 'acoesDoTruco', 'jogarCarta', 'visaoDoTruco',
   'trucar', 'aceitarTruco', 'correrDoTruco', 'decidirOnze', 'abandonarOTruco', 'timeNoTruco',
+  'NIVEIS_TRUCO', 'poderDaCarta', 'poderDaMao', 'escolherCarta', 'querTrucar',
+  'responderAposta', 'avaliarAposta', 'informacaoDoTruco', 'jogadaDoBotNoTruco', 'dicaDoTruco',
 ]));
 
 let falhas = 0, n = 0;
@@ -522,6 +524,178 @@ console.log('\nmil mãos bot×bot, sem estourar e sem travar');
   ok(melou > 0, 'nenhuma vaza empatou em centenas de mãos — o melou não existe mais');
   console.log(`  60 partidas · ${maos} mãos · ${lances} cartas · ${correu} corridas · ` +
     `${entregou} entregas · ${melou} vazas empatadas · 0 travadas`);
+}
+
+// ═══ O BOT ══════════════════════════════════════════════════════════════════
+console.log('\no poder de uma carta, e o de uma mão');
+{
+  const man = iv('Q');                                  // virou 7 → manilha Q
+  // A ESCALA APERTA AS DUAS FAIXAS. `forcaDaCarta` é boa para comparar e péssima para somar
+  // (100 contra 9); `poderDaCarta` é o contrário. Ordem preservada, distâncias comprimidas.
+  ok(mod.poderDaCarta(c('Q', 'paus'), man) > mod.poderDaCarta(c('3', 'paus'), man),
+    'a manilha devia ter mais poder que o 3');
+  ok(mod.poderDaCarta(c('3', 'ouros'), man) > mod.poderDaCarta(c('4', 'paus'), man),
+    'o 3 devia ter mais poder que o 4');
+  ok(mod.poderDaCarta(c('4', 'ouros'), man) === 0, 'a carta mais fraca devia valer 0');
+  ok(mod.poderDaCarta(c('Q', 'paus'), man) <= 1, 'nenhuma carta pode passar de 1');
+  // O NAIPE só separa manilhas, aqui também.
+  ok(mod.poderDaCarta(c('3', 'paus'), man) === mod.poderDaCarta(c('3', 'ouros'), man),
+    'duas cartas comuns iguais deviam ter o mesmo poder');
+
+  // A mão de três manilhas contra a mão de três lixos.
+  const otima = mod.poderDaMao([c('Q', 'paus'), c('3', 'paus'), c('2', 'copas')], man);
+  const pessima = mod.poderDaMao([c('4', 'ouros'), c('5', 'ouros'), c('6', 'ouros')], man);
+  ok(otima > 0.8, `a mão com manilha e dois altos devia ser forte, deu ${otima.toFixed(2)}`);
+  ok(pessima < 0.25, `a mão de 4-5-6 devia ser fraca, deu ${pessima.toFixed(2)}`);
+  // UMA MANILHA SOZINHA levanta a mão mais do que a média sugere: ela ganha uma vaza
+  // inteira, e uma vaza é um terço da mão.
+  const soManilha = mod.poderDaMao([c('Q', 'paus'), c('4', 'ouros'), c('5', 'ouros')], man);
+  const mediaCrua = (mod.poderDaCarta(c('Q', 'paus'), man) + 0 + mod.poderDaCarta(c('5', 'ouros'), man)) / 3;
+  ok(soManilha > mediaCrua, 'a manilha sozinha devia pesar mais que a média crua');
+  console.log(`  Q♣ ${mod.poderDaCarta(c('Q', 'paus'), man).toFixed(2)} · ` +
+    `3 ${mod.poderDaCarta(c('3', 'ouros'), man).toFixed(2)} · 4 0.00 · ` +
+    `mão ótima ${otima.toFixed(2)} × péssima ${pessima.toFixed(2)}`);
+}
+
+console.log('\nque carta o bot joga');
+{
+  const P = mod.novaPartidaDoTruco(mesa(4));
+  P.manilha = iv('Q');
+  const time = c => c % 2;
+  const info = c2 => Object.assign(mod.informacaoDoTruco(P, 0, mod.NIVEIS_TRUCO.dificil), c2);
+
+  // GANHA COM A MAIS BARATA QUE GANHA. Matar um 4 com manilha é jogar a mão fora.
+  P.mesa = [{ cadeira: 1, carta: c('4', 'ouros') }];
+  let e = mod.escolherCarta([c('Q', 'paus'), c('5', 'ouros'), c('3', 'paus')], info({ mesa: P.mesa }), time);
+  ok(mod.mesmaCarta(e.carta, c('5', 'ouros')),
+    `devia ganhar com o 5 e escolheu ${mod.nomeDaCarta(e.carta)}`);
+
+  // NÃO DÁ PARA GANHAR: descarta a pior.
+  P.mesa = [{ cadeira: 1, carta: c('Q', 'paus') }];
+  e = mod.escolherCarta([c('4', 'ouros'), c('7', 'ouros'), c('3', 'paus')], info({ mesa: P.mesa }), time);
+  ok(mod.mesmaCarta(e.carta, c('4', 'ouros')),
+    `devia descartar o 4 e escolheu ${mod.nomeDaCarta(e.carta)}`);
+
+  // O SÓCIO ESTÁ GANHANDO: não passe por cima dele. É o erro mais caro de um bot de dupla.
+  P.mesa = [{ cadeira: 2, carta: c('3', 'paus') }];    // cadeira 2 é do time da cadeira 0
+  e = mod.escolherCarta([c('Q', 'paus'), c('4', 'ouros')], info({ mesa: P.mesa }), time);
+  ok(mod.mesmaCarta(e.carta, c('4', 'ouros')),
+    `o parceiro estava ganhando e o bot gastou ${mod.nomeDaCarta(e.carta)}`);
+
+  // SAINDO, sai forte — e a primeira vaza vale mais NESTA CASA, porque é o desempate.
+  e = mod.escolherCarta([c('4', 'ouros'), c('3', 'paus'), c('5', 'ouros')],
+    info({ mesa: [], vazas: [] }), time);
+  ok(mod.mesmaCarta(e.carta, c('3', 'paus')),
+    `saindo devia sair forte e saiu com ${mod.nomeDaCarta(e.carta)}`);
+
+  // E TODA ESCOLHA VEM COM PORQUÊ, porque é o que a dica mostra a quem está aprendendo.
+  ok(e.porques.length > 0 && e.porques.every(p => p.texto), 'a escolha veio sem porquê');
+  console.log(`  ganha com a mais barata · descarta a pior · não atropela o sócio · sai forte na 1ª`);
+}
+
+console.log('\nquando o bot aposta');
+{
+  const P = mod.novaPartidaDoTruco(mesa(2));
+  P.manilha = iv('Q');
+  const info = mod.informacaoDoTruco(P, 0, mod.NIVEIS_TRUCO.normal);
+  const OTIMA = [c('Q', 'paus'), c('3', 'paus'), c('2', 'copas')];
+  const PESSIMA = [c('4', 'ouros'), c('5', 'ouros'), c('6', 'ouros')];
+
+  ok(mod.querTrucar(OTIMA, info, 3), 'com manilha e dois altos o bot devia trucar');
+  ok(!mod.querTrucar(PESSIMA, info, 3), 'com 4-5-6 o bot não devia trucar');
+  // O LIMIAR SOBE COM A APOSTA, e provar isso exige uma mão NO MEIO — uma que passe no
+  // limiar do truco e não passe no do doze. A primeira versão usava uma mão fraca, que é
+  // recusada nos dois mundos: a asserção passava e passaria também com o limiar achatado,
+  // ou seja não media a escada coisa nenhuma. Foi a mutação que contou.
+  const BOA = [c('Q', 'ouros'), c('3', 'ouros'), c('7', 'ouros')];   // a manilha mais fraca
+  const pBoa = mod.poderDaMao(BOA, info.manilha);
+  ok(pBoa > 0.58 && pBoa < 0.82, `a mão do meio saiu em ${pBoa.toFixed(2)} e precisa ficar entre 0.58 e 0.82`);
+  ok(mod.querTrucar(BOA, info, 3), 'com manilha de ouros e um 3 o bot devia pedir truco');
+  ok(!mod.querTrucar(BOA, info, 12), 'a MESMA mão não pode pedir doze — é a escada em número');
+
+  // CORRER É BARATO, ACEITAR É CARO — e por isso o limiar de aceitar é mais BAIXO que o de
+  // pedir. Um bot com os dois iguais correria de mãos boas.
+  ok(mod.responderAposta(OTIMA, info, { valor: 3 }) !== 'correr', 'não se corre com mão ótima');
+  ok(mod.responderAposta(PESSIMA, info, { valor: 3 }) === 'correr', 'com 4-5-6 devia correr');
+  // AUMENTAR é um ramo que não roda sozinho, e a primeira versão desta asserção usava a mão
+  // "ótima" (0.84) contra um limiar de 0.86 — ou seja, media o NÚMERO e não o mecanismo, e
+  // reprovava com o bot certíssimo. Aqui vai a mão imbatível: TRÊS manilhas, que existem
+  // (são quatro no baralho). Se nem com ela o bot sobe, o ramo está morto.
+  const NUTS = [c('Q', 'paus'), c('Q', 'copas'), c('Q', 'espadas')];
+  ok(mod.poderDaMao(NUTS, info.manilha) > 0.9, 'três manilhas deviam ser quase 1');
+  ok(mod.responderAposta(NUTS, info, { valor: 6 }) === 'aumentar',
+    'com três manilhas o bot devia subir de 6 para 9');
+  // A mão MÉDIA aceita o truco e não pede: é a assimetria em número.
+  const MEDIA = [c('3', 'ouros'), c('K', 'paus'), c('6', 'ouros')];
+  ok(!mod.querTrucar(MEDIA, info, 3) && mod.responderAposta(MEDIA, info, { valor: 3 }) === 'aceitar',
+    'a mão média devia aceitar sem pedir — se pede e aceita no mesmo limiar, algo está errado');
+
+  // DESESPERO: perdendo feio, a mesma mão vale mais.
+  const atras = Object.assign({}, info, { placar: [0, 8] });
+  ok(mod.avaliarAposta(MEDIA, atras) > mod.avaliarAposta(MEDIA, info),
+    'perdendo de 8 a 0 a mesma mão devia valer mais — não ter nada a perder é informação');
+  console.log('  truca com mão boa · corre com lixo · aceita com média · arrisca mais perdendo');
+}
+
+console.log('\no bot não trapaceia: a dica sai da VISTA');
+{
+  // A MESMA PROPRIEDADE DO DOMINÓ, e ela não é escrúpulo: se a dica precisasse de um campo
+  // que a visão não tem, isso seria PROVA de que o bot olha a mão dos outros.
+  const P = mod.novaPartidaDoTruco(mesa(2));
+  P.vez = 0; P.saiu = 0;
+  const v = mod.visaoDoTruco(P, 0);
+  const d = mod.dicaDoTruco(v);
+  ok(d && d.acao === 'jogar' && d.carta, 'a dica não sugeriu jogada nenhuma na vez do jogador');
+  ok(v.mao.some(x => mod.mesmaCarta(x, d.carta)), 'a dica sugeriu uma carta que não está na sua mão');
+  ok(d.porques.length > 0, 'a dica veio sem porquê — é metade do que ela serve');
+  // FORA DA VEZ não há o que sugerir: prometer jogada que o motor recusa é pior que calar.
+  ok(mod.dicaDoTruco(mod.visaoDoTruco(P, 1)) === null, 'a dica falou fora da vez');
+  ok(mod.dicaDoTruco(null) === null, 'a dica estourou com vista nula');
+  console.log(`  sugeriu ${mod.nomeDaCarta(d.carta)} · ${d.porques.length} porquê(s) · cala fora da vez`);
+}
+
+console.log('\no difícil ganha do fácil');
+{
+  // A ÚNICA ASSERÇÃO DE QUALIDADE do truco, irmã da que o dominó tem há oito releases. Ela é
+  // o que defende os limiares do bot: eles são chute calibrado, e o que os justifica não é a
+  // escolha do número — é isto continuar verde depois de mexerem neles.
+  //
+  // LIMIAR e não número fixo (`> 2σ`), pelo mesmo motivo do dominó: a força muda quando uma
+  // regra muda, e um número cravado transformaria toda mudança de regra em falso alarme.
+  seedRandom(4242);
+  let venceDificil = 0, venceFacil = 0, travadas = 0;
+  const N = 400;
+  for (let p = 0; p < N; p++) {
+    // Alterna quem senta na cadeira 0, senão a vantagem da saída vira a do nível.
+    const dOndeEsta = p % 2;
+    const cad = [0, 1].map(i => ({ nome: 'C' + i, tipo: 'bot', nivel: i === dOndeEsta ? 'dificil' : 'facil' }));
+    const P = mod.novaPartidaDoTruco(cad);
+    let guarda = 0;
+    while (P.fase !== 'fim' && guarda++ < 3000) {
+      if (P.fase === 'fimDeMao') { mod.novaMaoDoTruco(P); continue; }
+      const i = mod.jogadaDoBotNoTruco(P, P.vez);
+      if (!i) { travadas++; break; }
+      if (i.acao === 'jogar') mod.jogarCarta(P, P.vez, i.carta);
+      else if (i.acao === 'trucar' || i.acao === 'aumentar') mod.trucar(P, P.vez);
+      else if (i.acao === 'aceitar') mod.aceitarTruco(P, P.vez);
+      else if (i.acao === 'correr') mod.correrDoTruco(P, P.vez);
+      else if (i.acao === 'onze') mod.decidirOnze(P, P.vez, i.jogar);
+      else { travadas++; break; }
+    }
+    if (P.fase !== 'fim') { travadas++; continue; }
+    const campeao = P.placar[0] >= P.placar[1] ? 0 : 1;
+    if (campeao === dOndeEsta) venceDificil++; else venceFacil++;
+  }
+  ok(travadas === 0, `${travadas} partida(s) travaram com bots de verdade jogando`);
+  const jogadas = venceDificil + venceFacil;
+  ok(jogadas > N * 0.9, `só ${jogadas} das ${N} partidas terminaram`);
+  // 2σ de uma binomial justa: quantas vitórias a mais que a metade seriam sorte.
+  const sigma = Math.sqrt(jogadas) / 2;
+  const vantagem = (venceDificil - jogadas / 2) / sigma;
+  ok(vantagem > 2,
+    `o difícil ganhou ${venceDificil} × ${venceFacil} — ${vantagem.toFixed(1)}σ, e abaixo de 2σ é sorte`);
+  console.log(`  ${venceDificil} × ${venceFacil} em ${jogadas} partidas · ` +
+    `${(100 * venceDificil / jogadas).toFixed(1)}% · ${vantagem.toFixed(1)}σ`);
 }
 
 console.log(`\n${falhas ? falhas + ' falha(s)' : 'tudo certo'} — ${n} asserções`);
