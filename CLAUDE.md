@@ -889,10 +889,19 @@ está. Um `Set-Location` que falhou fez o comando seguinte criar a branch no wor
   ela estava certa — a pergunta é que era estreita.
 - **O dublê do harness ganhou `location.search` e `history`** — e o `history` **grava** as
   trocas. Ver a armadilha do dublê, lá em cima: é a décima primeira.
-- **As mutações desta sessão estão em dois scripts de uma vez só** (scratchpad, e portanto
-  perdidos amanhã — como os da Fase 1). O que fica é o registro: o `test-acoplamento` foi
-  conferido em 4 mutações (2 de acoplamento real, 2 de falso positivo) e as asserções da
-  Fase 2 em 5, cada uma matando exatamente a sua.
+- **`tests/test-cartas.mjs`** (`npm run cartas`) e **`tests/test-truco.mjs`** (`npm run truco`),
+  os dois no `npm test`. Instantâneos, sem navegador. O do truco tem uma **varredura de 60
+  partidas** que existe para caçar o defeito que caso escrito à mão não pega: estado de onde
+  não se sai. Mesa parada, sem mensagem e sem botão, é o que mais dói neste projeto.
+- **As mutações desta sessão viveram em scripts de uma vez só** (scratchpad, e portanto
+  perdidos amanhã — como os da Fase 1). O que fica é o número: `test-acoplamento` conferido em
+  6 mutações (4 de acoplamento real, 2 de falso positivo), a Fase 2 em 5, as cartas em 7 e o
+  truco em **19**. Cada uma matando exatamente a sua.
+
+  **E duas delas ensinaram mais que o conserto:** uma mutação matou o PROCESSO em vez de
+  reprovar (a suíte sub-relatou 0 asserções onde havia 10), e outra revelou que o motor
+  estourava com cadeira fora da faixa. **Mutação não confere só a asserção — ela exercita o
+  código por caminhos que o caminho feliz nunca toca.**
 
 #### A FASE 4, ao meio — o que está pronto e o que falta
 
