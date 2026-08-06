@@ -455,6 +455,15 @@ por mutação nas quatro direções, inclusive as duas de falso positivo.
   continuava com o `<h1>Dominó de Bar</h1>`, os três botões de modo escritos à mão e as doze
   linhas de regra. **O teste dizia zero e estava certo; a pergunta é que era estreita.**
   Ao auditar a fronteira casa/jogo, olhe também o HTML e o CSS.
+- **`var(--que-nao-existe)` NÃO pinta de errado — ele invalida a declaração inteira, e a
+  propriedade cai na herança.** A faixa de abas nasceu com `color: var(--marfim)`, que é uma
+  cor do 3D (`CORES.marfim`, em JS) e nunca existiu no CSS; o texto ficou com a cor certa por
+  acidente, porque o que ela herda calha de ser `--texto`. Defeito escondido atrás de um
+  acidente é o que dura. A conferência custa uma linha e vale como hábito:
+  ```
+  grep -o "var(--[a-z-]*)" src/css/estilo.css | sed 's/.*var(//;s/)//' | sort -u \
+    | while read v; do grep -q -- "  $v:" src/css/estilo.css || echo "NAO DECLARADA: $v"; done
+  ```
 - **Uma tela que é `display: flex` em LINHA não aceita um irmão novo sem mudar de layout.**
   Pôr a faixa de abas ao lado da `.carta` a jogaria para a esquerda dela — e trocar o
   `flex-direction` do `.tela` teria mexido no `margin: auto` que conserta o topo inalcançável
@@ -755,6 +764,22 @@ worktree        ../domino-bar-jogos   branch v4.1   ← o trabalho desta sessão
   perdidos amanhã — como os da Fase 1). O que fica é o registro: o `test-acoplamento` foi
   conferido em 4 mutações (2 de acoplamento real, 2 de falso positivo) e as asserções da
   Fase 2 em 5, cada uma matando exatamente a sua.
+
+#### O que a Fase 3 herda pronto
+
+Quando o `40-cartas/` chegar, estas coisas **já existem** e não devem ser reinventadas:
+
+- **A carta 3D não precisa de encaixe novo no menu.** Título, resumo, regras e os botões de
+  modo já saem do registro; um jogo de carta preenche os mesmos campos.
+- **O `emBreve` sai do `50-truco/500-registro.js` quando o motor entrar**, e é a linha que
+  transforma a aba de vitrine em mesa. Enquanto ela existir, `jogavel()` é falso e a casa não
+  monta mesa nenhuma — nada mais precisa mudar.
+- **`CHAVES_DO_JOGO` já cobre o truco:** a mesa e a partida dele vão para `mesa.truco` e
+  `partida.truco` sem uma linha nova.
+- **O que AINDA falta e está previsto:** a `barraDoJogo` (o `#acoes` tem "Comprar" e "Passar"
+  escritos à mão, e truco precisa de trucar/aceitar/correr/aumentar) e o segundo atalho do
+  manifest. Os dois entram junto com o motor, e não antes: sem o truco escrito, a forma deles
+  seria chute.
 
 ---
 
