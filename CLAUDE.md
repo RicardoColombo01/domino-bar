@@ -943,14 +943,16 @@ Quando o truco chegar, estas coisas **já existem** e não devem ser reinventada
   `cartaValida` (que é o `jogadaDoFio` do truco de graça), `criarCarta`, `criarVersoDeCarta`,
   `criarFantasmaDeCarta` e `faceDaCarta`. **A biblioteca não sabe o que é manilha**, e não
   pode passar a saber: o `test-acoplamento` reprova biblioteca alcançando nome de jogo.
-- **A ORDEM DE FORÇA é do truco e nasce lá.** `VALORES` está em ordem de baralho (A 2 3 4 5 6
-  7 Q J K), não de força (4 5 6 7 Q J K A 2 3). O desempate entre manilhas
-  (ouros < espadas < copas < paus) *calha* de ser a ordem de `NAIPES`, e isso é coincidência
-  — quem depender dela está lendo regra de truco de dentro da pasta errada.
+- **A ORDEM DE FORÇA é do truco e JÁ NASCEU LÁ** (`ORDEM_TRUCO`, em `510-regras.js`).
+  `VALORES` está em ordem de baralho (A 2 3 4 5 6 7 Q J K), não de força. E o desempate entre
+  manilhas está em `FORCA_NAIPE`, declarado por **id** e não pela posição em `NAIPES` — a
+  ordem daquele array calha de ser a mesma, e depender dela seria ler regra de truco de dentro
+  da pasta das cartas.
 - **`window.__cartas` SOME nesta fase.** É bancada temporária para as suítes; quando o truco
   tiver `JOGO.ponte`, as cartas entram lá, como as peças do dominó.
 - **A aba não precisa de nada.** `jogavel()` passa a ser verdadeiro só de tirar a linha
-  `emBreve` do `50-truco/500-registro.js`, e o menu monta sozinho a partir de `menu.MODOS`.
+  `emBreve` do `50-truco/590-registro.js`, e o menu monta sozinho a partir de `menu.MODOS` —
+  que já existe (`MODOS_TRUCO`, com `cadeiras: [2, 4]`; três não fecha dois times).
 - **`CHAVES_DO_JOGO` já cobre o truco:** a mesa e a partida dele vão para `mesa.truco` e
   `partida.truco` sem uma linha nova.
 - **O que AINDA falta e está previsto:** a `barraDoJogo` (o `#acoes` tem "Comprar" e "Passar"
