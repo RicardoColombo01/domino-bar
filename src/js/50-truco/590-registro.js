@@ -30,8 +30,8 @@ JOGOS.truco = {
   // O QUE FALTA, dito na tela em vez de escondido. Botão apagado sem explicação é o jogo
   // emudecendo, e esta casa já pagou por isso duas vezes (a compra livre no Duelo, o
   // `selecionarPeca` que desistia calado).
-  emBreve: 'O truco ainda não senta nesta mesa. As cartas e as regras vêm nas próximas duas '
-    + 'ondas; o online, a conversa e as cadeiras já estão prontos e ele herda os três.',
+  emBreve: 'As cartas e as regras já estão de pé — falta a mesa em 3D, o bot e a barra de '
+    + 'apostas. O online, a conversa e as cadeiras ele herda prontos da casa.',
 
   // As regras que VÃO valer. Ficam aqui, e não no HTML da casa, pelo mesmo motivo que as do
   // dominó saíram de lá: `src/pagina.html` é da casa, e a casa não sabe que jogo está na mesa.

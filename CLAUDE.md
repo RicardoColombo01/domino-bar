@@ -844,7 +844,7 @@ está. Um `Set-Location` que falhou fez o comando seguinte criar a branch no wor
 | | |
 |---|---|
 | a faixa | `10-casa/141-abas.js`, montada de `JOGOS` — escrever "Dominó \| Truco" no HTML seria o acoplamento voltando pela marcação |
-| o truco | `50-truco/500-registro.js`: nome, resumo, regras e `emBreve`. **REGISTRADO ≠ JOGÁVEL** (`jogavel()`, em 010) |
+| o truco | `50-truco/590-registro.js` (era 500): nome, resumo, regras e `emBreve`. **REGISTRADO ≠ JOGÁVEL** (`jogavel()`, em 010) |
 | a URL | `?jogo=truco` abre o truco. O padrão SAI da URL, para o endereço limpo continuar sendo o de sempre |
 | a escada | URL → preferência → primeiro do balcão. **Os três degraus, e os dois primeiros com `Object.hasOwn`** |
 | as chaves | `mesa` e `partida` viraram `mesa.domino` e `partida.domino` — espiar a aba não custa a partida |
