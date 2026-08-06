@@ -201,7 +201,7 @@ existe mais.
 Sem framework, sem bundler. Madeira, piso, as pintas das peças e todos os sons são gerados
 em código na hora — não há um único `.mp3` no repositório, e os únicos binários são os dois
 ícones do aplicativo, que o manifest exige em arquivo. Three.js e PeerJS vêm de CDN. São
-**6.669 linhas** em `src/`.
+**7.058 linhas** em `src/`.
 
 ```
 src/pagina.html      o molde
@@ -212,8 +212,15 @@ src/js/10-casa/      o que é da CASA e de jogo nenhum: cores, armazenamento, ce
                      áudio, HUD, abas, menu de cadeiras, saguão, rede P2P, loop
 src/js/30-domino/    o que é DOMINÓ: constantes, baralho, regras, partida, bot,
                      layout, peça 3D, tabuleiro, mão, interação, painel de contagem
+src/js/40-cartas/    BIBLIOTECA: naipes, valores, o baralho de 40 e a carta 3D —
+                     o truco paga, o pife e o vinte-e-um herdam
 src/js/50-truco/     o que é TRUCO: por enquanto só o registro — nome, resumo e regras
 ```
+
+São **três espécies de pasta**, e o `test-acoplamento` cobra a diferença: a **casa** não
+alcança nada de fora; um **jogo** se pendura em `JOGOS` e não alcança outro jogo; uma
+**biblioteca** ninguém registra, os jogos a usam, e ela **não alcança jogo nenhum** — a seta
+tem um sentido só, senão um baralho que sabe o que é manilha vira truco disfarçado.
 
 Os números dos arquivos vão **de dez em dez**, e é isso que deixa encaixar um arquivo novo
 entre dois velhos sem renumerar tudo — o número é a ordem de carga.
@@ -246,6 +253,7 @@ npm run check       avisa se o index.html ou o sw.js estão desatualizados
 npm test            build + o acoplamento e as três suítes de lógica (segundos)
 npm run acoplamento a casa alcança ZERO nomes de jogo — varredura por AST, instantânea
                     (traz o `acorn`: rode `cd tests && npm install` uma vez)
+npm run cartas      o baralho de 40 e a carta 3D, no terminal
 npm run app         build + manifest, ícones, e o jogo abrindo COM A REDE DESLIGADA
 npm run icones      regera os dois PNG a partir de src/icone.svg
 npm run telas       build + o jogo em seis tamanhos de tela, dez situações cada
