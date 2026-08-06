@@ -50,7 +50,19 @@ for (const i of manifesto.icons) {
   const arq = path.join(RAIZ, i.src);
   ok(fs.existsSync(arq), `o manifest aponta ${i.src} e o arquivo não existe`);
 }
-console.log(`  ${manifesto.icons.length} ícones declarados, todos em disco · start_url ${manifesto.start_url}`);
+// OS ATALHOS, pela mesma razão do `start_url`: um atalho absoluto aponta para a raiz do
+// domínio, que é 404 numa project page — e ele só é exercitado por quem segura o ícone na
+// tela inicial, ou seja quase nunca. O ícone dele tem de existir pelo mesmo motivo do de
+// cima. E o `url` tem de conter o `?jogo=`, senão o atalho é um segundo botão que faz
+// exatamente o que o primeiro já fazia.
+for (const a of manifesto.shortcuts || []) {
+  ok(a.url.startsWith('./'), `o atalho "${a.name}" tem url absoluta ("${a.url}") — 404 numa project page`);
+  ok(/\?jogo=/.test(a.url), `o atalho "${a.name}" não escolhe jogo nenhum: "${a.url}"`);
+  for (const i of a.icons || [])
+    ok(fs.existsSync(path.join(RAIZ, i.src)), `o atalho "${a.name}" aponta ${i.src} e o arquivo não existe`);
+}
+console.log(`  ${manifesto.icons.length} ícones declarados, todos em disco · start_url ${manifesto.start_url}` +
+  ` · ${(manifesto.shortcuts || []).length} atalho(s)`);
 
 // ─── a versão do cache acompanha o bundle ────────────────────────────────────
 // Cache de service worker que não troca de nome é o defeito mais cruel desta família: o

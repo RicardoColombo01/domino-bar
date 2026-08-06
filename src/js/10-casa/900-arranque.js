@@ -15,42 +15,21 @@
 // depois de tudo existir. Mover o que não precisa ser movido seria trocar risco por nada.
 
 function arrancar() {
-  // 1. QUEM ESTÁ NA MESA. Hoje é sempre o dominó; a aba que deixa o jogador escolher entra
-  //    aqui, e é por isso que a escolha já passa por `trocarDeJogo` em vez de uma atribuição.
-  if (!trocarDeJogo('domino')) throw new Error('nenhum jogo se registrou em JOGOS');
+  // 1. A FAIXA DE ABAS, montada a partir de quem se registrou. Antes de escolher, porque
+  //    `abrirJogo` marca a aba ativa e ela precisa existir para receber a marca.
+  montarAbas();
 
-  // 2. A MESA GUARDADA. Só agora `mesaLembrada()` sabe contra qual tabela de modos validar.
-  //    `Object.assign` e não `MESA = …`: a referência tem de continuar a mesma, porque o
-  //    projeto inteiro lê `MESA.n` direto.
-  Object.assign(MESA, mesaLembrada());
+  // 2. QUEM ESTÁ NA MESA: a URL, senão a preferência, senão o primeiro do balcão. Tudo o que
+  //    era feito aqui — a mesa guardada, os modos, as cadeiras, o botão de retomar e a ponte
+  //    das suítes — mora dentro de `abrirJogo` (141-abas.js), porque a aba faz exatamente a
+  //    mesma coisa e duas cópias da mesma sequência é como o defeito 3 da Fila 6 durou.
+  if (!abrirJogo(jogoEscolhido())) throw new Error('nenhum jogo se registrou em JOGOS');
 
-  // 3. A TELA. Os botões nascem marcados no HTML com o padrão, então sem `refletir` o jogo
-  //    começaria num Trio até 10 enquanto a tela promete Clássico até 6.
-  refletirMesaNosBotoes();
-  ajustarCadeirasAoModo();
-  montarCadeiras();
-
-  // 4. O ENQUADRAMENTO. Depois da mão existir: `enquadrar()` lê a profundidade dela e manda
+  // 3. O ENQUADRAMENTO. Depois de a mão existir: `enquadrar()` lê a profundidade dela e manda
   //    refazer o leque.
   enquadrar();
 
-  // 5. O BOTÃO DE RETOMAR. O menu já nasce visível pelo HTML, então `mostrarTela` nunca roda
-  //    na carga — sem esta chamada o botão só apareceria depois da primeira volta ao menu,
-  //    que é justamente quando ele não serve mais para nada.
-  atualizarBotaoRetomar();
-
-  // 6. O QUE AS SUÍTES ALCANÇAM. A ponte da casa (`window.__jogo`) nasce com o que é da
-  //    casa; o jogo despeja o resto por cima, com as MESMAS chaves de antes — foi assim que
-  //    `grupoMonte` e `naMao` saíram de `160-loop.js` sem uma linha de teste mudar.
-  //
-  //    NÃO É `Object.assign`, e a diferença custou uma reprovação: `Object.assign` INVOCA os
-  //    getters da origem e copia o VALOR. O `get maoNaTela()` da ponte virava uma fotografia
-  //    tirada neste instante — a mão vazia, porque ainda não há partida —, e depois de
-  //    retomar uma partida guardada a suíte via "23 peças na mesa, 0 na sua mão". Copiar os
-  //    DESCRITORES leva o getter inteiro, e ele continua sendo consultado na hora.
-  Object.defineProperties(window.__jogo, Object.getOwnPropertyDescriptors(JOGO.ponte));
-
-  // 7. E O LOOP.
+  // 4. E O LOOP.
   requestAnimationFrame(quadro);
 }
 

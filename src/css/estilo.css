@@ -293,6 +293,52 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
 
    De brinde, o `padding` do scroller volta a valer: hoje ele não protegia nada, porque a
    carta transbordava ACIMA dele. */
+/* O BALCÃO é o item flex de `#telaMenu`: a faixa de abas mais o cartão do jogo. Quem carrega
+   o `margin: auto` do parágrafo acima passa a ser ele — a carta continua com o dela porque as
+   outras seis telas não têm balcão nenhum, e ali ela ainda é o item flex. */
+.balcao { margin: auto; max-width: 620px; width: 100%; }
+
+/* A FAIXA DE ABAS. Encostada no topo do cartão, com a aba ativa se emendando nele: é o que
+   diz, sem legenda, que o cartão é o conteúdo daquela aba.
+
+   LIMITE CONHECIDO: em 360px a faixa tem ~320px, e é por isso que a aba mostra o nome CURTO
+   do jogo ("Dominó", e não "Dominó de Bar"). Com dois jogos sobra folga; com os quatro do
+   plano — dominó, truco, pife, vinte-e-um — ela chega no limite, e aí o conserto é rolagem
+   horizontal e não quebra de linha: a aba ativa se emenda ao cartão, e numa segunda fileira
+   ela se emendaria ao nada. */
+.abas { display: flex; gap: 4px; padding: 0 10px; }
+.abas .aba {
+  font: inherit; font-size: 13.5px; font-weight: 600; color: var(--marfim);
+  background: rgba(22, 14, 9, .72); border: 1px solid var(--borda); border-bottom: none;
+  border-radius: 11px 11px 0 0; padding: 9px 16px 8px; cursor: pointer;
+  opacity: var(--fraco); transition: opacity .12s, background .12s;
+}
+.abas .aba:hover { opacity: .85; }
+/* A aba ativa se funde ao cartão: mesmo fundo do topo do gradiente, e um pixel a mais de
+   altura para tapar a borda de cima dele. */
+.abas .aba.on {
+  opacity: 1; color: var(--ambar-forte);
+  background: rgba(38, 25, 16, .97); border-color: var(--borda);
+  margin-bottom: -1px; padding-bottom: 9px;
+}
+/* O "em breve" é a etiqueta do jogo que ainda não senta, e ela NÃO tem opacidade própria.
+   OPACIDADE DENTRO DE OPACIDADE MULTIPLICA: a aba inativa já está em `--fraco` (.58), e um
+   `.58` aqui dentro daria .34 na tela — abaixo do piso do projeto, e num texto que é
+   informação e não decoração. O que separa a etiqueta do nome é o tamanho e a caixa alta,
+   que não custam contraste nenhum. */
+.abas .aba i {
+  font-style: normal; font-size: 10px; text-transform: uppercase; letter-spacing: .09em;
+  margin-left: 7px;
+}
+
+/* O recado do jogo registrado e ainda não jogável. Cor de aviso e não de erro — não há nada
+   quebrado aqui, há uma coisa que ainda não chegou. */
+.vemAi {
+  margin: 0 0 6px; font-size: 13.5px; line-height: 1.5;
+  border-left: 3px solid var(--ambar); padding: 10px 0 10px 13px;
+  background: rgba(240, 194, 116, .07); border-radius: 0 8px 8px 0;
+}
+
 .carta {
   margin: auto;
   background: linear-gradient(180deg, rgba(38, 25, 16, .97), rgba(22, 14, 9, .97));

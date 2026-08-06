@@ -313,8 +313,10 @@ function guardarPartida() {
   if (!P || modo === 'convidado') return;
   // Partida acabada não é partida para voltar — e deixá-la guardada faria o menu oferecer
   // para sempre a revanche de uma final que você já viu.
-  if (P.fase === 'fim') { esquecer('partida'); return; }
-  guardar('partida', { quando: Date.now(), euNaTela, P: partidaParaGuardar() });
+  if (P.fase === 'fim') { esquecerDoJogo('partida'); return; }
+  // POR JOGO, e não numa chave só: uma partida de dominó em andamento não pode sumir porque
+  // alguém deu uma espiada na aba do truco. Ver `CHAVES_DO_JOGO`, em 010-constantes.js.
+  guardarNoJogo('partida', { quando: Date.now(), euNaTela, P: partidaParaGuardar() });
 }
 
 // Devolve o guardado só se ele ainda serve. Prazo porque uma partida de anteontem não é
@@ -337,7 +339,10 @@ function guardarPartida() {
 // fecha não tem padrão nenhum — meia partida remendada é pior que partida nenhuma. Recusar
 // só esconde o botão de retomar, que é degradação graciosa; o jogo abre normalmente.
 function partidaGuardada() {
-  const g = lido('partida', null);
+  // Jogo sem motor não tem partida para retomar, e nem tabela de modos contra a qual validar
+  // — sem esta linha, a aba do truco derrubaria o menu em `JOGO.menu.MODOS` indefinido.
+  if (!jogavel(JOGO)) return null;
+  const g = lidoDoJogo('partida', null);
   if (!g || !g.P || !g.quando || Date.now() - g.quando > HORAS_GUARDADA * 3600e3) return null;
 
   const p = g.P;

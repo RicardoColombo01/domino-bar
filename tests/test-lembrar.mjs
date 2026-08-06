@@ -21,10 +21,22 @@ const ok = (cond, msg) => { if (!cond) { console.error('  ✗ ' + msg); falhas++
 // Joga por bots até chegar a SUA vez. É o único estado parado que existe numa mesa com
 // bot: `seguirOTurno` só arma temporizador para cadeira de bot, então na sua vez não há
 // nada pendente e o guardado para de mudar debaixo do teste.
+// AS CHAVES SÃO POR JOGO desde a v4.1: `dominobar.mesa` virou `dominobar.mesa.domino`, para
+// que espiar a aba do truco não leve a mesa nem a partida do dominó junto. Elas estão
+// escritas à mão aqui, e não lidas do jogo, de propósito: uma asserção que pergunta ao jogo
+// qual é a chave dele concorda com qualquer resposta, inclusive com a errada.
+const CHAVE_MESA = 'dominobar.mesa.domino';
+const CHAVE_PARTIDA = 'dominobar.partida.domino';
+
 const AJUDA = `
   const j = window.__jogo;
+  // Limpa as novas E as antigas: uma chave antiga esquecida aqui MIGRARIA na próxima carga
+  // e ressuscitaria uma mesa que o teste acabou de apagar.
   const limpar = () => {
-    try { localStorage.removeItem('dominobar.partida'); localStorage.removeItem('dominobar.mesa'); } catch (e) { void e; }
+    try {
+      localStorage.removeItem('${CHAVE_PARTIDA}'); localStorage.removeItem('${CHAVE_MESA}');
+      localStorage.removeItem('dominobar.partida'); localStorage.removeItem('dominobar.mesa');
+    } catch (e) { void e; }
   };
   const soBots = (modo, n) => {
     j.MESA.modo = modo; j.MESA.n = n;
@@ -40,7 +52,7 @@ const AJUDA = `
     }
     return false;
   };
-  const guardado = () => { try { return JSON.parse(localStorage.getItem('dominobar.partida')); } catch (e) { return null; } };
+  const guardado = () => { try { return JSON.parse(localStorage.getItem('${CHAVE_PARTIDA}')); } catch (e) { return null; } };
 `;
 
 const navegador = await puppeteer.launch({
@@ -64,6 +76,13 @@ const abrir = async () => {
 // Recarregar é o que este arquivo testa: é a aba fechada, o erro de script, o celular
 // matando a página. Nada de estado de JavaScript sobrevive — só o localStorage.
 const recarregar = async () => { await pagina.reload({ waitUntil: 'networkidle2', timeout: 45000 }); await pagina.evaluate(AJUDA); };
+// Abrir com uma busca na URL. `?jogo=` é o handle compartilhável da casa de jogos, e é a
+// única entrada do mecanismo que não dá para exercitar recarregando a mesma página.
+const abrirCom = async busca => {
+  await pagina.goto(JOGO + busca, { waitUntil: 'networkidle2', timeout: 45000 });
+  await pagina.waitForFunction('window.__jogo && window.__jogo.pronto', { timeout: 30000, polling: 400 });
+  await pagina.evaluate(AJUDA);
+};
 
 console.log(`testando ${JOGO}`);
 
@@ -93,6 +112,18 @@ try {
       nome.value = 'Bigodinho';
       nome.oninput();
     });
+
+    // A CHAVE, medida direto. Com um jogo jogável só, gravar a mesa na chave comum
+    // continuaria funcionando — a migração a traz de volta a cada carga —, então nenhuma
+    // asserção de COMPORTAMENTO consegue distinguir as duas escritas hoje. A que distingue é
+    // esta, e ela vale até o truco ter motor: aí a mesa dele passaria por cima da do dominó,
+    // e a distinção volta a ser visível de fora.
+    const onde = await pagina.evaluate(() => ({
+      porJogo: localStorage.getItem('dominobar.mesa.domino') !== null,
+      comum: localStorage.getItem('dominobar.mesa') !== null,
+    }));
+    ok(onde.porJogo, 'a mesa não foi guardada na chave DO JOGO (dominobar.mesa.domino)');
+    ok(!onde.comum, 'a mesa foi guardada na chave comum — o truco passaria por cima dela');
 
     await recarregar();
     const m = await pagina.evaluate(() => ({
@@ -129,7 +160,7 @@ try {
       // Um modo que não existe, um número de jogadores impossível, um tipo de cadeira
       // inventado e um nível de bot que ninguém reconhece. É o que sobra de uma versão
       // antiga — ou de alguém mexendo no armazenamento.
-      localStorage.setItem('dominobar.mesa', JSON.stringify({
+      localStorage.setItem('dominobar.mesa.domino', JSON.stringify({
         modo: 'xadrez', n: 9, alvo: 999, compraVoluntaria: 'talvez',
         cadeiras: [{ nome: '', tipo: 'voce' }, { nome: 'x'.repeat(80), tipo: 'trapaceiro', nivel: 'divino' }],
       }));
@@ -169,7 +200,7 @@ try {
   console.log('\no "Você" gravado por uma versão antiga não sobrevive');
   {
     await pagina.evaluate(() => {
-      localStorage.setItem('dominobar.mesa', JSON.stringify({
+      localStorage.setItem('dominobar.mesa.domino', JSON.stringify({
         modo: 'classico', n: 2, alvo: 6, compraVoluntaria: false,
         // A cadeira 1 também se chama "Você" — e ali é ESCOLHA, porque "Você" nunca foi
         // padrão fora da cadeira 0. O par separa migrar de apagar nome alheio.
@@ -204,7 +235,7 @@ try {
   console.log('\nchave de protótipo no armazenamento não mata o jogo');
   {
     await pagina.evaluate(() => {
-      localStorage.setItem('dominobar.mesa', JSON.stringify({
+      localStorage.setItem('dominobar.mesa.domino', JSON.stringify({
         modo: 'constructor', n: 4,
         cadeiras: [{ nome: 'Eu', tipo: 'voce' }, { nome: 'Bot', tipo: 'bot', nivel: 'toString' }],
       }));
@@ -248,7 +279,7 @@ try {
     ];
     for (const [rotulo, P] of CASOS) {
       await pagina.evaluate(g => {
-        localStorage.setItem('dominobar.partida', JSON.stringify(g));
+        localStorage.setItem('dominobar.partida.domino', JSON.stringify(g));
       }, { quando: Date.now(), euNaTela: 0, P });
       await recarregar();
       // Se o script tivesse morrido, `window.__jogo` nem existiria — é esta a asserção que
@@ -263,7 +294,7 @@ try {
       const jogou = await pagina.evaluate(() => { soBots('classico', 2); return !!(j.P && j.P.fase === 'mao'); });
       ok(jogou, `partida guardada ${rotulo}: depois de recusar o guardado a partida não começou`);
     }
-    await pagina.evaluate(() => { try { localStorage.removeItem('dominobar.partida'); } catch (e) { void e; } });
+    await pagina.evaluate(() => { try { localStorage.removeItem('dominobar.partida.domino'); } catch (e) { void e; } });
     console.log(`  ${CASOS.length} formas de guardado corrompido, e o jogo abre em todas`);
   }
 
@@ -450,6 +481,145 @@ try {
     console.log('  vencido não aparece — mesa de 3h atrás não volta');
 
     await pagina.evaluate(() => { try { localStorage.removeItem('dominobar.sala'); } catch (e) { void e; } });
+  }
+
+  // ─── 6. o que estava guardado sem sufixo era do dominó ─────────────────────
+  // Da v4.1 em diante a mesa e a partida são guardadas POR JOGO. Sem migrar, o conserto
+  // seria invisível justamente para quem jogou o bastante para ter preferência guardada: a
+  // mesa dele voltaria ao padrão e a partida de antes sumiria do menu. É a mesma lição que o
+  // "Você" gravado pagou na v2.0.0.
+  console.log('\na mesa e a partida da v4.0 sobrevivem à chegada da aba');
+  {
+    // Uma partida de verdade, e não um objeto escrito à mão: o que se quer provar é que o
+    // guardado ANTIGO ainda serve, e um objeto inventado aqui provaria só que ele passa no
+    // validador que eu mesmo escrevi.
+    await pagina.evaluate(() => {
+      limpar();
+      // O clique no modo é o que GRAVA a mesa (`lembrarMesa`); `soBots` só mexe em `MESA` na
+      // memória. Sem ele haveria só a partida para migrar, e a asserção mediria metade.
+      j.mostrarTela('telaMenu');
+      document.querySelector('#modoMesa button[data-modo="trio"]').click();
+      soBots('trio', 3); ateMinhaVez();
+    });
+    const virou = await pagina.evaluate(() => {
+      // Vira um jogador da v4.0: as duas chaves voltam a se chamar como se chamavam.
+      let n = 0;
+      for (const c of ['mesa', 'partida']) {
+        const v = localStorage.getItem('dominobar.' + c + '.domino');
+        if (v === null) continue;
+        localStorage.setItem('dominobar.' + c, v);
+        localStorage.removeItem('dominobar.' + c + '.domino');
+        n++;
+      }
+      return n;
+    });
+    ok(virou === 2, `montagem: esperava duas chaves para renomear, renomeei ${virou}`);
+
+    await recarregar();
+    const m = await pagina.evaluate(() => ({
+      modo: j.MESA.modo,
+      oferece: !document.getElementById('btRetomar').classList.contains('oculta'),
+      // As antigas têm de ter SUMIDO, e isto não é limpeza: `esquecerDoJogo('partida')` roda
+      // no fim de toda partida, e uma chave antiga intacta ressuscitaria na leitura seguinte
+      // a partida que acabou de acabar.
+      sobrouMesa: localStorage.getItem('dominobar.mesa') !== null,
+      sobrouPartida: localStorage.getItem('dominobar.partida') !== null,
+      temNova: localStorage.getItem('dominobar.partida.domino') !== null,
+    }));
+    ok(m.modo === 'trio', `a mesa da v4.0 não migrou: esperava trio, veio ${m.modo}`);
+    ok(m.oferece, 'a partida da v4.0 não migrou — o menu não ofereceu retomar');
+    ok(m.temNova, 'a partida migrou mas não foi gravada na chave do jogo');
+    ok(!m.sobrouMesa && !m.sobrouPartida,
+      'a chave antiga ficou para trás — ela ressuscita a partida que o jogo acabou de esquecer');
+    console.log('  mesa e partida da v4.0 vieram para `…​.domino`, e as antigas sumiram');
+  }
+
+  // ─── 7. a aba escolhe o jogo ───────────────────────────────────────────────
+  console.log('\na aba escolhe o jogo, e cada mesa fica onde estava');
+  {
+    // A URL manda: um link `?jogo=truco` mandado no grupo abre o truco, mesmo com dominó
+    // guardado como preferência.
+    await abrirCom('?jogo=truco');
+    const t = await pagina.evaluate(() => ({
+      titulo: document.getElementById('tituloJogo').textContent,
+      abas: [...document.querySelectorAll('#abasJogos button')].map(b => b.dataset.jogo),
+      ativa: document.querySelector('#abasJogos button.on').dataset.jogo,
+      // REGISTRADO não é JOGÁVEL: sem motor não pode haver montagem de mesa na tela.
+      montagem: !document.getElementById('montagemDaMesa').classList.contains('oculta'),
+      vemAi: document.getElementById('vemAi').textContent.length,
+      regras: document.querySelectorAll('#regrasLista li').length,
+    }));
+    ok(t.abas.length === 2, `a faixa deveria listar os dois jogos, veio ${t.abas.join()}`);
+    ok(t.ativa === 'truco', `?jogo=truco deveria abrir o truco, abriu ${t.ativa}`);
+    ok(/Truco/.test(t.titulo), `o cartão não é o do truco: "${t.titulo}"`);
+    ok(!t.montagem, 'jogo sem motor mostrou a montagem da mesa — um "Sentar e jogar" que não senta');
+    ok(t.vemAi > 20, 'o truco não disse o que falta para ele — botão apagado sem explicação');
+    ok(t.regras > 4, `as regras do truco não vieram do registro (${t.regras} itens)`);
+
+    // Nome inventado na URL é ENTRADA DE FORA e cai no padrão, sem derrubar a carga. A chave
+    // de protótipo é o caso que já deu tela preta permanente uma vez (defeito 5 da Fila 6).
+    //
+    // A PREFERÊNCIA SAI DA FRENTE PRIMEIRO, e isso é asserção e não arrumação: com 'truco'
+    // guardado pelo bloco acima, uma URL inválida cai na PREFERÊNCIA e não no padrão — que é
+    // o desenho, e é exatamente o que faria este teste medir o degrau errado da escada.
+    await pagina.evaluate(() => { try { localStorage.removeItem('dominobar.jogo'); } catch (e) { void e; } });
+    for (const ruim of ['xadrez', 'constructor', '__proto__']) {
+      await abrirCom('?jogo=' + ruim);
+      // `dataset` é um `DOMStringMap` e atravessa o CDP como `{}` — devolvê-lo daqui faria a
+      // asserção comparar contra objeto vazio e reprovar com o jogo certíssimo na tela. É a
+      // armadilha do "comparado contra um dublê vazio", num meio novo: o que sai de um
+      // `evaluate` tem de ser dado puro.
+      const v = await pagina.evaluate(() => {
+        const b = document.querySelector('#abasJogos button.on');
+        return { vivo: !!(window.__jogo && window.__jogo.pronto), ativa: b ? b.dataset.jogo : '' };
+      });
+      ok(v.vivo, `?jogo=${ruim} matou a carga — tela preta`);
+      ok(v.ativa === 'domino', `?jogo=${ruim} deveria cair no dominó, veio "${v.ativa}"`);
+    }
+
+    // A MESA DE CADA JOGO É A DELE. Guarda uma mesa de dominó, passa pelo truco, volta.
+    await abrirCom('');
+    await pagina.evaluate(() => {
+      limpar();
+      j.mostrarTela('telaMenu');
+      document.querySelector('#modoMesa button[data-modo="duelo"]').click();
+    });
+    const ida = await pagina.evaluate(() => {
+      document.querySelector('#abasJogos button[data-jogo="truco"]').click();
+      return { ativa: document.querySelector('#abasJogos button.on').dataset.jogo, busca: location.search };
+    });
+    ok(ida.ativa === 'truco', 'o clique na aba não trocou de jogo');
+    ok(/jogo=truco/.test(ida.busca), `a URL não passou a dizer qual jogo está na mesa: "${ida.busca}"`);
+
+    const volta = await pagina.evaluate(() => {
+      document.querySelector('#abasJogos button[data-jogo="domino"]').click();
+      return { modo: j.MESA.modo, busca: location.search };
+    });
+    ok(volta.modo === 'duelo', `a mesa do dominó não estava onde ficou: veio ${volta.modo}`);
+    // O padrão SAI da URL: o endereço limpo tem de continuar sendo o endereço de sempre.
+    ok(!/jogo=/.test(volta.busca), `o jogo padrão não devia sujar a URL: "${volta.busca}"`);
+
+    // E A PREFERÊNCIA SOBREVIVE À RECARGA — é o que faz a aba valer alguma coisa amanhã.
+    await pagina.evaluate(() => { document.querySelector('#abasJogos button[data-jogo="truco"]').click(); });
+    await abrirCom('');
+    const lembrou = await pagina.evaluate(() => document.querySelector('#abasJogos button.on').dataset.jogo);
+    ok(lembrou === 'truco', `a aba escolhida não foi lembrada: abriu no ${lembrou}`);
+
+    // MESA OCUPADA NÃO TROCA DE JOGO, e diz por quê.
+    await pagina.evaluate(() => {
+      document.querySelector('#abasJogos button[data-jogo="domino"]').click();
+      limpar(); soBots('classico', 2); ateMinhaVez();
+      j.mostrarTela('telaMenu');
+    });
+    const ocupada = await pagina.evaluate(() => {
+      const b = document.querySelector('#abasJogos button[data-jogo="truco"]');
+      return { travado: b.disabled, porque: b.title, emJogo: !!(j.P && j.P.fase === 'mao') };
+    });
+    ok(ocupada.emJogo, 'montagem: não havia partida em andamento');
+    ok(ocupada.travado, 'a aba trocaria de jogo com uma partida viva — a partida de um jogo iria para a chave do outro');
+    ok(ocupada.porque.length > 10, 'a aba travada não disse por quê');
+    await pagina.evaluate(() => { limpar(); });
+    console.log(`  ${t.abas.join(' | ')} · a URL manda, a preferência lembra, e a mesa ocupada não troca`);
   }
 } catch (e) {
   console.error('  ✗ ' + e.message);
