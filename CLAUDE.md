@@ -660,9 +660,9 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 
 | | |
 |---|---|
-| **PUBLICADO** | ⚠ **v3.0.1** — o Pages parou de disparar deploy; ver "O DEPLOY QUE NÃO ACONTECEU" |
-| commitado | **v4.1.0** — a Fase 2: a faixa de abas, as chaves por jogo, o `?jogo=` na URL |
-| `main` ↔ `origin/main` | conferir com `git rev-list --left-right --count origin/main...main` |
+| enviado | **v4.1.2** — empurrado, `0 0` contra `origin/main` |
+| **PUBLICADO** | ⚠ **CONFERIR** — o build do Pages ficou EM FILA; ver "O DEPLOY QUE NÃO ACONTECEU" |
+| esta release | **v4.1.0** — a Fase 2: a faixa de abas, as chaves por jogo, o `?jogo=` na URL |
 | Filas 5 a 11 | **todas fechadas**, e não há defeito conhecido em aberto |
 | o que vem | **Fase 3 da v4: `40-cartas/`** — o baralho de 40 e a carta 3D |
 
@@ -693,11 +693,29 @@ respondia tudo. Ele continua respondendo `0 0` com o site três releases atrás.
 curl -s https://ricardocolombo01.github.io/domino-bar/sw.js | grep VERSAO   # compare com o local
 ```
 
-**O que fazer:** o próximo push deve disparar um build — é o teste mais barato. Se não
-disparar, é decisão de conta e não de código: **Settings → Pages**, reconfirmar a origem
-(*Deploy from a branch → main → / (root)*), ou reexecutar a última rodada em **Actions**.
-`gh` não está instalado nesta máquina; a API pública responde sem autenticação:
-`https://api.github.com/repos/RicardoColombo01/domino-bar/actions/runs?per_page=5`.
+**O TESTE FOI FEITO, e corrigiu o diagnóstico acima pela metade.** O push da v4.1
+(06/08, 20:44 UTC) **disparou** uma rodada — logo, o gatilho não está desconfigurado e não há
+nada a mexer em Settings. Mas a rodada ficou **`queued` por mais de oito minutos sem começar**,
+e o `sw.js` servido continuou sendo o `a8107950668b` da v3.0.1 durante toda a espera.
+
+Ou seja: **não é gatilho e não é conta — é a fila de build do Pages atrasada do lado do
+GitHub.** Os dois pushes de ontem que não geraram rodada nenhuma são o mesmo problema num
+grau pior. Não há conserto do nosso lado; há espera, e há saber medir.
+
+**Como conferir, e é a única régua que vale:**
+
+```
+curl -s https://ricardocolombo01.github.io/domino-bar/sw.js | grep VERSAO
+grep VERSAO sw.js                                      # o local, para comparar
+curl -s "https://api.github.com/repos/RicardoColombo01/domino-bar/actions/runs?per_page=3"
+```
+
+Se depois de algumas horas a rodada continuar `queued` ou tiver sumido, aí sim vale
+**Actions → re-run**, ou **Settings → Pages** reconfirmando *Deploy from a branch → main →
+/ (root)*. `gh` não está instalado nesta máquina; a API pública responde sem autenticação.
+
+**E o jogo não depende disso para ser testado:** o `index.html` abre por duplo-clique, com
+tudo dentro. Só o modo online precisa de `http(s)` — para isso, `npm run servir`.
 
 ---
 
@@ -706,9 +724,13 @@ disparar, é decisão de conta e não de código: **Settings → Pages**, reconf
 **LEIA ISTO PRIMEIRO.** É o ponto exato de retomada.
 
 ```
-main            v4.0.1
-worktree        ../domino-bar-jogos   branch v4.1   ← o trabalho desta sessão
+main            v4.1.2, empurrada, árvore limpa
+worktree        ../domino-bar-jogos   (as branches v4.1, v4.1.1 e v4.1.2 já foram mergeadas;
+                                       podem ser apagadas — a tag é o que fica)
 ```
+
+**ANTES DE RODAR QUALQUER SUÍTE:** `cd tests && npm install`. O `test-acoplamento` trouxe o
+`acorn`, e `tests/node_modules` não é versionado nem compartilhado entre worktrees.
 
 **Feito nesta sessão** (as fases estão descritas em "O PLANO DA v4", mais abaixo):
 
