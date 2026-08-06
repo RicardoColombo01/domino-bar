@@ -728,34 +728,40 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 
 | | |
 |---|---|
-| enviado | **v4.3.0** — empurrada, `0 0` contra o origin, árvore limpa |
-| **PUBLICADO** | ⚠ **v4.2.1** — o push da v4.3.0 não disparou build; ver "O DEPLOY INTERMITENTE" |
-| esta release | **v4.3.0** — a Fase 4 ao meio: as regras e o motor do truco |
-| as anteriores | v4.2.0 (`40-cartas/`) · v4.1.0 (a faixa de abas) · v4.0.0 (o contrato) |
+| enviado | **v4.4.0** — empurrada, `0 0` contra o origin, árvore limpa |
+| **PUBLICADO** | ⚠ **v4.2.1** — o Pages parou às 22:04 e **precisa de um clique**; ver a seção abaixo |
+| esta release | **v4.4.0** — o bot e o layout do truco: o cérebro completo |
+| as anteriores | v4.3.0 (regras + motor) · v4.2.0 (`40-cartas/`) · v4.1.0 (a aba) · v4.0.0 (o contrato) |
 | Filas 5 a 11 | **todas fechadas**, e não há defeito conhecido em aberto |
-| o que vem | **o CORPO do truco** — 3D, bot e a barra de apostas |
+| o que vem | **a MESA do truco** — `550-mesa`, `560-interacao`, a `barraDoJogo` e o registro |
 
 **Nada que um jogador use está atrás do deploy pendente:** o truco não senta na mesa, e o
-dominó publicado é o mesmo.
+dominó publicado é o mesmo desde a v4.2.1.
 
 ---
 
-#### O DEPLOY INTERMITENTE — cinco pushes, três comportamentos (06/08/2026)
+#### O DEPLOY PAROU ÀS 22:04 — e precisa de um clique (06/08/2026)
 
-**NÃO ESTÁ RESOLVIDO, e a palavra certa é INTERMITENTE.** Esta seção já disse "resolvido"
-uma vez e teve de ser desdita duas horas depois — o que é a lição em si: **um push que
-funcionou não prova que o gatilho está de pé.**
+**A última rodada de Pages que existiu foi a das 22:04.** Depois dela, **quatro pushes
+seguidos** não geraram rodada nenhuma. Isto é o mais preciso que dá para dizer, e é diferente
+do que esta seção já disse duas vezes:
 
 | push | o que aconteceu |
 |---|---|
 | v4.0.0, v4.0.1 (05/08 22:41 e 22:46) | **nenhuma rodada** |
 | v4.1.x (06/08 20:44) | rodada disparou, ficou **20 min `queued`** e foi **cancelada** |
-| v4.2.0 (21:57) e v4.2.1 (22:04) | rodaram e **publicaram em ~1 min** |
-| v4.3.0 (22:5x) | **nenhuma rodada** em mais de 10 minutos |
+| v4.2.0 (21:57) e v4.2.1 (22:04) | rodaram e **publicaram em ~1 min** ← as últimas que rodaram |
+| v4.3.0, v4.3.1, v4.4.0 (22:5x em diante) | **nenhuma rodada**, quatro pushes seguidos |
 
-O que dá para afirmar: **não é gatilho desconfigurado** (dois pushes dispararam sozinhos),
-**não é conta** (nada mudou em Settings entre um caso e outro) e **não é o jogo**. É o Pages
-do lado do GitHub, e o comportamento varia de push para push.
+**A leitura mudou com o quarto.** Um push que não dispara é ruído; quatro seguidos depois de
+um horário exato não são oscilação — **parou e ficou parado.** Então a recomendação deixa de
+ser "espere" e passa a ser **agir**: `Actions → a rodada das 22:04 → Re-run all jobs`, ou
+`Settings → Pages` reconfirmando *Deploy from a branch → main → / (root)*. Os dois são conta,
+não código, e `gh` não está instalado nesta máquina.
+
+O que continua valendo, e foi medido: **não é gatilho desconfigurado** (dois pushes
+dispararam sozinhos na mesma tarde, sem ninguém tocar em Settings) e **não é o jogo** — as
+sete suítes passaram contra o bundle local em todas as releases.
 
 Dois corolários práticos, os dois pagos:
 
@@ -764,9 +770,9 @@ Dois corolários práticos, os dois pagos:
 2. **A régua de PUBLICADO é o conteúdo SERVIDO.** `git rev-list --left-right` responde `0 0`
    com o site releases atrás. Custa um `curl` conferir de verdade.
 
-**O que fazer quando isto acontecer:** esperar (destravou sozinho duas vezes), e se depois de
-algumas horas não tiver ido, **Actions → re-run** na última rodada, ou **Settings → Pages**
-reconfirmando *Deploy from a branch → main → / (root)*. É conta, não código.
+**E a lição de método, que é o que sobra:** esta seção disse "RESOLVIDO" quando um push
+funcionou, e teve de ser desdita duas horas depois. **Um push que funcionou não prova que o
+gatilho está de pé** — só quatro tentativas depois dá para afirmar alguma coisa.
 
 <details><summary>o registro do dia em que pareceu resolvido</summary>
 
