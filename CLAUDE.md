@@ -3164,7 +3164,20 @@ mão      3 cartas para cada; melhor de 3 vazas
 aposta   truco 3 → seis 6 → nove 9 → doze 12
 partida  até 12 pontos
 mão de 11  quem chega a 11 vê as cartas e decide jogar ou entregar 1 ponto
+
+O MELOU (empate de vaza) — decidido com o Ricardo em 06/08/2026:
+  empatou a 1ª            quem ganhar a 2ª leva a mão
+  ganhou a 1ª, empatou a 2ª   quem ganhou a 1ª leva
+  empatou a 1ª e a 2ª     quem ganhar a 3ª leva
+  EMPATOU AS TRÊS         a MÃO MORRE — ninguém marca, embaralha de novo
 ```
+
+**O "melou tudo" é escolha de casa, e ela tem irmã neste projeto.** As outras duas saídas
+eram defensáveis — "quem é mão leva" é a mais comum em mesa de bar, e "vale a primeira vaza"
+é a mais usada em app. O Ricardo escolheu a mão morta, e o argumento é coerência: o dominó
+desta casa já diz *"trancou e empatou, a mão morre"*. Ninguém marca ponto sem ter ganho nada.
+Registrado aqui porque **nenhuma leitura de código chega a esta resposta** — é irmã da
+cruzada valer 4.
 
 `regras.js` e `layout.js` **puros** (invariante 4). `visaoDe()` com a **mesma fronteira de
 segurança** do invariante 3. O bot ganha **decisão de aposta**, que é a parte nova e a mais
@@ -3175,11 +3188,13 @@ difícil. Online, hotseat, conversa, saguão, identidade e reconexão **vêm pro
 SEM barra de URL**, que é o único teste que prova o assetlinks → `.apk` num GitHub Release →
 conta grátis na Amazon com o mesmo `.apk`.
 
-### Três coisas que ficam EM ABERTO para o Ricardo
+### O que ficava EM ABERTO para o Ricardo
 
-1. **O empate de vaza no truco (o "melou")** — regra de casa, e há mais de uma leitura
-   defensável, como a cruzada valer 4. **Perguntar na Fase 4, não escolher sozinho.**
+1. ~~**O empate de vaza no truco (o "melou")**~~ ✔ **respondido em 06/08/2026: a mão morre.**
+   Ver a tabela de regras acima.
 2. **Truco de 2 e de 4 (duplas)?** O plano assume os dois, porque a casa já faz duplas em cruz.
+   **Ainda em aberto** — mas é escolha de escopo, não de regra: a mesa de 2 é o caminho curto
+   para a Fase 4 andar, e a de 4 vem de graça se o `timeDe` da casa for reusado.
 3. **O repo da user page** é conta dele, não código.
 
 ### Os riscos, ditos antes de começar
