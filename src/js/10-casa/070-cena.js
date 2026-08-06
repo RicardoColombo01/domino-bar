@@ -357,21 +357,25 @@ function assentosDaMesa(vista) {
   const crus = [];
   for (let i = 0; i < n; i++) {
     if (i === vista.cadeira) continue;
-    const a = anguloDaCadeira(i, vista.cadeira, n);
+    const a = JOGO.mesa.anguloDaCadeira(i, vista.cadeira, n);
     crus.push({ cadeira: i, a, x: Math.sin(a) * RAIO_ASSENTO, z: Math.cos(a) * RAIO_ASSENTO,
       quantas: vista.naMao[i] });
   }
   let aperto = 1;
   for (const s of crus) {
     if (Math.abs(s.x) < 1e-6) continue;                 // sentado no eixo: nada a apertar
-    const cabe = larguraVisivelEm(PECA_E / 2, s.z) / 2 - PECA_C / 2;
+    // A LARGURA E A ESPESSURA VÊM DO JOGO. Era aqui que o boteco sabia o tamanho de uma
+    // peça de dominó: uma carta tem outra proporção, e com o número cravado ela não caberia
+    // na conta do assento — o adversário passaria por cima do vizinho.
+    const cabe = larguraVisivelEm(JOGO.mesa.espessuraDaPeca() / 2, s.z) / 2
+      - JOGO.mesa.larguraDaPeca() / 2;
     aperto = Math.min(aperto, cabe / Math.abs(s.x));
   }
   aperto = Math.min(1, Math.max(0.25, aperto));
   const lugares = crus.map(s => {
     const x = s.x * aperto;
     const espaco = Math.min(0.56, 4.2 * aperto / Math.max(s.quantas, 1));
-    return { ...s, x, espaco, monte: caixaDoMonte(s.a, x, s.z, s.quantas, espaco) };
+    return { ...s, x, espaco, monte: JOGO.mesa.caixaDoMonte(s.a, x, s.z, s.quantas, espaco) };
   });
   return { aperto, lugares };
 }
@@ -397,7 +401,8 @@ function enquadrar() {
   camera.lookAt(0, enq.alvoY, enq.alvoZ);
   camera.aspect = aspect;
 
-  const fovX = 2 * Math.atan((MAO_CHEIA / 2) / profundidadeDe(MAO_Y, MAO_Z));
+  const fovX = 2 * Math.atan((MAO_CHEIA / 2)
+    / profundidadeDe(JOGO.mesa.alturaDaMao(), JOGO.mesa.profundidadeDaMao()));
   const preciso = 2 * Math.atan(Math.tan(fovX / 2) / aspect) * 180 / Math.PI;
   // Em retrato o "preciso" passa de 90°, e aí é melhor a mão em mais fileiras do que a
   // mesa entortada de perspectiva: o teto corta, e 100-mao.js quebra o leque.
@@ -408,7 +413,7 @@ function enquadrar() {
   renderer.setSize(innerWidth, innerHeight);
   // A largura disponível mudou: o leque tem de ser refeito. Quem decide se vale a pena
   // é a assinatura da mão, em 100-mao.js — resize que não mexe na largura é no-op.
-  redesenharMao();
+  JOGO.mesa.redesenhar();
 }
 
 // Um `resize` pode chegar dezenas de vezes numa rotação, e no iOS a barra de URL

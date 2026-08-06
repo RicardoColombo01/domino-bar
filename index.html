@@ -972,6 +972,39 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
 //
 // O que sobrou é o que o truco, o pife e o vinte-e-um herdam sem mudar uma letra.
 
+// ─── a casa e os jogos que sentam nela ───────────────────────────────────────
+// A casa sabe de cadeiras, de online, de placar e de boteco — e não sabe que jogo está na
+// mesa. Até a v3 isso era só uma AFIRMAÇÃO da pasta: o código chamava o dominó pelo nome
+// (`novaPartida`, `visaoDe`, `sincronizarMao`), o que funciona enquanto houver um jogo só.
+//
+// `JOGOS` é o balcão onde cada jogo se apresenta; `JOGO` é quem está na mesa agora.
+// `130-hud.js` já tinha o primeiro encaixe desse tipo — `painelDoJogo`, da v3.0.0 — e isto
+// generaliza aquilo de um encaixe para um contrato.
+//
+// A CARGA PASSA A TER TRÊS TEMPOS, e é isso que torna o terceiro e o quarto jogo baratos:
+//
+//   1. DECLARAR   010…160   a casa. Só define; nada que dependa de JOGO roda aqui.
+//   2. REGISTRAR  300…      cada jogo pendura o seu contrato em JOGOS.
+//   3. ARRANCAR   900       escolhe o jogo, monta a tela e liga o loop.
+//
+// Sem o terceiro tempo não haveria resposta para "qual `MODOS`?" durante a carga:
+// `140-menu.js` valida a mesa guardada contra a tabela de modos, e com dois jogos essa
+// pergunta tem duas respostas. O arranque é o instante em que ela passa a ter uma.
+const JOGOS = {};
+let JOGO = null;
+
+// Trocar o jogo da mesa. Hoje é chamada uma vez, no arranque; a aba que deixa o jogador
+// escolher entra por aqui.
+//
+// `Object.hasOwn` e não `JOGOS[nome]`: o nome pode vir do armazenamento ou da URL, ou seja
+// é ENTRADA DE FORA, e `JOGOS['constructor']` é truthy — foi exatamente esse buraco que deu
+// tela preta permanente no defeito 5 da Fila 6.
+function trocarDeJogo(nome) {
+  if (!Object.hasOwn(JOGOS, nome)) return false;
+  JOGO = JOGOS[nome];
+  return true;
+}
+
 // ─── quem pediu menos movimento ──────────────────────────────────────────────
 // Sensibilidade vestibular não é preferência estética: para quem tem, movimento na tela
 // dá enjoo de verdade. Este jogo era o pior conjunto possível — a lâmpada respira PARA
@@ -2252,21 +2285,25 @@ function assentosDaMesa(vista) {
   const crus = [];
   for (let i = 0; i < n; i++) {
     if (i === vista.cadeira) continue;
-    const a = anguloDaCadeira(i, vista.cadeira, n);
+    const a = JOGO.mesa.anguloDaCadeira(i, vista.cadeira, n);
     crus.push({ cadeira: i, a, x: Math.sin(a) * RAIO_ASSENTO, z: Math.cos(a) * RAIO_ASSENTO,
       quantas: vista.naMao[i] });
   }
   let aperto = 1;
   for (const s of crus) {
     if (Math.abs(s.x) < 1e-6) continue;                 // sentado no eixo: nada a apertar
-    const cabe = larguraVisivelEm(PECA_E / 2, s.z) / 2 - PECA_C / 2;
+    // A LARGURA E A ESPESSURA VÊM DO JOGO. Era aqui que o boteco sabia o tamanho de uma
+    // peça de dominó: uma carta tem outra proporção, e com o número cravado ela não caberia
+    // na conta do assento — o adversário passaria por cima do vizinho.
+    const cabe = larguraVisivelEm(JOGO.mesa.espessuraDaPeca() / 2, s.z) / 2
+      - JOGO.mesa.larguraDaPeca() / 2;
     aperto = Math.min(aperto, cabe / Math.abs(s.x));
   }
   aperto = Math.min(1, Math.max(0.25, aperto));
   const lugares = crus.map(s => {
     const x = s.x * aperto;
     const espaco = Math.min(0.56, 4.2 * aperto / Math.max(s.quantas, 1));
-    return { ...s, x, espaco, monte: caixaDoMonte(s.a, x, s.z, s.quantas, espaco) };
+    return { ...s, x, espaco, monte: JOGO.mesa.caixaDoMonte(s.a, x, s.z, s.quantas, espaco) };
   });
   return { aperto, lugares };
 }
@@ -2292,7 +2329,8 @@ function enquadrar() {
   camera.lookAt(0, enq.alvoY, enq.alvoZ);
   camera.aspect = aspect;
 
-  const fovX = 2 * Math.atan((MAO_CHEIA / 2) / profundidadeDe(MAO_Y, MAO_Z));
+  const fovX = 2 * Math.atan((MAO_CHEIA / 2)
+    / profundidadeDe(JOGO.mesa.alturaDaMao(), JOGO.mesa.profundidadeDaMao()));
   const preciso = 2 * Math.atan(Math.tan(fovX / 2) / aspect) * 180 / Math.PI;
   // Em retrato o "preciso" passa de 90°, e aí é melhor a mão em mais fileiras do que a
   // mesa entortada de perspectiva: o teto corta, e 100-mao.js quebra o leque.
@@ -2303,7 +2341,7 @@ function enquadrar() {
   renderer.setSize(innerWidth, innerHeight);
   // A largura disponível mudou: o leque tem de ser refeito. Quem decide se vale a pena
   // é a assinatura da mão, em 100-mao.js — resize que não mexe na largura é no-op.
-  redesenharMao();
+  JOGO.mesa.redesenhar();
 }
 
 // Um `resize` pode chegar dezenas de vezes numa rotação, e no iOS a barra de URL
@@ -3442,12 +3480,15 @@ let contando = !!lido('contagem', false);
 //
 // Estava tudo aqui dentro (`desenharContagem`), que era a última regra de dominó morando na
 // pasta que promete não conhecer o jogo. Agora a casa reserva o lugar e chama; quem sabe as
-// regras pendura o seu em `30-domino/135-contagem.js`, e o truco pendura o dele sem que um
+// regras entrega o seu no contrato (`JOGO.painel`), e o truco entrega o dele sem que um
 // precise saber do outro.
 //
-// Nasce sem fazer nada de propósito: um jogo que não tenha painel não paga nada por isso, e
-// a casa não fica com um `if` perguntando qual jogo está na mesa.
-let painelDoJogo = () => {};
+// Era um `let` que o jogo reatribuía; passou a vir pelo contrato como todo o resto — assim
+// não há duas maneiras de um jogo se apresentar à casa.
+//
+// Jogo sem painel simplesmente não põe a chave, e o `?.` cobre: ninguém paga um `if`
+// perguntando qual jogo está na mesa.
+const painelDoJogo = vista => JOGO.painel?.(vista);
 
 const ETIQUETA ={ voce: 'você', local: 'nesta tela', bot: 'bot', online: 'online' };
 
@@ -3512,8 +3553,8 @@ function nomeEmPartes(nome) {
 // sem placar, sem vez, sem botões); e `'constructor'` é TRUTHY num objeto literal, então
 // passava pelo `||` e escrevia "undefined · até 6" na cara do jogador. É literalmente o
 // defeito 5 da Fila 6, no único validador que nunca foi endurecido.
-const rotuloDoModo = modo => Object.hasOwn(MODOS, modo) && modo !== MODO_PADRAO
-  ? escapar(MODOS[modo].rotulo) + ' · ' : '';
+const rotuloDoModo = modo => Object.hasOwn(JOGO.menu.MODOS, modo) && modo !== JOGO.menu.MODO_PADRAO
+  ? escapar(JOGO.menu.MODOS[modo].rotulo) + ' · ' : '';
 
 function desenharHUD(vista) {
   HUD.pontas.textContent = vista.pontas ? vista.pontas.join('  ·  ') : '—';
@@ -3584,7 +3625,7 @@ function mostrarConfirmacao(vista, m) {
     return `<button class="btn peq principal" data-lado="${lado}">${rotulo}</button>`;
   }).join('');
   el('confBotoes').querySelectorAll('button').forEach(b => {
-    b.onclick = () => confirmarJogada(b.dataset.lado);
+    b.onclick = () => JOGO.toque.confirmar(b.dataset.lado);
   });
   el('confirmar').classList.remove('oculta');
 }
@@ -3592,7 +3633,7 @@ function mostrarConfirmacao(vista, m) {
 function esconderConfirmacao() {
   el('confirmar').classList.add('oculta');
 }
-el('btCancelar').onclick = () => cancelarEscolha();
+el('btCancelar').onclick = () => JOGO.toque.cancelar();
 
 // ─── a conversa da mesa ──────────────────────────────────────────────────────
 // A narração do jogo e as falas no MESMO fio, em ordem: jogada em cinza, fala em âmbar
@@ -3790,7 +3831,7 @@ function sobrouNaMao(vista) {
       .map((s, i) => `<div><span>${escapar(vista.cadeiras[i].nome)}</span><b>${escapar(s)}</b></div>`).join('');
   }
   return (r.somasPorTime || []).map((total, t) => {
-    const parcelas = r.somas.filter((_, i) => timeDe(vista, i) === t).map(escapar).join(' + ');
+    const parcelas = r.somas.filter((_, i) => JOGO.motor.time(vista, i) === t).map(escapar).join(' + ');
     return `<div><span>${nomeDoTime(vista, t)}<i>${parcelas}</i></span><b>${escapar(total)}</b></div>`;
   }).join('');
 }
@@ -3803,7 +3844,7 @@ function mostrarFimDeMao(vista) {
   // vieram os pontos. Agora ela aparece sempre, e o botão vira o passo para o resultado.
   const acabou = vista.fase === 'fim';
   el('fimTitulo').textContent = bateu ? 'Bateu!' : 'Trancou';
-  el('fimTipo').textContent = NOME_BATIDA[r.tipo];
+  el('fimTipo').textContent = JOGO.motor.nomeDoFim(r.tipo);
   // "Zé e Tião fazem", não "faz": em duplas o sujeito é a dupla.
   const fazem = vista.duplas ? 'fazem' : 'faz';
   el('fimQuem').textContent = r.time === null
@@ -3823,13 +3864,13 @@ function mostrarFimDePartida(vista) {
   // Quem saiu da mesa não leva a partida nem estando na frente: o time dele fica fora
   // da conta do campeão. É o que impede fechar a aba de virar saída de emergência.
   const fora = vista.desistiu === null || vista.desistiu === undefined
-    ? -1 : timeDe(vista, vista.desistiu);
+    ? -1 : JOGO.motor.time(vista, vista.desistiu);
   let campeao = 0;
   vista.placar.forEach((p, t) => {
     if (t === fora) return;
     if (campeao === fora || p > vista.placar[campeao]) campeao = t;
   });
-  const meuTime = timeDe(vista, vista.cadeira);
+  const meuTime = JOGO.motor.time(vista, vista.cadeira);
   el('campeao').textContent = nomeDoTime(vista, campeao);
   el('campeaoTitulo').textContent = fora >= 0
     ? (fora === meuTime ? 'Você saiu da mesa' : `${vista.cadeiras[vista.desistiu].nome} saiu da mesa`)
@@ -3922,8 +3963,9 @@ function desenharContagem(vista) {
   HUD.contagem.innerHTML = '<span class="rot">faltam aparecer</span>' + linhas.join('');
 }
 
-// É por esta linha que o HUD da casa desenha um painel de dominó sem nunca citar dominó.
-painelDoJogo = desenharContagem;
+// A ligação com o HUD da casa mora agora no CONTRATO (`painel: desenharContagem`, em
+// `300-registro.js`), e não numa atribuição solta daqui. É a mesma mudança que os outros
+// encaixes sofreram na v4: um jogo se apresenta à casa por um lugar só.
 
 /* ····· 10-casa/140-menu.js ····· */
 //
@@ -3971,8 +4013,8 @@ function mesaLembrada() {
   // inteiro: tela preta que voltava a cada recarregamento, até alguém limpar o
   // armazenamento à mão. É exatamente o "alguém mexendo no armazenamento" que o comentário
   // acima promete cobrir — a validação existia e tinha um buraco do tamanho do protótipo.
-  const modo = Object.hasOwn(MODOS, g.modo) ? g.modo : MODO_PADRAO;
-  const cabem = MODOS[modo].cadeiras;
+  const modo = Object.hasOwn(JOGO.menu.MODOS, g.modo) ? g.modo : JOGO.menu.MODO_PADRAO;
+  const cabem = JOGO.menu.MODOS[modo].cadeiras;
   return {
     modo,
     n: cabem.includes(g.n) ? g.n : cabem[0],
@@ -4001,7 +4043,7 @@ function mesaLembrada() {
         // passava e o bot jogava sem ruído e sem memória, degradação invisível), mas é o
         // mesmo furo, e deixar dois padrões de validação no mesmo arquivo é como o
         // primeiro volta.
-        nivel: tipo === 'bot' ? (Object.hasOwn(NIVEIS, c.nivel) ? c.nivel : 'normal') : undefined,
+        nivel: tipo === 'bot' ? (Object.hasOwn(JOGO.bot.NIVEIS, c.nivel) ? c.nivel : 'normal') : undefined,
         // DE SESSÃO, nunca do armazenamento — e por isso escrita como literal, e não
         // copiada de `c`. A marca diz "esta cadeira virou bot por falta de gente, NESTA
         // mesa que está de pé agora"; vinda de fora ela abriria ao primeiro estranho com o
@@ -4014,7 +4056,16 @@ function mesaLembrada() {
   };
 }
 
-const MESA = mesaLembrada();
+// A MESA NASCE VAZIA E É PREENCHIDA NO ARRANQUE, e não é preciosismo: `mesaLembrada()`
+// valida o modo guardado contra a tabela `MODOS`, e com dois jogos na casa a pergunta "qual
+// tabela?" só tem resposta depois de alguém escolher o jogo. Enquanto isso acontecia aqui,
+// no topo do módulo, a resposta tinha de ser "a do dominó" — que é a definição de casa que
+// conhece o jogo.
+//
+// Continua sendo `const`: o que muda é o CONTEÚDO, nunca a referência. Fosse `let`, as
+// dezenas de leituras de `MESA.n` espalhadas pelo projeto passariam a depender de quem
+// reatribuiu por último.
+const MESA = {};
 
 // Guarda as quatro cadeiras, e não só as `n` em uso: quem joga em três e volta para
 // quatro esperava o nome do quarto de volta, não "Tião" outra vez.
@@ -4077,8 +4128,8 @@ function montarCadeiras() {
 // O tamanho do baralho sai de baralhoDoModo, não de um 28 escrito aqui — foi assim que
 // esta linha quebrou quando os modos chegaram.
 function notaDaMesa() {
-  const m = MODOS[MESA.modo];
-  const baralho = baralhoDoModo(m).length;
+  const m = JOGO.menu.MODOS[MESA.modo];
+  const baralho = JOGO.menu.baralho(m).length;
   const monte = baralho - m.pecasPorMao * MESA.n;
   return (MESA.n === 4 ? 'em duplas: 1 e 3 contra 2 e 4' : 'sem duplas') +
     ` · ${baralho} peças, ${m.pecasPorMao} para cada · ` +
@@ -4089,7 +4140,7 @@ function notaDaMesa() {
 // delas não sobra peça, sobra erro. Em vez de deixar escolher e reclamar depois, as
 // cadeiras que não fecham ficam apagadas.
 function ajustarCadeirasAoModo() {
-  const cabem = MODOS[MESA.modo].cadeiras;
+  const cabem = JOGO.menu.MODOS[MESA.modo].cadeiras;
   if (!cabem.includes(MESA.n)) MESA.n = cabem[0];
   el('qtdJogadores').querySelectorAll('button').forEach(b => {
     const n = +b.dataset.n;
@@ -4113,7 +4164,7 @@ function ajustarCadeirasAoModo() {
 // ignora o valor onde não há monte, então guardá-lo não custa nada — e é o `disabled` que
 // impede a promessa.
 function ajustarCompraAoModo() {
-  const temMonte = sobraDoBaralho(MODOS[MESA.modo], MESA.n) > 0;
+  const temMonte = JOGO.menu.sobra(JOGO.menu.MODOS[MESA.modo], MESA.n) > 0;
   el('compraLivre').querySelectorAll('button').forEach(b => { b.disabled = !temMonte; });
   el('notaCompra').textContent = temMonte ? '' : 'sem monte nesta mesa';
 }
@@ -4173,9 +4224,9 @@ el('btEntrar').onclick = () => entrarNumaMesa();
 // clique. É o mesmo caminho que o `encerrarRede` ao lado já fazia.
 el('btMenu').onclick = () => { recomecarAsVoltas(); encerrarRede(); mostrarTela('telaMenu'); };
 
-refletirMesaNosBotoes();
-ajustarCadeirasAoModo();
-montarCadeiras();
+// As três chamadas que montavam o menu na carga foram para `900-arranque.js`, junto com o
+// `mesaLembrada()` que enche a MESA. Todas dependem de saber QUAL jogo está na mesa, e no
+// primeiro tempo da carga ninguém sabe ainda.
 
 /* ····· 10-casa/145-saguao.js ····· */
 //
@@ -4666,7 +4717,7 @@ function desistiuDaMesa(cadeira) {
   const conn = conexoes.get(cadeira);
   conexoes.delete(cadeira);
   if (conn) { try { conn.close(); } catch (e) { void e; } }
-  abandonar(P, cadeira);
+  JOGO.motor.abandonar(P, cadeira);
   narrar(`${P.cadeiras[cadeira].nome} saiu da mesa — a partida foi dada como perdida para ele.`);
   publicar();
 }
@@ -4948,7 +4999,7 @@ function largar(cadeira, conn) {
       esperando.delete(cadeira);
       if (!P || P.fase === 'fim' || conexoes.has(cadeira)) return;
       donoDaCadeira.delete(cadeira);                    // não voltou: a cadeira não é mais dele
-      abandonar(P, cadeira);
+      JOGO.motor.abandonar(P, cadeira);
       narrar(`${nome} não voltou — a partida foi dada como perdida para ele.`);
       publicar();
     }, ESPERA_VOLTA));
@@ -5213,7 +5264,7 @@ function explicarErroDeRede(e) {
 // Chamado pelo anfitrião depois de cada mudança: cada cadeira recebe a SUA visão.
 function espalharVistas() {
   for (const [cadeira, conn] of conexoes) {
-    if (conn.open) conn.send({ t: 'vista', v: visaoDe(P, cadeira) });
+    if (conn.open) conn.send({ t: 'vista', v: JOGO.motor.visao(P, cadeira) });
   }
 }
 function espalharLog(txt) {
@@ -5249,7 +5300,7 @@ function donoLocalDaFala(de) {
   for (let c = 0; c < P.cadeiras.length; c++) {
     const t = MESA.cadeiras[c].tipo;
     if (t !== 'voce' && t !== 'local') continue;
-    if (timeDe(P, c) === timeDe(P, de)) return c;
+    if (JOGO.motor.time(P, c) === JOGO.motor.time(P, de)) return c;
   }
   return -1;
 }
@@ -5262,7 +5313,7 @@ const mesaEmDuplas = () => (P ? { duplas: P.duplas } : { duplas: MESA.n === 4 })
 function espalharChat(de, canal, txt) {
   const fala = String(txt).slice(0, TAMANHO_FALA);
   const quem = mesaEmDuplas();
-  const mesmoTime = c => !quem.duplas || timeDe(quem, c) === timeDe(quem, de);
+  const mesmoTime = c => !quem.duplas || JOGO.motor.time(quem, c) === JOGO.motor.time(quem, de);
   // O nome vai no fio SÓ para o saguão, onde não existe vista de onde tirá-lo. Sai do
   // MESA do anfitrião, nunca do que o convidado mandou: com a partida de pé, `dizer`
   // ignora isto e usa a vista, como sempre.
@@ -5355,12 +5406,12 @@ function comecarLocal() {
   });
   const cadeiras = MESA.cadeiras.slice(0, MESA.n)
     .map(c => ({ nome: c.nome, tipo: c.tipo, nivel: c.nivel }));
-  P = novaPartida(cadeiras, {
+  P = JOGO.motor.nova(cadeiras, {
     alvo: MESA.alvo, compraVoluntaria: MESA.compraVoluntaria, modo: MESA.modo,
   });
   euNaTela = 0;
   travado = false;
-  esquecerArrumacao();               // mesa nova, mão nova: a arrumação de antes não vale
+  JOGO.mesa.esquecerArrumacao();               // mesa nova, mão nova: a arrumação de antes não vale
   limparConversa();
   tocarEmbaralho();
   anunciarAbertura();
@@ -5387,7 +5438,7 @@ function avancar() {
 function publicar() {
   if (!P) return;
   if (modo === 'anfitriao') espalharVistas();
-  const v = visaoDe(P, euNaTela);
+  const v = JOGO.motor.visao(P, euNaTela);
   atualizarVista(travado
     ? Object.assign({}, v, { mao: [], acoes: { jogadas: [], comprar: false, passar: false } })
     : v);
@@ -5396,12 +5447,12 @@ function publicar() {
 
 function atualizarVista(v) {
   vistaAtual = v;
-  sincronizarTabuleiro(v);
-  sincronizarMao(v);
-  sincronizarOutros(v);
-  sincronizarMonte(v);
+  // UM VERBO, e não os quatro `sincronizar*` de antes. O dominó tem tabuleiro, mão, mãos
+  // dos outros e monte; o truco tem três vazas e nenhum monte. O que a casa precisa dizer é
+  // "ponha a mesa de acordo com esta vista" — como, é problema de quem conhece o jogo.
+  JOGO.mesa.sincronizar(v);
   desenharHUD(v);
-  reavaliarEscolha(v);
+  JOGO.toque.reavaliar(v);
   // A mão que fecha a partida também mostra os pontos: fase 'fim' cai primeiro na tela
   // de fim de mão, e só depois do clique é que o campeão entra.
   //
@@ -5435,7 +5486,7 @@ function seguirOTurno() {
     const quem = P.vez, naMao = P.maoNum;
     timerBot = setTimeout(() => {
       if (P && P.fase === 'mao' && P.vez === quem && P.maoNum === naMao && P.cadeiras[quem].tipo === 'bot')
-        aplicarIntencao(quem, jogadaDoBot(P, quem));
+        aplicarIntencao(quem, JOGO.bot.jogada(P, quem));
     }, 550 + Math.random() * 600);                       // pausa para dar para acompanhar
     return;
   }
@@ -5462,8 +5513,9 @@ function pedirAcao(intencao) {
 // `acoesDe(P, cadeira)`, que sai da mão do próprio jogador, então peça inventada continua
 // devolvendo 'jogada inválida' e a fronteira do invariante 3 segue de pé. É sobre a mesa
 // dos outros parar.
-const pecaDoFio = p => Array.isArray(p) && p.length === 2 &&
-  p.every(n => Number.isInteger(n) && n >= 0 && n <= MAX_PINTAS);
+// Quem sabe a FORMA de uma jogada é o jogo: no dominó é um par de números de 0 a 6, no
+// truco será uma carta. A casa só precisa saber que existe uma pergunta a fazer.
+const pecaDoFio = p => JOGO.motor.jogadaDoFio(p);
 
 function aplicarIntencao(cadeira, i) {
   if (!P || P.fase !== 'mao') return;
@@ -5473,9 +5525,9 @@ function aplicarIntencao(cadeira, i) {
   // mandando uma mensagem vazia. Agora as três ações são nomeadas e o resto é recusa.
   if (i.acao === 'jogar') {
     if (!pecaDoFio(i.peca) || (i.ponta !== 'esq' && i.ponta !== 'dir')) r = { erro: 'jogada inválida' };
-    else r = jogar(P, cadeira, i.peca, i.ponta);
-  } else if (i.acao === 'comprar') r = comprar(P, cadeira);
-  else if (i.acao === 'passar') r = passar(P, cadeira);
+    else r = JOGO.motor.jogar(P, cadeira, i.peca, i.ponta);
+  } else if (i.acao === 'comprar') r = JOGO.motor.comprar(P, cadeira);
+  else if (i.acao === 'passar') r = JOGO.motor.passar(P, cadeira);
   else r = { erro: 'ação desconhecida' };
 
   // O SILÊNCIO É O DEFEITO, NÃO A RECUSA. `avisar` fala com quem está NESTA tela, e o
@@ -5494,7 +5546,7 @@ function aplicarIntencao(cadeira, i) {
 
   if (r.fim) {
     tocarBatida();
-    narrar(r.fim.motivo === 'batida' ? `${nome} bateu — ${NOME_BATIDA[r.fim.tipo]}` : 'Jogo trancado');
+    narrar(r.fim.motivo === 'batida' ? `${nome} bateu — ${JOGO.motor.nomeDoFim(r.fim.tipo)}` : 'Jogo trancado');
   }
   avancar();
 }
@@ -5507,7 +5559,7 @@ function pedirTroca(cadeira) {
   // sempre, sem botão nem tecla que saísse dela.
   saindo = false;
   travado = true;
-  esconderMao();                       // as peças somem da CENA, não só da vista
+  JOGO.mesa.esconderMao();                       // as peças somem da CENA, não só da vista
   el('passeNome').textContent = P.cadeiras[cadeira].nome;
   mostrarTela('telaPasse');
 }
@@ -5530,7 +5582,7 @@ el('btProxima').onclick = () => {
     if (P) publicar(); else atualizarVista(vistaAtual);
     return;
   }
-  novaMao(P);
+  JOGO.motor.proximaMao(P);
   tocarEmbaralho();
   anunciarAbertura();
   avancar();
@@ -5570,7 +5622,7 @@ function sairDaPartida() {
     return;
   }
   if (modo === 'anfitriao' && P && P.fase !== 'fim') {
-    abandonar(P, euNaTela);
+    JOGO.motor.abandonar(P, euNaTela);
     publicar();                                   // a mesa fica sabendo por que acabou
     // A QUARTA CABEÇA DA MESMA HIDRA, achada ao consertar as outras três: um `setTimeout`
     // sem dono, sem guarda, e chamando `encerrarRede` incondicionalmente. Se o anfitrião
@@ -5662,8 +5714,8 @@ function partidaGuardada() {
   // truthy num objeto literal e passaria — deixar dois padrões de validação no mesmo
   // projeto é como o primeiro volta.
   if (!p.regras || typeof p.regras !== 'object') return null;
-  if (!Object.hasOwn(MODOS, p.regras.modo)) return null;
-  if (!MODOS[p.regras.modo].cadeiras.includes(p.n)) return null;
+  if (!Object.hasOwn(JOGO.menu.MODOS, p.regras.modo)) return null;
+  if (!JOGO.menu.MODOS[p.regras.modo].cadeiras.includes(p.n)) return null;
 
   return g;
 }
@@ -5672,7 +5724,7 @@ function atualizarBotaoRetomar() {
   const g = partidaGuardada();
   el('btRetomar').classList.toggle('oculta', !g);
   if (g) {
-    const m = MODOS[g.P.regras.modo];
+    const m = JOGO.menu.MODOS[g.P.regras.modo];
     el('btRetomar').textContent =
       `Continuar a partida de antes · ${m ? m.rotulo : g.P.regras.modo}, mão ${g.P.maoNum}`;
   }
@@ -5707,7 +5759,7 @@ function retomarPartida(opcoes) {
   travado = false;
   viuOFimDaMao = false;
   saindo = false;
-  esquecerArrumacao();                 // a arrumação era da sessão que morreu
+  JOGO.mesa.esquecerArrumacao();                 // a arrumação era da sessão que morreu
   limparConversa();
   ligarMurmuro();
   esconderTelas();
@@ -5759,14 +5811,14 @@ const digitando = ev => /^(INPUT|TEXTAREA)$/.test((ev.target || {}).tagName || '
 
 addEventListener('keydown', ev => {
   if (digitando(ev)) return;
-  if (ev.key === 'Escape') cancelarEscolha();
+  if (ev.key === 'Escape') JOGO.toque.cancelar();
 });
 
 HUD.comprar.onclick = () => pedirAcao({ acao: 'comprar' });
 HUD.passar.onclick = () => pedirAcao({ acao: 'passar' });
 // Arrumar e contar não passam pelo motor: são jeitos de OLHAR a sua própria mão, e
 // funcionam fora da sua vez de propósito.
-HUD.arrumar.onclick = () => { arrumarMao(); tocarSoltar(); };
+HUD.arrumar.onclick = () => { JOGO.mesa.arrumar(); tocarSoltar(); };
 HUD.contar.onclick = () => {
   contando = !contando;
   guardar('contagem', contando);
@@ -5781,7 +5833,7 @@ HUD.contar.onclick = () => {
 // ainda confirma ou cancela, e ninguém joga por você.
 function pedirDica() {
   if (!podeAgirAgora()) { avisar('A dica é para a sua vez.'); return; }
-  const d = dicaDaVista(vistaAtual);
+  const d = JOGO.bot.dica(vistaAtual);
   if (!d) { avisar('Nada a sugerir agora.'); return; }
 
   // Só os porquês que pesaram de verdade, do mais forte para o mais fraco, e no máximo
@@ -5798,9 +5850,9 @@ function pedirDica() {
 
   // Procura na ORDEM DA TELA, que desde a arrumação não é a de vista.mao — é o mesmo
   // cuidado da ponte `selecionar` dos testes, e pela mesma razão.
-  const i = naMao.findIndex(m => mesmaPeca(m.peca, d.peca));
+  const i = JOGO.mesa.naMao.findIndex(m => JOGO.motor.mesmaJogada(m.peca, d.peca));
   if (i < 0) { avisar('Nada a sugerir agora.'); return; }
-  selecionarPeca(i);
+  JOGO.toque.selecionar(i);
   tocarSoltar();
   const onde = d.ponta === 'esq' ? 'na esquerda' : 'na direita';
   anotar(`Dica: ${d.peca[0]}|${d.peca[1]} ${onde}${razoes.length ? ' — ' + razoes.join('; ') : ''}`);
@@ -5811,21 +5863,15 @@ HUD.dica.onclick = () => pedirDica();
 
 addEventListener('keydown', ev => {
   if (digitando(ev)) return;
-  if (ev.key === 'a' || ev.key === 'A') arrumarMao();
+  if (ev.key === 'a' || ev.key === 'A') JOGO.mesa.arrumar();
   if (ev.key === 'd' || ev.key === 'D') pedirDica();
 });
 
 // ─── loop ────────────────────────────────────────────────────────────────────
-// Primeiro enquadramento. Fica aqui, e não no fim de 070-cena.js, porque enquadrar() lê
-// a profundidade da mão (100-mao.js) e manda refazer o leque — nada disso existe ainda
-// quando o arquivo da cena termina de rodar.
-enquadrar();
-
-// O menu já nasce visível pelo HTML, então `mostrarTela` nunca roda na carga — e sem esta
-// chamada o botão de retomar só apareceria depois da primeira volta ao menu, que é
-// justamente quando ele não é mais necessário. Fica aqui, no fim, pelo mesmo motivo do
-// `enquadrar()` acima: depende de tudo já estar declarado.
-atualizarBotaoRetomar();
+// O primeiro `enquadrar()`, o `atualizarBotaoRetomar()` e o `requestAnimationFrame(quadro)`
+// que ligava tudo foram para `900-arranque.js`. Os três dependem do jogo que está na mesa —
+// o enquadramento lê a profundidade da mão, o botão de retomar lê a tabela de modos, e o
+// loop anima a mesa —, e no primeiro tempo da carga não há jogo escolhido ainda.
 
 let ultimoQuadro = performance.now();
 
@@ -5834,9 +5880,10 @@ function quadro(agora) {
   const dt = Math.min((agora - ultimoQuadro) / 1000, 0.1);
   ultimoQuadro = agora;
 
-  atualizarPonteiro();
-  animarTabuleiro(dt);
-  animarMao(dt, apontada);
+  JOGO.toque.ponteiro();
+  // `apontada` é lido AGORA, e não guardado: é um `let` que muda a cada movimento do
+  // ponteiro, e um valor copiado no registro congelaria o realce da peça.
+  JOGO.mesa.animar(dt, JOGO.toque.apontada());
 
   // A lâmpada respira de leve: mesa parada com luz parada parece render, não boteco.
   //
@@ -5852,26 +5899,27 @@ function quadro(agora) {
 
   renderer.render(scene, camera);
 }
-requestAnimationFrame(quadro);
 
 // Ponte para os testes de aparência (tests/shots.mjs): monta situações específicas —
 // tabuleiro longo, lá-e-lô com as duas pontas acesas — sem ter de jogar de verdade.
 window.__jogo = {
-  pronto: true, MESA, comecarLocal, aplicarIntencao, pedirAcao, jogadaDoBot, mostrarTela, grupoPrevia,
-  // camera e naMao existem aqui para tests/test-telas.mjs projetar cada peça da mão para
-  // coordenadas de tela e reprovar se alguma cair fora — que é o teste que prova "dá
-  // para ver a mão" sem ninguém olhar screenshot.
-  camera, naMao, enquadrar, grupoMesa, grupoOutros, grupoMonte,
+  pronto: true, MESA, comecarLocal, aplicarIntencao, pedirAcao, mostrarTela,
+  // A CAMERA é da casa e fica aqui; o que ela projeta — as peças, os grupos, a mão — chega
+  // pelo `JOGO.ponte`, que o arranque despeja por cima deste objeto. Foi assim que os nomes
+  // do dominó saíram daqui: um teste que precisa de `grupoMonte` está pedindo uma coisa DO
+  // JOGO, e quem sabe se ela existe é o jogo. As chaves continuam as mesmas, então nenhuma
+  // suíte mudou de linha.
+  camera, enquadrar,
   // THREE e as tralhas existem aqui para a asserção 3D CONTRA 3D do test-telas medir
   // CAIXAS em coordenadas de mundo. Sem o Box3 ela só saberia comparar centros, e centro
   // contra centro nunca acusa nada: os centros ficam a 2,7 um do outro e quem se toca são
   // as bordas.
   THREE, tralhas,
-  arrumarMao, moverNaMao, publicar, alternarConversa, falar, trocarCanal,
+  publicar, alternarConversa, falar, trocarCanal,
   // Retomar precisa ser dirigível pelos testes: o caminho inteiro só existe entre duas
   // cargas da página, e é justamente aí que ninguém olha.
   retomarPartida, partidaGuardada, atualizarBotaoRetomar, lembrarMesa, mesaLembrada,
-  pedirDica, dicaDaVista,
+  pedirDica,
   // CONGELA A MESA: cancela o lance de bot que estiver agendado. As cenas do
   // tests/test-telas.mjs montam a mesa jogando de verdade e depois esperam a tela
   // assentar — e nessa janela um número VARIÁVEL de temporizadores de bot disparava, com
@@ -5913,14 +5961,182 @@ window.__jogo = {
   ajustarCompraAoModo,
   get P() { return P; },
   get vista() { return vistaAtual; },
-  // A ORDEM DA TELA, que desde a arrumação não é mais a de vista.mao. Quem quiser
-  // selecionar uma peça tem de procurar aqui.
-  get maoNaTela() { return naMao.map(m => m.peca); },
-  // Faz exatamente o que o clique faria: levanta a peça, mostra os fantasmas e a barra.
-  // Recebe a PEÇA e não o índice — igual ao motor, e pelo mesmo motivo: índice de tela
-  // era o único acoplamento do repositório que quebrava calado quando a mão reordenava.
-  selecionar: peca => selecionarPeca(naMao.findIndex(m => mesmaPeca(m.peca, peca))),
+  // `maoNaTela` e `selecionar` foram para o `JOGO.ponte`: os dois falam de PEÇA — a ordem
+  // das peças na tela, e escolher uma pela peça e não pelo índice. Uma carta de truco não
+  // responde a nenhuma das duas perguntas do mesmo jeito.
 };
+
+/* ····· 30-domino/300-registro.js ····· */
+//
+// Até a v3 a casa chamava o dominó pelo nome — `novaPartida(...)`, `sincronizarMao(v)`,
+// `selecionarPeca(i)`. Funciona com um jogo só, e para de funcionar com dois. Aqui o dominó
+// pendura um CONTRATO em `JOGOS`, e a casa passa a falar com `JOGO.motor.x`.
+//
+// O CONTRATO É DE VERBOS, NÃO DE NOMES INTERNOS, e a distinção é o ponto todo. Espelhar os
+// 46 nomes que a casa usava hoje obrigaria o truco a ter um `sincronizarMonte` — e truco não
+// tem monte. O que a casa precisa dizer é "sincronize a mesa com esta vista", "anime",
+// "qual a largura de uma peça". Como cada jogo faz isso é problema dele.
+//
+// O número 300 põe este arquivo depois de toda a `10-casa/` (010…160) e depois de todo o
+// resto do dominó: ele REFERENCIA tudo, então tem de vir por último. É o segundo dos três
+// tempos de carga descritos em `010-constantes.js`.
+
+JOGOS.domino = {
+  nome: 'Dominó de Bar',
+  sub: 'Dupla-seis, regras de bar. Você escolhe quem senta em cada cadeira.',
+
+  // ─── o motor ───────────────────────────────────────────────────────────────
+  // Turnos, pontuação e a fronteira de segurança. `visao` é o invariante 3: é literalmente o
+  // que trafega no online, e o anfitrião nunca manda a mão alheia.
+  motor: {
+    nova: novaPartida,
+    visao: visaoDe,
+    jogar, comprar, passar,
+    proximaMao: novaMao,
+    time: timeDe,
+    abandonar,
+    // "esta jogada que chegou pelo fio tem forma de jogada deste jogo?" — a guarda que
+    // impede uma mensagem torta de derrubar a mesa do anfitrião (C3 da Fila 11). No dominó
+    // é um par de números de 0 a 6; no truco será uma carta.
+    jogadaDoFio: p => Array.isArray(p) && p.length === 2
+      && p.every(n => Number.isInteger(n) && n >= 0 && n <= MAX_PINTAS),
+    // Duas jogadas são a mesma? O arrasto e a seleção precisam comparar sem saber a forma.
+    mesmaJogada: mesmaPeca,
+    // Como se chama o jeito como a mão acabou ("batida de carroça", "jogo trancado").
+    nomeDoFim: tipo => NOME_BATIDA[tipo] || '',
+  },
+
+  // ─── a mesa em 3D ──────────────────────────────────────────────────────────
+  // Quatro verbos, e não os vinte e um nomes que a casa alcançava antes.
+  mesa: {
+    sincronizar(v) { sincronizarTabuleiro(v); sincronizarMao(v); sincronizarOutros(v); sincronizarMonte(v); },
+    animar(dt, apontada) { animarTabuleiro(dt); animarMao(dt, apontada); },
+    esconderMao,
+    arrumar: arrumarMao,
+    esquecerArrumacao,
+    mover: moverNaMao,
+    redesenhar: redesenharMao,
+    // O array vivo das peças na sua mão, para o raycast e para o arrasto. A referência é
+    // estável (é um `const []` que o dominó só mutila por dentro), então vai direto.
+    naMao,
+    // Os grupos que o raycast atravessa. Devolvido por função porque um jogo pode montá-los
+    // depois — e porque o truco terá outros.
+    grupos: () => [grupoMesa, grupoPrevia, grupoOutros, grupoMonte],
+
+    // AS MEDIDAS QUE O ASSENTO PRECISA. Era aqui que o 3D da casa vazava: `070-cena.js`
+    // media o assento do adversário com `PECA_C`/`PECA_E` e chamava `caixaDoMonte` — ou
+    // seja, o boteco sabia o tamanho de uma peça de dominó. Uma carta tem outra proporção, e
+    // sem isto ela não caberia na conta.
+    larguraDaPeca: () => PECA_C,
+    espessuraDaPeca: () => PECA_E,
+    alturaDaMao: () => MAO_Y,
+    profundidadeDaMao: () => MAO_Z,
+    anguloDaCadeira,
+    caixaDoMonte,
+  },
+
+  // ─── escolher → ver → confirmar ────────────────────────────────────────────
+  toque: {
+    selecionar: selecionarPeca,
+    cancelar: cancelarEscolha,
+    confirmar: confirmarJogada,
+    reavaliar: reavaliarEscolha,
+    ponteiro: atualizarPonteiro,
+    // `apontada` é um `let` que muda a cada quadro — tem de ser lido na hora, nunca copiado
+    // no registro, senão o realce congela no valor que existia na carga.
+    apontada: () => apontada,
+  },
+
+  // ─── o bot ─────────────────────────────────────────────────────────────────
+  // Níveis são QUANTA INFORMAÇÃO o bot recebe, não três algoritmos — e a dica é o bot
+  // pensando com a sua mão, o que só é possível porque ele nunca trapaceou.
+  bot: { jogada: jogadaDoBot, dica: dicaDaVista, NIVEIS },
+
+  // ─── o menu ────────────────────────────────────────────────────────────────
+  menu: { MODOS, MODO_PADRAO, baralho: baralhoDoModo, sobra: sobraDoBaralho },
+
+  // ─── os dois encaixes da tela ──────────────────────────────────────────────
+  // O painel de apoio já era um encaixe desde a v3.0.0 (`painelDoJogo`); ele passa a chegar
+  // pelo contrato, junto com os outros, em vez de por uma atribuição solta.
+  painel: desenharContagem,
+
+  // ─── o que as SUÍTES precisam alcançar ─────────────────────────────────────
+  // A ponte `window.__jogo` (160-loop.js) expunha `grupoMonte`, `naMao` e `jogadaDoBot` —
+  // ou seja, a casa listava nomes de dominó para os testes acharem. Um teste que precisa de
+  // `grupoMonte` está pedindo uma coisa DO JOGO, e quem sabe se ela existe é o jogo.
+  //
+  // O arranque despeja isto por cima da ponte, então AS CHAVES CONTINUAM AS MESMAS e
+  // nenhuma linha de suíte mudou. Um jogo sem monte simplesmente não põe `grupoMonte` aqui.
+  ponte: {
+    jogadaDoBot, dicaDaVista,
+    grupoMesa, grupoPrevia, grupoOutros, grupoMonte,
+    naMao, arrumarMao, moverNaMao,
+    // A ORDEM DA TELA, que desde a arrumação não é mais a de `vista.mao`. Quem quiser
+    // selecionar uma peça tem de procurar aqui.
+    get maoNaTela() { return naMao.map(m => m.peca); },
+    // Faz exatamente o que o clique faria: levanta a peça, mostra os fantasmas e a barra.
+    // Recebe a PEÇA e não o índice — igual ao motor, e pelo mesmo motivo: índice de tela era
+    // o único acoplamento do repositório que quebrava calado quando a mão reordenava.
+    selecionar: peca => selecionarPeca(naMao.findIndex(m => mesmaPeca(m.peca, peca))),
+  },
+};
+
+/* ····· 10-casa/900-arranque.js ····· */
+//
+// Os outros dois tempos estão descritos em `010-constantes.js`. Este arquivo é o último de
+// todos de propósito — é o único lugar de onde se enxerga a casa inteira E todos os jogos
+// registrados.
+//
+// POR QUE ISTO PRECISOU EXISTIR. Até a v3 estas chamadas moravam soltas no fim de
+// `140-menu.js` e de `160-loop.js`, e funcionavam porque só havia um jogo: "a tabela de
+// modos" era a do dominó, ponto. Com dois jogos a mesma linha passa a ter duas respostas
+// possíveis, e a única hora em que ela tem UMA é depois de alguém escolher.
+//
+// Repare no que NÃO veio para cá: os `addEventListener` e os `onclick` continuam onde
+// estavam. Eles não executam nada na carga — registram um corpo que só roda no clique, muito
+// depois de tudo existir. Mover o que não precisa ser movido seria trocar risco por nada.
+
+function arrancar() {
+  // 1. QUEM ESTÁ NA MESA. Hoje é sempre o dominó; a aba que deixa o jogador escolher entra
+  //    aqui, e é por isso que a escolha já passa por `trocarDeJogo` em vez de uma atribuição.
+  if (!trocarDeJogo('domino')) throw new Error('nenhum jogo se registrou em JOGOS');
+
+  // 2. A MESA GUARDADA. Só agora `mesaLembrada()` sabe contra qual tabela de modos validar.
+  //    `Object.assign` e não `MESA = …`: a referência tem de continuar a mesma, porque o
+  //    projeto inteiro lê `MESA.n` direto.
+  Object.assign(MESA, mesaLembrada());
+
+  // 3. A TELA. Os botões nascem marcados no HTML com o padrão, então sem `refletir` o jogo
+  //    começaria num Trio até 10 enquanto a tela promete Clássico até 6.
+  refletirMesaNosBotoes();
+  ajustarCadeirasAoModo();
+  montarCadeiras();
+
+  // 4. O ENQUADRAMENTO. Depois da mão existir: `enquadrar()` lê a profundidade dela e manda
+  //    refazer o leque.
+  enquadrar();
+
+  // 5. O BOTÃO DE RETOMAR. O menu já nasce visível pelo HTML, então `mostrarTela` nunca roda
+  //    na carga — sem esta chamada o botão só apareceria depois da primeira volta ao menu,
+  //    que é justamente quando ele não serve mais para nada.
+  atualizarBotaoRetomar();
+
+  // 6. O QUE AS SUÍTES ALCANÇAM. A ponte da casa (`window.__jogo`) nasce com o que é da
+  //    casa; o jogo despeja o resto por cima, com as MESMAS chaves de antes — foi assim que
+  //    `grupoMonte` e `naMao` saíram de `160-loop.js` sem uma linha de teste mudar.
+  //
+  //    NÃO É `Object.assign`, e a diferença custou uma reprovação: `Object.assign` INVOCA os
+  //    getters da origem e copia o VALOR. O `get maoNaTela()` da ponte virava uma fotografia
+  //    tirada neste instante — a mão vazia, porque ainda não há partida —, e depois de
+  //    retomar uma partida guardada a suíte via "23 peças na mesa, 0 na sua mão". Copiar os
+  //    DESCRITORES leva o getter inteiro, e ele continua sendo consultado na hora.
+  Object.defineProperties(window.__jogo, Object.getOwnPropertyDescriptors(JOGO.ponte));
+
+  // 7. E O LOOP.
+  requestAnimationFrame(quadro);
+}
+
+arrancar();
 </script>
 
 <!-- SONDA DE CARGA — script CLÁSSICO, não módulo, e é o ponto todo.

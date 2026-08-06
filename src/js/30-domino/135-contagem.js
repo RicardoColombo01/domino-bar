@@ -37,5 +37,6 @@ function desenharContagem(vista) {
   HUD.contagem.innerHTML = '<span class="rot">faltam aparecer</span>' + linhas.join('');
 }
 
-// É por esta linha que o HUD da casa desenha um painel de dominó sem nunca citar dominó.
-painelDoJogo = desenharContagem;
+// A ligação com o HUD da casa mora agora no CONTRATO (`painel: desenharContagem`, em
+// `300-registro.js`), e não numa atribuição solta daqui. É a mesma mudança que os outros
+// encaixes sofreram na v4: um jogo se apresenta à casa por um lugar só.

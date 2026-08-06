@@ -32,12 +32,15 @@ let contando = !!lido('contagem', false);
 //
 // Estava tudo aqui dentro (`desenharContagem`), que era a última regra de dominó morando na
 // pasta que promete não conhecer o jogo. Agora a casa reserva o lugar e chama; quem sabe as
-// regras pendura o seu em `30-domino/135-contagem.js`, e o truco pendura o dele sem que um
+// regras entrega o seu no contrato (`JOGO.painel`), e o truco entrega o dele sem que um
 // precise saber do outro.
 //
-// Nasce sem fazer nada de propósito: um jogo que não tenha painel não paga nada por isso, e
-// a casa não fica com um `if` perguntando qual jogo está na mesa.
-let painelDoJogo = () => {};
+// Era um `let` que o jogo reatribuía; passou a vir pelo contrato como todo o resto — assim
+// não há duas maneiras de um jogo se apresentar à casa.
+//
+// Jogo sem painel simplesmente não põe a chave, e o `?.` cobre: ninguém paga um `if`
+// perguntando qual jogo está na mesa.
+const painelDoJogo = vista => JOGO.painel?.(vista);
 
 const ETIQUETA ={ voce: 'você', local: 'nesta tela', bot: 'bot', online: 'online' };
 
@@ -102,8 +105,8 @@ function nomeEmPartes(nome) {
 // sem placar, sem vez, sem botões); e `'constructor'` é TRUTHY num objeto literal, então
 // passava pelo `||` e escrevia "undefined · até 6" na cara do jogador. É literalmente o
 // defeito 5 da Fila 6, no único validador que nunca foi endurecido.
-const rotuloDoModo = modo => Object.hasOwn(MODOS, modo) && modo !== MODO_PADRAO
-  ? escapar(MODOS[modo].rotulo) + ' · ' : '';
+const rotuloDoModo = modo => Object.hasOwn(JOGO.menu.MODOS, modo) && modo !== JOGO.menu.MODO_PADRAO
+  ? escapar(JOGO.menu.MODOS[modo].rotulo) + ' · ' : '';
 
 function desenharHUD(vista) {
   HUD.pontas.textContent = vista.pontas ? vista.pontas.join('  ·  ') : '—';
@@ -174,7 +177,7 @@ function mostrarConfirmacao(vista, m) {
     return `<button class="btn peq principal" data-lado="${lado}">${rotulo}</button>`;
   }).join('');
   el('confBotoes').querySelectorAll('button').forEach(b => {
-    b.onclick = () => confirmarJogada(b.dataset.lado);
+    b.onclick = () => JOGO.toque.confirmar(b.dataset.lado);
   });
   el('confirmar').classList.remove('oculta');
 }
@@ -182,7 +185,7 @@ function mostrarConfirmacao(vista, m) {
 function esconderConfirmacao() {
   el('confirmar').classList.add('oculta');
 }
-el('btCancelar').onclick = () => cancelarEscolha();
+el('btCancelar').onclick = () => JOGO.toque.cancelar();
 
 // ─── a conversa da mesa ──────────────────────────────────────────────────────
 // A narração do jogo e as falas no MESMO fio, em ordem: jogada em cinza, fala em âmbar
@@ -380,7 +383,7 @@ function sobrouNaMao(vista) {
       .map((s, i) => `<div><span>${escapar(vista.cadeiras[i].nome)}</span><b>${escapar(s)}</b></div>`).join('');
   }
   return (r.somasPorTime || []).map((total, t) => {
-    const parcelas = r.somas.filter((_, i) => timeDe(vista, i) === t).map(escapar).join(' + ');
+    const parcelas = r.somas.filter((_, i) => JOGO.motor.time(vista, i) === t).map(escapar).join(' + ');
     return `<div><span>${nomeDoTime(vista, t)}<i>${parcelas}</i></span><b>${escapar(total)}</b></div>`;
   }).join('');
 }
@@ -393,7 +396,7 @@ function mostrarFimDeMao(vista) {
   // vieram os pontos. Agora ela aparece sempre, e o botão vira o passo para o resultado.
   const acabou = vista.fase === 'fim';
   el('fimTitulo').textContent = bateu ? 'Bateu!' : 'Trancou';
-  el('fimTipo').textContent = NOME_BATIDA[r.tipo];
+  el('fimTipo').textContent = JOGO.motor.nomeDoFim(r.tipo);
   // "Zé e Tião fazem", não "faz": em duplas o sujeito é a dupla.
   const fazem = vista.duplas ? 'fazem' : 'faz';
   el('fimQuem').textContent = r.time === null
@@ -413,13 +416,13 @@ function mostrarFimDePartida(vista) {
   // Quem saiu da mesa não leva a partida nem estando na frente: o time dele fica fora
   // da conta do campeão. É o que impede fechar a aba de virar saída de emergência.
   const fora = vista.desistiu === null || vista.desistiu === undefined
-    ? -1 : timeDe(vista, vista.desistiu);
+    ? -1 : JOGO.motor.time(vista, vista.desistiu);
   let campeao = 0;
   vista.placar.forEach((p, t) => {
     if (t === fora) return;
     if (campeao === fora || p > vista.placar[campeao]) campeao = t;
   });
-  const meuTime = timeDe(vista, vista.cadeira);
+  const meuTime = JOGO.motor.time(vista, vista.cadeira);
   el('campeao').textContent = nomeDoTime(vista, campeao);
   el('campeaoTitulo').textContent = fora >= 0
     ? (fora === meuTime ? 'Você saiu da mesa' : `${vista.cadeiras[vista.desistiu].nome} saiu da mesa`)

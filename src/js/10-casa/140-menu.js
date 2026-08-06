@@ -45,8 +45,8 @@ function mesaLembrada() {
   // inteiro: tela preta que voltava a cada recarregamento, até alguém limpar o
   // armazenamento à mão. É exatamente o "alguém mexendo no armazenamento" que o comentário
   // acima promete cobrir — a validação existia e tinha um buraco do tamanho do protótipo.
-  const modo = Object.hasOwn(MODOS, g.modo) ? g.modo : MODO_PADRAO;
-  const cabem = MODOS[modo].cadeiras;
+  const modo = Object.hasOwn(JOGO.menu.MODOS, g.modo) ? g.modo : JOGO.menu.MODO_PADRAO;
+  const cabem = JOGO.menu.MODOS[modo].cadeiras;
   return {
     modo,
     n: cabem.includes(g.n) ? g.n : cabem[0],
@@ -75,7 +75,7 @@ function mesaLembrada() {
         // passava e o bot jogava sem ruído e sem memória, degradação invisível), mas é o
         // mesmo furo, e deixar dois padrões de validação no mesmo arquivo é como o
         // primeiro volta.
-        nivel: tipo === 'bot' ? (Object.hasOwn(NIVEIS, c.nivel) ? c.nivel : 'normal') : undefined,
+        nivel: tipo === 'bot' ? (Object.hasOwn(JOGO.bot.NIVEIS, c.nivel) ? c.nivel : 'normal') : undefined,
         // DE SESSÃO, nunca do armazenamento — e por isso escrita como literal, e não
         // copiada de `c`. A marca diz "esta cadeira virou bot por falta de gente, NESTA
         // mesa que está de pé agora"; vinda de fora ela abriria ao primeiro estranho com o
@@ -88,7 +88,16 @@ function mesaLembrada() {
   };
 }
 
-const MESA = mesaLembrada();
+// A MESA NASCE VAZIA E É PREENCHIDA NO ARRANQUE, e não é preciosismo: `mesaLembrada()`
+// valida o modo guardado contra a tabela `MODOS`, e com dois jogos na casa a pergunta "qual
+// tabela?" só tem resposta depois de alguém escolher o jogo. Enquanto isso acontecia aqui,
+// no topo do módulo, a resposta tinha de ser "a do dominó" — que é a definição de casa que
+// conhece o jogo.
+//
+// Continua sendo `const`: o que muda é o CONTEÚDO, nunca a referência. Fosse `let`, as
+// dezenas de leituras de `MESA.n` espalhadas pelo projeto passariam a depender de quem
+// reatribuiu por último.
+const MESA = {};
 
 // Guarda as quatro cadeiras, e não só as `n` em uso: quem joga em três e volta para
 // quatro esperava o nome do quarto de volta, não "Tião" outra vez.
@@ -151,8 +160,8 @@ function montarCadeiras() {
 // O tamanho do baralho sai de baralhoDoModo, não de um 28 escrito aqui — foi assim que
 // esta linha quebrou quando os modos chegaram.
 function notaDaMesa() {
-  const m = MODOS[MESA.modo];
-  const baralho = baralhoDoModo(m).length;
+  const m = JOGO.menu.MODOS[MESA.modo];
+  const baralho = JOGO.menu.baralho(m).length;
   const monte = baralho - m.pecasPorMao * MESA.n;
   return (MESA.n === 4 ? 'em duplas: 1 e 3 contra 2 e 4' : 'sem duplas') +
     ` · ${baralho} peças, ${m.pecasPorMao} para cada · ` +
@@ -163,7 +172,7 @@ function notaDaMesa() {
 // delas não sobra peça, sobra erro. Em vez de deixar escolher e reclamar depois, as
 // cadeiras que não fecham ficam apagadas.
 function ajustarCadeirasAoModo() {
-  const cabem = MODOS[MESA.modo].cadeiras;
+  const cabem = JOGO.menu.MODOS[MESA.modo].cadeiras;
   if (!cabem.includes(MESA.n)) MESA.n = cabem[0];
   el('qtdJogadores').querySelectorAll('button').forEach(b => {
     const n = +b.dataset.n;
@@ -187,7 +196,7 @@ function ajustarCadeirasAoModo() {
 // ignora o valor onde não há monte, então guardá-lo não custa nada — e é o `disabled` que
 // impede a promessa.
 function ajustarCompraAoModo() {
-  const temMonte = sobraDoBaralho(MODOS[MESA.modo], MESA.n) > 0;
+  const temMonte = JOGO.menu.sobra(JOGO.menu.MODOS[MESA.modo], MESA.n) > 0;
   el('compraLivre').querySelectorAll('button').forEach(b => { b.disabled = !temMonte; });
   el('notaCompra').textContent = temMonte ? '' : 'sem monte nesta mesa';
 }
@@ -247,6 +256,6 @@ el('btEntrar').onclick = () => entrarNumaMesa();
 // clique. É o mesmo caminho que o `encerrarRede` ao lado já fazia.
 el('btMenu').onclick = () => { recomecarAsVoltas(); encerrarRede(); mostrarTela('telaMenu'); };
 
-refletirMesaNosBotoes();
-ajustarCadeirasAoModo();
-montarCadeiras();
+// As três chamadas que montavam o menu na carga foram para `900-arranque.js`, junto com o
+// `mesaLembrada()` que enche a MESA. Todas dependem de saber QUAL jogo está na mesa, e no
+// primeiro tempo da carga ninguém sabe ainda.

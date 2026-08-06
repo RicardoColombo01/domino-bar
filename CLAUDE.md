@@ -2762,12 +2762,39 @@ paga; o pife e o 21 pegam de graça.
 
 ### As cinco fases
 
-**FASE 1 — o contrato. Nada muda para o jogador.** Varredura por AST; `JOGOS`/`JOGO`;
-converter as chamadas de `10-casa/`; **inverter os dois vazamentos do 3D** (sem isso a carta do
-truco não cabe na conta do assento); `barraDoJogo`; `900-arranque.js`. É a fase **arriscada** —
-refatoração pura em quase todo arquivo da casa. Vai sozinha, num commit próprio. A prova é a
-mesma da v2.3.0: suítes verdes **e** comportamento idêntico; onde a asserção nascer verde,
-**mutação**.
+**FASE 1 — o contrato ✔ FEITA (v4.0.0).** A asserção desta fase não é suíte verde, é um
+NÚMERO: a varredura por AST media **46 nomes do dominó alcançados pela casa, 77 vezes**;
+rodada depois, dá **ZERO**. Suíte verde diz que nada quebrou; este número diz que o
+acoplamento acabou. E a "folga mínima 0.33" do `telas` — a medida mais sensível que este
+projeto tem a mudança de geometria — saiu idêntica à da `main`.
+
+O contrato ficou de VERBOS: os quatro `sincronizar*` viraram `JOGO.mesa.sincronizar(v)`, os
+dois `animar*` viraram `JOGO.mesa.animar(dt, JOGO.toque.apontada())`. Um truco não é obrigado
+a ter um `sincronizarMonte` para caber na casa. E `070-cena.js` parou de saber o tamanho de
+uma peça — a conta do assento usava `PECA_C`/`PECA_E` cravados, e com carta a proporção é
+outra.
+
+O que a implementação acrescentou ao plano:
+
+- **A ponte de teste também vazava.** `window.__jogo` listava `grupoMonte`, `naMao` e
+  `jogadaDoBot` — a casa enumerando nomes de dominó para as suítes acharem. Virou
+  `JOGO.ponte`, com as MESMAS chaves, então nenhuma linha de teste mudou.
+- **`barraDoJogo` NÃO foi feita, de propósito.** Sem o truco escrito, a forma dela seria
+  chute. Entra na Fase 4, onde a necessidade define a interface.
+
+**Três tropeços que valem mais que o conserto:**
+
+- **`{ jogadaDoBot }` é ATALHO DE OBJETO, e ali a chave e o valor são o MESMO nó de AST.**
+  Trocar o texto produziu `{ JOGO.bot.jogada }`, que não é sintaxe, e o build reprovou. A
+  migração passou a emitir `jogadaDoBot: JOGO.bot.jogada`.
+- **`Object.assign` INVOCA os getters da origem e copia o VALOR.** O `get maoNaTela()` da
+  ponte virou uma fotografia da mão vazia tirada no arranque, e retomar uma partida guardada
+  passou a mostrar *"23 peças na mesa, 0 na sua mão"*. Quem leva o getter inteiro é
+  `Object.defineProperties` com `getOwnPropertyDescriptors`.
+- **A guarda de nome repetido do build pegou uma colisão de verdade na primeira vez que
+  serviu para alguma coisa:** eu ia chamar a função de trocar de jogo de `porNaMesa`, e
+  `080-peca3d.js` já tinha uma. Era exatamente o caso silencioso que ela existe para pegar —
+  duas `function` de mesmo nome, a segunda vencendo calada.
 
 **FASE 2 — a aba.** Faixa **Dominó | Truco** no topo do `telaMenu`; `?jogo=truco` na URL (é o
 que a torna compartilhável e o que os atalhos do manifest usam); `shortcuts` no manifest;

@@ -49,12 +49,12 @@ function comecarLocal() {
   });
   const cadeiras = MESA.cadeiras.slice(0, MESA.n)
     .map(c => ({ nome: c.nome, tipo: c.tipo, nivel: c.nivel }));
-  P = novaPartida(cadeiras, {
+  P = JOGO.motor.nova(cadeiras, {
     alvo: MESA.alvo, compraVoluntaria: MESA.compraVoluntaria, modo: MESA.modo,
   });
   euNaTela = 0;
   travado = false;
-  esquecerArrumacao();               // mesa nova, mão nova: a arrumação de antes não vale
+  JOGO.mesa.esquecerArrumacao();               // mesa nova, mão nova: a arrumação de antes não vale
   limparConversa();
   tocarEmbaralho();
   anunciarAbertura();
@@ -81,7 +81,7 @@ function avancar() {
 function publicar() {
   if (!P) return;
   if (modo === 'anfitriao') espalharVistas();
-  const v = visaoDe(P, euNaTela);
+  const v = JOGO.motor.visao(P, euNaTela);
   atualizarVista(travado
     ? Object.assign({}, v, { mao: [], acoes: { jogadas: [], comprar: false, passar: false } })
     : v);
@@ -90,12 +90,12 @@ function publicar() {
 
 function atualizarVista(v) {
   vistaAtual = v;
-  sincronizarTabuleiro(v);
-  sincronizarMao(v);
-  sincronizarOutros(v);
-  sincronizarMonte(v);
+  // UM VERBO, e não os quatro `sincronizar*` de antes. O dominó tem tabuleiro, mão, mãos
+  // dos outros e monte; o truco tem três vazas e nenhum monte. O que a casa precisa dizer é
+  // "ponha a mesa de acordo com esta vista" — como, é problema de quem conhece o jogo.
+  JOGO.mesa.sincronizar(v);
   desenharHUD(v);
-  reavaliarEscolha(v);
+  JOGO.toque.reavaliar(v);
   // A mão que fecha a partida também mostra os pontos: fase 'fim' cai primeiro na tela
   // de fim de mão, e só depois do clique é que o campeão entra.
   //
@@ -129,7 +129,7 @@ function seguirOTurno() {
     const quem = P.vez, naMao = P.maoNum;
     timerBot = setTimeout(() => {
       if (P && P.fase === 'mao' && P.vez === quem && P.maoNum === naMao && P.cadeiras[quem].tipo === 'bot')
-        aplicarIntencao(quem, jogadaDoBot(P, quem));
+        aplicarIntencao(quem, JOGO.bot.jogada(P, quem));
     }, 550 + Math.random() * 600);                       // pausa para dar para acompanhar
     return;
   }
@@ -156,8 +156,9 @@ function pedirAcao(intencao) {
 // `acoesDe(P, cadeira)`, que sai da mão do próprio jogador, então peça inventada continua
 // devolvendo 'jogada inválida' e a fronteira do invariante 3 segue de pé. É sobre a mesa
 // dos outros parar.
-const pecaDoFio = p => Array.isArray(p) && p.length === 2 &&
-  p.every(n => Number.isInteger(n) && n >= 0 && n <= MAX_PINTAS);
+// Quem sabe a FORMA de uma jogada é o jogo: no dominó é um par de números de 0 a 6, no
+// truco será uma carta. A casa só precisa saber que existe uma pergunta a fazer.
+const pecaDoFio = p => JOGO.motor.jogadaDoFio(p);
 
 function aplicarIntencao(cadeira, i) {
   if (!P || P.fase !== 'mao') return;
@@ -167,9 +168,9 @@ function aplicarIntencao(cadeira, i) {
   // mandando uma mensagem vazia. Agora as três ações são nomeadas e o resto é recusa.
   if (i.acao === 'jogar') {
     if (!pecaDoFio(i.peca) || (i.ponta !== 'esq' && i.ponta !== 'dir')) r = { erro: 'jogada inválida' };
-    else r = jogar(P, cadeira, i.peca, i.ponta);
-  } else if (i.acao === 'comprar') r = comprar(P, cadeira);
-  else if (i.acao === 'passar') r = passar(P, cadeira);
+    else r = JOGO.motor.jogar(P, cadeira, i.peca, i.ponta);
+  } else if (i.acao === 'comprar') r = JOGO.motor.comprar(P, cadeira);
+  else if (i.acao === 'passar') r = JOGO.motor.passar(P, cadeira);
   else r = { erro: 'ação desconhecida' };
 
   // O SILÊNCIO É O DEFEITO, NÃO A RECUSA. `avisar` fala com quem está NESTA tela, e o
@@ -188,7 +189,7 @@ function aplicarIntencao(cadeira, i) {
 
   if (r.fim) {
     tocarBatida();
-    narrar(r.fim.motivo === 'batida' ? `${nome} bateu — ${NOME_BATIDA[r.fim.tipo]}` : 'Jogo trancado');
+    narrar(r.fim.motivo === 'batida' ? `${nome} bateu — ${JOGO.motor.nomeDoFim(r.fim.tipo)}` : 'Jogo trancado');
   }
   avancar();
 }
@@ -201,7 +202,7 @@ function pedirTroca(cadeira) {
   // sempre, sem botão nem tecla que saísse dela.
   saindo = false;
   travado = true;
-  esconderMao();                       // as peças somem da CENA, não só da vista
+  JOGO.mesa.esconderMao();                       // as peças somem da CENA, não só da vista
   el('passeNome').textContent = P.cadeiras[cadeira].nome;
   mostrarTela('telaPasse');
 }
@@ -224,7 +225,7 @@ el('btProxima').onclick = () => {
     if (P) publicar(); else atualizarVista(vistaAtual);
     return;
   }
-  novaMao(P);
+  JOGO.motor.proximaMao(P);
   tocarEmbaralho();
   anunciarAbertura();
   avancar();
@@ -264,7 +265,7 @@ function sairDaPartida() {
     return;
   }
   if (modo === 'anfitriao' && P && P.fase !== 'fim') {
-    abandonar(P, euNaTela);
+    JOGO.motor.abandonar(P, euNaTela);
     publicar();                                   // a mesa fica sabendo por que acabou
     // A QUARTA CABEÇA DA MESMA HIDRA, achada ao consertar as outras três: um `setTimeout`
     // sem dono, sem guarda, e chamando `encerrarRede` incondicionalmente. Se o anfitrião
@@ -356,8 +357,8 @@ function partidaGuardada() {
   // truthy num objeto literal e passaria — deixar dois padrões de validação no mesmo
   // projeto é como o primeiro volta.
   if (!p.regras || typeof p.regras !== 'object') return null;
-  if (!Object.hasOwn(MODOS, p.regras.modo)) return null;
-  if (!MODOS[p.regras.modo].cadeiras.includes(p.n)) return null;
+  if (!Object.hasOwn(JOGO.menu.MODOS, p.regras.modo)) return null;
+  if (!JOGO.menu.MODOS[p.regras.modo].cadeiras.includes(p.n)) return null;
 
   return g;
 }
@@ -366,7 +367,7 @@ function atualizarBotaoRetomar() {
   const g = partidaGuardada();
   el('btRetomar').classList.toggle('oculta', !g);
   if (g) {
-    const m = MODOS[g.P.regras.modo];
+    const m = JOGO.menu.MODOS[g.P.regras.modo];
     el('btRetomar').textContent =
       `Continuar a partida de antes · ${m ? m.rotulo : g.P.regras.modo}, mão ${g.P.maoNum}`;
   }
@@ -401,7 +402,7 @@ function retomarPartida(opcoes) {
   travado = false;
   viuOFimDaMao = false;
   saindo = false;
-  esquecerArrumacao();                 // a arrumação era da sessão que morreu
+  JOGO.mesa.esquecerArrumacao();                 // a arrumação era da sessão que morreu
   limparConversa();
   ligarMurmuro();
   esconderTelas();
@@ -453,14 +454,14 @@ const digitando = ev => /^(INPUT|TEXTAREA)$/.test((ev.target || {}).tagName || '
 
 addEventListener('keydown', ev => {
   if (digitando(ev)) return;
-  if (ev.key === 'Escape') cancelarEscolha();
+  if (ev.key === 'Escape') JOGO.toque.cancelar();
 });
 
 HUD.comprar.onclick = () => pedirAcao({ acao: 'comprar' });
 HUD.passar.onclick = () => pedirAcao({ acao: 'passar' });
 // Arrumar e contar não passam pelo motor: são jeitos de OLHAR a sua própria mão, e
 // funcionam fora da sua vez de propósito.
-HUD.arrumar.onclick = () => { arrumarMao(); tocarSoltar(); };
+HUD.arrumar.onclick = () => { JOGO.mesa.arrumar(); tocarSoltar(); };
 HUD.contar.onclick = () => {
   contando = !contando;
   guardar('contagem', contando);
@@ -475,7 +476,7 @@ HUD.contar.onclick = () => {
 // ainda confirma ou cancela, e ninguém joga por você.
 function pedirDica() {
   if (!podeAgirAgora()) { avisar('A dica é para a sua vez.'); return; }
-  const d = dicaDaVista(vistaAtual);
+  const d = JOGO.bot.dica(vistaAtual);
   if (!d) { avisar('Nada a sugerir agora.'); return; }
 
   // Só os porquês que pesaram de verdade, do mais forte para o mais fraco, e no máximo
@@ -492,9 +493,9 @@ function pedirDica() {
 
   // Procura na ORDEM DA TELA, que desde a arrumação não é a de vista.mao — é o mesmo
   // cuidado da ponte `selecionar` dos testes, e pela mesma razão.
-  const i = naMao.findIndex(m => mesmaPeca(m.peca, d.peca));
+  const i = JOGO.mesa.naMao.findIndex(m => JOGO.motor.mesmaJogada(m.peca, d.peca));
   if (i < 0) { avisar('Nada a sugerir agora.'); return; }
-  selecionarPeca(i);
+  JOGO.toque.selecionar(i);
   tocarSoltar();
   const onde = d.ponta === 'esq' ? 'na esquerda' : 'na direita';
   anotar(`Dica: ${d.peca[0]}|${d.peca[1]} ${onde}${razoes.length ? ' — ' + razoes.join('; ') : ''}`);
@@ -505,21 +506,15 @@ HUD.dica.onclick = () => pedirDica();
 
 addEventListener('keydown', ev => {
   if (digitando(ev)) return;
-  if (ev.key === 'a' || ev.key === 'A') arrumarMao();
+  if (ev.key === 'a' || ev.key === 'A') JOGO.mesa.arrumar();
   if (ev.key === 'd' || ev.key === 'D') pedirDica();
 });
 
 // ─── loop ────────────────────────────────────────────────────────────────────
-// Primeiro enquadramento. Fica aqui, e não no fim de 070-cena.js, porque enquadrar() lê
-// a profundidade da mão (100-mao.js) e manda refazer o leque — nada disso existe ainda
-// quando o arquivo da cena termina de rodar.
-enquadrar();
-
-// O menu já nasce visível pelo HTML, então `mostrarTela` nunca roda na carga — e sem esta
-// chamada o botão de retomar só apareceria depois da primeira volta ao menu, que é
-// justamente quando ele não é mais necessário. Fica aqui, no fim, pelo mesmo motivo do
-// `enquadrar()` acima: depende de tudo já estar declarado.
-atualizarBotaoRetomar();
+// O primeiro `enquadrar()`, o `atualizarBotaoRetomar()` e o `requestAnimationFrame(quadro)`
+// que ligava tudo foram para `900-arranque.js`. Os três dependem do jogo que está na mesa —
+// o enquadramento lê a profundidade da mão, o botão de retomar lê a tabela de modos, e o
+// loop anima a mesa —, e no primeiro tempo da carga não há jogo escolhido ainda.
 
 let ultimoQuadro = performance.now();
 
@@ -528,9 +523,10 @@ function quadro(agora) {
   const dt = Math.min((agora - ultimoQuadro) / 1000, 0.1);
   ultimoQuadro = agora;
 
-  atualizarPonteiro();
-  animarTabuleiro(dt);
-  animarMao(dt, apontada);
+  JOGO.toque.ponteiro();
+  // `apontada` é lido AGORA, e não guardado: é um `let` que muda a cada movimento do
+  // ponteiro, e um valor copiado no registro congelaria o realce da peça.
+  JOGO.mesa.animar(dt, JOGO.toque.apontada());
 
   // A lâmpada respira de leve: mesa parada com luz parada parece render, não boteco.
   //
@@ -546,26 +542,27 @@ function quadro(agora) {
 
   renderer.render(scene, camera);
 }
-requestAnimationFrame(quadro);
 
 // Ponte para os testes de aparência (tests/shots.mjs): monta situações específicas —
 // tabuleiro longo, lá-e-lô com as duas pontas acesas — sem ter de jogar de verdade.
 window.__jogo = {
-  pronto: true, MESA, comecarLocal, aplicarIntencao, pedirAcao, jogadaDoBot, mostrarTela, grupoPrevia,
-  // camera e naMao existem aqui para tests/test-telas.mjs projetar cada peça da mão para
-  // coordenadas de tela e reprovar se alguma cair fora — que é o teste que prova "dá
-  // para ver a mão" sem ninguém olhar screenshot.
-  camera, naMao, enquadrar, grupoMesa, grupoOutros, grupoMonte,
+  pronto: true, MESA, comecarLocal, aplicarIntencao, pedirAcao, mostrarTela,
+  // A CAMERA é da casa e fica aqui; o que ela projeta — as peças, os grupos, a mão — chega
+  // pelo `JOGO.ponte`, que o arranque despeja por cima deste objeto. Foi assim que os nomes
+  // do dominó saíram daqui: um teste que precisa de `grupoMonte` está pedindo uma coisa DO
+  // JOGO, e quem sabe se ela existe é o jogo. As chaves continuam as mesmas, então nenhuma
+  // suíte mudou de linha.
+  camera, enquadrar,
   // THREE e as tralhas existem aqui para a asserção 3D CONTRA 3D do test-telas medir
   // CAIXAS em coordenadas de mundo. Sem o Box3 ela só saberia comparar centros, e centro
   // contra centro nunca acusa nada: os centros ficam a 2,7 um do outro e quem se toca são
   // as bordas.
   THREE, tralhas,
-  arrumarMao, moverNaMao, publicar, alternarConversa, falar, trocarCanal,
+  publicar, alternarConversa, falar, trocarCanal,
   // Retomar precisa ser dirigível pelos testes: o caminho inteiro só existe entre duas
   // cargas da página, e é justamente aí que ninguém olha.
   retomarPartida, partidaGuardada, atualizarBotaoRetomar, lembrarMesa, mesaLembrada,
-  pedirDica, dicaDaVista,
+  pedirDica,
   // CONGELA A MESA: cancela o lance de bot que estiver agendado. As cenas do
   // tests/test-telas.mjs montam a mesa jogando de verdade e depois esperam a tela
   // assentar — e nessa janela um número VARIÁVEL de temporizadores de bot disparava, com
@@ -607,11 +604,7 @@ window.__jogo = {
   ajustarCompraAoModo,
   get P() { return P; },
   get vista() { return vistaAtual; },
-  // A ORDEM DA TELA, que desde a arrumação não é mais a de vista.mao. Quem quiser
-  // selecionar uma peça tem de procurar aqui.
-  get maoNaTela() { return naMao.map(m => m.peca); },
-  // Faz exatamente o que o clique faria: levanta a peça, mostra os fantasmas e a barra.
-  // Recebe a PEÇA e não o índice — igual ao motor, e pelo mesmo motivo: índice de tela
-  // era o único acoplamento do repositório que quebrava calado quando a mão reordenava.
-  selecionar: peca => selecionarPeca(naMao.findIndex(m => mesmaPeca(m.peca, peca))),
+  // `maoNaTela` e `selecionar` foram para o `JOGO.ponte`: os dois falam de PEÇA — a ordem
+  // das peças na tela, e escolher uma pela peça e não pelo índice. Uma carta de truco não
+  // responde a nenhuma das duas perguntas do mesmo jeito.
 };
