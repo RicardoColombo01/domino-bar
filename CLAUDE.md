@@ -354,6 +354,11 @@ cumprir, não um fato.**
   para uma suíte de Node ao lado do `test-telas`: aquilo renderiza WebGL **por software**,
   ou seja é CPU pura, e a espera dele é "oito quadros iguais" com teto de 240 — máquina
   disputada chega ao teto antes de assentar. **Suíte pesada roda sozinha.**
+- **Cache é a segunda porta do "está consertado e o celular mostra o defeito".** O dia perdido
+  de 31/07 tinha um conserto barato — `git push`. Um service worker servindo a PÁGINA do cache
+  reabre o mesmo engano sem conserto nenhum do seu lado, porque o cache é do celular do
+  jogador. Regra que fica: **o que muda de conteúdo sem mudar de nome não pode ser servido do
+  cache enquanto houver rede**; o que tem versão na URL pode e deve.
 - **`String.replace` troca só a PRIMEIRA ocorrência, e o marcador escrito no comentário
   come o de verdade.** O `build.mjs` carimba a versão do `sw.js` trocando `__VERSAO__` — e o
   comentário logo acima explicava o mecanismo citando o próprio token. O comentário ficou com
@@ -563,8 +568,8 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 
 | | |
 |---|---|
-| publicado | **v3.0.0** — https://ricardocolombo01.github.io/domino-bar/ |
-| esta release | **v3.0.0** — as duas dívidas da reorganização fechadas, e **o jogo virou aplicativo** |
+| publicado | **v3.0.1** — https://ricardocolombo01.github.io/domino-bar/ |
+| esta release | **v3.0.1** — a auditoria da v3.0.0: a página passa a ser rede-primeiro, e o resumo do cache cobre o worker |
 | `main` ↔ `origin/main` | conferir com `git rev-list --left-right --count origin/main...main` |
 | Filas 5 a 11 | **todas fechadas**, e não há defeito conhecido em aberto |
 | o que vem | **o Truco** — é o próximo, e o único item grande que sobrou da ordem dada pelo Ricardo em 04/08 |
@@ -2844,7 +2849,19 @@ de fora: a loja e o manifest exigem PNG em arquivo. A fonte é `src/icone.svg`, 
 `npm run icones` refaz os dois; artefato sem caminho de volta à fonte é artefato que ninguém
 consegue mudar daqui a um ano.
 
-**O nome do cache é um RESUMO do `index.html`**, carimbado pelo `build.mjs`. Cache de service
+**A PÁGINA É REDE-PRIMEIRO; o resto é cache-primeiro.** Não é inconsistência, e a distinção é
+o achado mais importante da auditoria da v3.0.0: as URLs do three e do peerjs têm a versão no
+caminho e são **imutáveis**, então buscá-las de novo nunca traria nada diferente. O
+`index.html` é o **único arquivo que muda de conteúdo sem mudar de nome** — servi-lo do cache
+fazia toda correção publicada só aparecer na SEGUNDA visita, e quem testa veria o defeito que
+acabou de consertar. É o dia perdido de 31/07 por uma porta nova, e pior: ali bastava um
+`git push`, aqui não bastaria nada, porque o cache é do celular do jogador. Há asserção — a
+suíte publica uma "v2" no meio da rodada e exige que ela apareça sem segunda visita.
+
+**O nome do cache é um RESUMO do `index.html` mais o molde `src/sw.js`**, carimbado pelo
+`build.mjs`. A segunda metade também veio da auditoria: mudando só a estratégia de cache o
+`index.html` fica igual, o nome não trocaria, e a lógica nova mandaria num cache montado pela
+lógica velha. Cache de service
 worker que não troca de nome prende o jogador numa versão antiga para sempre, e nem limpar a
 aba resolve — amarrando o nome ao conteúdo, publicar correção JÁ é publicar cache novo, e
 "esquecer de bumpar a versão" deixa de existir como categoria de erro. Por isso `sw.js`
