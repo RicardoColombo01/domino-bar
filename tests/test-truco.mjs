@@ -257,8 +257,6 @@ console.log('\na partida começa');
   ok(P.n === 2 && P.duplas === false, 'a mesa de 2 não devia ser de duplas');
   ok(P.placar.length === 2, `o truco tem sempre DOIS placares, veio ${P.placar.length}`);
   ok(P.maos.every(m => m.length === 3), `cada um recebe 3 cartas, veio ${P.maos.map(m => m.length)}`);
-  ok(mod.cartaValida ? true : true, '');
-  n--;                                     // a linha acima é só documentação; não conta
   ok(Array.isArray(P.vira) && P.vira.length === 2, 'a vira não é uma carta');
   // A VIRA SAI DO BARALHO. Sem isto ela poderia repetir uma carta da mão de alguém, e a
   // manilha apareceria duas vezes na mesma mão — defeito que só aparece em uma mão de dez.
