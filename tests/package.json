@@ -2,9 +2,10 @@
   "name": "domino-bar-tests",
   "private": true,
   "scripts": {
-    "test": "node test-acoplamento.mjs && node test-regras.mjs && node test-cartas.mjs && node test-mesa.mjs && node test-jogo.mjs",
+    "test": "node test-acoplamento.mjs && node test-regras.mjs && node test-cartas.mjs && node test-truco.mjs && node test-mesa.mjs && node test-jogo.mjs",
     "acoplamento": "node test-acoplamento.mjs",
     "cartas": "node test-cartas.mjs",
+    "truco": "node test-truco.mjs",
     "telas": "node test-telas.mjs",
     "lembrar": "node test-lembrar.mjs",
     "shots": "node shots.mjs",
