@@ -334,7 +334,11 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
    ela se emendaria ao nada. */
 .abas { display: flex; gap: 4px; padding: 0 10px; }
 .abas .aba {
-  font: inherit; font-size: 13.5px; font-weight: 600; color: var(--marfim);
+  /* `var(--texto)` e não `--marfim`: aquele é do 3D (`CORES.marfim`, em 010-constantes.js) e
+     NÃO existe no CSS. A referência quebrada não pinta de errado — ela invalida a declaração
+     e `color` cai na herança, que aqui calha de ser a cor certa. Defeito que se esconde
+     atrás de um acidente é o que dura. */
+  font: inherit; font-size: 13.5px; font-weight: 600; color: var(--texto);
   background: rgba(22, 14, 9, .72); border: 1px solid var(--borda); border-bottom: none;
   border-radius: 11px 11px 0 0; padding: 9px 16px 8px; cursor: pointer;
   opacity: var(--fraco); transition: opacity .12s, background .12s;
