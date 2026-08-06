@@ -5,6 +5,11 @@ de gente e bot, na mesma tela ou pela internet.
 
 ### ▶ Jogar agora: **https://ricardocolombo01.github.io/domino-bar/**
 
+**Isto está virando uma casa de jogos.** Há uma faixa de abas no alto do menu, e o **Truco
+Paulista** já está lá — registrado, com as regras à mostra, e ainda sem motor para sentar
+nele. O link `?jogo=truco` abre direto. Cada jogo guarda a mesa e a partida **na chave dele**,
+então espiar a aba do lado não custa a partida que está em andamento.
+
 **Dá para instalar como aplicativo**, e depois de uma partida ele **abre sem internet** — o
 service worker guarda o jogo e as duas bibliotecas. Também abre por duplo-clique no
 `index.html`, que é um arquivo só, com o CSS e o JavaScript dentro. Só o modo online precisa
@@ -196,7 +201,7 @@ existe mais.
 Sem framework, sem bundler. Madeira, piso, as pintas das peças e todos os sons são gerados
 em código na hora — não há um único `.mp3` no repositório, e os únicos binários são os dois
 ícones do aplicativo, que o manifest exige em arquivo. Three.js e PeerJS vêm de CDN. São
-**6.061 linhas** em `src/`.
+**6.669 linhas** em `src/`.
 
 ```
 src/pagina.html      o molde
@@ -204,17 +209,25 @@ src/css/estilo.css   entra no bundle como <style>
 src/sw.js            o service worker, com a versão carimbada pelo build
 src/icone.svg        a fonte dos dois PNG (npm run icones)
 src/js/10-casa/      o que é da CASA e de jogo nenhum: cores, armazenamento, cena,
-                     áudio, HUD, menu de cadeiras, saguão, rede P2P, loop
+                     áudio, HUD, abas, menu de cadeiras, saguão, rede P2P, loop
 src/js/30-domino/    o que é DOMINÓ: constantes, baralho, regras, partida, bot,
                      layout, peça 3D, tabuleiro, mão, interação, painel de contagem
+src/js/50-truco/     o que é TRUCO: por enquanto só o registro — nome, resumo e regras
 ```
 
 Os números dos arquivos vão **de dez em dez**, e é isso que deixa encaixar um arquivo novo
 entre dois velhos sem renumerar tudo — o número é a ordem de carga.
 
-A separação por pasta existe para o **segundo jogo**: a camada de rede, as cadeiras, o
-saguão, a conversa e o hotseat nunca precisaram saber que o jogo era dominó, e é isso que
-um Truco herdaria de graça.
+A separação por pasta existe para o **segundo jogo**, e ela deixou de ser promessa: a casa
+alcança **zero** nomes de dominó, e há um teste que mede isso a cada `npm test`
+(`test-acoplamento`, uma varredura por AST — `grep` não serve, porque `chave` e `valor`
+também são palavras portuguesas). A camada de rede, as cadeiras, o saguão, a conversa e o
+hotseat nunca precisaram saber que o jogo era dominó, e é isso que o Truco herda de graça.
+
+A carga tem **três tempos**: a casa DECLARA (010…160), cada jogo se REGISTRA em `JOGOS`
+(300, 500…), e o `900-arranque` escolhe quem senta e liga o loop. O terceiro tempo existe
+porque "validar a mesa guardada contra a tabela de modos" é uma pergunta sem resposta
+enquanto ninguém escolheu o jogo.
 
 Os arquivos de `src/js/` são **pedaços do mesmo escopo**, concatenados por `build.mjs` na
 ordem do NÚMERO do nome — nunca na do caminho — e não têm `import`/`export` entre si. A
@@ -230,7 +243,8 @@ sintaxe vira mensagem no terminal em vez de tela preta.
 ```
 npm run build       junta src/ num index.html autossuficiente (o CSS entra junto)
 npm run check       avisa se o index.html ou o sw.js estão desatualizados
-npm test            build + as três suítes de lógica (segundos)
+npm test            build + o acoplamento e as três suítes de lógica (segundos)
+npm run acoplamento a casa alcança ZERO nomes de jogo — varredura por AST, instantânea
 npm run app         build + manifest, ícones, e o jogo abrindo COM A REDE DESLIGADA
 npm run icones      regera os dois PNG a partir de src/icone.svg
 npm run telas       build + o jogo em seis tamanhos de tela, dez situações cada
@@ -289,10 +303,10 @@ versão que ela vai lançar — `v2`, `v3` —, que nasce de `main`, volta para 
 apagada. A tag é o que fica.
 
 ```
-main   v1.0.0 ── v1.0.1 ── … ── v1.10.0 ── v2.0.0 ── v2.1.1 ── v2.2.0 ─────────── v3.0.0
-                                                  ╲          ╱      ╲          ╱
-                                                   ●──●──●──●         ●──●──●──●
-                                                       v2                  v3
+main   … ── v1.10.0 ── v2.0.0 ── v2.2.0 ─────── v3.0.0 ── v3.1.0 ── v4.0.0 ─────── v4.1.0
+                              ╲            ╱          ╲          ╱      ╲         ╱
+                               ●──●──●──●──            ●──●──●──         ●──●──●──
+                                     v2                     v3              v4.1
 ```
 
 Até a v1.10.0 o projeto usava GitFlow, com uma `develop` entre as features e a `main`.
@@ -302,7 +316,7 @@ dois merges e dois rebuilds do bundle por release. **Um dia inteiro se perdeu po
 disso**, com a `develop` em dia e a `main` três releases atrás. Hoje há um lugar a menos
 para o trabalho ficar preso.
 
-Vinte releases até aqui, e três delas dizem bem o que este repositório é: a **v1.6.0** foi a
+Vinte e cinco releases até aqui, e três delas dizem bem o que este repositório é: a **v1.6.0** foi a
 primeira cujos itens vieram quase todos de **jogo de verdade, no celular**, e não de leitura
 de código; a **v1.7.1** veio do contrário — uma varredura atrás do que ainda não tinha
 incomodado ninguém; e a **v1.10.0** fechou os ramos que **existiam e nunca tinham rodado**.
@@ -337,6 +351,18 @@ ou promessa — a camada de rede não escreve mais uma única linha na tela (a t
 virou arquivo próprio), e as regras de dominó saíram do primeiro arquivo da casa, onde
 estavam desde sempre. As duas dívidas estavam **anotadas com o diagnóstico errado**, e nos
 dois casos foi medir que mostrou.
+
+A **v4.0.0** e a **v4.1.0** transformam o jogo em **casa de jogos**. A primeira trocou os 46
+nomes de dominó que a casa alcançava por um contrato — `JOGOS`, `JOGO`, e uma carga em três
+tempos —, e a asserção dela não é suíte verde: é o número **zero**. A segunda pôs a **faixa
+de abas** em cima disso, com o Truco Paulista já registrado e ainda sem motor, e resolveu o
+que a aba obriga a resolver: a mesa e a partida passam a ser guardadas **por jogo** (com
+migração do que já estava gravado, senão o conserto seria invisível justamente para quem mais
+jogou), `?jogo=` na URL para o link ser compartilhável, e a faixa **travada com a mesa
+ocupada** — trocar de jogo com uma partida viva gravaria a partida de um sob a chave do
+outro. Ela também transformou a varredura de acoplamento, que vivia num arquivo temporário,
+no `test-acoplamento`: o invariante "a casa não conhece jogo nenhum" passou de fotografia a
+trava.
 
 O dia a dia: `git switch -c v2` a partir de `main`, commits normais na branch, e no fim ela
 sobe a `version` do `package.json`, roda `npm test`, e volta para `main` com `--no-ff` e a
