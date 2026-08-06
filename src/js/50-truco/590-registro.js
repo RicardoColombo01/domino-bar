@@ -41,8 +41,13 @@ JOGOS.truco = {
     '<b>A vira:</b> uma carta é virada a cada mão, e a <b>manilha</b> é a seguinte dela nessa ordem — virou 3, a manilha é o 4.',
     '<b>Entre manilhas</b> manda o naipe: ouros &lt; espadas &lt; copas &lt; paus.',
     '<b>A mão:</b> 3 cartas para cada, melhor de 3 vazas.',
-    '<b>A aposta:</b> truco vale 3 · seis · nove · doze.',
-    '<b>Mão de 11:</b> quem chega a 11 vê as cartas e decide jogar ou entregar 1 ponto.',
-    '<b>A partida</b> vai até 12.',
+    // O MELOU é regra de casa (decidida em 06/08/2026) e por isso está escrito na tela: as
+    // três primeiras linhas são o paulista padrão, e a última tem mais de uma leitura
+    // defensável por aí. Quem senta na mesa precisa saber qual vale AQUI.
+    '<b>Empatou a vaza ("melou"):</b> a <b>primeira</b> vaza é o desempate de tudo — quem a ganhou leva qualquer mão que empate depois.',
+    '<b>Empataram as três:</b> a mão <b>morre</b> e ninguém marca.',
+    '<b>A aposta:</b> truco vale 3 · seis · nove · doze. Quem corre paga o que valia <b>antes</b> do pedido.',
+    '<b>Mão de 11:</b> quem chega a 11 vê as cartas e decide jogar (valendo 3) ou entregar 1 ponto.',
+    '<b>A partida</b> vai até 12, de 2 ou de 4 (duplas em cruz).',
   ],
 };
