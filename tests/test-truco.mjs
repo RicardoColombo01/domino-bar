@@ -18,6 +18,8 @@ const mod = await import(buildModule([
   'trucar', 'aceitarTruco', 'correrDoTruco', 'decidirOnze', 'abandonarOTruco', 'timeNoTruco',
   'NIVEIS_TRUCO', 'poderDaCarta', 'poderDaMao', 'escolherCarta', 'querTrucar',
   'responderAposta', 'avaliarAposta', 'informacaoDoTruco', 'jogadaDoBotNoTruco', 'dicaDoTruco',
+  'postaDaVaza', 'layoutDaVaza', 'postaDaVazaGanha', 'layoutDasVazas', 'caixaDaMesaDoTruco',
+  'CARTA_C', 'CARTA_L', 'anguloDaCadeira',
 ]));
 
 let falhas = 0, n = 0;
@@ -696,6 +698,122 @@ console.log('\no difícil ganha do fácil');
     `o difícil ganhou ${venceDificil} × ${venceFacil} — ${vantagem.toFixed(1)}σ, e abaixo de 2σ é sorte`);
   console.log(`  ${venceDificil} × ${venceFacil} em ${jogadas} partidas · ` +
     `${(100 * venceDificil / jogadas).toFixed(1)}% · ${vantagem.toFixed(1)}σ`);
+}
+
+// ═══ O LAYOUT ═══════════════════════════════════════════════════════════════
+// Puro, como o `060-layout.js` do dominó — e é por isso que ele cabe aqui em vez de precisar
+// de navegador. O que se testa é a GEOMETRIA da mesa, não o desenho dela.
+console.log('\nonde cada carta cai na mesa');
+{
+  const dist = p => Math.hypot(p.x, p.z);
+
+  // A SUA CARTA CAI NA SUA DIREÇÃO, que em coordenadas de mundo é +z (a câmera olha de +z
+  // para a origem). Se este sinal inverter, a mesa inteira gira e cada carta aparece no
+  // lugar do adversário de frente — e nenhuma foto denuncia, porque continua simétrica.
+  const minha = mod.postaDaVaza(0, 0, 4);
+  ok(minha.z > 0 && Math.abs(minha.x) < 1e-9,
+    `a sua carta devia cair à sua frente (+z), e caiu em x=${minha.x.toFixed(2)} z=${minha.z.toFixed(2)}`);
+
+  // O DE FRENTE cai do lado oposto.
+  const frente = mod.postaDaVaza(2, 0, 4);
+  ok(frente.z < 0 && Math.abs(frente.x) < 1e-9, 'a carta de quem senta à sua frente devia cair em -z');
+
+  // E os dois de lado, um de cada lado — nunca no mesmo.
+  const esq = mod.postaDaVaza(1, 0, 4), dir = mod.postaDaVaza(3, 0, 4);
+  ok(Math.sign(esq.x) === -Math.sign(dir.x) && Math.abs(esq.x) > 0.1,
+    `as cadeiras 1 e 3 caíram do mesmo lado: ${esq.x.toFixed(2)} e ${dir.x.toFixed(2)}`);
+
+  // TODAS À MESMA DISTÂNCIA do centro: a vaza é um círculo, e uma carta mais perto pareceria
+  // ter sido jogada com mais força.
+  const raios = [0, 1, 2, 3].map(i => dist(mod.postaDaVaza(i, 0, 4)));
+  ok(Math.max(...raios) - Math.min(...raios) < 1e-9, `os raios não batem: ${raios.map(r => r.toFixed(3))}`);
+
+  // NADA SE SOBREPÕE: duas cartas quaisquer ficam a mais de uma largura de carta uma da
+  // outra. É a mesma pergunta que o espaçamento da mão do dominó responde, e o número sai
+  // do TAMANHO DA CARTA — nunca de um valor escolhido a olho.
+  for (const n2 of [2, 4]) {
+    const postas = [];
+    for (let i = 0; i < n2; i++) postas.push(mod.postaDaVaza(i, 0, n2));
+    for (let i = 0; i < n2; i++) for (let k = i + 1; k < n2; k++) {
+      const d = Math.hypot(postas[i].x - postas[k].x, postas[i].z - postas[k].z);
+      ok(d > mod.CARTA_L, `mesa de ${n2}: as cartas ${i} e ${k} ficaram a ${d.toFixed(2)}, e a carta tem ${mod.CARTA_L}`);
+    }
+  }
+
+  // A CARTA CAI DO LADO DE QUEM A JOGOU — a mesma convenção que a CASA usa para os assentos
+  // (`assentosDaMesa`, em 070-cena.js, põe o assento em `sin(a), cos(a)`).
+  //
+  // Esta é a asserção que pega o ESPELHO, e ela precisou existir: a primeira versão do
+  // layout tinha `-sin`, e a mesa saía espelhada — o vizinho da esquerda jogava e a carta
+  // aparecia à direita. Todas as outras asserções passavam, porque uma mesa espelhada
+  // continua simétrica: os raios batem, nada se sobrepõe, e as cadeiras 1 e 3 continuam em
+  // lados opostos. Só amarrar a carta ao ASSENTO denuncia.
+  for (const n2 of [2, 4]) {
+    for (let i = 0; i < n2; i++) {
+      const a = mod.anguloDaCadeira(i, 0, n2);
+      const p = mod.postaDaVaza(i, 0, n2);
+      const ladoDoAssento = Math.sin(a), ladoDaCarta = p.x;
+      ok(Math.abs(ladoDoAssento) < 1e-9 || Math.sign(ladoDoAssento) === Math.sign(ladoDaCarta),
+        `mesa de ${n2}: a cadeira ${i} senta em x=${ladoDoAssento.toFixed(2)} e a carta dela caiu em ` +
+        `x=${ladoDaCarta.toFixed(2)} — a mesa está espelhada`);
+    }
+  }
+
+  // A MESA GIRA COM QUEM OLHA: para o jogador da cadeira 2, a carta DELE é que fica na
+  // frente. Sem isto, o convidado veria a mesa pelos olhos do anfitrião.
+  const doOutro = mod.postaDaVaza(2, 2, 4);
+  ok(Math.abs(doOutro.z - minha.z) < 1e-9 && Math.abs(doOutro.x - minha.x) < 1e-9,
+    'a mesa não girou para quem senta na cadeira 2');
+  console.log(`  raio ${raios[0].toFixed(2)} · 4 cadeiras sem sobreposição · a mesa gira com quem olha`);
+}
+
+console.log('\nas vazas ganhas empilham de lado');
+{
+  const meu = mod.postaDaVazaGanha(0, 0, 0, 2);       // eu sou a cadeira 0 (time 0)
+  const dele = mod.postaDaVazaGanha(0, 1, 0, 2);
+  ok(Math.sign(meu.x) === -Math.sign(dele.x) && Math.abs(meu.x) > 0.1,
+    'a pilha do seu time e a do adversário ficaram do mesmo lado');
+  // O MELOU NÃO É DE NINGUÉM: fica no meio e girado, para não parecer de alguém.
+  const melou = mod.postaDaVazaGanha(0, null, 0, 2);
+  ok(Math.abs(melou.x) < 1e-9 && melou.inclinada === true,
+    'a vaza que melou devia ficar no meio e marcada como tal');
+  // EMPILHA PARA CIMA, senão a segunda vaza some dentro da primeira.
+  const p0 = mod.postaDaVazaGanha(0, 0, 0, 2), p1 = mod.postaDaVazaGanha(1, 0, 0, 2);
+  ok(p1.y > p0.y, 'a segunda vaza da pilha devia ficar acima da primeira');
+  ok(p1.z < p0.z, 'a pilha devia crescer para trás, longe da vaza em curso');
+
+  // E NA MESA DE 4 quem manda é o TIME, não a cadeira: as cadeiras 0 e 2 veem a mesma pilha
+  // do mesmo lado, porque são do mesmo time.
+  const de0 = mod.postaDaVazaGanha(0, 0, 0, 4), de2 = mod.postaDaVazaGanha(0, 0, 2, 4);
+  ok(Math.sign(de0.x) === Math.sign(de2.x),
+    'parceiros deviam ver a pilha do time deles do mesmo lado');
+  const de1 = mod.postaDaVazaGanha(0, 0, 1, 4);
+  ok(Math.sign(de1.x) === -Math.sign(de0.x), 'o adversário devia ver a pilha do outro lado');
+
+  const l = mod.layoutDasVazas([{ time: 0 }, { time: null }, { time: 1 }], 0, 2);
+  ok(l.length === 3 && l.every(v => Number.isFinite(v.x) && Number.isFinite(v.y)),
+    'layoutDasVazas devolveu posta inválida');
+  console.log('  seu time de um lado, o outro do outro · melou no meio · empilha para cima e para trás');
+}
+
+console.log('\na mesa cabe no tampo');
+{
+  // O tampo do boteco tem ~6.1 de raio (070-cena.js). A mesa do truco não cresce — é o
+  // contrário da linha do dominó —, então ela tem de caber SEMPRE, sem escala nenhuma.
+  for (const n2 of [2, 4]) {
+    const cx = mod.caixaDaMesaDoTruco(n2);
+    ok(cx.x > 0 && cx.z > 0, `a caixa da mesa de ${n2} veio vazia`);
+    ok(cx.x < 3 && cx.z < 3, `a mesa de ${n2} ficou grande demais: ${cx.x.toFixed(2)} × ${cx.z.toFixed(2)}`);
+    // E ela precisa envolver de fato o que cai nela: uma caixa menor que as cartas seria
+    // uma promessa falsa para quem for enquadrar a câmera.
+    for (let i = 0; i < n2; i++) {
+      const p = mod.postaDaVaza(i, 0, n2);
+      ok(Math.abs(p.x) <= cx.x + 1e-9 && Math.abs(p.z) <= cx.z + 1e-9,
+        `a carta da cadeira ${i} caiu fora da caixa declarada`);
+    }
+  }
+  const c4 = mod.caixaDaMesaDoTruco(4);
+  console.log(`  mesa de 4: ${c4.x.toFixed(2)} × ${c4.z.toFixed(2)} de meia-caixa, dentro dos 6.1 do tampo`);
 }
 
 console.log(`\n${falhas ? falhas + ' falha(s)' : 'tudo certo'} — ${n} asserções`);

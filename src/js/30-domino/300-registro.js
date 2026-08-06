@@ -101,7 +101,10 @@ JOGOS.domino = {
     espessuraDaPeca: () => PECA_E,
     alturaDaMao: () => MAO_Y,
     profundidadeDaMao: () => MAO_Z,
-    anguloDaCadeira,
+    // `anguloDaCadeira` SAIU DO CONTRATO na v4.4: ele estava aqui só porque o nome morava no
+    // dominó, e a conta é da mesa. Foi para `10-casa/010-constantes.js` e a casa passou a
+    // chamá-la direto. **Um encaixe some quando o que ele carregava se descobre da casa** —
+    // e o contrato ficar menor é o sinal de que a fronteira melhorou, não piorou.
     caixaDoMonte,
   },
 
