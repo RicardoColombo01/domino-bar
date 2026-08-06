@@ -572,7 +572,11 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 | esta release | **v3.0.1** — a auditoria da v3.0.0: a página passa a ser rede-primeiro, e o resumo do cache cobre o worker |
 | `main` ↔ `origin/main` | conferir com `git rev-list --left-right --count origin/main...main` |
 | Filas 5 a 11 | **todas fechadas**, e não há defeito conhecido em aberto |
-| o que vem | **o Truco** — é o próximo, e o único item grande que sobrou da ordem dada pelo Ricardo em 04/08 |
+| o que vem | **a v4: o Truco na mesma aba, e o jogo virando aplicativo** — plano fechado com o Ricardo em 05/08, na seção "O PLANO DA v4" lá embaixo |
+
+**PARA RETOMAR AMANHÃ: leia "O PLANO DA v4 — o Truco na mesma casa"**, dentro de "A casa de
+jogos". Ele tem as decisões já tomadas, as cinco fases em ordem, e o que a medição já corrigiu
+antes de alguém começar. O trabalho vai na branch `v4`, num worktree.
 
 **A ordem do Ricardo (04/08) foi cumprida inteira:** worktree ✔ (v2.3.0 e v3.0.0 saíram de
 um), as pastas ✔ (v2.3.0, e as duas dívidas na v3.0.0), o PWA ✔ (v3.0.0). Sobra o Truco.
@@ -2659,6 +2663,165 @@ isso a ordem é boa: **o truco paga o baralho e a carta, e o pife e o 21 depois 
 
 ---
 
+## O PLANO DA v4 — o Truco na mesma casa, e o jogo virando aplicativo
+
+**É AQUI QUE SE RETOMA.** Plano fechado com o Ricardo em **05/08/2026**, com as três decisões
+que só ele podia tomar já respondidas. Pedido dele, literal: *"criar um truco dentro desse
+mesmo site, ou seja, só mudando a aba… deixe cada item separado sem misturar nos códigos, ou
+seja, cada pasta separada… e pense também em um jeito de poder baixar tipo um aplicativo,
+porém realmente transformar em um aplicativo de jogo… dando para jogar tanto no site quanto no
+aplicativo, e também os dois juntos online."*
+
+### As decisões já tomadas — não perguntar de novo
+
+| | |
+|---|---|
+| variante | **Truco Paulista** — 40 cartas, **vira + manilha corrida**, sem envido e sem flor |
+| escopo | contrato → aba → cartas → truco jogável, nesta ordem, uma release por fase |
+| distribuição | **APK no GitHub Releases** + **Amazon Appstore** (os dois **gratuitos**). **SEM Play Store** |
+| worktree | `../domino-bar-jogos`, branch `v4` |
+
+**Por que não a Play Store:** US$ 25 uma vez **e** 12 testadores reais opt-in por 14 dias
+corridos — regra para conta pessoal criada depois de 13/11/2023; conta de empresa é isenta. O
+`.aab` sai do mesmo Bubblewrap, então **nada do que for feito aqui é jogado fora** se ele mudar
+de ideia depois.
+
+### O que a medição já corrigiu, ANTES de começar
+
+- **A casa não tem uma palavra de dominó.** Medido arquivo a arquivo em `10-casa/`: `peça`,
+  `pinta`, `carroça`, `tabuleiro`, `baralho`, `monte` → **zero**. A tabela de menções mais
+  acima nesta seção é de 04/08 e **envelheceu**; ela media o código antes da reorganização.
+- **A casa chama o dominó em ~59 nomes / 184 referências** — e parte é falso positivo, porque
+  `chave`, `valor` e `pontas` também são palavras portuguesas em comentário e em parâmetro
+  (`guardar(chave, valor)`). **O número real sai de varredura por AST, e ela é o primeiro passo
+  da Fase 1.** O `grep` já mentiu aqui uma vez.
+- **O vazamento do 3D é MENOR do que parecia:** em `070-cena.js` só **duas** funções conhecem
+  dominó — `assentosDaMesa` (usa `anguloDaCadeira`, `caixaDoMonte`, `PECA_C`, `PECA_E`) e
+  `enquadrar` (usa `MAO_Z`, `redesenharMao`). As outras seis citações são **comentário**.
+- **O TWA resolve o "jogar junto" DE GRAÇA.** Ele roda o site na **mesma origem `https://`**,
+  então `localStorage`, `clienteId` e os códigos de 4 letras do PeerJS são **os mesmos** no
+  site e no app. Um WebView empacotado (Capacitor) trocaria a origem — e com ela a identidade
+  que devolve a cadeira certa a quem cai, que é o item 4 da Fila 5 voltando pela porta do
+  empacotador.
+- **O GitHub Pages não serve pasta que começa com ponto** (o Jekyll a ignora em silêncio). O
+  `.well-known/assetlinks.json` exige um **`.nojekyll`** ao lado — e este repositório não tem.
+
+### A arquitetura: o contrato `JOGOS`, e a carga em TRÊS TEMPOS
+
+A casa passa a falar com **um jogo**, e não com o dominó:
+
+```js
+// 10-casa/010-constantes.js   — a casa declara
+const JOGOS = {};            // nome → contrato
+let JOGO = null;             // quem está na mesa agora
+
+// 30-domino/300-registro.js  — o dominó se apresenta
+JOGOS.domino = {
+  nome, abertura,
+  motor: { novaPartida, visaoDe, jogar, passar, comprar, acoesDe, timeDe, fecharMao, novaMao, abandonar },
+  mesa:  { sincronizar, animar, grupos, esconderMao, arrumar, larguraDaPeca, caixaDoMonte },
+  toque: { selecionar, cancelar, confirmar, atualizarPonteiro, reavaliar },
+  bot:   { jogada, dica, NIVEIS },
+  menu:  { MODOS, MODO_PADRAO, montar, regras },
+  painel: desenharContagem,     // o encaixe que JÁ EXISTE desde a v3.0.0
+  barra:  acoesDoDomino,        // NOVO — ver abaixo
+};
+```
+
+**`painelDoJogo` é o precedente vivo**: a casa reserva o lugar e chama, o jogo preenche. A v4
+generaliza aquilo de um encaixe para seis.
+
+**O encaixe NOVO que o truco obriga a criar é a BARRA DE AÇÕES.** O `#acoes` do HUD tem
+"Comprar" e "Passar" escritos à mão. O truco precisa de **trucar / aceitar / correr / aumentar**
+— que não são jogadas, são **apostas**. `acoesDe` já devolve um conjunto de ações, então o motor
+aguenta; quem não aguenta é o HTML.
+
+**A carga em três tempos**, e é o que torna o quarto jogo barato:
+
+```
+1. DECLARAR   010…160        a casa. Só define; NADA de topo de módulo que dependa de jogo
+2. REGISTRAR  300…           cada jogo pendura o seu contrato em JOGOS
+3. ARRANCAR   900-arranque   escolhe o jogo, valida o guardado, monta a tela, liga o loop
+```
+
+Hoje `140-menu.js` roda `mesaLembrada()` no topo do módulo, e ela valida contra `MODOS`. Com
+dois jogos a pergunta "qual `MODOS`?" não tem resposta — por isso o terceiro tempo existe.
+
+### As pastas
+
+```
+src/js/10-casa/     a casa   (mais JOGOS/JOGO e os dois encaixes)
+src/js/30-domino/   dominó   (mais 300-registro.js)
+src/js/40-cartas/   O BARALHO E A CARTA 3D   ← nasce aqui; o pife e o 21 herdam
+src/js/50-truco/    truco    (regras, partida, bot, layout, mesa, interação, registro)
+```
+
+**`40-cartas/` é pasta própria e NÃO parte do truco**, pela mesma razão que fez `10-casa/`
+existir: naipe, valor e o desenho da carta em canvas servem aos três jogos de carta. O truco
+paga; o pife e o 21 pegam de graça.
+
+### As cinco fases
+
+**FASE 1 — o contrato. Nada muda para o jogador.** Varredura por AST; `JOGOS`/`JOGO`;
+converter as chamadas de `10-casa/`; **inverter os dois vazamentos do 3D** (sem isso a carta do
+truco não cabe na conta do assento); `barraDoJogo`; `900-arranque.js`. É a fase **arriscada** —
+refatoração pura em quase todo arquivo da casa. Vai sozinha, num commit próprio. A prova é a
+mesma da v2.3.0: suítes verdes **e** comportamento idêntico; onde a asserção nascer verde,
+**mutação**.
+
+**FASE 2 — a aba.** Faixa **Dominó | Truco** no topo do `telaMenu`; `?jogo=truco` na URL (é o
+que a torna compartilhável e o que os atalhos do manifest usam); `shortcuts` no manifest;
+preferência guardada e **validada com `Object.hasOwn`** (defeito 5 da Fila 6). E: **trocar de
+aba não pode apagar a partida guardada em silêncio** — cada jogo guarda a sua sob chave própria.
+
+**FASE 3 — `40-cartas/`.** Baralho de 40 puro, e a carta 3D com atlas de naipes e valores em
+canvas. **As regras que a Fila 7 pagou valem aqui:** a receita de `pintar()` fica guardada para
+poder repintar, começa com `fillRect` opaco (é o que faz a sonda de alfa funcionar) e **não
+pode consumir `Math.random` global** — as suítes de tela semeiam aquele gerador dentro da
+página.
+
+**FASE 4 — `50-truco/`.** As regras, testáveis:
+
+```
+baralho  40 cartas, sem 8 9 10
+ordem    4 5 6 7 Q J K A 2 3         (da mais fraca para a mais forte)
+vira     uma carta por mão; a MANILHA é a SEGUINTE dela na ordem (3 → 4, cíclico)
+manilhas batem tudo; entre elas:   ♦ ouros < ♠ espadas < ♥ copas < ♣ paus
+mão      3 cartas para cada; melhor de 3 vazas
+aposta   truco 3 → seis 6 → nove 9 → doze 12
+partida  até 12 pontos
+mão de 11  quem chega a 11 vê as cartas e decide jogar ou entregar 1 ponto
+```
+
+`regras.js` e `layout.js` **puros** (invariante 4). `visaoDe()` com a **mesma fronteira de
+segurança** do invariante 3. O bot ganha **decisão de aposta**, que é a parte nova e a mais
+difícil. Online, hotseat, conversa, saguão, identidade e reconexão **vêm prontos da casa**.
+
+**FASE 5 — o aplicativo.** Repo `ricardocolombo01.github.io` (user page) com `.nojekyll` +
+`.well-known/assetlinks.json` → `bubblewrap init/build` → **conferir no celular que o app abre
+SEM barra de URL**, que é o único teste que prova o assetlinks → `.apk` num GitHub Release →
+conta grátis na Amazon com o mesmo `.apk`.
+
+### Três coisas que ficam EM ABERTO para o Ricardo
+
+1. **O empate de vaza no truco (o "melou")** — regra de casa, e há mais de uma leitura
+   defensável, como a cruzada valer 4. **Perguntar na Fase 4, não escolher sozinho.**
+2. **Truco de 2 e de 4 (duplas)?** O plano assume os dois, porque a casa já faz duplas em cruz.
+3. **O repo da user page** é conta dele, não código.
+
+### Os riscos, ditos antes de começar
+
+- **A Fase 1 é a arriscada** — refatoração pura, em quase todo arquivo de `10-casa/`.
+- **O truco tem aposta e o dominó não.** É o único ponto em que o motor da casa pode não
+  aguentar de primeira; se `acoesDe` não bastar, isso aparece na Fase 4.
+- **TWA depende de navegador compatível no aparelho.** Em tablet Fire (que usa Silk, não
+  Chrome) pode cair para aba comum; em celular Android normal, funciona. E se a Amazon
+  reassinar o pacote, a impressão muda e o `assetlinks.json` precisa levar **as duas**.
+- **A carta 3D é uma fase inteira.** O atlas do dominó levou uma release e um bug de textura
+  preta no Android; a carta tem naipe, valor e canto — mais desenho, não menos.
+
+---
+
 ## A reorganização — ✔ as pastas feitas (v2.3.0), as duas dívidas EM ABERTO
 
 **Feito em 05/08/2026:** `src/js/10-casa/` e `src/js/30-domino/`, o `build.mjs` varrendo
@@ -2911,8 +3074,32 @@ aplicativo. **O conserto é de graça e não envolve o jogo:** criar o repositó
 `ricardocolombo01.github.io` (user page) só para servir o `.well-known/`. É **decisão de
 conta, não de código** — por isso está escrito aqui e não numa tarefa.
 
-O resto do caminho: conta de desenvolvedor Google (US$ 25, uma vez), Bubblewrap para gerar o
-projeto Android, assinatura do AAB, política de privacidade, ícone e prints.
+**E há uma segunda armadilha, medida em 05/08:** o GitHub Pages **não serve pasta que começa
+com ponto** — o Jekyll ignora `.well-known/` em silêncio, e o sintoma é um 404 que parece erro
+de caminho. Precisa de um arquivo **`.nojekyll`** vazio na raiz daquele repositório. Este aqui
+não tem um, e nunca precisou.
+
+### A DECISÃO DE DISTRIBUIÇÃO (05/08/2026): os dois caminhos GRATUITOS
+
+O Ricardo perguntou se havia algo gratuito, e há — **mas não na Play Store**. Ali os US$ 25 são
+obrigatórios e, para conta pessoal criada depois de 13/11/2023, ainda há **12 testadores reais
+opt-in por 14 dias corridos e ininterruptos** antes de poder publicar em produção (conta de
+empresa é isenta). Não é dinheiro: é gente e tempo.
+
+Escolhidos:
+
+| caminho | custo | alcance | atrito |
+|---|---|---|---|
+| **APK no GitHub Releases** | zero, sem conta | quem tem o link | o Android pede "permitir fontes desconhecidas" uma vez |
+| **Amazon Appstore** | **conta grátis**, sem taxa | pequeno no Brasil | nenhum: é loja |
+| ~~Play Store~~ | US$ 25 + 12 testadores × 14 dias | o único alcance real | — |
+
+**O trabalho de código é o MESMO nos três** — o Bubblewrap gera o mesmo artefato (`.apk` para
+instalar direto, `.aab` para loja). Mudar de ideia depois não joga nada fora, e é por isso que
+esta decisão não travou o plano.
+
+**Serviços que vendem "12 testadores" existem e não são recomendados** — arriscam banimento da
+conta, e o registro fica aqui para a tentação não voltar sem a ressalva.
 
 ### Dois riscos a dizer antes de prometer prazo
 
