@@ -6,9 +6,10 @@ de gente e bot, na mesma tela ou pela internet.
 ### ▶ Jogar agora: **https://ricardocolombo01.github.io/domino-bar/**
 
 **Isto está virando uma casa de jogos.** Há uma faixa de abas no alto do menu, e o **Truco
-Paulista** já está lá — registrado, com as regras à mostra, e ainda sem motor para sentar
-nele. O link `?jogo=truco` abre direto. Cada jogo guarda a mesa e a partida **na chave dele**,
-então espiar a aba do lado não custa a partida que está em andamento.
+Paulista** já está lá — com as regras à mostra e o motor escrito, mas ainda **sem mesa em 3D,
+sem bot e sem a barra de apostas**, então não dá para sentar nele. O link `?jogo=truco` abre
+direto. Cada jogo guarda a mesa e a partida **na chave dele**, então espiar a aba do lado não
+custa a partida que está em andamento.
 
 **Dá para instalar como aplicativo**, e depois de uma partida ele **abre sem internet** — o
 service worker guarda o jogo e as duas bibliotecas. Também abre por duplo-clique no
