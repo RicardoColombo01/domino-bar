@@ -8,7 +8,7 @@ Paulista** já tem aba, nome e regras à mostra, faltando o motor. No ar em
 Sem framework, sem bundler, e **dois binários** — os ícones do aplicativo, exigidos pelo
 manifest: madeira, pintas e sons continuam gerados em canvas e WebAudio na hora. Three.js e
 PeerJS vêm de CDN, e o **service worker os guarda**, então depois de uma partida o jogo abre
-sem internet. **7.499 linhas** no total (`src/js` + `src/pagina.html` + `src/css/estilo.css`
+sem internet. **7.917 linhas** no total (`src/js` + `src/pagina.html` + `src/css/estilo.css`
 + `src/sw.js`), conferido em 06/08/2026 — este número **envelhece**, e envelheceu: ficou
 dizendo 2.100 por três releases seguidas.
 
@@ -24,7 +24,7 @@ npm run check     avisa se o index.html OU o sw.js estão desatualizados
 npm test          build + o acoplamento, as cartas e as três suítes de lógica
 npm run acoplamento  a casa alcança ZERO nomes de jogo (varredura por AST, instantânea)
 npm run cartas    o baralho de 40 e a carta 3D, no terminal
-npm run truco     as regras e o motor do truco, no terminal (185 asserções)
+npm run truco     as regras, o motor, o bot e o layout do truco (252 asserções)
 npm run app       build + manifest, ícones e o jogo abrindo COM A REDE DESLIGADA (~30 s)
 npm run icones    regera icone-192.png e icone-512.png a partir de src/icone.svg
 npm run telas     build + o jogo em seis tamanhos de tela (retrato, paisagem, tablet, wide)
@@ -156,7 +156,7 @@ src/icone.svg                    a fonte dos dois PNG do manifest
 
 — 1º tempo: A CASA DECLARA ————————————————————————————————————————————————
 10-casa/010-constantes   JOGOS/JOGO/jogavel, cores, movimento reduzido, EMBARALHAR,
-                         guardar/lido/esquecer — e as chaves POR JOGO mais a migração
+                         ANGULO DA CADEIRA, guardar/lido/esquecer — e as chaves POR JOGO
 30-domino/015-constantes peça, MODOS, pontuação, medidas do tabuleiro
 30-domino/020-baralho    distribuir (com re-embaralho), quem abre, sobraDoBaralho
 30-domino/030-regras     encaixes, pontas, jogadas válidas, tipo de batida     ← puro
@@ -169,6 +169,8 @@ src/icone.svg                    a fonte dos dois PNG do manifest
 40-cartas/085-carta3d    a carta 3D: atlas de 40 células (10 valores × 4 naipes)  ← BIBLIOTECA
 50-truco/510-regras      força, manilha, quem ganha a vaza, o melou, a aposta   ← puro
 50-truco/520-partida     vazas, aposta, mão de 11, placar, visaoDoTruco
+50-truco/530-bot         que carta jogar E quando apostar; nível = informação
+50-truco/540-layout      onde cada carta cai; a vira no centro, as vazas de lado ← puro
 30-domino/090-tabuleiro  reconcilia o tabuleiro com a visão; prévia da jogada
 30-domino/100-mao        sua mão em leque, mãos dos outros, monte
 30-domino/110-interacao  raycast: escolher → ver → confirmar
@@ -508,6 +510,18 @@ por mutação nas quatro direções, inclusive as duas de falso positivo.
   amostrando o centro da célula e lendo "papel" nas dez cartas de paus. **Asserção de desenho
   que só pergunta "tem tinta em algum lugar" aprova qualquer borrão**; a que vale escolhe um
   ponto onde a tinta TEM de estar e diz por quê.
+- **Mesa ESPELHADA passa em toda asserção de simetria, e só a amarração denuncia.** O layout
+  do truco nasceu com `-sin` onde a casa usa `+sin`: o vizinho da esquerda jogava e a carta
+  aparecia à direita. Os raios batiam, nada se sobrepunha, as cadeiras opostas continuavam
+  opostas — porque **uma mesa espelhada continua simétrica**. O que denuncia é amarrar a
+  carta ao ASSENTO (a convenção da casa), e não medir a carta contra ela mesma. Vale para
+  qualquer geometria com eixo de simetria.
+- **Utilitário genérico morando na pasta de um jogo só é descoberto quando aparece o
+  segundo — e o CONTRATO ENCOLHE junto.** `anguloDaCadeira` tinha ao lado o comentário "mora
+  aqui porque é trigonometria pura", e trigonometria pura sobre CADEIRAS é da mesa: quem
+  senta à sua frente está à sua frente em qualquer jogo. Ela estava no `JOGO.mesa` do
+  contrato **só porque o nome morava no jogo** — vindo para a casa, o encaixe desapareceu.
+  **Contrato menor é sinal de fronteira melhor, não pior.**
 - **Utilitário genérico morando na pasta de um jogo só é descoberto quando aparece o
   segundo.** `embaralhar` é Fisher-Yates sobre um array — não é dominó — e morou em
   `30-domino/020-baralho.js` enquanto havia um jogo só. Com o baralho de 40, as saídas eram
@@ -939,17 +953,23 @@ está. Um `Set-Location` que falhou fez o comando seguinte criar a branch no wor
 
 #### A FASE 4, ao meio — o que está pronto e o que falta
 
-**É AQUI QUE SE RETOMA.** O truco tem cérebro e não tem corpo, e a divisão é de propósito: o
-que dá para provar no terminal foi escrito e provado primeiro, porque é onde um erro custa
-segundos. O `emBreve` do registro **continua lá**, e tem de continuar — não dá para sentar.
+**É AQUI QUE SE RETOMA.** O truco tem **tudo o que dá para provar no terminal** — regras,
+motor, bot e layout — e nada do que precisa de tela. A divisão é de propósito: um erro achado
+no terminal custa segundos, achado depois do 3D custa horas. O `emBreve` do registro
+**continua lá**, e tem de continuar — não dá para sentar.
+
+**O que sobrou é exatamente a camada que exige navegador**, e ela é pequena porque as quatro
+de baixo já resolveram o difícil: `550-mesa` só traduz `layoutDaVaza` em `Object3D`, e
+`560-interacao` só chama `jogarCarta`. **É a segunda vez nesta v4 que a ordem "puro primeiro"
+paga** — na Fase 3 o mesmo desenho fez a carta 3D nascer com atlas testado.
 
 | | |
 |---|---|
 | ✔ `510-regras.js` | força, manilha (com a volta cíclica), o melou, a escada da aposta — **puro** |
 | ✔ `520-partida.js` | vazas, pedido/aceita/corre, mão de 11, placar, `visaoDoTruco` |
-| ✔ `tests/test-truco.mjs` | **185 asserções**, dez mutações, 60 partidas de varredura |
-| ⏳ `530-bot.js` | jogar E apostar. A decisão de aposta é a parte nova e a mais difícil |
-| ⏳ `540-layout.js` | onde cada carta cai — **puro**, como o `060-layout` do dominó |
+| ✔ `530-bot.js` | jogar **e** apostar; o difícil ganha **58,8% em 400 partidas (3,5σ)** |
+| ✔ `540-layout.js` | onde cada carta cai — **puro**, como o `060-layout` do dominó |
+| ✔ `tests/test-truco.mjs` | **252 asserções**, 27 mutações, 60 partidas de varredura |
 | ⏳ `550-mesa.js` | sincronizar/animar em 3D, usando o `40-cartas/` que já existe |
 | ⏳ `560-interacao.js` | escolher → ver → confirmar |
 | ⏳ `barraDoJogo` | o encaixe do HUD para trucar/aceitar/correr. **Agora dá para desenhá-lo** |
