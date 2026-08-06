@@ -39,7 +39,18 @@ function arrancar() {
   //    que é justamente quando ele não serve mais para nada.
   atualizarBotaoRetomar();
 
-  // 6. E O LOOP.
+  // 6. O QUE AS SUÍTES ALCANÇAM. A ponte da casa (`window.__jogo`) nasce com o que é da
+  //    casa; o jogo despeja o resto por cima, com as MESMAS chaves de antes — foi assim que
+  //    `grupoMonte` e `naMao` saíram de `160-loop.js` sem uma linha de teste mudar.
+  //
+  //    NÃO É `Object.assign`, e a diferença custou uma reprovação: `Object.assign` INVOCA os
+  //    getters da origem e copia o VALOR. O `get maoNaTela()` da ponte virava uma fotografia
+  //    tirada neste instante — a mão vazia, porque ainda não há partida —, e depois de
+  //    retomar uma partida guardada a suíte via "23 peças na mesa, 0 na sua mão". Copiar os
+  //    DESCRITORES leva o getter inteiro, e ele continua sendo consultado na hora.
+  Object.defineProperties(window.__jogo, Object.getOwnPropertyDescriptors(JOGO.ponte));
+
+  // 7. E O LOOP.
   requestAnimationFrame(quadro);
 }
 

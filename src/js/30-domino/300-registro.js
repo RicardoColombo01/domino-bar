@@ -92,4 +92,24 @@ JOGOS.domino = {
   // O painel de apoio já era um encaixe desde a v3.0.0 (`painelDoJogo`); ele passa a chegar
   // pelo contrato, junto com os outros, em vez de por uma atribuição solta.
   painel: desenharContagem,
+
+  // ─── o que as SUÍTES precisam alcançar ─────────────────────────────────────
+  // A ponte `window.__jogo` (160-loop.js) expunha `grupoMonte`, `naMao` e `jogadaDoBot` —
+  // ou seja, a casa listava nomes de dominó para os testes acharem. Um teste que precisa de
+  // `grupoMonte` está pedindo uma coisa DO JOGO, e quem sabe se ela existe é o jogo.
+  //
+  // O arranque despeja isto por cima da ponte, então AS CHAVES CONTINUAM AS MESMAS e
+  // nenhuma linha de suíte mudou. Um jogo sem monte simplesmente não põe `grupoMonte` aqui.
+  ponte: {
+    jogadaDoBot, dicaDaVista,
+    grupoMesa, grupoPrevia, grupoOutros, grupoMonte,
+    naMao, arrumarMao, moverNaMao,
+    // A ORDEM DA TELA, que desde a arrumação não é mais a de `vista.mao`. Quem quiser
+    // selecionar uma peça tem de procurar aqui.
+    get maoNaTela() { return naMao.map(m => m.peca); },
+    // Faz exatamente o que o clique faria: levanta a peça, mostra os fantasmas e a barra.
+    // Recebe a PEÇA e não o índice — igual ao motor, e pelo mesmo motivo: índice de tela era
+    // o único acoplamento do repositório que quebrava calado quando a mão reordenava.
+    selecionar: peca => selecionarPeca(naMao.findIndex(m => mesmaPeca(m.peca, peca))),
+  },
 };

@@ -344,7 +344,7 @@ function desistiuDaMesa(cadeira) {
   const conn = conexoes.get(cadeira);
   conexoes.delete(cadeira);
   if (conn) { try { conn.close(); } catch (e) { void e; } }
-  abandonar(P, cadeira);
+  JOGO.motor.abandonar(P, cadeira);
   narrar(`${P.cadeiras[cadeira].nome} saiu da mesa — a partida foi dada como perdida para ele.`);
   publicar();
 }
@@ -626,7 +626,7 @@ function largar(cadeira, conn) {
       esperando.delete(cadeira);
       if (!P || P.fase === 'fim' || conexoes.has(cadeira)) return;
       donoDaCadeira.delete(cadeira);                    // não voltou: a cadeira não é mais dele
-      abandonar(P, cadeira);
+      JOGO.motor.abandonar(P, cadeira);
       narrar(`${nome} não voltou — a partida foi dada como perdida para ele.`);
       publicar();
     }, ESPERA_VOLTA));
@@ -891,7 +891,7 @@ function explicarErroDeRede(e) {
 // Chamado pelo anfitrião depois de cada mudança: cada cadeira recebe a SUA visão.
 function espalharVistas() {
   for (const [cadeira, conn] of conexoes) {
-    if (conn.open) conn.send({ t: 'vista', v: visaoDe(P, cadeira) });
+    if (conn.open) conn.send({ t: 'vista', v: JOGO.motor.visao(P, cadeira) });
   }
 }
 function espalharLog(txt) {
@@ -927,7 +927,7 @@ function donoLocalDaFala(de) {
   for (let c = 0; c < P.cadeiras.length; c++) {
     const t = MESA.cadeiras[c].tipo;
     if (t !== 'voce' && t !== 'local') continue;
-    if (timeDe(P, c) === timeDe(P, de)) return c;
+    if (JOGO.motor.time(P, c) === JOGO.motor.time(P, de)) return c;
   }
   return -1;
 }
@@ -940,7 +940,7 @@ const mesaEmDuplas = () => (P ? { duplas: P.duplas } : { duplas: MESA.n === 4 })
 function espalharChat(de, canal, txt) {
   const fala = String(txt).slice(0, TAMANHO_FALA);
   const quem = mesaEmDuplas();
-  const mesmoTime = c => !quem.duplas || timeDe(quem, c) === timeDe(quem, de);
+  const mesmoTime = c => !quem.duplas || JOGO.motor.time(quem, c) === JOGO.motor.time(quem, de);
   // O nome vai no fio SÓ para o saguão, onde não existe vista de onde tirá-lo. Sai do
   // MESA do anfitrião, nunca do que o convidado mandou: com a partida de pé, `dizer`
   // ignora isto e usa a vista, como sempre.
