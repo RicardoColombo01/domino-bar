@@ -54,15 +54,11 @@ function maoRuim(mao, modo) {
   return mao.filter(carroca).length >= modo.carrocasDemais;
 }
 
-// Fisher-Yates. Usa Math.random de propósito: os testes trocam Math.random por uma
-// versão com semente, e aí uma partida que falhou é sempre reproduzível.
-function embaralhar(lista) {
-  for (let i = lista.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [lista[i], lista[j]] = [lista[j], lista[i]];
-  }
-  return lista;
-}
+// `embaralhar` SAIU DAQUI e foi para `10-casa/010-constantes.js`. Embaralhar um array não é
+// dominó: é da casa, como `guardar` e `escapar`. Ficou aqui enquanto havia um jogo só, e o
+// baralho de 40 do `40-cartas/` seria a segunda cópia — que é como duas metades passam a
+// discordar. E não daria para reusar esta: o `test-acoplamento` reprova um jogo alcançando o
+// nome de outro, e reprovaria com razão.
 
 function distribuir(nJogadores, regras) {
   const modo = modoDe(regras);

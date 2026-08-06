@@ -267,24 +267,50 @@ for (const [pasta, lista] of arquivos) {
   donoDoNome.set(pasta, m);
 }
 
-const jogos = pastas.filter(p => p !== CASA);
+// ─── quem é o quê ────────────────────────────────────────────────────────────
+// A primeira versão desta suíte supunha que **toda pasta que não é a casa é um jogo**, e
+// reprovou honestamente na hora em que nasceu a primeira que não era: `40-cartas/` é uma
+// BIBLIOTECA — naipe, valor e o desenho de uma carta servem ao truco, ao pife e ao
+// vinte-e-um, e nenhum deles é ela. Foi o teste obrigando a dizer o que a pasta É.
+//
+// A classificação é INFERIDA e não escrita numa lista aqui: quem se pendura em `JOGOS` é
+// jogo, quem não se pendura é biblioteca. Lista de nomes num teste apodrece — foi esse o
+// argumento que tirou o literal 'domino' de dentro da casa duas horas atrás.
+const naoCasa = pastas.filter(p => p !== CASA);
+const jogos = naoCasa.filter(p => arquivos.get(p).some(a => a.livres.has('JOGOS')));
+const bibliotecas = naoCasa.filter(p => !jogos.includes(p));
 
 // A varredura conta o QUE ELA ACHOU antes de julgar. É a lição do "quando a sua conferência
 // acusa TUDO, o errado é ela": um analisador quebrado devolve zero achados e passa por verde.
 const totalCasa = [...donoDoNome.get(CASA).keys()].length;
-const totalJogos = jogos.reduce((s, j) => s + donoDoNome.get(j).size, 0);
+const totalFora = naoCasa.reduce((s, j) => s + donoDoNome.get(j).size, 0);
 console.log(`\nvarredura: ${pastas.length} pastas · ${[...arquivos.values()].flat().length} arquivos`);
-console.log(`  ${CASA} declara ${totalCasa} nomes de topo`);
-for (const j of jogos) console.log(`  ${j} declara ${donoDoNome.get(j).size}`);
+console.log(`  ${CASA.padEnd(11)} a casa   · ${totalCasa} nomes de topo`);
+for (const j of jogos) console.log(`  ${j.padEnd(11)} jogo     · ${donoDoNome.get(j).size}`);
+// Quem USA cada biblioteca vai para o log, e não para uma asserção: uma biblioteca sem
+// consumidor é um fato a saber (hoje o `40-cartas` é uma, e será até o truco ter motor), e
+// asserção vermelha no tronco ensina a rodar de novo, que é o hábito que a Fila 5 condena.
+for (const b of bibliotecas) {
+  const usam = jogos.filter(j => arquivos.get(j).some(a =>
+    [...a.livres.keys()].some(n => donoDoNome.get(b).has(n))));
+  console.log(`  ${b.padEnd(11)} bibliot. · ${donoDoNome.get(b).size} · usada por: ${usam.join(', ') || '(ninguém ainda)'}`);
+}
 
-console.log('\na casa não alcança nome de jogo');
+console.log('\na casa não alcança nome de jogo nem de biblioteca');
 ok(totalCasa > 50, `o analisador achou nomes na casa (${totalCasa}) — zero aqui seria instrumento quebrado`);
-ok(totalJogos > 50, `o analisador achou nomes nos jogos (${totalJogos})`);
+ok(totalFora > 50, `o analisador achou nomes fora da casa (${totalFora})`);
+// Sem nenhum jogo, "jogo" e "biblioteca" viram a mesma coisa e as três asserções abaixo
+// passam por vacuidade. A mensagem é o FATO e não a falha, porque ela é impressa nos dois
+// casos — mensagem escrita como reclamação sai com ✓ ao lado e confunde quem lê o log.
+ok(jogos.length >= 1, `${jogos.length} pasta(s) se registram em JOGOS, ${bibliotecas.length} são biblioteca`);
 
+// A CASA NÃO PODE ALCANÇAR A BIBLIOTECA TAMBÉM. Uma casa que sabe o que é uma carta é a
+// mesma casa que sabia o que era uma peça, com outro nome — e é justamente o erro que fica
+// fácil de cometer agora, porque `40-cartas/` "não é de nenhum jogo em particular".
 const achados = [];
 for (const a of arquivos.get(CASA)) {
   for (const [nome, linhas] of a.livres) {
-    for (const j of jogos) {
+    for (const j of naoCasa) {
       const dono = donoDoNome.get(j).get(nome);
       if (dono) achados.push({ nome, de: a.nome, linhas, dono });
     }
@@ -296,7 +322,7 @@ for (const c of achados) {
 }
 const refs = achados.reduce((s, c) => s + c.linhas.length, 0);
 ok(achados.length === 0,
-  `a casa alcança ${achados.length} nomes de jogo, ${refs} vezes — o contrato JOGOS existe para que seja zero`);
+  `a casa alcança ${achados.length} nomes de fora, ${refs} vezes — o contrato JOGOS existe para que seja zero`);
 
 // ─── e a casa não CITA o nome de um jogo, nem em texto ───────────────────────
 // O id de cada jogo é o nome da pasta sem o número — `30-domino` → `domino` —, que é
@@ -339,18 +365,38 @@ for (const j of jogos) {
 for (const c of cruzados) console.log(`    ✗ ${c.de}:${c.linhas.join(',')} alcança \`${c.nome}\` (de ${c.dono})`);
 ok(cruzados.length === 0, `nenhum jogo alcança o nome de outro (${cruzados.length} achados)`);
 
+// ─── e a biblioteca não alcança o jogo ───────────────────────────────────────
+// A seta tem UM sentido: o jogo usa a biblioteca, nunca o contrário. Uma `40-cartas/` que
+// soubesse o que é uma manilha seria truco disfarçado de baralho, e o pife herdaria a regra
+// do vizinho junto com a carta — que é exatamente o que esta pasta existe para não fazer.
+console.log('\na biblioteca não alcança o nome de um jogo');
+const invertidos = [];
+for (const b of bibliotecas) {
+  for (const a of arquivos.get(b)) {
+    for (const [nome, linhas] of a.livres) {
+      for (const j of jogos) {
+        const dono = donoDoNome.get(j).get(nome);
+        if (dono) invertidos.push({ nome, de: a.nome, linhas, dono });
+      }
+    }
+  }
+}
+for (const c of invertidos) console.log(`    ✗ ${c.de}:${c.linhas.join(',')} alcança \`${c.nome}\` (de ${c.dono})`);
+ok(invertidos.length === 0,
+  `nenhuma biblioteca alcança o nome de um jogo (${invertidos.length} achados) — a seta tem um sentido só`);
+
 // ─── e o contrato é o ÚNICO caminho de volta ─────────────────────────────────
-// A casa fala com o jogo por `JOGO.x` e por `JOGOS`. Se ela parar de citar `JOGO`, ou o jogo
-// parar de se registrar, o acoplamento é zero por não haver ligação nenhuma — que é zero
-// pelo motivo errado.
+// A casa fala com o jogo por `JOGO.x` e por `JOGOS`. Se ela parar de citar `JOGO`, o
+// acoplamento é zero por não haver ligação nenhuma — que é zero pelo motivo errado.
+//
+// "Cada jogo se registra" NÃO é asserção aqui, e a diferença é sutil: registrar-se é o que
+// DEFINE ser jogo, três blocos acima. Cobrá-lo seria conferir a classificação contra ela
+// mesma — a mesma armadilha do teste que importa a tabela do próprio código para conferir a
+// tabela. Quem responde por isso é o `jogos.length >= 1` lá em cima, e o log.
 console.log('\no contrato está de pé');
 const citaJOGO = arquivos.get(CASA).filter(a => a.livres.has('JOGO') || a.topo.has('JOGO'));
 ok(citaJOGO.length >= 3,
   `${citaJOGO.length} arquivos da casa falam com o jogo por \`JOGO\` — zero seria casa sem jogo, não casa desacoplada`);
-for (const j of jogos) {
-  const registra = arquivos.get(j).some(a => a.livres.has('JOGOS'));
-  ok(registra, `${j} se apresenta em JOGOS`);
-}
 
 console.log(`\n${asserçoes} asserções, ${falhas} falharam`);
 process.exit(falhas ? 1 : 0);

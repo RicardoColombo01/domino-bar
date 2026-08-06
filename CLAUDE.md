@@ -8,7 +8,7 @@ Paulista** já tem aba, nome e regras à mostra, faltando o motor. No ar em
 Sem framework, sem bundler, e **dois binários** — os ícones do aplicativo, exigidos pelo
 manifest: madeira, pintas e sons continuam gerados em canvas e WebAudio na hora. Three.js e
 PeerJS vêm de CDN, e o **service worker os guarda**, então depois de uma partida o jogo abre
-sem internet. **6.669 linhas** no total (`src/js` + `src/pagina.html` + `src/css/estilo.css`
+sem internet. **7.058 linhas** no total (`src/js` + `src/pagina.html` + `src/css/estilo.css`
 + `src/sw.js`), conferido em 06/08/2026 — este número **envelhece**, e envelheceu: ficou
 dizendo 2.100 por três releases seguidas.
 
@@ -21,8 +21,9 @@ investigação. `node -e "…split('\n').length"` é a que bate com o `wc -l`.
 ```
 npm run build     junta src/ num index.html autossuficiente, e carimba o sw.js
 npm run check     avisa se o index.html OU o sw.js estão desatualizados
-npm test          build + o acoplamento e as três suítes de lógica
+npm test          build + o acoplamento, as cartas e as três suítes de lógica
 npm run acoplamento  a casa alcança ZERO nomes de jogo (varredura por AST, instantânea)
+npm run cartas    o baralho de 40 e a carta 3D, no terminal
 npm run app       build + manifest, ícones e o jogo abrindo COM A REDE DESLIGADA (~30 s)
 npm run icones    regera icone-192.png e icone-512.png a partir de src/icone.svg
 npm run telas     build + o jogo em seis tamanhos de tela (retrato, paisagem, tablet, wide)
@@ -159,10 +160,12 @@ src/icone.svg                    a fonte dos dois PNG do manifest
 30-domino/020-baralho    embaralhar, distribuir (com re-embaralho), quem abre, sobraDoBaralho
 30-domino/030-regras     encaixes, pontas, jogadas válidas, tipo de batida     ← puro
 30-domino/040-partida    turnos, compra, passe, placar, visaoDe()
+40-cartas/045-baralho    naipes, valores, o baralho de 40, distribuir       ← puro, BIBLIOTECA
 30-domino/050-bot        níveis = quanta informação o bot recebe
 30-domino/060-layout     onde cada peça cai na mesa, com as dobras             ← puro
 10-casa/070-cena         renderer, câmera, luz de boteco, mesa, tralhas
 30-domino/080-peca3d     geometria + atlas de pintas em canvas + fantasma
+40-cartas/085-carta3d    a carta 3D: atlas de 40 células (10 valores × 4 naipes)  ← BIBLIOTECA
 30-domino/090-tabuleiro  reconcilia o tabuleiro com a visão; prévia da jogada
 30-domino/100-mao        sua mão em leque, mãos dos outros, monte
 30-domino/110-interacao  raycast: escolher → ver → confirmar
@@ -184,8 +187,21 @@ src/icone.svg                    a fonte dos dois PNG do manifest
 10-casa/900-arranque     monta as abas, abre o jogo escolhido, enquadra, liga o loop
 ```
 
+**HÁ TRÊS ESPÉCIES DE PASTA, e a distinção nasceu na v4.2.0 porque o teste a exigiu:**
+
+| | | |
+|---|---|---|
+| **casa** | `10-casa/` | não alcança nada de fora — nem jogo, nem biblioteca |
+| **jogo** | `30-domino/`, `50-truco/` | pendura-se em `JOGOS`; não alcança outro jogo |
+| **biblioteca** | `40-cartas/` | ninguém a registra; jogos a usam, e ela **não alcança jogo nenhum** |
+
+A seta da biblioteca tem **um sentido só**: uma `40-cartas/` que soubesse o que é manilha
+seria truco disfarçado de baralho, e o pife herdaria a regra do vizinho junto com a carta.
+O `test-acoplamento` classifica pela pergunta *"esta pasta se pendura em `JOGOS`?"* — e não
+por uma lista de nomes escrita nele, que apodreceria.
+
 **A pasta é uma AFIRMAÇÃO, e desde a v4.0.0 ela é um FATO com asserção:** a casa alcança
-**zero** nomes de jogo, e `npm run acoplamento` (`tests/test-acoplamento.mjs`) reprova se
+**zero** nomes de fora, e `npm run acoplamento` (`tests/test-acoplamento.mjs`) reprova se
 deixar de ser. As duas dívidas que a tornavam promessa — a rede escrevendo na tela e o
 `desenharContagem` dentro do HUD — fecharam na v3.0.0.
 
@@ -460,6 +476,18 @@ por mutação nas quatro direções, inclusive as duas de falso positivo.
   continuava com o `<h1>Dominó de Bar</h1>`, os três botões de modo escritos à mão e as doze
   linhas de regra. **O teste dizia zero e estava certo; a pergunta é que era estreita.**
   Ao auditar a fronteira casa/jogo, olhe também o HTML e o CSS.
+- **"Está desenhado" não é "está desenhado CERTO", e a diferença some no antialiasing.** O
+  naipe de paus nasceu com as três folhas se tocando exatamente no centro — um furo de um
+  pixel bem no meio da figura. A olho não aparece; quem viu foi a asserção do atlas
+  amostrando o centro da célula e lendo "papel" nas dez cartas de paus. **Asserção de desenho
+  que só pergunta "tem tinta em algum lugar" aprova qualquer borrão**; a que vale escolhe um
+  ponto onde a tinta TEM de estar e diz por quê.
+- **Utilitário genérico morando na pasta de um jogo só é descoberto quando aparece o
+  segundo.** `embaralhar` é Fisher-Yates sobre um array — não é dominó — e morou em
+  `30-domino/020-baralho.js` enquanto havia um jogo só. Com o baralho de 40, as saídas eram
+  duplicar (que é como duas metades passam a discordar) ou um jogo alcançar o nome do outro,
+  que o `test-acoplamento` reprova. Foi para a casa. **A pergunta ao escrever qualquer
+  função: ela fala de PEÇA e PONTA, ou fala de ARRAY?**
 - **Dependência nova de teste quebra TODO worktree que já existia, e o erro do Node não diz
   o que fazer.** `tests/node_modules` não é versionado nem compartilhado: o `acorn` do
   `test-acoplamento` foi instalado no worktree onde ele nasceu, e o `npm test` na `main`
@@ -662,7 +690,8 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 |---|---|
 | enviado | **v4.1.2** — empurrado, `0 0` contra `origin/main` |
 | **PUBLICADO** | ⚠ **CONFERIR** — o build do Pages ficou EM FILA; ver "O DEPLOY QUE NÃO ACONTECEU" |
-| esta release | **v4.1.0** — a Fase 2: a faixa de abas, as chaves por jogo, o `?jogo=` na URL |
+| esta release | **v4.2.0** — a Fase 3: `40-cartas/`, o baralho de 40 e a carta 3D |
+| a anterior | **v4.1.0** — a Fase 2: a faixa de abas, as chaves por jogo, o `?jogo=` na URL |
 | Filas 5 a 11 | **todas fechadas**, e não há defeito conhecido em aberto |
 | o que vem | **Fase 3 da v4: `40-cartas/`** — o baralho de 40 e a carta 3D |
 
@@ -740,8 +769,8 @@ worktree        ../domino-bar-jogos   (as branches v4.1, v4.1.1 e v4.1.2 já for
 | ✔ Fase 1 | o contrato `JOGOS`/`JOGO`, a carga em três tempos, acoplamento zero (v4.0.0) |
 | ✔ recado 2 | a varredura por AST virou **`tests/test-acoplamento.mjs`**, dentro do `npm test` |
 | ✔ Fase 2 | **a aba de escolher o jogo** (v4.1.0) |
-| ⏳ Fase 3 | `40-cartas/` — baralho de 40 e a carta 3D — **É AQUI QUE SE RETOMA** |
-| ⏳ Fase 4 | `50-truco/` — o Paulista, com a `barraDoJogo` que ficou de fora da Fase 1 |
+| ✔ Fase 3 | **`40-cartas/`** — o baralho de 40 e a carta 3D (v4.2.0) |
+| ⏳ Fase 4 | `50-truco/` — o Paulista, com a `barraDoJogo` que ficou de fora da Fase 1 — **É AQUI QUE SE RETOMA** |
 | ⏳ Fase 5 | o aplicativo: APK no GitHub Releases + Amazon Appstore |
 
 **O que a Fase 2 entregou, e o que ela obrigou a decidir:**
@@ -799,21 +828,31 @@ worktree        ../domino-bar-jogos   (as branches v4.1, v4.1.1 e v4.1.2 já for
   conferido em 4 mutações (2 de acoplamento real, 2 de falso positivo) e as asserções da
   Fase 2 em 5, cada uma matando exatamente a sua.
 
-#### O que a Fase 3 herda pronto
+#### O que a Fase 4 herda pronto
 
-Quando o `40-cartas/` chegar, estas coisas **já existem** e não devem ser reinventadas:
+Quando o truco chegar, estas coisas **já existem** e não devem ser reinventadas:
 
-- **A carta 3D não precisa de encaixe novo no menu.** Título, resumo, regras e os botões de
-  modo já saem do registro; um jogo de carta preenche os mesmos campos.
-- **O `emBreve` sai do `50-truco/500-registro.js` quando o motor entrar**, e é a linha que
-  transforma a aba de vitrine em mesa. Enquanto ela existir, `jogavel()` é falso e a casa não
-  monta mesa nenhuma — nada mais precisa mudar.
+- **O baralho e a carta 3D** (`40-cartas/`, v4.2.0). `baralho40()`, `distribuirCartas(n, porMao)`,
+  `cartaValida` (que é o `jogadaDoFio` do truco de graça), `criarCarta`, `criarVersoDeCarta`,
+  `criarFantasmaDeCarta` e `faceDaCarta`. **A biblioteca não sabe o que é manilha**, e não
+  pode passar a saber: o `test-acoplamento` reprova biblioteca alcançando nome de jogo.
+- **A ORDEM DE FORÇA é do truco e nasce lá.** `VALORES` está em ordem de baralho (A 2 3 4 5 6
+  7 Q J K), não de força (4 5 6 7 Q J K A 2 3). O desempate entre manilhas
+  (ouros < espadas < copas < paus) *calha* de ser a ordem de `NAIPES`, e isso é coincidência
+  — quem depender dela está lendo regra de truco de dentro da pasta errada.
+- **`window.__cartas` SOME nesta fase.** É bancada temporária para as suítes; quando o truco
+  tiver `JOGO.ponte`, as cartas entram lá, como as peças do dominó.
+- **A aba não precisa de nada.** `jogavel()` passa a ser verdadeiro só de tirar a linha
+  `emBreve` do `50-truco/500-registro.js`, e o menu monta sozinho a partir de `menu.MODOS`.
 - **`CHAVES_DO_JOGO` já cobre o truco:** a mesa e a partida dele vão para `mesa.truco` e
   `partida.truco` sem uma linha nova.
 - **O que AINDA falta e está previsto:** a `barraDoJogo` (o `#acoes` tem "Comprar" e "Passar"
   escritos à mão, e truco precisa de trucar/aceitar/correr/aumentar) e o segundo atalho do
   manifest. Os dois entram junto com o motor, e não antes: sem o truco escrito, a forma deles
   seria chute.
+- **A pergunta em aberto para o Ricardo continua sendo o EMPATE DE VAZA (o "melou")** — regra
+  de casa, com mais de uma leitura defensável, como a cruzada valer 4. **Perguntar, não
+  escolher sozinho.**
 
 ---
 
@@ -3077,11 +3116,42 @@ O que a implementação acrescentou ao plano:
   não existe. A entrada do truco entra junto com o motor dele.
 - **A faixa trava com a mesa ocupada** — ver os três achados em "ONDE PAROU".
 
+**FASE 3 — `40-cartas/` ✔ FEITA (v4.2.0).** O baralho de 40 (`045-baralho.js`, puro) e a
+carta 3D (`085-carta3d.js`, atlas de 10 valores × 4 naipes numa textura de 1920×768). As
+regras da Fila 7 foram obedecidas e conferidas: a receita fica guardada em `pintar()`, começa
+com `fillRect` opaco, e a suíte de textura mediu **0 sorteios globais** por repintura.
+
+O que a implementação acrescentou ao plano:
+
+- **`40-cartas/` é BIBLIOTECA, não jogo — e foi o teste que obrigou a dizer isso.** O
+  `test-acoplamento` supunha "toda pasta que não é a casa é um jogo" e reprovou honestamente
+  na primeira que não era. Hoje ele classifica pela pergunta *"pendura-se em `JOGOS`?"* e
+  cobra a regra nova: **biblioteca não alcança nome de jogo.** Ver as três espécies de pasta,
+  lá em cima.
+- **`embaralhar` mudou de dono**, do dominó para a casa — ver a armadilha própria.
+- **Os naipes são CAMINHO e não glifo.** `fillText('♠')` depende de a fonte do sistema ter
+  aquele caractere, e o que falta vira tofu — num Android antigo, que é exatamente o aparelho
+  onde este projeto já perdeu uma release para textura. O VALOR continua sendo texto, porque
+  dígito e letra latina existem em qualquer fonte.
+- **A carta é `[v, n]`, dois inteiros**, pelo mesmo motivo que a peça é `[a, b]`: atravessa
+  `JSON.stringify` sem perder nada e cabe na `visaoDe` que trafega no online. E **não** tem a
+  simetria do dominó — `[0,2]` e `[2,0]` são cartas diferentes; quem copiar o `mesmaPeca`
+  para cá faz duas virarem uma. Há asserção.
+- **`window.__cartas` é uma bancada TEMPORÁRIA.** Enquanto não houver truco, nada no jogo
+  chama estas funções, e código que existe e nunca rodou é a categoria que a Fila 9 inteira
+  passou fechando. Ela some na Fase 4, quando as cartas viram `JOGO.ponte` do truco. Não vai
+  pelo `window.__jogo` de propósito: aquela ponte é da casa, e a casa não pode conhecer a
+  pasta das cartas.
+
+<details><summary>o texto original da fase, de quando ela era plano</summary>
+
 **FASE 3 — `40-cartas/`.** Baralho de 40 puro, e a carta 3D com atlas de naipes e valores em
 canvas. **As regras que a Fila 7 pagou valem aqui:** a receita de `pintar()` fica guardada para
 poder repintar, começa com `fillRect` opaco (é o que faz a sonda de alfa funcionar) e **não
 pode consumir `Math.random` global** — as suítes de tela semeiam aquele gerador dentro da
 página.
+
+</details>
 
 **FASE 4 — `50-truco/`.** As regras, testáveis:
 
@@ -3094,7 +3164,20 @@ mão      3 cartas para cada; melhor de 3 vazas
 aposta   truco 3 → seis 6 → nove 9 → doze 12
 partida  até 12 pontos
 mão de 11  quem chega a 11 vê as cartas e decide jogar ou entregar 1 ponto
+
+O MELOU (empate de vaza) — decidido com o Ricardo em 06/08/2026:
+  empatou a 1ª            quem ganhar a 2ª leva a mão
+  ganhou a 1ª, empatou a 2ª   quem ganhou a 1ª leva
+  empatou a 1ª e a 2ª     quem ganhar a 3ª leva
+  EMPATOU AS TRÊS         a MÃO MORRE — ninguém marca, embaralha de novo
 ```
+
+**O "melou tudo" é escolha de casa, e ela tem irmã neste projeto.** As outras duas saídas
+eram defensáveis — "quem é mão leva" é a mais comum em mesa de bar, e "vale a primeira vaza"
+é a mais usada em app. O Ricardo escolheu a mão morta, e o argumento é coerência: o dominó
+desta casa já diz *"trancou e empatou, a mão morre"*. Ninguém marca ponto sem ter ganho nada.
+Registrado aqui porque **nenhuma leitura de código chega a esta resposta** — é irmã da
+cruzada valer 4.
 
 `regras.js` e `layout.js` **puros** (invariante 4). `visaoDe()` com a **mesma fronteira de
 segurança** do invariante 3. O bot ganha **decisão de aposta**, que é a parte nova e a mais
@@ -3105,11 +3188,13 @@ difícil. Online, hotseat, conversa, saguão, identidade e reconexão **vêm pro
 SEM barra de URL**, que é o único teste que prova o assetlinks → `.apk` num GitHub Release →
 conta grátis na Amazon com o mesmo `.apk`.
 
-### Três coisas que ficam EM ABERTO para o Ricardo
+### O que ficava EM ABERTO para o Ricardo
 
-1. **O empate de vaza no truco (o "melou")** — regra de casa, e há mais de uma leitura
-   defensável, como a cruzada valer 4. **Perguntar na Fase 4, não escolher sozinho.**
+1. ~~**O empate de vaza no truco (o "melou")**~~ ✔ **respondido em 06/08/2026: a mão morre.**
+   Ver a tabela de regras acima.
 2. **Truco de 2 e de 4 (duplas)?** O plano assume os dois, porque a casa já faz duplas em cruz.
+   **Ainda em aberto** — mas é escolha de escopo, não de regra: a mesa de 2 é o caminho curto
+   para a Fase 4 andar, e a de 4 vem de graça se o `timeDe` da casa for reusado.
 3. **O repo da user page** é conta dele, não código.
 
 ### Os riscos, ditos antes de começar
