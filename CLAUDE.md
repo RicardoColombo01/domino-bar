@@ -45,6 +45,11 @@ node tests/test-online.mjs https://ricardocolombo01.github.io/domino-bar/
                   testa o que está PUBLICADO, não o local
 
 Primeira vez:  cd tests && npm install
+E DE NOVO depois da v4.1.0, inclusive num worktree que já existia: o
+`test-acoplamento` trouxe o `acorn`, a primeira dependência nova desde o
+puppeteer — e `tests/node_modules` não é versionado nem compartilhado entre
+worktrees. Sem ele, `npm test` morre na PRIMEIRA suíte. (A suíte explica o que
+fazer; foi assim que esta linha nasceu.)
 ```
 
 ## Branches
@@ -455,6 +460,13 @@ por mutação nas quatro direções, inclusive as duas de falso positivo.
   continuava com o `<h1>Dominó de Bar</h1>`, os três botões de modo escritos à mão e as doze
   linhas de regra. **O teste dizia zero e estava certo; a pergunta é que era estreita.**
   Ao auditar a fronteira casa/jogo, olhe também o HTML e o CSS.
+- **Dependência nova de teste quebra TODO worktree que já existia, e o erro do Node não diz
+  o que fazer.** `tests/node_modules` não é versionado nem compartilhado: o `acorn` do
+  `test-acoplamento` foi instalado no worktree onde ele nasceu, e o `npm test` na `main`
+  morreu com um `ERR_MODULE_NOT_FOUND` cru. Este arquivo já registrava "npm install POR
+  worktree" — e eu tropecei mesmo assim, o que diz que a nota não bastava. O que faltava era
+  a SUÍTE dizer: o import virou dinâmico e o catch imprime o comando. Conferido escondendo o
+  módulo, e não só lendo o catch.
 - **`var(--que-nao-existe)` NÃO pinta de errado — ele invalida a declaração inteira, e a
   propriedade cai na herança.** A faixa de abas nasceu com `color: var(--marfim)`, que é uma
   cor do 3D (`CORES.marfim`, em JS) e nunca existiu no CSS; o texto ficou com a cor certa por
