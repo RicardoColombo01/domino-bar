@@ -50,6 +50,22 @@ function trocarDeJogo(nome) {
 // registro dele.
 const jogavel = j => !!j && !j.emBreve;
 
+// Fisher-Yates. Morava em `30-domino/020-baralho.js`, e embaralhar um array não é dominó —
+// é da casa, como `guardar` e `escapar`. Veio para cá quando o baralho de 40 do `40-cartas/`
+// precisou da mesma coisa: a alternativa era uma segunda cópia (que é como duas metades
+// passam a discordar) ou um jogo alcançando o nome do outro, que o `test-acoplamento`
+// reprova — e reprovaria com razão.
+//
+// Usa `Math.random` de propósito: os testes o trocam por uma versão semeada, e aí uma
+// partida que falhou é sempre reproduzível.
+function embaralhar(lista) {
+  for (let i = lista.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [lista[i], lista[j]] = [lista[j], lista[i]];
+  }
+  return lista;
+}
+
 // ─── quem pediu menos movimento ──────────────────────────────────────────────
 // Sensibilidade vestibular não é preferência estética: para quem tem, movimento na tela
 // dá enjoo de verdade. Este jogo era o pior conjunto possível — a lâmpada respira PARA
