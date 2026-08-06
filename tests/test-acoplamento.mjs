@@ -33,7 +33,22 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import * as acorn from 'acorn';
+
+// `acorn` é a PRIMEIRA dependência nova desde o puppeteer, e `tests/node_modules` NÃO é
+// compartilhado entre worktrees nem versionado. Quem clonar o repositório, ou quem já tiver
+// um worktree aberto de antes desta release, roda `npm test` e leva um `ERR_MODULE_NOT_FOUND`
+// cru do Node — que não diz o que fazer, e é a doença que esta casa passou quatro filas
+// consertando. O import vira dinâmico só para poder explicar.
+let acorn;
+try {
+  acorn = await import('acorn');
+} catch (e) {
+  void e;
+  console.error('\n  ✗ falta o `acorn`, que esta suíte usa para ler o código.\n' +
+    '    `tests/node_modules` não é compartilhado entre worktrees nem versionado:\n\n' +
+    '        cd tests && npm install\n');
+  process.exit(1);
+}
 
 const RAIZ = path.join(import.meta.dirname, '..', 'src', 'js');
 const CASA = '10-casa';

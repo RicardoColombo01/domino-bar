@@ -245,6 +245,7 @@ npm run build       junta src/ num index.html autossuficiente (o CSS entra junto
 npm run check       avisa se o index.html ou o sw.js estão desatualizados
 npm test            build + o acoplamento e as três suítes de lógica (segundos)
 npm run acoplamento a casa alcança ZERO nomes de jogo — varredura por AST, instantânea
+                    (traz o `acorn`: rode `cd tests && npm install` uma vez)
 npm run app         build + manifest, ícones, e o jogo abrindo COM A REDE DESLIGADA
 npm run icones      regera os dois PNG a partir de src/icone.svg
 npm run telas       build + o jogo em seis tamanhos de tela, dez situações cada
