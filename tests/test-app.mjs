@@ -63,12 +63,21 @@ const versao = (sw.match(/const VERSAO = '([^']*)'/) || [])[1];
 ok(versao && /^[a-f0-9]{12}$/.test(versao), `o sw.js não tem versão carimbada (achei "${versao}")`);
 ok(!sw.includes('__VERSAO__'), 'o marcador __VERSAO__ sobrou no sw.js — o build não carimbou');
 
+// Esta refaz a conta do build, e é de propósito que ela seja modesta sobre o que prova: o
+// trabalho dela é pegar ARTEFATO VELHO — alguém que mexeu em `src/` e não rodou o build,
+// e cujo `sw.js` publicado aponta para um cache que não corresponde ao que está no ar.
+// Não é uma asserção sobre criptografia, é sobre frescor.
+//
+// O resumo cobre o index.html E o molde do worker: mudando só a estratégia de cache, o
+// index.html fica igual, e sem a segunda metade o nome do cache não trocaria — a lógica
+// nova mandaria num cache montado pela lógica velha.
 const crypto = await import('node:crypto');
+const semFimDeLinha = f => fs.readFileSync(path.join(RAIZ, f), 'utf8').replace(/\r\n/g, '\n');
 const esperada = crypto.createHash('sha256')
-  .update(fs.readFileSync(path.join(RAIZ, 'index.html'), 'utf8')).digest('hex').slice(0, 12);
+  .update(semFimDeLinha('index.html')).update(semFimDeLinha('src/sw.js')).digest('hex').slice(0, 12);
 ok(versao === esperada,
-  `a versão do sw.js (${versao}) não é o resumo do index.html publicado (${esperada}) — rode npm run build`);
-console.log(`  cache dominobar-${versao}, amarrado ao index.html`);
+  `a versão do sw.js (${versao}) não corresponde ao que está publicado (${esperada}) — rode npm run build`);
+console.log(`  cache dominobar-${versao}, amarrado ao index.html + src/sw.js`);
 
 // ─── e agora o navegador ─────────────────────────────────────────────────────
 const servidor = http.createServer((req, res) => {
@@ -78,8 +87,17 @@ const servidor = http.createServer((req, res) => {
     res.writeHead(404); res.end(); return;
   }
   res.writeHead(200, { 'content-type': TIPOS[path.extname(arq)] || 'application/octet-stream' });
-  res.end(fs.readFileSync(arq));
+  // SIMULA UMA PUBLICAÇÃO: quando `publicado` sobe, o servidor passa a entregar um
+  // index.html e um sw.js diferentes — que é exatamente o que uma release faz, já que o
+  // nome do cache dentro do sw.js é um resumo do index.html.
+  let corpo = fs.readFileSync(arq);
+  if (publicado > 1 && /index\.html$/.test(arq))
+    corpo = Buffer.from(String(corpo).replace('<title>', `<title>v${publicado} `));
+  if (publicado > 1 && /sw\.js$/.test(arq))
+    corpo = Buffer.from(String(corpo).replace(/const VERSAO = '([^']*)'/, `const VERSAO = 'v${publicado}$1'`));
+  res.end(corpo);
 });
+let publicado = 1;
 await new Promise(r => servidor.listen(PORTA, r));
 
 const nav = await puppeteer.launch({
@@ -140,6 +158,38 @@ try {
   ok(offline.peer, 'offline o PeerJS sumiu: dava para jogar, mas não dava para abrir mesa');
   ok(!offline.recado, 'o jogo abriu offline e mesmo assim mostrou o recado de "não carregou"');
   console.log('  o jogo abriu sem rede, com o PeerJS junto');
+  await pag.setOfflineMode(false);
+
+  // ─── a correção publicada chega NA PRIMEIRA visita ─────────────────────────
+  // A ASSERÇÃO MAIS IMPORTANTE DESTA SUÍTE, e ela existe por causa de um dia perdido:
+  // em 31/07/2026 o Ricardo testou o github.io e viu os mesmos defeitos que já estavam
+  // consertados — o trabalho não tinha saído da máquina. O service worker abre uma
+  // SEGUNDA porta para exatamente esse engano, e pior, uma que não se resolve com
+  // `git push`: cache primeiro na PÁGINA faz a correção publicada só aparecer na
+  // segunda visita, e quem testa vê o defeito que acabou de consertar.
+  //
+  // Por isso a página é rede-primeiro e o resto é cache-primeiro. Não é inconsistência:
+  // as URLs do three e do peerjs têm a versão no caminho e são imutáveis — buscá-las de
+  // novo nunca traria nada diferente. O index.html é o único arquivo que muda de conteúdo
+  // sem mudar de nome, e é justamente por isso que ele não pode ser servido do cache
+  // enquanto houver rede.
+  console.log('\ndepois de publicar uma correção');
+  publicado = 2;
+  await pag.reload({ waitUntil: 'networkidle2', timeout: 45000 });
+  await pronto();
+  const titulo = await pag.title();
+  ok(/^v2 /.test(titulo),
+    `a versão publicada NÃO chegou na primeira visita — a página ainda diz "${titulo}"`);
+  console.log(`  a página recarregou já na versão nova: "${titulo}"`);
+
+  // E o que a rede-primeiro NÃO pode custar: offline continua abrindo, agora servindo do
+  // cache a última versão que chegou a ser baixada.
+  await pag.setOfflineMode(true);
+  await pag.reload({ waitUntil: 'domcontentloaded', timeout: 45000 });
+  await pronto(20000);
+  const depois = await pag.evaluate(() => ({ pronto: !!(window.__jogo && window.__jogo.pronto), t: document.title }));
+  ok(depois.pronto, 'depois da atualização o jogo deixou de abrir offline');
+  console.log(`  e offline continua abrindo, na versão guardada: "${depois.t}"`);
   await pag.setOfflineMode(false);
 } finally {
   await nav.close();

@@ -143,8 +143,13 @@ try {
 // troca de nome é o defeito mais cruel desta família: o jogador fica preso numa versão
 // antiga para sempre. Amarrando o nome ao conteúdo, publicar correção JÁ é publicar cache
 // novo — e "esquecer de bumpar a versão" deixa de ser uma coisa que existe.
-const versao = crypto.createHash('sha256').update(html).digest('hex').slice(0, 12);
 const moldeSW = ler(MOLDE_SW);
+// O resumo cobre o index.html E O PRÓPRIO MOLDE DO WORKER, e a segunda metade veio de uma
+// auditoria: mudando só a estratégia de cache, o `index.html` fica igual, o nome do cache
+// não troca, e a lógica nova passa a mandar num cache montado pela lógica velha. Não há
+// auto-referência aqui — o resumo é do MOLDE (`src/sw.js`), que não contém o resumo; quem o
+// contém é o `sw.js` gerado.
+const versao = crypto.createHash('sha256').update(html).update(moldeSW).digest('hex').slice(0, 12);
 // EXIGE UMA ocorrência, e o motivo é uma cicatriz: `String.replace` troca a PRIMEIRA, e
 // bastou o marcador aparecer também num comentário para o comentário ficar com o resumo e o
 // `const VERSAO` ficar com o marcador — cache chamado `dominobar-__VERSAO__`, o mesmo nome

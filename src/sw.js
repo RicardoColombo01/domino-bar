@@ -42,27 +42,53 @@ self.addEventListener('activate', e => {
 
 const nosso = url => url.startsWith(self.registration.scope) || CDN.some(c => url.startsWith(c));
 
-self.addEventListener('fetch', e => {
-  const url = e.request.url;
-  if (e.request.method !== 'GET' || !nosso(url)) return;
+// `resp.ok` exclui o 404 e o 500; o `type` exclui resposta OPACA, que não dá para conferir e
+// envenenaria o cache com um erro disfarçado de sucesso. (É por causa desta linha que o
+// <script> do PeerJS precisa de `crossorigin`: sem ele a resposta é opaca e não entra.)
+const guardavel = resp => resp.ok && (resp.type === 'basic' || resp.type === 'cors');
 
+const guardar = (req, resp) => {
+  if (!guardavel(resp)) return resp;
+  const copia = resp.clone();
+  caches.open(CACHE).then(c => c.put(req, copia));
+  return resp;
+};
+
+self.addEventListener('fetch', e => {
+  const req = e.request;
+  if (req.method !== 'GET' || !nosso(req.url)) return;
   // WebRTC e o broker do PeerJS NÃO passam por aqui (não são HTTP GET), e é bom que não
   // passem: o online não pode ser servido de cache nem por um instante.
-  e.respondWith(caches.match(e.request).then(guardado => {
-    // CACHE PRIMEIRO, e a razão é o bar: a rede que este jogo encontra é ruim, e uma
-    // resposta guardada na hora vale mais que a versão de ontem chegando em cinco segundos.
-    // A troca de versão vem do NOME do cache, não da idade da resposta.
-    if (guardado) return guardado;
-    return fetch(e.request).then(resp => {
-      // `resp.ok` exclui o 404 e o 500; o `type` exclui resposta opaca, que não dá para
-      // conferir e envenenaria o cache com um erro disfarçado de sucesso.
-      if (resp.ok && (resp.type === 'basic' || resp.type === 'cors')) {
-        const copia = resp.clone();
-        caches.open(CACHE).then(c => c.put(e.request, copia));
-      }
-      return resp;
+
+  // ─── a PÁGINA é rede-primeiro ──────────────────────────────────────────────
+  // E isto não é inconsistência com a linha de baixo: o `index.html` é o ÚNICO arquivo que
+  // muda de conteúdo sem mudar de nome. As URLs do three e do peerjs têm a versão no
+  // caminho e são imutáveis — buscá-las de novo nunca traria nada diferente.
+  //
+  // Servir a página do cache faria toda correção publicada só aparecer na SEGUNDA visita, e
+  // quem testa veria o defeito que acabou de consertar. Este projeto já perdeu um dia
+  // inteiro exatamente assim (o `github.io` mostrando o que a `main` tinha, não o que estava
+  // pronto), e ali bastava um `git push`; aqui não bastaria nada — o cache é do celular do
+  // jogador. Havia asserção vermelha antes deste conserto, e ela continua na suíte.
+  //
+  // O custo é um pedido de rede por carga, e ele é pequeno de propósito: o cache HTTP do
+  // navegador continua valendo por baixo, então na prática é um 304 com ETag.
+  if (req.mode === 'navigate') {
+    e.respondWith(
+      fetch(req).then(resp => guardar(req, resp))
+        // Sem rede: a última versão que chegou a ser baixada. O `./index.html` é a rede de
+        // segurança para quando o endereço pedido não é o mesmo que foi guardado (abrir por
+        // `/` e por `/index.html` são dois pedidos diferentes para a mesma página).
+        .catch(() => caches.match(req).then(r => r || caches.match('./index.html'))));
+    return;
+  }
+
+  // ─── o RESTO é cache-primeiro ──────────────────────────────────────────────
+  // A rede que este jogo encontra é de bar. Para arquivo imutável, resposta guardada na hora
+  // vale mais que a mesma resposta chegando em cinco segundos.
+  e.respondWith(caches.match(req).then(guardado => guardado
+    || fetch(req).then(resp => guardar(req, resp))
     // Offline e sem nada guardado: devolve o erro de rede de sempre. Quem explica isso ao
     // jogador é o #semCarga da página, que já existe e já sabe dizer a frase certa.
-    }).catch(() => guardado || Response.error());
-  }));
+    .catch(() => Response.error())));
 });
