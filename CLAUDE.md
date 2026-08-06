@@ -154,10 +154,10 @@ src/sw.js                        o molde do service worker, com __VERSAO__
 src/icone.svg                    a fonte dos dois PNG do manifest
 
 — 1º tempo: A CASA DECLARA ————————————————————————————————————————————————
-10-casa/010-constantes   JOGOS/JOGO/jogavel, cores, movimento reduzido, guardar/lido/
-                         esquecer — e as chaves POR JOGO (mesa, partida) mais a migração
+10-casa/010-constantes   JOGOS/JOGO/jogavel, cores, movimento reduzido, EMBARALHAR,
+                         guardar/lido/esquecer — e as chaves POR JOGO mais a migração
 30-domino/015-constantes peça, MODOS, pontuação, medidas do tabuleiro
-30-domino/020-baralho    embaralhar, distribuir (com re-embaralho), quem abre, sobraDoBaralho
+30-domino/020-baralho    distribuir (com re-embaralho), quem abre, sobraDoBaralho
 30-domino/030-regras     encaixes, pontas, jogadas válidas, tipo de batida     ← puro
 30-domino/040-partida    turnos, compra, passe, placar, visaoDe()
 40-cartas/045-baralho    naipes, valores, o baralho de 40, distribuir       ← puro, BIBLIOTECA
@@ -688,8 +688,7 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 
 | | |
 |---|---|
-| enviado | **v4.1.2** — empurrado, `0 0` contra `origin/main` |
-| **PUBLICADO** | ⚠ **CONFERIR** — o build do Pages ficou EM FILA; ver "O DEPLOY QUE NÃO ACONTECEU" |
+| **PUBLICADO** | **v4.2.0** — conferido: `sw.js` no ar bate com o local, e o `test-online` passou contra o site |
 | esta release | **v4.2.0** — a Fase 3: `40-cartas/`, o baralho de 40 e a carta 3D |
 | a anterior | **v4.1.0** — a Fase 2: a faixa de abas, as chaves por jogo, o `?jogo=` na URL |
 | Filas 5 a 11 | **todas fechadas**, e não há defeito conhecido em aberto |
@@ -697,9 +696,31 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 
 ---
 
-#### O DEPLOY QUE NÃO ACONTECEU — o recado 1, respondido em 06/08/2026
+#### O DEPLOY QUE NÃO ACONTECEU — e voltou a acontecer (06/08/2026)
 
-**O site no ar é a v3.0.1, e não é defeito do jogo nem espera de propagação.** Medido:
+**RESOLVIDO.** O site no ar é a **v4.2.0**: `sw.js` publicado `d0b4c9bb11d2`, idêntico ao
+local, com 21 ocorrências de `JOGOS`, o `abasJogos`, o `baralho40` e o "Truco Paulista" no
+HTML servido. **Não houve conserto do nosso lado** — a fila do Pages destravou sozinha.
+
+O que aconteceu, na ordem, porque a sequência é a informação:
+
+| | |
+|---|---|
+| 05/08 22:41 e 22:46 | os pushes da v4.0.0 e v4.0.1 **não disparam rodada nenhuma** |
+| 06/08 20:44 | o push da v4.1 **dispara** — logo o gatilho nunca esteve desconfigurado |
+| | a rodada fica **`queued` por ~20 min** e é **cancelada**; o push seguinte não enfileira outra (o Pages não aceita dois) |
+| 06/08 21:57 | o push da v4.2.0 dispara, **roda e publica em ~1 min** |
+
+**A lição, e ela é nova neste projeto:** *commitado ≠ enviado ≠ publicado* ganhou um quarto
+lugar. Até aqui "enviado" implicava "publicado em minutos", e `git rev-list --left-right`
+respondia tudo — ele respondia `0 0` com o site três releases atrás. **A régua de "publicado"
+é o conteúdo SERVIDO**, e ela custa um `curl`.
+
+E o corolário prático: **fila do Pages travada engole o push seguinte.** Enquanto houver uma
+rodada `queued`, um push novo não cria outra — então "empurrei de novo e não adiantou" não
+quer dizer que o gatilho esteja quebrado. Espere a rodada morrer e empurre depois.
+
+<details><summary>o diagnóstico intermediário, de quando ainda não se sabia</summary>
 
 ```
 publicado  sw.js VERSAO a8107950668b   ← é o da v3.0.1 / v3.1.0
@@ -743,8 +764,11 @@ Se depois de algumas horas a rodada continuar `queued` ou tiver sumido, aí sim 
 **Actions → re-run**, ou **Settings → Pages** reconfirmando *Deploy from a branch → main →
 / (root)*. `gh` não está instalado nesta máquina; a API pública responde sem autenticação.
 
-**E o jogo não depende disso para ser testado:** o `index.html` abre por duplo-clique, com
-tudo dentro. Só o modo online precisa de `http(s)` — para isso, `npm run servir`.
+</details>
+
+**E o jogo nunca dependeu disso para ser testado:** o `index.html` abre por duplo-clique, com
+tudo dentro. Só o modo online precisa de `http(s)` — para isso, `npm run servir`. Foi por isso
+que as oito suítes rodaram inteiras com o site no ar três releases atrás.
 
 ---
 
@@ -753,10 +777,25 @@ tudo dentro. Só o modo online precisa de `http(s)` — para isso, `npm run serv
 **LEIA ISTO PRIMEIRO.** É o ponto exato de retomada.
 
 ```
-main            v4.1.2, empurrada, árvore limpa
-worktree        ../domino-bar-jogos   (as branches v4.1, v4.1.1 e v4.1.2 já foram mergeadas;
-                                       podem ser apagadas — a tag é o que fica)
+main            v4.2.1, empurrada, árvore limpa, PUBLICADA
+worktree        ../domino-bar-jogos   (branch de trabalho; as mergeadas já foram apagadas)
 ```
+
+**O ARRANJO DE WORKTREE em uso, e por que ele é este:**
+
+```
+../domino-bar          main    o que está no ar — para conferir e publicar
+../domino-bar-jogos    v4.x    o trabalho da onda
+```
+
+Duas frentes bastam hoje porque as fases da v4 **se cruzam**: a Fase 4 mexe em `50-truco/` e
+vai mexer no `#acoes` do HUD (a `barraDoJogo`), que é da casa. Worktree serve a frentes que
+NÃO se cruzam — usá-lo para frentes que se cruzam é fabricar trabalho de merge. Quando a Fase
+5 (o APK) começar, aí sim ela merece um `../domino-bar-app` próprio: ela não toca em `src/`.
+
+**A armadilha que mordeu nesta sessão:** `git checkout -b` roda no diretório em que você
+está. Um `Set-Location` que falhou fez o comando seguinte criar a branch no worktree da
+`main`. Use `git -C <caminho>` ou confira com `git worktree list` antes.
 
 **ANTES DE RODAR QUALQUER SUÍTE:** `cd tests && npm install`. O `test-acoplamento` trouxe o
 `acorn`, e `tests/node_modules` não é versionado nem compartilhado entre worktrees.
@@ -770,6 +809,7 @@ worktree        ../domino-bar-jogos   (as branches v4.1, v4.1.1 e v4.1.2 já for
 | ✔ recado 2 | a varredura por AST virou **`tests/test-acoplamento.mjs`**, dentro do `npm test` |
 | ✔ Fase 2 | **a aba de escolher o jogo** (v4.1.0) |
 | ✔ Fase 3 | **`40-cartas/`** — o baralho de 40 e a carta 3D (v4.2.0) |
+| ✔ o melou | decidido: empataram as três vazas, **a mão morre** |
 | ⏳ Fase 4 | `50-truco/` — o Paulista, com a `barraDoJogo` que ficou de fora da Fase 1 — **É AQUI QUE SE RETOMA** |
 | ⏳ Fase 5 | o aplicativo: APK no GitHub Releases + Amazon Appstore |
 
