@@ -88,7 +88,16 @@ function mesaLembrada() {
   };
 }
 
-const MESA = mesaLembrada();
+// A MESA NASCE VAZIA E É PREENCHIDA NO ARRANQUE, e não é preciosismo: `mesaLembrada()`
+// valida o modo guardado contra a tabela `MODOS`, e com dois jogos na casa a pergunta "qual
+// tabela?" só tem resposta depois de alguém escolher o jogo. Enquanto isso acontecia aqui,
+// no topo do módulo, a resposta tinha de ser "a do dominó" — que é a definição de casa que
+// conhece o jogo.
+//
+// Continua sendo `const`: o que muda é o CONTEÚDO, nunca a referência. Fosse `let`, as
+// dezenas de leituras de `MESA.n` espalhadas pelo projeto passariam a depender de quem
+// reatribuiu por último.
+const MESA = {};
 
 // Guarda as quatro cadeiras, e não só as `n` em uso: quem joga em três e volta para
 // quatro esperava o nome do quarto de volta, não "Tião" outra vez.
@@ -247,6 +256,6 @@ el('btEntrar').onclick = () => entrarNumaMesa();
 // clique. É o mesmo caminho que o `encerrarRede` ao lado já fazia.
 el('btMenu').onclick = () => { recomecarAsVoltas(); encerrarRede(); mostrarTela('telaMenu'); };
 
-refletirMesaNosBotoes();
-ajustarCadeirasAoModo();
-montarCadeiras();
+// As três chamadas que montavam o menu na carga foram para `900-arranque.js`, junto com o
+// `mesaLembrada()` que enche a MESA. Todas dependem de saber QUAL jogo está na mesa, e no
+// primeiro tempo da carga ninguém sabe ainda.

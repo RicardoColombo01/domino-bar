@@ -510,16 +510,10 @@ addEventListener('keydown', ev => {
 });
 
 // ─── loop ────────────────────────────────────────────────────────────────────
-// Primeiro enquadramento. Fica aqui, e não no fim de 070-cena.js, porque enquadrar() lê
-// a profundidade da mão (100-mao.js) e manda refazer o leque — nada disso existe ainda
-// quando o arquivo da cena termina de rodar.
-enquadrar();
-
-// O menu já nasce visível pelo HTML, então `mostrarTela` nunca roda na carga — e sem esta
-// chamada o botão de retomar só apareceria depois da primeira volta ao menu, que é
-// justamente quando ele não é mais necessário. Fica aqui, no fim, pelo mesmo motivo do
-// `enquadrar()` acima: depende de tudo já estar declarado.
-atualizarBotaoRetomar();
+// O primeiro `enquadrar()`, o `atualizarBotaoRetomar()` e o `requestAnimationFrame(quadro)`
+// que ligava tudo foram para `900-arranque.js`. Os três dependem do jogo que está na mesa —
+// o enquadramento lê a profundidade da mão, o botão de retomar lê a tabela de modos, e o
+// loop anima a mesa —, e no primeiro tempo da carga não há jogo escolhido ainda.
 
 let ultimoQuadro = performance.now();
 
@@ -546,7 +540,6 @@ function quadro(agora) {
 
   renderer.render(scene, camera);
 }
-requestAnimationFrame(quadro);
 
 // Ponte para os testes de aparência (tests/shots.mjs): monta situações específicas —
 // tabuleiro longo, lá-e-lô com as duas pontas acesas — sem ter de jogar de verdade.

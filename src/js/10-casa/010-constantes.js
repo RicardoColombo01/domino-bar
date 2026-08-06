@@ -7,6 +7,39 @@
 //
 // O que sobrou é o que o truco, o pife e o vinte-e-um herdam sem mudar uma letra.
 
+// ─── a casa e os jogos que sentam nela ───────────────────────────────────────
+// A casa sabe de cadeiras, de online, de placar e de boteco — e não sabe que jogo está na
+// mesa. Até a v3 isso era só uma AFIRMAÇÃO da pasta: o código chamava o dominó pelo nome
+// (`novaPartida`, `visaoDe`, `sincronizarMao`), o que funciona enquanto houver um jogo só.
+//
+// `JOGOS` é o balcão onde cada jogo se apresenta; `JOGO` é quem está na mesa agora.
+// `130-hud.js` já tinha o primeiro encaixe desse tipo — `painelDoJogo`, da v3.0.0 — e isto
+// generaliza aquilo de um encaixe para um contrato.
+//
+// A CARGA PASSA A TER TRÊS TEMPOS, e é isso que torna o terceiro e o quarto jogo baratos:
+//
+//   1. DECLARAR   010…160   a casa. Só define; nada que dependa de JOGO roda aqui.
+//   2. REGISTRAR  300…      cada jogo pendura o seu contrato em JOGOS.
+//   3. ARRANCAR   900       escolhe o jogo, monta a tela e liga o loop.
+//
+// Sem o terceiro tempo não haveria resposta para "qual `MODOS`?" durante a carga:
+// `140-menu.js` valida a mesa guardada contra a tabela de modos, e com dois jogos essa
+// pergunta tem duas respostas. O arranque é o instante em que ela passa a ter uma.
+const JOGOS = {};
+let JOGO = null;
+
+// Trocar o jogo da mesa. Hoje é chamada uma vez, no arranque; a aba que deixa o jogador
+// escolher entra por aqui.
+//
+// `Object.hasOwn` e não `JOGOS[nome]`: o nome pode vir do armazenamento ou da URL, ou seja
+// é ENTRADA DE FORA, e `JOGOS['constructor']` é truthy — foi exatamente esse buraco que deu
+// tela preta permanente no defeito 5 da Fila 6.
+function trocarDeJogo(nome) {
+  if (!Object.hasOwn(JOGOS, nome)) return false;
+  JOGO = JOGOS[nome];
+  return true;
+}
+
 // ─── quem pediu menos movimento ──────────────────────────────────────────────
 // Sensibilidade vestibular não é preferência estética: para quem tem, movimento na tela
 // dá enjoo de verdade. Este jogo era o pior conjunto possível — a lâmpada respira PARA
