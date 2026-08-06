@@ -568,15 +568,60 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 
 | | |
 |---|---|
-| publicado | **v3.0.1** — https://ricardocolombo01.github.io/domino-bar/ |
-| esta release | **v3.0.1** — a auditoria da v3.0.0: a página passa a ser rede-primeiro, e o resumo do cache cobre o worker |
-| `main` ↔ `origin/main` | conferir com `git rev-list --left-right --count origin/main...main` |
+| publicado | **v4.0.0** — https://ricardocolombo01.github.io/domino-bar/ |
+| esta release | **v4.0.0** — a Fase 1 da casa de jogos: a casa deixa de conhecer o dominó (46 nomes → **zero**) |
+| `main` ↔ `origin/main` | `0 0` em 05/08 — conferir com `git rev-list --left-right --count origin/main...main` |
 | Filas 5 a 11 | **todas fechadas**, e não há defeito conhecido em aberto |
-| o que vem | **a v4: o Truco na mesma aba, e o jogo virando aplicativo** — plano fechado com o Ricardo em 05/08, na seção "O PLANO DA v4" lá embaixo |
+| o que vem | **Fase 2 da v4: a aba de escolher o jogo** — ver "ONDE PAROU", logo abaixo |
 
-**PARA RETOMAR AMANHÃ: leia "O PLANO DA v4 — o Truco na mesma casa"**, dentro de "A casa de
-jogos". Ele tem as decisões já tomadas, as cinco fases em ordem, e o que a medição já corrigiu
-antes de alguém começar. O trabalho vai na branch `v4`, num worktree.
+---
+
+#### ONDE PAROU — fim da sessão de 05/08/2026
+
+**LEIA ISTO PRIMEIRO.** É o ponto exato de retomada.
+
+**O estado, conferido:**
+
+```
+main            v4.0.0, empurrada, árvore limpa, 0 0 contra origin
+worktree        ../domino-bar-jogos   branch v4   (já mergeada em main, limpa)
+suítes          as sete verdes na v4.0.0, rodadas uma de cada vez
+```
+
+**Feito nesta sessão** (as fases estão descritas em "O PLANO DA v4", mais abaixo):
+
+| | |
+|---|---|
+| ✔ Fase 0 | o plano gravado aqui (v3.1.0) e o worktree `../domino-bar-jogos` aberto |
+| ✔ Fase 1 | o contrato `JOGOS`/`JOGO`, a carga em três tempos, e a casa zerando o acoplamento (v4.0.0) |
+| ⏳ Fase 2 | **a aba de escolher o jogo — É AQUI QUE SE RETOMA** |
+| ⏳ Fase 3 | `40-cartas/` — baralho de 40 e a carta 3D |
+| ⏳ Fase 4 | `50-truco/` — o Paulista, com a `barraDoJogo` que ficou de fora da Fase 1 de propósito |
+| ⏳ Fase 5 | o aplicativo: APK no GitHub Releases + Amazon Appstore |
+
+**Dois recados para o primeiro dia:**
+
+1. **A propagação da v4.0.0 no GitHub Pages NÃO chegou a ser confirmada** — a espera de
+   ~3,5 min terminou sem o `sw.js` novo aparecer, e a sessão parou antes de investigar.
+   **Conferir antes de qualquer outra coisa:**
+   ```
+   curl -s https://ricardocolombo01.github.io/domino-bar/sw.js | grep VERSAO
+   ```
+   e comparar com o `sw.js` local. Se não bater, olhar a aba Actions do repositório: o
+   deploy do Pages pode ter falhado, e aí o site no ar ainda é a v3.0.1. **Não é sintoma de
+   defeito no jogo** — as sete suítes passaram contra o bundle local.
+2. **As ferramentas de medição desta sessão viviam no scratchpad e SUMIRAM.** Eram duas: a
+   varredura por AST (com pilha de escopos) que mediu o acoplamento casa→jogo, e o migrador
+   por offset. A varredura merece virar teste de verdade — *"a casa alcança zero nomes de
+   jogo"* é um invariante que hoje não tem asserção nenhuma, e é justamente o que a Fase 4
+   pode quebrar sem ninguém ver. Ela precisa do `acorn`, que **não** está em
+   `tests/package.json`.
+
+---
+
+**PARA ENTENDER O PLANO: leia "O PLANO DA v4 — o Truco na mesma casa"**, dentro de "A casa de
+jogos". Ele tem as decisões já tomadas, as cinco fases em ordem, e o que a medição corrigiu
+antes de alguém começar.
 
 **A ordem do Ricardo (04/08) foi cumprida inteira:** worktree ✔ (v2.3.0 e v3.0.0 saíram de
 um), as pastas ✔ (v2.3.0, e as duas dívidas na v3.0.0), o PWA ✔ (v3.0.0). Sobra o Truco.
