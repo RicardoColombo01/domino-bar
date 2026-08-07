@@ -76,9 +76,17 @@ function barraDoTruco(vista) {
 // ─── a barra de confirmação ──────────────────────────────────────────────────
 // Um botão só: no truco não há dois lados para escolher. O `dado` vai `null` e volta `null` —
 // a casa nunca o lê, e o truco não precisa dele.
+// CURTO, e o motivo é medido: a barra do truco tinha 137px de altura numa tela de 360 — 38%
+// do celular deitado —, porque "J de ouros" e "Jogar esta carta" quebram em três linhas na
+// faixa estreita. A do dominó tem 59px. Com o nome curto e um verbo, elas ficam do mesmo
+// tamanho, e a diferença some do layout inteiro em vez de virar caso especial de CSS.
+//
+// E não se perde nada: a carta escolhida está LEVANTADA e com o fantasma no lugar em que vai
+// cair. A barra não precisa soletrar o que a mesa já está mostrando — ela precisa dizer o que
+// o botão faz.
 const confirmacaoDoTruco = (vista, m) => ({
-  titulo: nomeDaCarta(m.carta),
-  botoes: [{ dado: null, rotulo: 'Jogar esta carta' }],
+  titulo: nomeCurtoDaCarta(m.carta),
+  botoes: [{ dado: null, rotulo: 'Jogar' }],
 });
 
 // ─── a tela de fim de mão ────────────────────────────────────────────────────

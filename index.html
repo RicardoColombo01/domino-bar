@@ -600,6 +600,42 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
      a mesa é mais estreita, e a barra monta em cima de 83px de peça. Prender a barra à
      faixa que já é dela resolve os dois de uma vez, e sem tocar no 3D — o caminho de
      fazer a mesa desviar existe (`apertoDaMesa`), mas é o mais caro e não é preciso aqui. */
+  /* A BARRA DE CONFIRMAR VAI PARA A MESMA FAIXA, empilhada por cima das ações.
+     Ela ficava no `bottom: 24px; left: 50%` do topo do arquivo, ou seja EM CIMA DA MÃO — em
+     640×360 o teste acusou CINCO peças cobertas. E não apareceu antes porque a cena
+     `confirmando` do `test-telas` nunca chegou a levantar peça nenhuma (ver a armadilha do
+     helper que passava índice): a asserção existia, o estado é que nunca acontecia.
+     O raciocínio é o mesmo do item 10 que trouxe o #acoes para cá — a faixa esquerda é a
+     única sobra medida: a mão ocupa 57% da largura, de x=137 a x=502, e a faixa vai até 138.
+     Empilhar as duas na faixa mantém a conta UMA: a barra publica a própria altura e as
+     ações descem por ela. Sem barra na tela a propriedade some e o #acoes volta ao topo. */
+  /* …E A BARRA DE CONFIRMAR VAI PARA A COLUNA DIREITA, sob a lista de jogadores.
+     Ela morava no `bottom: 24px; left: 50%` do topo do arquivo, ou seja EM CIMA DA MÃO: o
+     teste acusou CINCO peças cobertas em 640×360. E não aparecia antes porque a cena
+     `confirmando` do `test-telas` nunca chegou a levantar peça — a asserção existia, o estado
+     é que nunca acontecia (ver a armadilha do helper que passava índice).
+
+     A COLUNA DIREITA É A ÚNICA SOBRA MEDIDA, e as duas candidatas óbvias foram testadas e
+     recusadas com número, não com opinião — em 640×360:
+        sua mão      x 137→503   y 280→287
+        monte        x 118→149   y 200→214   ← invade a faixa ESQUERDA
+        #jogadores   x 510→626   y  14→151
+     A faixa esquerda (x 14→138) parece livre e não é: o monte entra nela. Empilhar por cima
+     do #acoes estoura os 360px de altura. Sobra x 510→640 abaixo de y 151, que não tem nada —
+     a mão acaba em 503 e a lista de jogadores em 151. */
+  #confirmar {
+    top: auto; bottom: calc(var(--seg-b) + 10px);
+    left: auto; right: calc(var(--seg-r) + 14px); transform: none;
+    /* 104 e não os 124 do #acoes: a mão chega a x=503 e a coluna começa em 640−14−104 = 522,
+       ou seja 19px de vão. Com 124 a borda cai em 502 e a peça mais à direita fica coberta
+       por UM pixel — a suíte acusou, e "sete pixels de folga não são um conserto, são sorte"
+       vale igual para um. O #acoes pode ser mais largo porque mora na faixa esquerda, que
+       começa antes da mão. */
+    max-width: 104px; flex-wrap: wrap; gap: 6px; justify-content: flex-start;
+  }
+  @keyframes subir { from { opacity: 0; transform: translateY(8px); } }
+  #confBotoes { flex: 1 1 auto; }
+  #confBotoes .btn { width: 100%; }
   #acoes {
     bottom: auto; top: calc(var(--seg-t) + 74px); left: calc(var(--seg-l) + 14px);
     max-width: 124px; flex-wrap: wrap; gap: 6px;
@@ -697,8 +733,14 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
   @keyframes subir { from { opacity: 0; transform: translateY(8px); } }
   #confBotoes { flex: 1 1 auto; }
   #confBotoes .btn { width: 100%; }
+  /* O #acoes se apoia na ALTURA REAL do #confirmar, e não num 74 cravado.
+     A barra publica a própria altura em `--alt-confirmar` (130-hud.js) quando aparece, e a
+     apaga quando some — o padrão abaixo é a altura da barra do dominó, então SEM barra na
+     tela o rodapé fica exatamente onde sempre esteve.
+     O 74 quebrou no truco: "J de ouros" + "Jogar esta carta" viram três linhas em 360px
+     (106px medidos) e montavam 32px em cima daqui. Ver o comentário da função. */
   #acoes {
-    bottom: calc(var(--seg-b) + 74px);
+    bottom: calc(var(--seg-b) + 16px + var(--alt-confirmar, 58px));
     left: calc(var(--seg-l) + 8px); right: calc(var(--seg-r) + 8px);
     flex-wrap: wrap; justify-content: center; gap: 7px;
   }
@@ -4226,10 +4268,49 @@ function mostrarConfirmacao(escolha) {
     b.onclick = () => JOGO.toque.confirmar(escolha.botoes[+b.dataset.i].dado);
   });
   el('confirmar').classList.remove('oculta');
+  publicarAlturaDaConfirmacao();
 }
 
 function esconderConfirmacao() {
   el('confirmar').classList.add('oculta');
+  document.body.style.removeProperty('--alt-confirmar');
+  document.body.style.removeProperty('--empurra-confirmar');
+}
+
+// A BARRA DIZ QUANTO ELA OCUPA, e o rodapé estreito se arruma em cima disso.
+//
+// Em retrato o `#confirmar` cola no fundo e o `#acoes` ficava cravado em `bottom: 74px` —
+// dois números fixos, cada caixa cabendo sozinha, NENHUMA perguntando pela outra. É a
+// armadilha que este projeto já pagou duas vezes: no CSS (item 8, o #topo montando na lista
+// de jogadores) e em 3D (Fila 7, o tabuleiro dentro da mão do vizinho). "Quando o mesmo
+// espaço tem dois donos, a conta tem de ser UMA."
+//
+// O 74 nasceu certo para o dominó, cuja barra tem 59px de altura, e QUEBROU no truco: lá o
+// título é "J de ouros" e o botão é "Jogar esta carta", que em 360px quebram em três linhas —
+// 106px, sobrepondo o #acoes em 32px. Medido, não deduzido.
+//
+// Ler `offsetHeight` força layout, e por isso isto NÃO mora no `desenharHUD`: aqui roda só
+// quando a barra aparece, que é um evento de toque, e não sessenta vezes por segundo.
+//
+// O PADRÃO NO CSS é a altura do dominó, então com a barra escondida o rodapé fica exatamente
+// onde sempre esteve — a mudança não mexe num pixel de quem não tem barra na tela.
+// SÃO DUAS PROPRIEDADES da mesma medida, e não uma, porque os dois usos precisam de coisas
+// diferentes quando a barra está ESCONDIDA:
+//
+//   --alt-confirmar         a altura crua. Em retrato o #acoes já reservava lugar para a
+//                           barra mesmo sem ela na tela (o antigo `74px`), então lá o padrão
+//                           é a altura do dominó e o rodapé não se mexe um pixel sem barra.
+//   --empurra-confirmar     a altura MAIS a folga, e ela some quando a barra some. Em
+//                           paisagem a barra empilha na faixa esquerda por cima do #acoes, e
+//                           sem barra o #acoes tem de voltar exatamente para o topo da faixa.
+//
+// Uma só propriedade obrigaria uma das duas a mentir — e um `calc(… + var(--x, -8px) + 8px)`
+// para fabricar o zero é o tipo de esperteza que ninguém entende seis meses depois.
+function publicarAlturaDaConfirmacao() {
+  const h = el('confirmar').offsetHeight;
+  if (h <= 0) return;
+  document.body.style.setProperty('--alt-confirmar', h + 'px');
+  document.body.style.setProperty('--empurra-confirmar', (h + 8) + 'px');
 }
 el('btCancelar').onclick = () => JOGO.toque.cancelar();
 
@@ -7223,6 +7304,42 @@ JOGOS.domino = {
     jogadaDoBot, dicaDaVista,
     grupoMesa, grupoPrevia, grupoOutros, grupoMonte,
     naMao, arrumarMao, moverNaMao,
+
+    // O QUE ESTÁ NO TAMPO, declarado pelo jogo e não adivinhado pela suíte.
+    //
+    // O `test-telas` lia `j.grupoMesa`, `j.grupoOutros` e `j.grupoMonte` cravados em quatro
+    // lugares, e a frase acima ("um jogo sem monte simplesmente não põe `grupoMonte` aqui")
+    // era exatamente a bomba: num truco o `grupoMonte` some de verdade — `porAPonteDoJogo`
+    // apaga as chaves do jogo anterior — e a suíte estourava. As duas saídas eram o truco
+    // expor um monte VAZIO (uma ponte mentindo, e a suíte passaria a medir um mundo que não
+    // existe) ou a suíte PERGUNTAR. É o mesmo desenho dos cinco encaixes de HUD da v4.5: a
+    // casa reserva o lugar e chama, o jogo preenche.
+    //
+    // FUNÇÃO e não tabela, pelo motivo que este projeto já pagou uma vez: o registro é o
+    // último arquivo do jogo justamente porque ele executa na hora em que é concatenado.
+    // Função é içada e sobrevive à ordem; tabela não.
+    //
+    // `pular` é o filho que não conta na medida de caixa — a prévia pousa fora da linha por
+    // definição, e incluí-la mediria o fantasma em vez da madeira.
+    //
+    // O NOME é do jogo porque ele só vive em mensagem de falha: "o monte e o tabuleiro
+    // ocupam o mesmo tampo" é uma frase que a suíte não sabe escrever sozinha, e ela não é o
+    // valor asseverado — é a etiqueta dele. (Ler do jogo o que ESTÁ sendo conferido seria
+    // conferir a tabela contra ela mesma; é a lição do atlas de pintas, e não vale aqui.)
+    // `curto` é a coluna do log, e não é enfeite: derivar a palavra do `nome` deu "mão" para
+    // "a mão de um adversário", que se lê como A SUA mão — o número certo com a etiqueta
+    // errada, na única linha que um humano compara entre duas rodadas. Duas palavras do
+    // vocabulário do jogo custam menos que uma heurística que erra.
+    gruposDaMesa: () => [
+      { nome: 'o tabuleiro', curto: 'tabuleiro', grupo: grupoMesa, pular: grupoPrevia },
+      { nome: 'a mão de um adversário', curto: 'outros', grupo: grupoOutros },
+      { nome: 'o monte', curto: 'monte', grupo: grupoMonte },
+    ],
+
+    // COMO SE CHAMA UMA COISA DA MÃO, na mensagem de falha. A suíte dizia `m.peca.join('|')`
+    // — e a mão do truco carrega `carta`, não `peca`: era o PRIMEIRO ponto a estourar, antes
+    // de qualquer grupo. Quem sabe o nome da sua peça é o jogo.
+    rotuloDaMao: m => m.peca.join('|'),
     // A ORDEM DA TELA, que desde a arrumação não é mais a de `vista.mao`. Quem quiser
     // selecionar uma peça tem de procurar aqui.
     get maoNaTela() { return naMao.map(m => m.peca); },
@@ -8275,6 +8392,51 @@ function caixaDoAssentoDoTruco(a, x, z, quantas, espaco) {
   return { x, z, l: 2 * (c * aoLongo + s * atravessado), a: 2 * (s * aoLongo + c * atravessado) };
 }
 
+// ─── quanto a mesa pode crescer sem invadir os assentos ──────────────────────
+// A FILA 7 DE NOVO, com outro jogo. Lá o tabuleiro do dominó e a mão do vizinho mediam a
+// mesma tela em profundidades diferentes, com divisores mágicos diferentes — cada caixa
+// cabia sozinha e nenhuma perguntava pela outra. O truco nasceu com o mesmo buraco: a escala
+// tinha DOIS tetos (o máximo e a tela) e o dominó tem TRÊS.
+//
+// Achado pela cena `truco duplas` do `test-telas`, na primeira vez que ela rodou: numa mesa
+// de 4 a mesa cresce até bater na largura da tela e monta em cima do vizinho — folga −0,36
+// em 360×640 e −0,45 em 390×844. Nenhum olho tinha visto porque nenhuma foto existia.
+//
+// A CONTA É DE SEPARAÇÃO DE CAIXAS, e duas caixas estão separadas se estiverem separadas em
+// **um** dos eixos — não nos dois. Por isso cada assento devolve o MAIOR entre a folga em x e
+// a folga em z: o vizinho de lado é resolvido afastando em x, e o de frente, em z. Tomar o
+// menor apertaria a mesa até sumir por um eixo que já estava resolvido pelo outro.
+//
+// O PISO É 1, como no dominó ("nunca abaixo de uma peça"): um corredor impossível encolheria
+// a mesa até virar um selo no meio da madeira, e mesa invisível é pior que mesa encostada. Se
+// um dia o piso morder, o sintoma volta a aparecer nesta mesma cena — e aí o conserto é mexer
+// no RAIO DO ASSENTO, não em espremer mais a mesa.
+// O NÚMERO É MEDIDO, e a diferença entre o que se pede e o que se obtém é o ponto: pedindo
+// 0,22 a suíte mediu 0,13. As duas caixas desta conta são ANALÍTICAS (meia-caixa em unidades
+// de carta) e a que o `test-telas` mede é a de verdade, montada com `Box3.setFromObject` sobre
+// as cartas na cena — a pilha de vazas desloca cada carta em `CARTA_E * 0.6`, e a fileira do
+// assento é medida com a rotação real. A analítica fica ~0,09 otimista.
+//
+// Então este número não é "a folga que eu quero": é a folga que eu quero MAIS o que a conta
+// erra. Está aqui com o valor conferido rodando, e quem mexer nele confere do mesmo jeito —
+// `node tests/test-telas.mjs 360x640 duplas` imprime a folga medida em toda rodada, verde
+// inclusive, exatamente para que ela não encolha em silêncio.
+const FOLGA_DO_VIZINHO_NO_TRUCO = 0.42;
+function escalaQueCabeEntreOsAssentos(vista, caixa) {
+  let teto = Infinity;
+  for (const l of assentosDaMesa(vista).lugares) {
+    const b = l.caixa;
+    // Quanto a meia-caixa da mesa pode medir antes de encostar, por eixo.
+    const emX = (Math.abs(b.x) - b.l / 2 - FOLGA_DO_VIZINHO_NO_TRUCO) / caixa.x;
+    // Em z a mesa não é centrada na origem: ela mora em `MESA_TRUCO_Z`, e o assento pode
+    // estar à frente ou atrás dela. `Math.abs` da distância entre os centros resolve os dois
+    // lados sem um `if` que alguém esqueceria de espelhar.
+    const emZ = (Math.abs(b.z - MESA_TRUCO_Z) - b.a / 2 - FOLGA_DO_VIZINHO_NO_TRUCO) / caixa.z;
+    teto = Math.min(teto, Math.max(emX, emZ));
+  }
+  return teto;
+}
+
 // ─── a mesa: a vira, a vaza em curso e as vazas ganhas ───────────────────────
 // UMA SÓ RECONCILIAÇÃO para as três coisas, e é o que faz a carta recolhida DESLIZAR da mesa
 // para a pilha em vez de sumir e reaparecer.
@@ -8335,8 +8497,12 @@ function sincronizarMesaDoTruco(vista) {
   // em unidades de carta; aqui ela vira pixels através de `larguraVisivelEm`, que é quem tem
   // a palavra final sobre o que cabe no QUADRO — a lição do monte, cobrada de novo.
   const caixa = caixaDaMesaDoTruco(n);
-  escalaAlvoDoTruco = Math.max(1, Math.min(ESCALA_TRUCO_MAX,
-    larguraVisivelEm(0, MESA_TRUCO_Z) * 0.86 / (2 * caixa.x)));
+  escalaAlvoDoTruco = Math.max(1, Math.min(
+    ESCALA_TRUCO_MAX,
+    larguraVisivelEm(0, MESA_TRUCO_Z) * 0.86 / (2 * caixa.x),
+    // O TERCEIRO TETO: o que cabe entre os ASSENTOS. Ele faltava, e é a Fila 7 se repetindo
+    // com outro jogo — ver `escalaQueCabeEntreOsAssentos`.
+    escalaQueCabeEntreOsAssentos(vista, caixa)));
 
   esconderPreviaDoTruco();
 }
@@ -8695,9 +8861,17 @@ function barraDoTruco(vista) {
 // ─── a barra de confirmação ──────────────────────────────────────────────────
 // Um botão só: no truco não há dois lados para escolher. O `dado` vai `null` e volta `null` —
 // a casa nunca o lê, e o truco não precisa dele.
+// CURTO, e o motivo é medido: a barra do truco tinha 137px de altura numa tela de 360 — 38%
+// do celular deitado —, porque "J de ouros" e "Jogar esta carta" quebram em três linhas na
+// faixa estreita. A do dominó tem 59px. Com o nome curto e um verbo, elas ficam do mesmo
+// tamanho, e a diferença some do layout inteiro em vez de virar caso especial de CSS.
+//
+// E não se perde nada: a carta escolhida está LEVANTADA e com o fantasma no lugar em que vai
+// cair. A barra não precisa soletrar o que a mesa já está mostrando — ela precisa dizer o que
+// o botão faz.
 const confirmacaoDoTruco = (vista, m) => ({
-  titulo: nomeDaCarta(m.carta),
-  botoes: [{ dado: null, rotulo: 'Jogar esta carta' }],
+  titulo: nomeCurtoDaCarta(m.carta),
+  botoes: [{ dado: null, rotulo: 'Jogar' }],
 });
 
 // ─── a tela de fim de mão ────────────────────────────────────────────────────
@@ -9003,6 +9177,51 @@ JOGOS.truco = {
     grupoOutros: grupoOutrosDoTruco, grupoMao: grupoMaoDoTruco,
     naMao: naMaoDoTruco, naMesa: naMesaDoTruco,
     arrumarMao: arrumarMaoDoTruco,
+
+    // ─── O QUE ESTÁ NO TAMPO ────────────────────────────────────────────────
+    // O `test-telas` lia `grupoMesa`, `grupoOutros` e `grupoMonte` cravados. Numa mesa de
+    // truco o `grupoMonte` NÃO EXISTE — `porAPonteDoJogo` (141-abas.js) apaga as chaves do
+    // jogo anterior de propósito, para a ponte não mentir — e a suíte estourava. Hoje cada
+    // jogo declara a própria mesa e a suíte itera o que vier; é o mesmo desenho dos cinco
+    // encaixes de HUD da v4.5. Ver o irmão em `30-domino/300-registro.js`, que declara três
+    // grupos porque tem monte.
+    //
+    // Cada item é `{ nome, curto, grupo, pular? }`:
+    //   nome   frase da mensagem de falha — "X e Y ocupam o mesmo tampo"
+    //   curto  uma palavra, a coluna do log que um humano compara entre duas rodadas
+    //   grupo  o THREE.Group cujos filhos são medidos (caixa, extremo em NDC, cobertura)
+    //   pular  filho que não conta na medida — a prévia pousa fora da linha por definição
+    //
+    // O que existe na mesa do truco: `grupoMesaDoTruco` (a vira, a vaza em curso e as
+    // pilhas de vazas ganhas moram TODOS aqui — ver `sincronizarMesaDoTruco`),
+    // `grupoOutrosDoTruco` (as cartas de costas dos adversários), `grupoPreviaDoTruco`
+    // (dentro do grupo da mesa) e `grupoMaoDoTruco` (a SUA mão, que já é medida à parte,
+    // pelo `naMao` — declará-la aqui a mediria duas vezes e faria a mão colidir consigo).
+    //
+    // DOIS grupos, e a mesa é UM só — não três. A vira, a vaza em curso e as pilhas de
+    // vazas ganhas são irmãs achatadas dentro de `grupoMesaDoTruco`, e o preço está dito de
+    // frente: `folgaEntre` só compara ENTRE grupos, nunca dentro de um, então esta suíte
+    // nunca perguntará se a pilha de uma dupla encavalou a vira. Separá-las exigiria criar
+    // um `THREE.Group` novo em `550-mesa.js` — mudar o JOGO para servir ao teste, que é a
+    // direção errada, e o mesmo raciocínio que recusou o truco expor um monte vazio. Quem
+    // cobre o interior da mesa é o `test-truco` (as postas e a amarração carta↔assento); é
+    // o papel que o `test-mesa` faz para o dominó, e é por isso que lá um grupo também basta.
+    //
+    // A SUA MÃO fica fora, e não por esquecimento: o `naMao` já a mede carta a carta, com a
+    // mesma câmera. Declará-la aqui a compararia consigo mesma e a folga mínima da suíte
+    // passaria a ser a distância entre duas cartas do seu leque — um número que não é
+    // defeito nenhum, medido no lugar do que importa.
+    gruposDaMesa: () => [
+      { nome: 'a mesa', curto: 'mesa', grupo: grupoMesaDoTruco, pular: grupoPreviaDoTruco },
+      { nome: 'a mão de um adversário', curto: 'outros', grupo: grupoOutrosDoTruco },
+    ],
+
+    // "3 de paus", e não "3|1" nem "3p". O nome sai da BIBLIOTECA (`045-baralho.js`), que já
+    // é quem sabe falar de carta — inventar um segundo jeito de nomear a mesma coisa é como
+    // duas metades passam a discordar. Ele aparece uma carta por mensagem ("a peça X da sua
+    // mão está por baixo de #contagem"), então o comprimento não custa nada.
+    rotuloDaMao: m => nomeDaCarta(m.carta),
+
     criarCarta, criarVersoDeCarta, criarFantasmaDeCarta, faceDaCarta,
     medidasDaCarta: { CARTA_L, CARTA_C, CARTA_E, CEL_CARTA, COLS_CARTA, LINS_CARTA },
     // A ORDEM DA TELA, que desde a arrumação não é a de `vista.mao`.

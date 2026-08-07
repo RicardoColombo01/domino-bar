@@ -243,10 +243,49 @@ function mostrarConfirmacao(escolha) {
     b.onclick = () => JOGO.toque.confirmar(escolha.botoes[+b.dataset.i].dado);
   });
   el('confirmar').classList.remove('oculta');
+  publicarAlturaDaConfirmacao();
 }
 
 function esconderConfirmacao() {
   el('confirmar').classList.add('oculta');
+  document.body.style.removeProperty('--alt-confirmar');
+  document.body.style.removeProperty('--empurra-confirmar');
+}
+
+// A BARRA DIZ QUANTO ELA OCUPA, e o rodapé estreito se arruma em cima disso.
+//
+// Em retrato o `#confirmar` cola no fundo e o `#acoes` ficava cravado em `bottom: 74px` —
+// dois números fixos, cada caixa cabendo sozinha, NENHUMA perguntando pela outra. É a
+// armadilha que este projeto já pagou duas vezes: no CSS (item 8, o #topo montando na lista
+// de jogadores) e em 3D (Fila 7, o tabuleiro dentro da mão do vizinho). "Quando o mesmo
+// espaço tem dois donos, a conta tem de ser UMA."
+//
+// O 74 nasceu certo para o dominó, cuja barra tem 59px de altura, e QUEBROU no truco: lá o
+// título é "J de ouros" e o botão é "Jogar esta carta", que em 360px quebram em três linhas —
+// 106px, sobrepondo o #acoes em 32px. Medido, não deduzido.
+//
+// Ler `offsetHeight` força layout, e por isso isto NÃO mora no `desenharHUD`: aqui roda só
+// quando a barra aparece, que é um evento de toque, e não sessenta vezes por segundo.
+//
+// O PADRÃO NO CSS é a altura do dominó, então com a barra escondida o rodapé fica exatamente
+// onde sempre esteve — a mudança não mexe num pixel de quem não tem barra na tela.
+// SÃO DUAS PROPRIEDADES da mesma medida, e não uma, porque os dois usos precisam de coisas
+// diferentes quando a barra está ESCONDIDA:
+//
+//   --alt-confirmar         a altura crua. Em retrato o #acoes já reservava lugar para a
+//                           barra mesmo sem ela na tela (o antigo `74px`), então lá o padrão
+//                           é a altura do dominó e o rodapé não se mexe um pixel sem barra.
+//   --empurra-confirmar     a altura MAIS a folga, e ela some quando a barra some. Em
+//                           paisagem a barra empilha na faixa esquerda por cima do #acoes, e
+//                           sem barra o #acoes tem de voltar exatamente para o topo da faixa.
+//
+// Uma só propriedade obrigaria uma das duas a mentir — e um `calc(… + var(--x, -8px) + 8px)`
+// para fabricar o zero é o tipo de esperteza que ninguém entende seis meses depois.
+function publicarAlturaDaConfirmacao() {
+  const h = el('confirmar').offsetHeight;
+  if (h <= 0) return;
+  document.body.style.setProperty('--alt-confirmar', h + 'px');
+  document.body.style.setProperty('--empurra-confirmar', (h + 8) + 'px');
 }
 el('btCancelar').onclick = () => JOGO.toque.cancelar();
 

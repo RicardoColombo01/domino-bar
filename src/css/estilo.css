@@ -574,6 +574,42 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
      a mesa é mais estreita, e a barra monta em cima de 83px de peça. Prender a barra à
      faixa que já é dela resolve os dois de uma vez, e sem tocar no 3D — o caminho de
      fazer a mesa desviar existe (`apertoDaMesa`), mas é o mais caro e não é preciso aqui. */
+  /* A BARRA DE CONFIRMAR VAI PARA A MESMA FAIXA, empilhada por cima das ações.
+     Ela ficava no `bottom: 24px; left: 50%` do topo do arquivo, ou seja EM CIMA DA MÃO — em
+     640×360 o teste acusou CINCO peças cobertas. E não apareceu antes porque a cena
+     `confirmando` do `test-telas` nunca chegou a levantar peça nenhuma (ver a armadilha do
+     helper que passava índice): a asserção existia, o estado é que nunca acontecia.
+     O raciocínio é o mesmo do item 10 que trouxe o #acoes para cá — a faixa esquerda é a
+     única sobra medida: a mão ocupa 57% da largura, de x=137 a x=502, e a faixa vai até 138.
+     Empilhar as duas na faixa mantém a conta UMA: a barra publica a própria altura e as
+     ações descem por ela. Sem barra na tela a propriedade some e o #acoes volta ao topo. */
+  /* …E A BARRA DE CONFIRMAR VAI PARA A COLUNA DIREITA, sob a lista de jogadores.
+     Ela morava no `bottom: 24px; left: 50%` do topo do arquivo, ou seja EM CIMA DA MÃO: o
+     teste acusou CINCO peças cobertas em 640×360. E não aparecia antes porque a cena
+     `confirmando` do `test-telas` nunca chegou a levantar peça — a asserção existia, o estado
+     é que nunca acontecia (ver a armadilha do helper que passava índice).
+
+     A COLUNA DIREITA É A ÚNICA SOBRA MEDIDA, e as duas candidatas óbvias foram testadas e
+     recusadas com número, não com opinião — em 640×360:
+        sua mão      x 137→503   y 280→287
+        monte        x 118→149   y 200→214   ← invade a faixa ESQUERDA
+        #jogadores   x 510→626   y  14→151
+     A faixa esquerda (x 14→138) parece livre e não é: o monte entra nela. Empilhar por cima
+     do #acoes estoura os 360px de altura. Sobra x 510→640 abaixo de y 151, que não tem nada —
+     a mão acaba em 503 e a lista de jogadores em 151. */
+  #confirmar {
+    top: auto; bottom: calc(var(--seg-b) + 10px);
+    left: auto; right: calc(var(--seg-r) + 14px); transform: none;
+    /* 104 e não os 124 do #acoes: a mão chega a x=503 e a coluna começa em 640−14−104 = 522,
+       ou seja 19px de vão. Com 124 a borda cai em 502 e a peça mais à direita fica coberta
+       por UM pixel — a suíte acusou, e "sete pixels de folga não são um conserto, são sorte"
+       vale igual para um. O #acoes pode ser mais largo porque mora na faixa esquerda, que
+       começa antes da mão. */
+    max-width: 104px; flex-wrap: wrap; gap: 6px; justify-content: flex-start;
+  }
+  @keyframes subir { from { opacity: 0; transform: translateY(8px); } }
+  #confBotoes { flex: 1 1 auto; }
+  #confBotoes .btn { width: 100%; }
   #acoes {
     bottom: auto; top: calc(var(--seg-t) + 74px); left: calc(var(--seg-l) + 14px);
     max-width: 124px; flex-wrap: wrap; gap: 6px;
@@ -671,8 +707,14 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
   @keyframes subir { from { opacity: 0; transform: translateY(8px); } }
   #confBotoes { flex: 1 1 auto; }
   #confBotoes .btn { width: 100%; }
+  /* O #acoes se apoia na ALTURA REAL do #confirmar, e não num 74 cravado.
+     A barra publica a própria altura em `--alt-confirmar` (130-hud.js) quando aparece, e a
+     apaga quando some — o padrão abaixo é a altura da barra do dominó, então SEM barra na
+     tela o rodapé fica exatamente onde sempre esteve.
+     O 74 quebrou no truco: "J de ouros" + "Jogar esta carta" viram três linhas em 360px
+     (106px medidos) e montavam 32px em cima daqui. Ver o comentário da função. */
   #acoes {
-    bottom: calc(var(--seg-b) + 74px);
+    bottom: calc(var(--seg-b) + 16px + var(--alt-confirmar, 58px));
     left: calc(var(--seg-l) + 8px); right: calc(var(--seg-r) + 8px);
     flex-wrap: wrap; justify-content: center; gap: 7px;
   }

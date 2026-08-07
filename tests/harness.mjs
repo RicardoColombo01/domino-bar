@@ -38,7 +38,26 @@ export function preferir(consulta, ligada = true) {
 function makeEl(id) {
   const e = {
     id, textContent: '', innerHTML: '', className: '', value: '', title: '', offsetWidth: 1,
-    onclick: null, style: {}, dataset: {}, _cls: new Set(), children: [],
+    // O `style` GRAVA as propriedades customizadas, e é a DÉCIMA SEGUNDA vez que o dublê fica
+    // para trás do jogo. Ele era `{}` puro, e no dia em que a barra de confirmar passou a
+    // publicar a própria altura (`style.setProperty('--alt-confirmar', …)`, em 130-hud.js) a
+    // suíte inteira morreu com "removeProperty is not a function" — dentro do `publicar`, ou
+    // seja longe de onde a causa estava.
+    //
+    // GRAVA em vez de engolir, pela mesma razão do `history.trocas`: um `setProperty` sem
+    // rastro torna inescrevível a asserção "o rodapé se apoia na altura da barra". E o teto
+    // continua sendo o de sempre — dublê que responde valor fixo é tão incompleto quanto
+    // dublê sem método.
+    onclick: null, dataset: {}, _cls: new Set(), children: [],
+    style: (() => {
+      const props = new Map();
+      return {
+        props,
+        setProperty(k, v) { props.set(k, String(v)); },
+        removeProperty(k) { props.delete(k); },
+        getPropertyValue: k => (props.has(k) ? props.get(k) : ''),
+      };
+    })(),
     // Os atributos. É a SEXTA vez que o dublê fica para trás do jogo (as outras foram
     // matchMedia, a captura de ponteiro, o AudioContext, o Peer e os eventos de contexto
     // WebGL), e a lição já está escrita no CLAUDE.md: a tentação é guardar no JOGO com um

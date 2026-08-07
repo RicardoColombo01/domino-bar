@@ -210,6 +210,51 @@ function caixaDoAssentoDoTruco(a, x, z, quantas, espaco) {
   return { x, z, l: 2 * (c * aoLongo + s * atravessado), a: 2 * (s * aoLongo + c * atravessado) };
 }
 
+// ─── quanto a mesa pode crescer sem invadir os assentos ──────────────────────
+// A FILA 7 DE NOVO, com outro jogo. Lá o tabuleiro do dominó e a mão do vizinho mediam a
+// mesma tela em profundidades diferentes, com divisores mágicos diferentes — cada caixa
+// cabia sozinha e nenhuma perguntava pela outra. O truco nasceu com o mesmo buraco: a escala
+// tinha DOIS tetos (o máximo e a tela) e o dominó tem TRÊS.
+//
+// Achado pela cena `truco duplas` do `test-telas`, na primeira vez que ela rodou: numa mesa
+// de 4 a mesa cresce até bater na largura da tela e monta em cima do vizinho — folga −0,36
+// em 360×640 e −0,45 em 390×844. Nenhum olho tinha visto porque nenhuma foto existia.
+//
+// A CONTA É DE SEPARAÇÃO DE CAIXAS, e duas caixas estão separadas se estiverem separadas em
+// **um** dos eixos — não nos dois. Por isso cada assento devolve o MAIOR entre a folga em x e
+// a folga em z: o vizinho de lado é resolvido afastando em x, e o de frente, em z. Tomar o
+// menor apertaria a mesa até sumir por um eixo que já estava resolvido pelo outro.
+//
+// O PISO É 1, como no dominó ("nunca abaixo de uma peça"): um corredor impossível encolheria
+// a mesa até virar um selo no meio da madeira, e mesa invisível é pior que mesa encostada. Se
+// um dia o piso morder, o sintoma volta a aparecer nesta mesma cena — e aí o conserto é mexer
+// no RAIO DO ASSENTO, não em espremer mais a mesa.
+// O NÚMERO É MEDIDO, e a diferença entre o que se pede e o que se obtém é o ponto: pedindo
+// 0,22 a suíte mediu 0,13. As duas caixas desta conta são ANALÍTICAS (meia-caixa em unidades
+// de carta) e a que o `test-telas` mede é a de verdade, montada com `Box3.setFromObject` sobre
+// as cartas na cena — a pilha de vazas desloca cada carta em `CARTA_E * 0.6`, e a fileira do
+// assento é medida com a rotação real. A analítica fica ~0,09 otimista.
+//
+// Então este número não é "a folga que eu quero": é a folga que eu quero MAIS o que a conta
+// erra. Está aqui com o valor conferido rodando, e quem mexer nele confere do mesmo jeito —
+// `node tests/test-telas.mjs 360x640 duplas` imprime a folga medida em toda rodada, verde
+// inclusive, exatamente para que ela não encolha em silêncio.
+const FOLGA_DO_VIZINHO_NO_TRUCO = 0.42;
+function escalaQueCabeEntreOsAssentos(vista, caixa) {
+  let teto = Infinity;
+  for (const l of assentosDaMesa(vista).lugares) {
+    const b = l.caixa;
+    // Quanto a meia-caixa da mesa pode medir antes de encostar, por eixo.
+    const emX = (Math.abs(b.x) - b.l / 2 - FOLGA_DO_VIZINHO_NO_TRUCO) / caixa.x;
+    // Em z a mesa não é centrada na origem: ela mora em `MESA_TRUCO_Z`, e o assento pode
+    // estar à frente ou atrás dela. `Math.abs` da distância entre os centros resolve os dois
+    // lados sem um `if` que alguém esqueceria de espelhar.
+    const emZ = (Math.abs(b.z - MESA_TRUCO_Z) - b.a / 2 - FOLGA_DO_VIZINHO_NO_TRUCO) / caixa.z;
+    teto = Math.min(teto, Math.max(emX, emZ));
+  }
+  return teto;
+}
+
 // ─── a mesa: a vira, a vaza em curso e as vazas ganhas ───────────────────────
 // UMA SÓ RECONCILIAÇÃO para as três coisas, e é o que faz a carta recolhida DESLIZAR da mesa
 // para a pilha em vez de sumir e reaparecer.
@@ -270,8 +315,12 @@ function sincronizarMesaDoTruco(vista) {
   // em unidades de carta; aqui ela vira pixels através de `larguraVisivelEm`, que é quem tem
   // a palavra final sobre o que cabe no QUADRO — a lição do monte, cobrada de novo.
   const caixa = caixaDaMesaDoTruco(n);
-  escalaAlvoDoTruco = Math.max(1, Math.min(ESCALA_TRUCO_MAX,
-    larguraVisivelEm(0, MESA_TRUCO_Z) * 0.86 / (2 * caixa.x)));
+  escalaAlvoDoTruco = Math.max(1, Math.min(
+    ESCALA_TRUCO_MAX,
+    larguraVisivelEm(0, MESA_TRUCO_Z) * 0.86 / (2 * caixa.x),
+    // O TERCEIRO TETO: o que cabe entre os ASSENTOS. Ele faltava, e é a Fila 7 se repetindo
+    // com outro jogo — ver `escalaQueCabeEntreOsAssentos`.
+    escalaQueCabeEntreOsAssentos(vista, caixa)));
 
   esconderPreviaDoTruco();
 }
