@@ -109,6 +109,10 @@ JOGOS.truco = {
     medidores: medidoresDoTruco,
     barra: barraDoTruco,
     fimDeMao: fimDeMaoDoTruco,
+    // O SEXTO ENCAIXE, e o primeiro OPCIONAL da série: a casa escreve "Vez de Fulano" e o
+    // jogo acrescenta o que mais importa naquele instante. O dominó não o declara, e a casa
+    // trata a ausência como "nada a dizer" em vez de exigir um `() => ''` de todo mundo.
+    notaDaVez: notaDaVezNoTruco,
   },
 
   // ─── o que as SUÍTES precisam alcançar ─────────────────────────────────────
@@ -120,6 +124,51 @@ JOGOS.truco = {
     grupoOutros: grupoOutrosDoTruco, grupoMao: grupoMaoDoTruco,
     naMao: naMaoDoTruco, naMesa: naMesaDoTruco,
     arrumarMao: arrumarMaoDoTruco,
+
+    // ─── O QUE ESTÁ NO TAMPO ────────────────────────────────────────────────
+    // O `test-telas` lia `grupoMesa`, `grupoOutros` e `grupoMonte` cravados. Numa mesa de
+    // truco o `grupoMonte` NÃO EXISTE — `porAPonteDoJogo` (141-abas.js) apaga as chaves do
+    // jogo anterior de propósito, para a ponte não mentir — e a suíte estourava. Hoje cada
+    // jogo declara a própria mesa e a suíte itera o que vier; é o mesmo desenho dos cinco
+    // encaixes de HUD da v4.5. Ver o irmão em `30-domino/300-registro.js`, que declara três
+    // grupos porque tem monte.
+    //
+    // Cada item é `{ nome, curto, grupo, pular? }`:
+    //   nome   frase da mensagem de falha — "X e Y ocupam o mesmo tampo"
+    //   curto  uma palavra, a coluna do log que um humano compara entre duas rodadas
+    //   grupo  o THREE.Group cujos filhos são medidos (caixa, extremo em NDC, cobertura)
+    //   pular  filho que não conta na medida — a prévia pousa fora da linha por definição
+    //
+    // O que existe na mesa do truco: `grupoMesaDoTruco` (a vira, a vaza em curso e as
+    // pilhas de vazas ganhas moram TODOS aqui — ver `sincronizarMesaDoTruco`),
+    // `grupoOutrosDoTruco` (as cartas de costas dos adversários), `grupoPreviaDoTruco`
+    // (dentro do grupo da mesa) e `grupoMaoDoTruco` (a SUA mão, que já é medida à parte,
+    // pelo `naMao` — declará-la aqui a mediria duas vezes e faria a mão colidir consigo).
+    //
+    // DOIS grupos, e a mesa é UM só — não três. A vira, a vaza em curso e as pilhas de
+    // vazas ganhas são irmãs achatadas dentro de `grupoMesaDoTruco`, e o preço está dito de
+    // frente: `folgaEntre` só compara ENTRE grupos, nunca dentro de um, então esta suíte
+    // nunca perguntará se a pilha de uma dupla encavalou a vira. Separá-las exigiria criar
+    // um `THREE.Group` novo em `550-mesa.js` — mudar o JOGO para servir ao teste, que é a
+    // direção errada, e o mesmo raciocínio que recusou o truco expor um monte vazio. Quem
+    // cobre o interior da mesa é o `test-truco` (as postas e a amarração carta↔assento); é
+    // o papel que o `test-mesa` faz para o dominó, e é por isso que lá um grupo também basta.
+    //
+    // A SUA MÃO fica fora, e não por esquecimento: o `naMao` já a mede carta a carta, com a
+    // mesma câmera. Declará-la aqui a compararia consigo mesma e a folga mínima da suíte
+    // passaria a ser a distância entre duas cartas do seu leque — um número que não é
+    // defeito nenhum, medido no lugar do que importa.
+    gruposDaMesa: () => [
+      { nome: 'a mesa', curto: 'mesa', grupo: grupoMesaDoTruco, pular: grupoPreviaDoTruco },
+      { nome: 'a mão de um adversário', curto: 'outros', grupo: grupoOutrosDoTruco },
+    ],
+
+    // "3 de paus", e não "3|1" nem "3p". O nome sai da BIBLIOTECA (`045-baralho.js`), que já
+    // é quem sabe falar de carta — inventar um segundo jeito de nomear a mesma coisa é como
+    // duas metades passam a discordar. Ele aparece uma carta por mensagem ("a peça X da sua
+    // mão está por baixo de #contagem"), então o comprimento não custa nada.
+    rotuloDaMao: m => nomeDaCarta(m.carta),
+
     criarCarta, criarVersoDeCarta, criarFantasmaDeCarta, faceDaCarta,
     medidasDaCarta: { CARTA_L, CARTA_C, CARTA_E, CEL_CARTA, COLS_CARTA, LINS_CARTA },
     // A ORDEM DA TELA, que desde a arrumação não é a de `vista.mao`.

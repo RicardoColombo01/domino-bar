@@ -27,38 +27,52 @@ const TELAS = [
   { nome: 'wide 1600×900', width: 1600, height: 900, touch: false },
 ];
 
+// TODA CENA DECLARA O SEU JOGO, e o campo não tem padrão de propósito.
+//
+// A aba entra pela URL (`?jogo=…`), e abrir um link GUARDA a preferência — foi decisão do
+// Ricardo em 06/08: link e clique na aba valem a mesma coisa. A consequência é que a
+// preferência GRUDA de uma cena para a outra, exatamente como o `localStorage` da contagem
+// e o `MESA` das cenas do online: uma cena de truco deixaria a próxima cena de dominó
+// abrindo em truco, e a foto sairia mentindo sem nenhuma asserção reclamar.
+//
+// É a mesma regra que o `contar()` e o `semGuardado()` já obedecem — cada cena diz o que
+// quer —, e por isso o campo é OBRIGATÓRIO em vez de opcional com padrão `'domino'`: um
+// padrão faria a cena nova ser a única que lembra de declarar, que é como a metade
+// esquecida vira defeito calado.
+//
 // As situações que mais apertam o HUD: a mão cheia, a mão de 14 do Duelo, e a barra de
 // confirmação aberta — que é quando o rodapé tem três coisas disputando a mesma faixa.
 const CASOS = [
-  { nome: 'mão de 7', montar: `mesa('classico', 3); contar(false); auto(6);` },
-  { nome: 'mão de 14', montar: `mesa('duelo', 2); contar(false); auto(1);` },
-  { nome: 'confirmando', montar: `mesa('classico', 3); contar(false); escolherUma();` },
-  { nome: 'contando', montar: `mesa('classico', 4); auto(11); contar(true);` },
+  { nome: 'mão de 7', jogo: 'domino', montar: `mesa('classico', 3); contar(false); auto(6);` },
+  { nome: 'mão de 14', jogo: 'domino', montar: `mesa('duelo', 2); contar(false); auto(1);` },
+  { nome: 'confirmando', jogo: 'domino', exigeEscolha: true,
+    montar: `mesa('classico', 3); contar(false); escolherUma();` },
+  { nome: 'contando', jogo: 'domino', montar: `mesa('classico', 4); auto(11); contar(true);` },
   // A conversa aberta é o painel que mais briga por espaço: tem campo dentro e fica no
   // mesmo canto que a barra de confirmação ocupa.
-  { nome: 'conversando', montar: `mesa('classico', 3); contar(false); auto(6); window.__jogo.alternarConversa(true);` },
+  { nome: 'conversando', jogo: 'domino', montar: `mesa('classico', 3); contar(false); auto(6); window.__jogo.alternarConversa(true);` },
   // Tabuleiro comprido: é quando a linha se espalha até a borda da mesa e o círculo dos
   // adversários fica mais apertado. Se algo vai sair do quadro, sai aqui.
-  { nome: 'mesa cheia', montar: `mesa('classico', 4); contar(true); ateALinha(13);` },
+  { nome: 'mesa cheia', jogo: 'domino', montar: `mesa('classico', 4); contar(true); ateALinha(13);` },
   // O QUINTO PAINEL DO TOPO. Mesa de 4 em duplas (placar com dois nomes) mais os três
   // dados mais o código: é o topo mais cheio que existe. Vale o cenário porque o #topo já
   // transbordou em 360px uma vez, e o comentário do CSS explica por que ninguém viu —
   // overflow negativo em elemento fixo não aparece no scrollWidth. Sem esta cena o painel
   // novo nasceria sem nenhuma foto, já que nenhum outro caso é de mesa online.
-  { nome: 'mesa online', montar: `mesa('classico', 4); contar(true); auto(11); window.__jogo.pintarSala('XJCR');` },
+  { nome: 'mesa online', jogo: 'domino', montar: `mesa('classico', 4); contar(true); auto(11); window.__jogo.pintarSala('XJCR');` },
   // NOMES NO LIMITE — item 8. Todas as cenas até aqui usavam os nomes padrão ("Você",
   // "Bot 1"), que cabem em qualquer coisa: é por isso que a suíte nunca viu o nome cortado
   // que o Ricardo relatou jogando. 14 é o `maxlength` do campo no menu (140-menu.js), então
   // este é o pior caso que o jogo DEIXA existir, e não um exagero inventado para o teste.
   // Em duplas o placar ainda soma dois deles ("Fulano e Sicrano"), que é onde o topo cresce.
-  { nome: 'nomes longos', montar:
+  { nome: 'nomes longos', jogo: 'domino', montar:
       `nomes('Ricardo Neves', 'Maria Fernanda', 'Sebastião Jr.', 'Ana Carolina');` +
       `mesa('classico', 4); contar(true); auto(11);` },
   // MESA DE 4 RECÉM-DADA — o pior caso das mãos dos ADVERSÁRIOS, e nenhuma cena tinha.
   // Toda cena de 4 aqui já jogou 11 peças, e aí cada montinho está com 4 e mede meia
   // largura 1.07. Recém-dada são 7 peças, e a fileira vai a 1.91 — quase o dobro. Quem
   // disputa espaço com o tabuleiro e com os copos é este tamanho, não o outro.
-  { nome: 'mão cheia de 4', montar: `mesa('classico', 4); contar(false);` },
+  { nome: 'mão cheia de 4', jogo: 'domino', montar: `mesa('classico', 4); contar(false);` },
   // A TELA DE MENU, que nenhuma cena mostrava — as dez de cima começam todas com `mesa()`,
   // ou seja com o menu já escondido. E ela não é "a tela antes do jogo": é um SCROLLER, e o
   // defeito de campo foi rolar as regras e não conseguir subir de volta.
@@ -66,7 +80,28 @@ const CASOS = [
   // As regras abrem de propósito: é o que faz a carta ficar mais alta que a viewport em
   // TODAS as seis telas, inclusive a de 1600×900. Sem isso a asserção seria verde por
   // trivialidade nas telas grandes, que é o pior tipo de verde — o que parece cobertura.
-  { nome: 'menu', soTela: true, exigeTransbordo: true, montar: `semGuardado(); menuCheio();` },
+  { nome: 'menu', jogo: 'domino', soTela: true, exigeTransbordo: true, montar: `semGuardado(); menuCheio();` },
+
+  // ─── TRUCO ─────────────────────────────────────────────────────────────────
+  // A LACUNA QUE A v4.5 DECLAROU DE PROPÓSITO, e que a v4.6 fecha. Até aqui o truco não
+  // tinha UMA FOTO em tamanho de tela nenhum: o `test-truco` mede as postas em coordenadas
+  // de mundo e o `test-lembrar` remonta a mesa, mas nenhum dos dois pergunta "cabe num
+  // celular em pé?". `ESCALA_TRUCO_MAX` (550-mesa.js) é o número a mexer se não couber.
+  //
+  // São TRÊS cenas e não seis: cada uma custa seis navegações completas de Chrome com
+  // WebGL por software, e a rodada cheia já passava de dez minutos. Estas três cobrem os
+  // três eixos que mudam o tamanho do que está no tampo — quantas cartas na sua mão, o que
+  // a barra faz com o rodapé, e quantos assentos disputam o anel.
+  { nome: 'truco mão', jogo: 'truco', montar: `mesa('paulista', 2);` },
+  // A BARRA DO TRUCO É MAIOR QUE A DO DOMINÓ, e é o que torna esta cena diferente da irmã:
+  // além de #confirmar e #vez, o rodapé do truco tem a barra de apostas (Pedir truco /
+  // Correr), que o dominó nunca teve. Três coisas viram quatro na mesma faixa.
+  { nome: 'truco confirmando', jogo: 'truco', exigeEscolha: true,
+    montar: `mesa('paulista', 2); escolherUmaCarta();` },
+  // MESA DE 4 COM VAZA JOGADA — o tampo mais cheio que o truco sabe ficar: quatro cartas da
+  // vaza em curso, uma pilha de vaza ganha, a vira, e três leques de costas no anel. Seis
+  // lances numa mesa de 4 dão exatamente isso (a 1ª vaza fecha em 4, e sobram 2 na mesa).
+  { nome: 'truco duplas', jogo: 'truco', montar: `mesa('paulista', 4); auto(6);` },
 ];
 
 // ESCOLHER TELAS E CENAS PELA LINHA DE COMANDO.
@@ -105,6 +140,16 @@ const filtrar = (lista, arg, oque) => {
   }
   return achou;
 };
+// CENA SEM JOGO DECLARADO É ERRO, e não um `?jogo=undefined` que a escada resolve calada
+// pela preferência — que é justamente a preferência deixada pela cena anterior. O sintoma
+// seria a foto certa de um jogo errado, com todas as asserções verdes: o pior desfecho
+// possível numa suíte cuja pergunta é "dá para ver a mão?".
+for (const c of CASOS) {
+  if (!c.jogo) {
+    console.error(`a cena "${c.nome}" não declarou \`jogo\` — ver o comentário de CASOS`);
+    process.exit(2);
+  }
+}
 const TELAS_ESCOLHIDAS = filtrar(TELAS, process.argv[2], 'tela');
 const CASOS_ESCOLHIDOS = filtrar(CASOS, process.argv[3], 'cena');
 const PARCIAL = TELAS_ESCOLHIDAS.length < TELAS.length || CASOS_ESCOLHIDOS.length < CASOS.length;
@@ -160,12 +205,34 @@ const AJUDA = `
   };
   // Joga até chegar a sua vez com o tabuleiro já formado, e levanta uma peça: é o
   // estado em que #confirmar, #acoes e #vez brigam pelo mesmo rodapé.
+  //
+  // ESTA CENA NUNCA LEVANTOU PEÇA NENHUMA até 07/08/2026, e ficou verde o tempo todo.
+  // A linha era \`j.selecionar(j.naMao.findIndex(m => m.jogavel))\` — um ÍNDICE — e a ponte
+  // recebe uma PEÇA (\`selecionar: peca => selecionarPeca(naMao.findIndex(m =>
+  // mesmaPeca(m.peca, peca)))\`, em 300-registro.js). \`mesmaPeca([1,6], 1)\` lê \`1[0]\`, que
+  // é \`undefined\`: nada casa, o \`findIndex\` devolve −1, e \`selecionarPeca(-1)\` cai no
+  // \`if (!m) return\` e DESISTE CALADA. Medido: barra \`painel oculta\`, 0 fantasmas na
+  // prévia; passando a peça, barra aberta e 1 fantasma.
+  //
+  // A ponte passou a receber a peça em vez do índice exatamente porque "índice de tela era
+  // o único acoplamento do repositório que quebrava calado quando a mão reordenava" — o
+  // comentário dela diz isso. O helper não acompanhou, e o modo de falhar foi o previsto,
+  // no lugar que ninguém olhou: um teste.
+  //
+  // É a família do \`conn.open\` da Fila 10 e do \`on()\` que engolia ouvinte: quando a
+  // montagem não alcança o estado interessante, o verde não quer dizer nada. E o remédio é
+  // o mesmo de lá — COBRAR QUE A MONTAGEM CONSEGUIU, senão o conserto de hoje volta a se
+  // desfazer calado amanhã.
+  //
+  // A marca vai em \`window\` e não num \`let\` do módulo porque o MEDIR roda noutro
+  // \`evaluate\`: são dois scripts, e só o objeto global é o mesmo para os dois.
   const escolherUma = () => {
     const j = window.__jogo;
     for (let i = 0; i < 300; i++) {
       const v = j.vista;
       if (v && v.fase === 'mao' && v.vez === v.cadeira && v.linha.length && v.acoes.jogadas.length) {
-        j.selecionar(j.naMao.findIndex(m => m.jogavel));
+        const m = j.naMao.find(x => x.jogavel);
+        if (m) { j.selecionar(m.peca); window.__cenaEscolheu = true; }
         return;
       }
       auto(1);
@@ -194,6 +261,27 @@ const AJUDA = `
     j.montarCadeiras();
     document.querySelector('details.regras').open = true;
     j.mostrarTela('telaMenu');
+  };
+  // ─── truco ────────────────────────────────────────────────────────────────
+  // Irmã de \`escolherUma\`, e a diferença é o que a ponte do truco aceita: uma CARTA
+  // (\`selecionar: carta => selecionarCarta(…)\`, em 590-registro.js). Escrever
+  // \`j.selecionar(indice)\` aqui reproduziria letra por letra o defeito que a irmã
+  // acabou de pagar — e reproduziria CALADO, que é o motivo de o \`__cenaEscolheu\` existir.
+  //
+  // Sem \`contar()\`: o truco não declara \`painel\` no registro, então a casa esconde o botão
+  // "Contar". Chamar aqui seria clicar num botão que a tela não oferece.
+  const escolherUmaCarta = () => {
+    const j = window.__jogo;
+    for (let i = 0; i < 300; i++) {
+      const v = j.vista;
+      if (v && v.fase === 'mao' && v.vez === v.cadeira && v.acoes.cartas.length) {
+        const m = j.naMao.find(x => x.jogavel);
+        if (m) { j.selecionar(m.carta); window.__cenaEscolheu = true; }
+        return;
+      }
+      auto(1);
+      if (!j.P || j.P.fase !== 'mao') mesa('paulista', v && v.n === 4 ? 4 : 2);
+    }
   };
   const ateALinha = (quantas) => {
     const j = window.__jogo;
@@ -229,10 +317,15 @@ const MEDIR = `(() => {
   // constructor" que não fala de mão nenhuma. Pegar o tipo de um objeto que pode não
   // existir é armadilha; a ponte já expõe a biblioteca.
   const V = j.THREE.Vector3;
+  // O NOME DA COISA NA MÃO SAI DO JOGO. Isto era \`m.peca.join('|')\`, e foi o PRIMEIRO
+  // ponto a estourar numa mesa de truco — antes de qualquer grupo, ao contrário do que o
+  // diagnóstico escrito no CLAUDE.md previa: a mão do truco carrega \`carta\`, não \`peca\`.
+  // Medir antes de consertar, mais uma vez.
+  const rotulo = j.rotuloDaMao;
   const pecas = j.naMao.map(m => {
     const v = new V(m.xBase, m.yBase, m.zBase);
     v.project(j.camera);
-    return { peca: m.peca.join('|'), x: v.x, y: v.y };
+    return { peca: rotulo(m), x: v.x, y: v.y };
   });
 
   // O mesmo tratamento para o que está na mesa: o tabuleiro cresce até dobrar na borda,
@@ -309,13 +402,19 @@ const MEDIR = `(() => {
     for (const c of caixas) if (t.x >= c.x && t.x <= c.r && t.y >= c.y && t.y <= c.b) return c.id;
     return null;
   };
+  // O QUE ESTÁ NO TAMPO, PERGUNTADO AO JOGO. Eram três grupos cravados aqui — e o
+  // \`grupoMonte\` não existe numa mesa de truco: \`porAPonteDoJogo\` apaga as chaves do jogo
+  // anterior, de propósito, para a ponte não mentir. Hoje o jogo declara a própria mesa
+  // (\`gruposDaMesa\`, no registro dele) e a suíte itera o que vier — é o mesmo desenho dos
+  // encaixes de HUD: a casa reserva o lugar e chama, o jogo preenche. O pife não mexe aqui.
+  const daMesa = j.gruposDaMesa();
   const cobertas = [];
   for (const m of j.naMao) {
     const v = new V(m.xBase, m.yBase, m.zBase); v.project(j.camera);
     const painel = cobrindo(naTela(v));
-    if (painel) cobertas.push({ oque: 'a peça ' + m.peca.join('|') + ' da sua mão', painel });
+    if (painel) cobertas.push({ oque: 'a peça ' + rotulo(m) + ' da sua mão', painel });
   }
-  for (const [nome, grupo] of [['a mão de um adversário', j.grupoOutros], ['o monte', j.grupoMonte], ['o tabuleiro', j.grupoMesa]]) {
+  for (const { nome, grupo } of daMesa) {
     for (const o of grupo.children) {
       const v = new V(); o.getWorldPosition(v); v.project(j.camera);
       const painel = cobrindo(naTela(v));
@@ -347,11 +446,11 @@ const MEDIR = `(() => {
     Math.max(a.min.x - b.max.x, b.min.x - a.max.x),
     Math.max(a.min.z - b.max.z, b.min.z - a.max.z));
 
+  // O \`pular\` vem declarado junto do grupo, e é o fantasma da prévia: ele pousa fora da
+  // linha por definição. As TRALHAS ficam de fora da declaração de propósito — copo,
+  // cinzeiro e o resto do boteco são da CASA, e valem para qualquer jogo que sente aqui.
   const grupos = [
-    // O fantasma da prévia não conta: ele pousa fora da linha por definição.
-    caixasDe(j.grupoMesa.children, 'o tabuleiro', j.grupoPrevia),
-    caixasDe(j.grupoOutros.children, 'a mão de um adversário'),
-    caixasDe(j.grupoMonte.children, 'o monte'),
+    ...daMesa.map(g => caixasDe(g.grupo.children, g.nome, g.pular)),
     caixasDe(j.tralhas || [], 'uma tralha da mesa'),
   ];
   // Peça contra peça do PRÓPRIO tabuleiro não entra: tests/test-mesa.mjs já faz isso, puro
@@ -419,14 +518,26 @@ const MEDIR = `(() => {
   const cortina = document.getElementById('cortina');
   return {
     pior, vazando, nomes, carta,
+    // A MONTAGEM CONSEGUIU? Ver \`escolherUma\`: por meses ela não conseguiu e a cena ficou
+    // verde medindo um rodapé que não tinha barra nenhuma.
+    escolheu: !!window.__cenaEscolheu,
     transbordo: document.documentElement.scrollWidth - window.innerWidth,
     largura: window.innerWidth, altura: window.innerHeight,
     // Gaveta aberta muda o que se exige da tela: cobrir o jogo passa a ser o PONTO.
     gaveta: !!cortina && !cortina.classList.contains('oculta'),
     fov: j.camera.fov, paineis, pecas, cobertas,
     fileiras: new Set(j.naMao.map(m => m.yBase.toFixed(3))).size,
-    naLinha: j.vista ? j.vista.linha.length : 0,
-    mesa: extremo(j.grupoMesa), outros: extremo(j.grupoOutros), monte: extremo(j.grupoMonte),
+    // UM POR GRUPO DECLARADO, e não as três chaves fixas mesa/outros/monte de antes.
+    //
+    // O \`quantos\` substitui o \`naLinha\`, que saía de \`vista.linha.length\` — e a visão do
+    // truco não tem \`linha\`, ela tem \`mesa\` e \`vazas\`. Era o SÉTIMO ponto de dominó nesta
+    // suíte, e o único que não aparecia em nenhuma leitura: ele não estourava, ele
+    // imprimiria "com undefined peças na linha" numa mensagem de falha. Contar os filhos do
+    // grupo é melhor que uma contagem paralela vinda da vista, porque é exatamente o que
+    // está sendo projetado — a medida e o diagnóstico param de poder discordar.
+    extremos: daMesa.map(g => ({
+      nome: g.nome, curto: g.curto, ndc: extremo(g.grupo), quantos: g.grupo.children.length,
+    })),
   };
 })()`;
 
@@ -463,7 +574,10 @@ for (const tela of TELAS_ESCOLHIDAS) {
     pagina.on('pageerror', e => erros.push(e.message));
     pagina.on('console', m => { if (m.type() === 'error') erros.push(m.text()); });
 
-    await pagina.goto(JOGO, { waitUntil: 'networkidle2', timeout: 45000 });
+    // O JOGO VAI NA URL, e cada cena declara o seu — ver o comentário de `CASOS`. Entra pela
+    // escada de verdade (URL → preferência → primeiro do balcão), que é o caminho que um
+    // jogador percorre ao receber um link; até aqui ela não tinha nenhuma foto.
+    await pagina.goto(`${JOGO}?jogo=${caso.jogo}`, { waitUntil: 'networkidle2', timeout: 45000 });
     await pagina.waitForFunction('window.__jogo && window.__jogo.pronto',
       { timeout: 30000, polling: 400 });
     // A MESMA semente para toda cena: o que muda entre elas é o tamanho da tela e o que a
@@ -493,9 +607,14 @@ for (const tela of TELAS_ESCOLHIDAS) {
       // deslizava — e a medida é em coordenadas de MUNDO, então é o grupo que manda.
       // A mão vem do `naMao`, e não de um `grupoMao`: a ponte nunca expôs esse grupo.
       const lugar = o => o.position.toArray().map(n => n.toFixed(4)).join(',');
+      // OS GRUPOS SAEM DO JOGO, como no MEDIR. Aqui a lista cravada seria pior que uma
+      // asserção quebrada: o `try/catch` logo abaixo trata erro na foto como "pronto", então
+      // um `j.grupoMonte` inexistente NÃO estouraria — ele daria a cena por assentada no
+      // primeiro quadro, e todas as medidas seguintes sairiam da animação pega no meio. Seria
+      // a intermitência do item 11 de volta, verde e silenciosa.
       const foto = () =>
-        [j.grupoMesa, j.grupoOutros, j.grupoMonte]
-          .map(g => lugar(g) + '>' + g.children.map(lugar).join(';')).join('|') +
+        j.gruposDaMesa()
+          .map(g => lugar(g.grupo) + '>' + g.grupo.children.map(lugar).join(';')).join('|') +
         '#' + j.naMao.map(m => lugar(m.obj)).join(';');
       let antes = '', parados = 0, quadros = 0;
       const olhar = () => {
@@ -582,15 +701,31 @@ for (const tela of TELAS_ESCOLHIDAS) {
 
     // 4. O QUE IMPORTA: toda peça da mão dentro do quadro.
     ok(m.pecas.length > 0, `${onde}: a mão não foi desenhada`);
+
+    // 4b. A CENA QUE DIZ LEVANTAR UMA PEÇA TEM DE TER LEVANTADO. Duas perguntas e não uma,
+    //     porque elas falham de jeitos diferentes: `escolheu` diz que a montagem chamou o
+    //     `selecionar` com o que ele aceita, e `#confirmar` diz que a barra APARECEU. Sem a
+    //     primeira, um dia em que a barra deixe de abrir vira "a cena mudou de estado" em
+    //     vez de "a montagem não alcançou o estado"; sem a segunda, a montagem podia
+    //     "conseguir" contra uma tela que não mostrou nada. Foi exatamente a segunda que
+    //     ficou verde por meses, com a cena `confirmando` medindo um rodapé sem barra.
+    if (caso.exigeEscolha) {
+      ok(m.escolheu, `${onde}: a cena diz levantar uma peça e a montagem não conseguiu ` +
+        `— ela não alcançou o estado que a cena existe para medir`);
+      ok(!!m.paineis.confirmar, `${onde}: a peça foi levantada e a barra #confirmar não apareceu`);
+    }
     for (const p of m.pecas) {
       ok(Math.abs(p.x) <= 1 && Math.abs(p.y) <= 1,
         `${onde}: a peça ${p.peca} caiu FORA da tela (ndc ${p.x.toFixed(2)}, ${p.y.toFixed(2)})`);
     }
 
-    // 5. e o que está na mesa também tem de caber
-    ok(m.mesa <= 1, `${onde}: o tabuleiro passou da borda da tela (ndc.x ${m.mesa.toFixed(2)}, com ${m.naLinha} peças na linha)`);
-    ok(m.outros <= 1, `${onde}: a mão de um adversário saiu da tela (ndc.x ${m.outros.toFixed(2)})`);
-    ok(m.monte <= 1, `${onde}: o monte saiu da tela (ndc.x ${m.monte.toFixed(2)})`);
+    // 5. e o que está na mesa também tem de caber — um por grupo que o JOGO declarou, e não
+    //    as três perguntas fixas de dominó que moravam aqui.
+    ok(m.extremos.length > 0, `${onde}: o jogo não declarou nada no tampo — gruposDaMesa() veio vazio`);
+    for (const e of m.extremos) {
+      ok(e.ndc <= 1,
+        `${onde}: ${e.nome} passou da borda da tela (ndc.x ${e.ndc.toFixed(2)}, com ${e.quantos} no grupo)`);
+    }
 
     // 5b. …e nada do que está no tampo pode ocupar o lugar de outra coisa. Esta é a
     //     pergunta 3D CONTRA 3D, e ela não existia: as duas asserções acima são sobre a
@@ -639,7 +774,11 @@ for (const tela of TELAS_ESCOLHIDAS) {
       ? (Math.max(...m.pecas.map(p => p.x)) - Math.min(...m.pecas.map(p => p.x))) : 0;
     console.log(`  ${caso.nome.padEnd(13)} fov ${m.fov.toFixed(0).padStart(2)}° · ` +
       `${m.pecas.length} peças em ${m.fileiras} fileira(s) · ocupam ${(larguraNaTela * 50).toFixed(0)}% · ` +
-      `mesa ${m.mesa.toFixed(2)} outros ${m.outros.toFixed(2)} monte ${m.monte.toFixed(2)} · ` +
+      // A COLUNA SAI DO QUE O JOGO DECLAROU, e por isso a linha do dominó continua legível
+      // como sempre foi enquanto a do truco diz o que a mesa do truco tem. Sem isto o log
+      // teria de conhecer os dois jogos — o acoplamento saindo pela porta do diagnóstico
+      // depois de ter saído pela da asserção, que é como ele costuma voltar.
+      m.extremos.map(e => `${e.curto} ${e.ndc.toFixed(2)}`).join(' ') + ' · ' +
       // A FOLGA SAI SEMPRE, mesmo verde: é a margem que encolhe em silêncio, e foi
       // exatamente uma folga de sete pixels que passou por conserto no item 8.
       `folga ${m.pior.folga.toFixed(2)}` +

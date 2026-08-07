@@ -201,7 +201,18 @@ function desenharHUD(vista) {
   // Atribuir `textContent` troca o nó de texto mesmo que a frase seja idêntica, e o leitor
   // de tela anuncia a troca, não a diferença: sem esta guarda ele repetiria "Vez de Tião"
   // a cada compra do bot, e a região viva viraria a razão de desligar o leitor.
-  const frase = minhaVez ? 'Sua vez' : `Vez de ${vista.cadeiras[vista.vez].nome}`;
+  // A NOTA É DO JOGO, e é opcional. A casa sabe DE QUEM é a vez — isso é da mesa —, mas não
+  // sabe o que mais vale a pena dizer nesse instante: no truco é quem está ganhando a vaza
+  // em curso (sem isso não há parâmetro para decidir se gasta carta forte), e no dominó não
+  // há nada a acrescentar, então ele simplesmente não declara a chave.
+  //
+  // Ela vem PARA CÁ e não para um painel próprio por duas razões somadas: o `#vez` já é
+  // prosa e não custa layout nenhum — e o `#topo` do retrato já transbordou uma vez por um
+  // painel a mais —, e ele é `aria-live`, então a frase é ANUNCIADA quando muda. Um painel
+  // novo seria visto por quem olha e invisível para quem ouve.
+  const nota = JOGO.hud.notaDaVez ? JOGO.hud.notaDaVez(vista) : '';
+  const frase = (minhaVez ? 'Sua vez' : `Vez de ${vista.cadeiras[vista.vez].nome}`)
+    + (nota ? ` · ${nota}` : '');
   if (HUD.vez.textContent !== frase) HUD.vez.textContent = frase;
   HUD.vez.classList.toggle('minha', minhaVez);
 
@@ -243,10 +254,49 @@ function mostrarConfirmacao(escolha) {
     b.onclick = () => JOGO.toque.confirmar(escolha.botoes[+b.dataset.i].dado);
   });
   el('confirmar').classList.remove('oculta');
+  publicarAlturaDaConfirmacao();
 }
 
 function esconderConfirmacao() {
   el('confirmar').classList.add('oculta');
+  document.body.style.removeProperty('--alt-confirmar');
+  document.body.style.removeProperty('--empurra-confirmar');
+}
+
+// A BARRA DIZ QUANTO ELA OCUPA, e o rodapé estreito se arruma em cima disso.
+//
+// Em retrato o `#confirmar` cola no fundo e o `#acoes` ficava cravado em `bottom: 74px` —
+// dois números fixos, cada caixa cabendo sozinha, NENHUMA perguntando pela outra. É a
+// armadilha que este projeto já pagou duas vezes: no CSS (item 8, o #topo montando na lista
+// de jogadores) e em 3D (Fila 7, o tabuleiro dentro da mão do vizinho). "Quando o mesmo
+// espaço tem dois donos, a conta tem de ser UMA."
+//
+// O 74 nasceu certo para o dominó, cuja barra tem 59px de altura, e QUEBROU no truco: lá o
+// título é "J de ouros" e o botão é "Jogar esta carta", que em 360px quebram em três linhas —
+// 106px, sobrepondo o #acoes em 32px. Medido, não deduzido.
+//
+// Ler `offsetHeight` força layout, e por isso isto NÃO mora no `desenharHUD`: aqui roda só
+// quando a barra aparece, que é um evento de toque, e não sessenta vezes por segundo.
+//
+// O PADRÃO NO CSS é a altura do dominó, então com a barra escondida o rodapé fica exatamente
+// onde sempre esteve — a mudança não mexe num pixel de quem não tem barra na tela.
+// SÃO DUAS PROPRIEDADES da mesma medida, e não uma, porque os dois usos precisam de coisas
+// diferentes quando a barra está ESCONDIDA:
+//
+//   --alt-confirmar         a altura crua. Em retrato o #acoes já reservava lugar para a
+//                           barra mesmo sem ela na tela (o antigo `74px`), então lá o padrão
+//                           é a altura do dominó e o rodapé não se mexe um pixel sem barra.
+//   --empurra-confirmar     a altura MAIS a folga, e ela some quando a barra some. Em
+//                           paisagem a barra empilha na faixa esquerda por cima do #acoes, e
+//                           sem barra o #acoes tem de voltar exatamente para o topo da faixa.
+//
+// Uma só propriedade obrigaria uma das duas a mentir — e um `calc(… + var(--x, -8px) + 8px)`
+// para fabricar o zero é o tipo de esperteza que ninguém entende seis meses depois.
+function publicarAlturaDaConfirmacao() {
+  const h = el('confirmar').offsetHeight;
+  if (h <= 0) return;
+  document.body.style.setProperty('--alt-confirmar', h + 'px');
+  document.body.style.setProperty('--empurra-confirmar', (h + 8) + 'px');
 }
 el('btCancelar').onclick = () => JOGO.toque.cancelar();
 

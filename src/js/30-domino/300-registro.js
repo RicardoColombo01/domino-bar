@@ -170,6 +170,42 @@ JOGOS.domino = {
     jogadaDoBot, dicaDaVista,
     grupoMesa, grupoPrevia, grupoOutros, grupoMonte,
     naMao, arrumarMao, moverNaMao,
+
+    // O QUE ESTÁ NO TAMPO, declarado pelo jogo e não adivinhado pela suíte.
+    //
+    // O `test-telas` lia `j.grupoMesa`, `j.grupoOutros` e `j.grupoMonte` cravados em quatro
+    // lugares, e a frase acima ("um jogo sem monte simplesmente não põe `grupoMonte` aqui")
+    // era exatamente a bomba: num truco o `grupoMonte` some de verdade — `porAPonteDoJogo`
+    // apaga as chaves do jogo anterior — e a suíte estourava. As duas saídas eram o truco
+    // expor um monte VAZIO (uma ponte mentindo, e a suíte passaria a medir um mundo que não
+    // existe) ou a suíte PERGUNTAR. É o mesmo desenho dos cinco encaixes de HUD da v4.5: a
+    // casa reserva o lugar e chama, o jogo preenche.
+    //
+    // FUNÇÃO e não tabela, pelo motivo que este projeto já pagou uma vez: o registro é o
+    // último arquivo do jogo justamente porque ele executa na hora em que é concatenado.
+    // Função é içada e sobrevive à ordem; tabela não.
+    //
+    // `pular` é o filho que não conta na medida de caixa — a prévia pousa fora da linha por
+    // definição, e incluí-la mediria o fantasma em vez da madeira.
+    //
+    // O NOME é do jogo porque ele só vive em mensagem de falha: "o monte e o tabuleiro
+    // ocupam o mesmo tampo" é uma frase que a suíte não sabe escrever sozinha, e ela não é o
+    // valor asseverado — é a etiqueta dele. (Ler do jogo o que ESTÁ sendo conferido seria
+    // conferir a tabela contra ela mesma; é a lição do atlas de pintas, e não vale aqui.)
+    // `curto` é a coluna do log, e não é enfeite: derivar a palavra do `nome` deu "mão" para
+    // "a mão de um adversário", que se lê como A SUA mão — o número certo com a etiqueta
+    // errada, na única linha que um humano compara entre duas rodadas. Duas palavras do
+    // vocabulário do jogo custam menos que uma heurística que erra.
+    gruposDaMesa: () => [
+      { nome: 'o tabuleiro', curto: 'tabuleiro', grupo: grupoMesa, pular: grupoPrevia },
+      { nome: 'a mão de um adversário', curto: 'outros', grupo: grupoOutros },
+      { nome: 'o monte', curto: 'monte', grupo: grupoMonte },
+    ],
+
+    // COMO SE CHAMA UMA COISA DA MÃO, na mensagem de falha. A suíte dizia `m.peca.join('|')`
+    // — e a mão do truco carrega `carta`, não `peca`: era o PRIMEIRO ponto a estourar, antes
+    // de qualquer grupo. Quem sabe o nome da sua peça é o jogo.
+    rotuloDaMao: m => m.peca.join('|'),
     // A ORDEM DA TELA, que desde a arrumação não é mais a de `vista.mao`. Quem quiser
     // selecionar uma peça tem de procurar aqui.
     get maoNaTela() { return naMao.map(m => m.peca); },
