@@ -942,6 +942,11 @@ continua no disco.
 **A FASE 4 FECHOU: o truco senta na mesa.** São dois jogos jogáveis, e o que sobra da v4 é a
 Fase 5, que não toca em `src/` e trava numa decisão de conta.
 
+**➜ O RICARDO VAI TESTAR NA PRÓXIMA SESSÃO.** Antes de qualquer outra coisa, leia
+**"⚑ PARA A SESSÃO DE TESTE"**, mais abaixo — ela tem onde testar (o `github.io` ainda NÃO tem
+truco), o que nunca foi tocado por mão humana, o mapa sintoma → arquivo, e o inventário
+completo das 28 mudanças desta onda.
+
 **AS TRÊS COISAS PARA FAZER, em ordem:**
 
 1. **O CLIQUE NO PAGES** — `Actions → a rodada das 22:04 → Re-run all jobs`. **Isto mudou de
@@ -1528,6 +1533,143 @@ a URL que vale como escolha de aba, o Truco Paulista sem envido e sem flor, APK 
 **um jogo novo que ninguém jogou de verdade ainda** — só bots contra bots, dentro de suítes.
 Meia hora de truco no celular vale mais que uma varredura, e o histórico deste arquivo diz
 isso em três filas diferentes.
+
+---
+
+## ⚑ PARA A SESSÃO DE TESTE — escrito em 06/08/2026, para ser lido ANTES de jogar
+
+O Ricardo vai testar, e pediu por escrito que tudo ficasse anotado para eu ter o melhor
+contexto possível. Esta seção existe para que **um relato dele custe minutos e não horas**, e
+para que eu não refaça investigação já feita.
+
+**Ela responde cinco coisas:** onde testar (§1), o que nunca foi tocado por mão humana (§2), o
+mapa sintoma → arquivo (§3), o inventário completo das mudanças (§3b), como relatar barato
+(§4), e o que já está medido e não vale reinvestigar (§5).
+
+### 1. ONDE TESTAR — e este é o item que já custou UM DIA a este projeto
+
+> **O `github.io` NÃO TEM TRUCO.** O que está no ar é a **v4.2.1**, e o truco só ficou jogável
+> na **v4.5.0**. Se você abrir o site e a aba do Truco disser "vem aí" — ou o jogo parecer o
+> mesmo de sempre —, **não é defeito: é o deploy parado**. Confira antes de relatar:
+>
+> ```
+> curl -s https://ricardocolombo01.github.io/domino-bar/sw.js | grep VERSAO
+> ```
+> `d0b4c9bb11d2` = v4.2.1 (velho) · `23dc31b4d8f9` = v4.5.1 (o de agora)
+
+Isto é literalmente o dia perdido de 31/07 se repetindo por outra porta — lá era trabalho
+commitado e não enviado; aqui é enviado e não publicado. **Enquanto o Pages não rodar, teste
+LOCAL:**
+
+| como | o que dá para testar |
+|---|---|
+| duplo-clique no `index.html` | **tudo menos o online** — dominó, truco, hotseat, teclado, gaveta |
+| `npm run servir` + o IP da máquina no celular | **tudo**, inclusive mesa online entre celular e PC |
+
+O celular é o aparelho que mais achou defeito na história deste projeto (as Filas 5, 7 e 10
+saíram dele). `npm run servir` diz o endereço; o celular tem de estar na mesma rede.
+
+### 2. O QUE NUNCA FOI TOCADO POR MÃO HUMANA
+
+O truco inteiro só foi jogado **por bots, dentro de suítes**. Em ordem de "onde eu olharia
+primeiro":
+
+| | por que é suspeito |
+|---|---|
+| **a mesa do truco no CELULAR** | é a lacuna declarada: o `test-telas` não tem cena de truco, então **nenhuma foto** do truco existe em nenhum tamanho de tela. `ESCALA_TRUCO_MAX = 2.35` (em `550-mesa.js`) é o número a mexer se a mesa ficar grande ou pequena demais |
+| **a carta virando de barriga para baixo** | a vaza recolhida DESLIZA para a pilha girando 180° em Z. Nunca foi vista por ninguém — só medida como posição |
+| **a barra de apostas** | Pedir truco · Aceitar · Aumentar · Correr. A suíte confere que os botões EXISTEM e que a intenção chega; ninguém clicou neles com o dedo |
+| **a mão de 11** | dois botões e uma fase própria. Testada em Node, nunca na tela |
+| **o truco ONLINE** | o `test-online` só joga dominó. O truco herda a rede inteira e nada nele é específico — mas "herda de graça" é uma afirmação, não uma medição |
+| **o truco em DUPLAS (4 cadeiras)** | o `timeNoTruco` é uma linha e está testado; o canal da dupla na conversa e o placar por time nunca foram vistos numa mesa de truco |
+| **o dominó, de novo** | ele mudou MAIS que o truco em superfície: os botões, os medidores do topo, a barra de confirmar e a tela de fim de mão passaram todos a ser gerados. As suítes dizem que está idêntico; olho humano é a outra régua |
+
+### 3. MAPA: sintoma → onde ele mora
+
+Para eu não caçar. **A regra da casa continua valendo — MEDIR antes de consertar**: três dos
+onze itens da Fila 5 e dois dos cinco da Fila 6 tinham diagnóstico errado escrito antes de
+alguém olhar os números.
+
+| se acontecer isto | olhar primeiro |
+|---|---|
+| a aba do Truco não aparece / diz "vem aí" | **é o deploy** (item 1), não o código |
+| o topo mostra "Pontas · Monte · Mão" no truco | `JOGO.hud.medidores` — `575-encaixes.js` e `desenharMedidores` (130-hud) |
+| botão do jogo errado, ou botão que não faz nada | `desenharBarra` (130-hud) — ele RELIGA o `onclick` a cada publicação, de propósito |
+| a carta não vai / o toque não responde | `estaNaMesa(JOGOS.truco)` nos ouvintes de `560-interacao.js`. Se o dominó estiver "roubando" o toque, é aqui |
+| a mesa do truco cortada, grande ou pequena demais | `ESCALA_TRUCO_MAX` e `MESA_TRUCO_Z`, em `550-mesa.js` |
+| carta ilegível / naipe borrado | o atlas em `085-carta3d.js` (192px por célula). O naipe é CAMINHO, não glifo |
+| a vira não aparece | `sincronizarMesaDoTruco` — a chave é literalmente `'vira'` |
+| a mesa PARA (sem mensagem e sem botão) | **o defeito que mais dói aqui.** Anote a fase, a vez e o placar — o `aplicarNoTruco` recusa em silêncio para quem não está na tela |
+| "continuar a partida de antes" não aparece | `partidaGuardada` (casa) + `partidaDoTrucoValida` (jogo) |
+| o dominó regrediu em botão ou painel | `137-encaixes.js` — foi para lá tudo o que estava no HTML |
+| peça/carta por baixo de painel no celular | é a família das Filas 7 e 10; o `test-telas` cobre o dominó e **não** cobre o truco |
+
+### 3b. O INVENTÁRIO COMPLETO DO QUE MUDOU (v4.4.1 → v4.5.1)
+
+**28 arquivos, +4.047 / −632.** Se alguma coisa regrediu, ela saiu daqui:
+
+| arquivo | o que mudou nele |
+|---|---|
+| **`src/pagina.html`** (+39/−19) | saíram: os 3 painéis "Pontas/Monte/Mão", `#btComprar`, `#btPassar`, os botões de alvo "6/10 pontos", a linha inteira da compra livre, e o `title` do `#btContagem`. Entraram: `<div id="medidores">`, `<div id="barraJogo">`, `<div id="opcoesDaMesa">` — os três vazios, preenchidos pelo jogo |
+| **`src/css/estilo.css`** (+13) | `#medidores, #barraJogo, #opcoesDaMesa { display: contents }` e `.rot.afastado`. **`display: contents` é o que faz o invólucro custar zero em layout** |
+| **`010-constantes.js`** (+26) | ganhou `estaNaMesa(jogo)` e `chegarPerto` (veio do dominó) |
+| **`070-cena.js`** (1 linha) | `JOGO.mesa.caixaDoMonte` → `caixaDoAssento`, e o campo `l.monte` virou `l.caixa` |
+| **`130-hud.js`** (+145/−59) | **o mais mexido da casa.** `desenharMedidores`, `desenharBarra`, `pintarBotaoDoPainel` são novos; `mostrarConfirmacao` mudou de assinatura (recebe um descritor, não a peça); `mostrarFimDeMao` lê `JOGO.hud.fimDeMao`; `sobrouNaMao` SAIU (foi para o dominó); `minhaVez` passou por `JOGO.motor.emJogo` |
+| **`140-menu.js`** (+109/−41) | `montarAlvos` e `montarOpcoes` novos; `ajustarCompraAoModo` → **`ajustarOpcoesAoModo`** (nome na ponte mudou, e as suítes acompanharam); `mesaLembrada` valida alvo e opções contra o jogo; `lembrarMesa` grava as opções pelo nome que o jogo deu; `notaDaMesa` pede a frase ao jogo |
+| **`141-abas.js`** (+5) | `abrirJogo` passou a chamar `montarAlvos`, `montarOpcoes` e `pintarBotaoDoPainel` |
+| **`160-loop.js`** (+160/−79) | `aplicarIntencao` entrega a intenção inteira ao jogo; `pecaDoFio` sumiu; `podeAgirAgora` e `seguirOTurno` usam `emJogo`; `publicar` usa `semAMao`; `partidaGuardada` deixou de exigir `linha`/`monte`; `partidaParaGuardar`/`partidaDeVolta` viraram opcionais do jogo; `pedirDica` encolheu para 6 linhas; os `onclick` de comprar/passar sumiram |
+| **`090-tabuleiro.js`** (−13) | `chegarPerto` saiu; `l.monte` → `l.caixa` |
+| **`110-interacao.js`** (+18/−9) | **8 guardas `estaNaMesa(JOGOS.domino)`** nos ouvintes globais; as duas chamadas de `mostrarConfirmacao` passam pelo `confirmacaoDoDomino` |
+| **`137-encaixes.js`** (NOVO, 239) | medidores, barra, confirmação, fim de mão (com `sobrouNaMao`), `semAMao`, abertura, `aplicar`, `jogadaDoFio`, dica, `ALVOS`, `OPCOES`, nota, e as três funções da partida guardada |
+| **`300-registro.js`** (+58/−17) | o contrato novo: saíram 8 verbos, entraram 5 + `hud` |
+| **`085-carta3d.js`** (+16/−5) | **`criarCarta` ganhou o VERSO** — é o que permite virar a carta recolhida sem trocar o objeto |
+| **`520-partida.js`** (+9) | `novaMaoDoTruco` passou a zerar `P.donoDaAposta` ← **defeito de regra** |
+| **`550-mesa.js`** (NOVO, 351) | a mesa do truco em 3D |
+| **`560-interacao.js`** (NOVO, 203) | o toque e o teclado do truco |
+| **`575-encaixes.js`** (NOVO, 264) | os cinco encaixes em truco; `aplicarNoTruco` aceita `'trucar'` **e** `'aumentar'` ← **defeito de mesa parada** |
+| **`590-registro.js`** (+126/−26) | perdeu o `emBreve`, ganhou o contrato inteiro |
+| **`manifest.webmanifest`** | `shortcuts` com os dois jogos; a `description` virou "casa de jogos" |
+| **as 4 suítes** (+468/−60) | `test-truco` +310 (a partida inteira, a barra, o fim de mão, o validador); `test-lembrar` +109 (a cena do truco); `test-jogo` +39 (a barra do dominó); `test-online` −10 (só renomes) |
+
+**O QUE **NÃO** MUDOU, e é o que sustenta a confiança:** `150-rede.js` (a camada mais cara do
+projeto), `145-saguao.js`, `120-audio.js`, `030-regras.js`, `040-partida.js`, `050-bot.js`,
+`060-layout.js`, `080-peca3d.js`, `100-mao.js`, `135-contagem.js`, `045-baralho.js`,
+`510-regras.js`, `530-bot.js`, `540-layout.js`. **Nenhuma linha de rede foi tocada** — o truco
+herdou o online sem que ele soubesse que existe um segundo jogo.
+
+### 4. COMO RELATAR BARATO
+
+O que faz um relato valer uma correção em vez de uma investigação:
+
+1. **QUAL VERSÃO.** Site ou local? Se site, rode o `curl` do item 1 — a Fila 7 inteira quase
+   foi consertada duas vezes porque cinco fotos eram de uma versão anterior ao conserto.
+   **Foto de celular tem data; use-a.**
+2. **QUAL JOGO E QUAL MESA.** Dominó ou truco; quantas cadeiras; contra bot de qual nível.
+3. **O QUE ESTAVA NA TELA.** Uma foto vale mais que a descrição — a Fila 10 inteira saiu de
+   UMA foto e três frases, e a foto tinha o defeito e o pedido na mesma imagem.
+4. **SE A MESA PAROU:** de quem era a vez, o que estava escrito no alto, e se havia botão.
+5. **Não precisa diagnosticar.** O histórico deste arquivo diz que a leitura erra muito: o
+   valor do relato está no QUE aconteceu, não no porquê.
+
+### 5. O QUE JÁ ESTÁ MEDIDO — não vale reinvestigar
+
+Para eu não gastar tempo em coisa provada. Tudo isto rodou verde em 06/08/2026:
+
+```
+npm test         acoplamento (8) + cartas (51) + truco (320) + regras + mesa + jogo
+npm run lembrar  a partida dos DOIS jogos volta depois de recarregar
+npm run app      o jogo abre com a REDE DESLIGADA, com o PeerJS junto
+npm run textura  a peça não fica preta ao voltar de outro aplicativo
+npm run online   duas abas, mesa real, take-over, nome hostil, sair e voltar
+npm run telas    seis telas × dez cenas — folga mínima 0.33, idêntica à da v4.4
+11 mutações      cada uma matando exatamente a asserção dela
+```
+
+**O que essas suítes NÃO conseguem ver, por construção:** o truco em qualquer tamanho de tela,
+o truco online, o truco em duplas, e qualquer coisa que só o olho note — cor, legibilidade,
+tempo de animação, "isso parece defeito". É exatamente a fatia que uma tarde de jogo cobre.
+
+---
 
 #### Como retomar em cinco minutos
 
