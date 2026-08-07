@@ -8,8 +8,8 @@ gente e bot, na mesma tela ou pela internet. No ar em
 Sem framework, sem bundler, e **dois binários** — os ícones do aplicativo, exigidos pelo
 manifest: madeira, pintas, cartas e sons continuam gerados em canvas e WebAudio na hora.
 Three.js e PeerJS vêm de CDN, e o **service worker os guarda**, então depois de uma partida o
-jogo abre sem internet. **9.226 linhas** no total (`src/js` + `src/pagina.html` +
-`src/css/estilo.css` + `src/sw.js`), conferido em 06/08/2026 — este número **envelhece**, e
+jogo abre sem internet. **9.643 linhas** no total (`src/js` + `src/pagina.html` +
+`src/css/estilo.css` + `src/sw.js`), conferido em 07/08/2026 — este número **envelhece**, e
 envelheceu: ficou dizendo 2.100 por três releases seguidas.
 
 **Conte com `node`, não com o PowerShell.** `Measure-Object -Line` **não conta linha em
@@ -37,6 +37,15 @@ npm run online    testa o online abrindo duas abas e uma mesa real
                   aceita escolher: node tests/test-online.mjs --so=saguao
 npm run fechamento  caça fechamento forçado jogando milhares de mãos (~3 min)
 npm run servir    servidor local (o online não fecha conexão em file://)
+
+node tests/mutar.mjs <arq> <de.txt> <para.txt> -- "<comando>"
+                  A CONFERÊNCIA POR MUTAÇÃO, versionada desde a v4.6.1. Quebra a linha
+                  que a asserção deveria proteger e confere que ela CAI — é a única prova
+                  de uma asserção que nasce verde, e este projeto escreve muitas.
+                  Ele exige que o padrão casou (1 ocorrência), detecta CRLF/LF sozinho, e
+                  CLASSIFICA A SAÍDA: sem `✗` no texto a rodada é INCONCLUSIVA, nunca
+                  "a asserção pegou". Saiu do scratchpad porque as três guardas se
+                  perdiam junto com o script, e cada uma custou uma conferência que mentiu.
 
 A suíte de telas passa de 10 min e já foi interrompida por limite de tempo. Rode em
 DUAS METADES, que é o que o argumento existe para permitir:
@@ -666,6 +675,22 @@ por mutação nas quatro direções, inclusive as duas de falso positivo.
   existia. O `test-telas` espera **oito quadros iguais** exatamente por isso, e foi ele que
   respondeu de primeira. **Antes de escrever sonda nova, pergunte se a suíte já sabe perguntar
   aquilo** — e se a sonda discordar dela, a suspeita começa pela sonda.
+- **Fatiar hunk para a FRENTE desloca todos os seguintes, em silêncio.** Separar em dois
+  commits uma onda cujos assuntos se interleavam exige escolher hunks — e as posições `+` de
+  um diff pressupõem que os hunks ANTERIORES foram aplicados. Pular um desloca cada um dos
+  próximos pelo tamanho dele, e o `git apply --unidiff-zero` obedece sem reclamar: a linha vai
+  parar no meio de outra função. Aqui deu `SyntaxError` no build, que é o desfecho BOM — o
+  ruim é compilar. **O que funciona é partir do estado final e DESFAZER (`git apply -R`) os
+  hunks do outro assunto**, porque aí toda posição é absoluta no arquivo que se tem. E a
+  conferência não é a saída do `git apply`, que ficou verde com uma numeração minha errada: é
+  `grep` pelos nomes que **não podem ter sobrado**, mais os que **têm de estar lá**.
+- **Desfazer a mutação alcança a FONTE, não o que o comando GEROU.** Um comando de mutação que
+  inclui `node build.mjs` deixa o `index.html` e o `sw.js` construídos a partir do código
+  mutado, e eles sobrevivem ao `finally` — o `git status` fica sujo com um bundle que contém
+  a mutação. Commitar aquilo é publicar código que ninguém escreveu, que é exatamente o que o
+  `merge=ours` e o `npm run check` existem para impedir. O `tests/mutar.mjs` avisa; o `npm run
+  check` é quem prova. **Vale para qualquer ferramenta que desfaz: pergunte o que mais o
+  comando tocou.**
 
 ---
 
@@ -967,31 +992,51 @@ que as suítes rodaram inteiras com o site no ar três releases atrás.
 
 ---
 
-#### ONDE PAROU — sessão de 07/08/2026 (v4.6, em curso)
+#### ONDE PAROU — fim da sessão de 07/08/2026 (v4.6 fechada)
 
 **LEIA ISTO PRIMEIRO.** É o ponto exato de retomada, e é o ÚNICO — este arquivo já registrou
 que ponteiro de retomada é o item que mais apodrece aqui, e por isso não pode haver dois.
 
 ```
-main               v4.6.0, merge --no-ff com tag
-PUBLICADO          confira o SERVIDO — é a única régua (o curl está logo abaixo)
-worktree           NENHUM
-árvore             limpa
+main         v4.6.1, mesclada e tagueada, árvore limpa, npm run check em dia
+ENVIADO      ✗ NÃO — há commits locais à frente do origin. É AQUI QUE SE COMEÇA
+PUBLICADO    ✗ não, por consequência
+worktree     NENHUM
 ```
+
+> ## ⚠ A PRIMEIRA COISA A FAZER
+>
+> ```
+> git rev-list --left-right --count origin/main...main    # deve dar 0 N, com N > 0
+> git push origin main --tags
+> ```
+>
+> **O trabalho da v4.6 está COMMITADO e NÃO ENVIADO.** Foi decisão explícita do Ricardo parar
+> no commit — ele pediu o commit, não o envio, e enviar publica no site ao vivo. Não é
+> esquecimento; é um degrau à espera de uma decisão que já pode ter sido tomada desde então.
+>
+> **Confira antes de supor qualquer coisa.** *Commitado ≠ enviado ≠ publicado* são TRÊS
+> lugares, e este projeto já perdeu um dia inteiro por confundir dois deles — o Ricardo testou
+> o `github.io` e viu os mesmos defeitos porque nada tinha saído da máquina. Depois do push,
+> a régua de PUBLICADO é o conteúdo SERVIDO, nunca o `git rev-list`:
+>
+> ```
+> curl -s https://ricardocolombo01.github.io/domino-bar/sw.js | grep VERSAO
+> grep VERSAO sw.js          # o local. Em 07/08 ele diz c93b56e82375
+> ```
+>
+> Iguais, está tudo no ar. Diferentes, espere a fila do Pages — ela já ficou travada por horas
+> e **engole o push seguinte**, então empurrar de novo não adianta e não prova nada.
 
 **A v4.6 SAIU PELA RECEITA DA CASA:** branch `v4.6` nascida de `main`, três commits (a suíte,
 a funcionalidade, o registro), merge `--no-ff` com a tag `v4.6.0`, `npm run build && git add
-index.html` dentro do merge, e a branch apagada — a tag é o que fica.
+index.html` dentro do merge, e a branch apagada — a tag é o que fica. A `v4.6.1` é registro,
+e registro **não é exceção à regra de branch**: saiu pelo mesmo caminho.
 
 **A onda nasceu direto na `main` e teve de ser transplantada**, porque começou como uma task
-só e cresceu. Fica a nota de método: os dois assuntos desta onda se interleavam em quatro
-arquivos, e separá-los em commits exigiu fatiar hunk a hunk. **Fatiar para a FRENTE não
-funciona** — as posições `+` de um diff pressupõem que os hunks anteriores foram aplicados, e
-pular um desloca todos os seguintes em silêncio (deu `SyntaxError` no build, que é o desfecho
-bom; o ruim seria compilar). O que funciona é **partir do estado final e DESFAZER** os hunks do
-outro assunto: aí toda posição é absoluta no arquivo que se tem. E a conferência não é a saída
-do `git apply` — é `grep` pelos nomes que não podem ter sobrado: uma numeração minha estava
-errada e o `apply` não reclamou.
+só e cresceu. A lição de método virou item na lista de armadilhas (ver *"Fatiar hunk para a
+FRENTE desloca todos os seguintes"*), e o resumo é: separar dois assuntos que se interleavam
+se faz **partindo do estado final e desfazendo**, nunca partindo do zero e aplicando.
 
 **O que a v4.6 leva, em duas frentes:**
 
@@ -1210,6 +1255,10 @@ projeto tem, cobrando de novo. **A Fila 5, a 7 e a 10 saíram de jogar, e esta �
   perdidos amanhã — como os da Fase 1). O que fica é o número: `test-acoplamento` conferido em
   6 mutações (4 de acoplamento real, 2 de falso positivo), a Fase 2 em 5, as cartas em 7 e o
   truco em **19**. Cada uma matando exatamente a sua.
+
+  **ISTO DEIXOU DE SER VERDADE NA v4.6.1:** o mutador virou `tests/mutar.mjs`, versionado. O
+  que se perdia todo dia não era o código — eram as GUARDAS, e cada uma delas custou uma
+  conferência inteira que mentiu. Escrever o mutador de novo amanhã é escrevê-lo sem elas.
 
   **E duas delas ensinaram mais que o conserto:** uma mutação matou o PROCESSO em vez de
   reprovar (a suíte sub-relatou 0 asserções onde havia 10), e outra revelou que o motor
