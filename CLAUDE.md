@@ -921,10 +921,23 @@ que as suítes rodaram inteiras com o site no ar três releases atrás.
 que ponteiro de retomada é o item que mais apodrece aqui, e por isso não pode haver dois.
 
 ```
-main               v4.5.0, empurrada, árvore limpa
+main               v4.5.0, empurrada, árvore limpa, `0 0` contra o origin
 PUBLICADO          ⚠ v4.2.1 — o Pages parou às 22:04 e precisa de UM CLIQUE
-worktree           ../domino-bar-jogos  (a branch v4.5 já foi mergeada e apagada)
+                   servido  sw.js VERSAO d0b4c9bb11d2   ← v4.2.1
+                   local    sw.js VERSAO 23dc31b4d8f9   ← v4.5.0
+worktree           NENHUM — a v4.5 foi mergeada, a branch apagada e o worktree removido
 ```
+
+**NÃO HÁ WORKTREE ABERTO**, e é de propósito: a onda acabou, e a receita para abrir o próximo
+está em "A reorganização → `git worktree`". Lembre do que ela custa: **`cd tests && npm install`
+por worktree** — `tests/node_modules` não é versionado nem compartilhado, e sem ele o
+`npm test` morre na PRIMEIRA suíte, no `acorn` do `test-acoplamento`.
+
+**Uma armadilha nova, do fechamento desta onda:** `git worktree remove` no Windows apagou os
+arquivos e **falhou ao apagar a pasta** ("Permission denied"), deixando um diretório vazio que
+não é worktree nem repositório. `git worktree prune` limpa o registro, e a pasta some com um
+`rmdir`. Conferir com `git worktree list` depois — meio-removido não aparece na lista e
+continua no disco.
 
 **A FASE 4 FECHOU: o truco senta na mesa.** São dois jogos jogáveis, e o que sobra da v4 é a
 Fase 5, que não toca em `src/` e trava numa decisão de conta.
@@ -939,20 +952,23 @@ Fase 5, que não toca em `src/` e trava numa decisão de conta.
 3. **A cena de truco no `test-telas`** — a lacuna que esta release deixa de propósito, com o
    motivo escrito. Ver "A LACUNA QUE ESTA RELEASE DEIXA".
 
-**O ARRANJO DE WORKTREE em uso, e por que ele é este:**
+**O ARRANJO DE WORKTREE que a v4 usou, e o que ele ensinou:**
 
 ```
 ../domino-bar          main    o que está no ar — para conferir e publicar
-../domino-bar-jogos    v4.x    o trabalho da onda
+../domino-bar-jogos    v4.x    o trabalho da onda   (removido no fim da v4.5)
 ```
 
-Duas frentes bastaram porque as fases da v4 **se cruzam**, e a v4.5 provou isso no pior
-grau: escrever o truco obrigou a mexer em `pagina.html`, `estilo.css`, `130-hud`, `140-menu`,
-`141-abas`, `160-loop` e `010-constantes` — sete arquivos da CASA. Worktree serve a frentes
-que NÃO se cruzam; usá-lo para frentes que se cruzam é fabricar trabalho de merge.
+**Duas frentes bastaram, e não foi acaso: as fases da v4 SE CRUZAM.** A v4.5 provou isso no
+pior grau — escrever o truco obrigou a mexer em `pagina.html`, `estilo.css`, `130-hud`,
+`140-menu`, `141-abas`, `160-loop`, `010-constantes` e `070-cena`: **oito arquivos da CASA**.
+Worktree serve a frentes que NÃO se cruzam; usá-lo para frentes que se cruzam é fabricar
+trabalho de merge, e uma segunda frente ali teria conflitado em todos os oito.
 
 **A Fase 5 (o APK) é a primeira que merece um `../domino-bar-app` próprio**, e por um motivo
-concreto: ela não toca em `src/` uma linha. É `.well-known/`, Bubblewrap e conta de loja.
+concreto: ela não toca em `src/` uma linha. É `.well-known/`, Bubblewrap e conta de loja —
+e por isso ela pode correr em paralelo com a task da cena de truco no `test-telas`, que só
+mexe em `tests/`.
 
 **A armadilha que mordeu nesta sessão:** `git checkout -b` roda no diretório em que você
 está. Um `Set-Location` que falhou fez o comando seguinte criar a branch no worktree da
@@ -1069,6 +1085,28 @@ o projeto             9.226 linhas em src/
   reprovar (a suíte sub-relatou 0 asserções onde havia 10), e outra revelou que o motor
   estourava com cadeira fora da faixa. **Mutação não confere só a asserção — ela exercita o
   código por caminhos que o caminho feliz nunca toca.**
+
+**O que a v4.5 acrescentou de ferramenta:**
+
+- **UMA PARTIDA DE TRUCO DO COMEÇO AO FIM, pela casa** (`test-truco.mjs`). Ela dirige
+  `aplicarIntencao` → `JOGO.motor.aplicar` → `publicar`, com teto de lances, e a cada volta
+  exige que **a mesa ANDOU** — comparando um retrato de `mão/fase/vez/cartas na mesa/aposta/
+  pedido/placar`. É a única asserção do projeto que prova que a mesa não empaca, e foi ela que
+  achou os DOIS defeitos de regra desta release. Nenhum deles aparece em caso escrito à mão,
+  porque nenhum caso escrito à mão atravessa um `novaMao`.
+  **A aposta teve de entrar no retrato**, e isso foi a primeira reprovação da suíte a acusar o
+  TESTE e não o jogo: pedir truco e o outro aceitar devolve a mesa exatamente ao mesmo ponto.
+- **Quando ela reprova, ela diz O QUÊ.** A mensagem carrega a ação, as `acoesDoTruco` daquela
+  cadeira e o último `aviso` do HUD — porque um laço que só diz "não andou" transforma um
+  defeito num palpite caro, que é a lição do `catch` que guarda só a `message`.
+- **Uma cena de truco no `test-lembrar`**: a partida guardada volta com a vira, as vazas e a
+  mão, e a mesa 3D é remontada. Ela mora no Chrome e não no Node porque **o harness não tem
+  `localStorage`** — lá `partidaGuardada()` devolveria `null` dizendo "a casa recusou" quando
+  nada foi gravado. **Lógica no Node, sessão no Chrome.**
+- **As 11 mutações desta release** viveram num script de uma vez só (perdido), mas o que ele
+  ensinou fica: ele detecta a QUEBRA DE LINHA do próprio arquivo antes de procurar, porque
+  este repositório tem arquivos em CRLF **e** em LF — um padrão cravado num dos dois não casa,
+  não estoura, e deixa "tudo certo" indistinguível de "não mexi em nada".
 
 #### A FASE 4 FECHOU (v4.5.0) — e o caro foi a CASA, não o truco
 
@@ -1441,6 +1479,27 @@ Registrado para não ser redescoberto do zero — e com o motivo de não ser pri
 
 #### Perguntas em aberto para o Ricardo
 
+**EM 06/08/2026 (v4.5.0) SÃO TRÊS, e nenhuma é de programador:**
+
+1. **O CLIQUE NO PAGES.** `Actions → a rodada das 22:04 → Re-run all jobs`, ou
+   `Settings → Pages` reconfirmando *Deploy from a branch → main → / (root)*. Quatro pushes
+   seguidos não geraram rodada, o que já não é oscilação. **É a única coisa entre o truco e
+   quem joga**, e `gh` não está instalado nesta máquina.
+2. **O REPOSITÓRIO `ricardocolombo01.github.io`** (user page), com um `.nojekyll` VAZIO na raiz
+   e o `.well-known/assetlinks.json`. Sem ele o TWA abre com barra de URL e não passa por
+   aplicativo. É o que trava a Fase 5 inteira.
+3. **O QUE VEM DEPOIS DO TRUCO.** O plano diz pife e depois 21, e o 21 vem com um aviso
+   escrito: **ele tem BANCA, e banca não é uma cadeira como as outras** — ela joga por regra
+   fixa e não por escolha, o que fura o invariante 2. É o único dos três que mexe no modelo de
+   cadeira, e por isso não deve ser o próximo apesar de parecer o mais simples. **Mas isso é
+   escopo, e escopo é dele.**
+
+**Decisões que ele já tomou nesta onda, e que não se pergunta de novo:** o melou (a mão morre),
+a URL que vale como escolha de aba, o Truco Paulista sem envido e sem flor, APK + Amazon e
+**sem** Play Store.
+
+<details><summary>o histórico das perguntas fechadas</summary>
+
 - **Nenhuma em aberto.** O corpo de `nomeUnico()` chegou a ser dele — foi escolha dele quando
   perguntado em 03/08 —, e no fim do mesmo dia ele devolveu: *"amanhã você termina o resto
   que falta"*. Voltou a ser meu e **saiu na v2.0.0**.
@@ -1463,17 +1522,31 @@ Registrado para não ser redescoberto do zero — e com o motivo de não ser pri
   incomodou, que deu a Fila 6). Três das quatro últimas vieram de jogar — é a fonte mais
   barata que este projeto tem, e a Fila 10 saiu de UMA foto e três frases.
 
+</details>
+
+**E A FONTE MAIS BARATA CONTINUA SENDO JOGAR.** A Fila 5, a 7 e a 10 saíram disso, e agora há
+**um jogo novo que ninguém jogou de verdade ainda** — só bots contra bots, dentro de suítes.
+Meia hora de truco no celular vale mais que uma varredura, e o histórico deste arquivo diz
+isso em três filas diferentes.
+
 #### Como retomar em cinco minutos
 
 ```
 git fetch origin && git rev-list --left-right --count origin/main...main   # tem de dar 0 0
+git worktree list      # deve haver SÓ a main; a próxima onda abre a sua
 git branch -a          # a próxima onda nasce numa branch com o nome da versão
 npm run check          # o bundle está em dia com src/?
 npm test               # o acoplamento + as três suítes de lógica, segundos
 
 # E A QUARTA RÉGUA, que a v4.1 aprendeu do jeito caro: o que está NO AR.
 curl -s https://ricardocolombo01.github.io/domino-bar/sw.js | grep VERSAO
+grep VERSAO sw.js      # o local, para comparar — em 06/08 eles DISCORDAM
 ```
+
+**E ABRA O JOGO NAS DUAS ABAS.** Cinco suítes verdes não substituem trinta segundos olhando:
+`npm run servir` e clicar em Dominó e em Truco. A v4.5 é a primeira release em que existe uma
+segunda aba com mesa de verdade, e as fotos que a suíte tira são todas do dominó (ver "A
+LACUNA QUE ESTA RELEASE DEIXA").
 
 **Hoje `npm test` tem de passar inteiro** — a fila está vazia e não há vermelha esperada.
 Qualquer reprovação é regressão.
