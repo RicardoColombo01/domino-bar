@@ -109,6 +109,10 @@ JOGOS.truco = {
     medidores: medidoresDoTruco,
     barra: barraDoTruco,
     fimDeMao: fimDeMaoDoTruco,
+    // O SEXTO ENCAIXE, e o primeiro OPCIONAL da série: a casa escreve "Vez de Fulano" e o
+    // jogo acrescenta o que mais importa naquele instante. O dominó não o declara, e a casa
+    // trata a ausência como "nada a dizer" em vez de exigir um `() => ''` de todo mundo.
+    notaDaVez: notaDaVezNoTruco,
   },
 
   // ─── o que as SUÍTES precisam alcançar ─────────────────────────────────────

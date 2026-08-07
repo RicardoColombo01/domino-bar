@@ -4226,7 +4226,18 @@ function desenharHUD(vista) {
   // Atribuir `textContent` troca o nó de texto mesmo que a frase seja idêntica, e o leitor
   // de tela anuncia a troca, não a diferença: sem esta guarda ele repetiria "Vez de Tião"
   // a cada compra do bot, e a região viva viraria a razão de desligar o leitor.
-  const frase = minhaVez ? 'Sua vez' : `Vez de ${vista.cadeiras[vista.vez].nome}`;
+  // A NOTA É DO JOGO, e é opcional. A casa sabe DE QUEM é a vez — isso é da mesa —, mas não
+  // sabe o que mais vale a pena dizer nesse instante: no truco é quem está ganhando a vaza
+  // em curso (sem isso não há parâmetro para decidir se gasta carta forte), e no dominó não
+  // há nada a acrescentar, então ele simplesmente não declara a chave.
+  //
+  // Ela vem PARA CÁ e não para um painel próprio por duas razões somadas: o `#vez` já é
+  // prosa e não custa layout nenhum — e o `#topo` do retrato já transbordou uma vez por um
+  // painel a mais —, e ele é `aria-live`, então a frase é ANUNCIADA quando muda. Um painel
+  // novo seria visto por quem olha e invisível para quem ouve.
+  const nota = JOGO.hud.notaDaVez ? JOGO.hud.notaDaVez(vista) : '';
+  const frase = (minhaVez ? 'Sua vez' : `Vez de ${vista.cadeiras[vista.vez].nome}`)
+    + (nota ? ` · ${nota}` : '');
   if (HUD.vez.textContent !== frase) HUD.vez.textContent = frase;
   HUD.vez.classList.toggle('minha', minhaVez);
 
@@ -7440,6 +7451,17 @@ function vencedorDaVaza(jogadas, manilha, time) {
   return empatado ? null : melhor.cadeira;
 }
 
+// O TIME DE UMA CADEIRA, PARTINDO DA VISTA. Irmão de `timeNoTruco` (520-partida.js), que
+// parte de `P` — e são dois porque quem tem `P` é só o anfitrião: a tela do convidado só
+// recebe a visão, e ela precisa da mesma conta para saber de que lado uma vaza caiu.
+//
+// Declarado UMA vez porque a fórmula já estava escrita à mão em três lugares (`530-bot.js`
+// duas vezes, e agora os medidores) — é a doença do `28 - 7 * MESA.n` que o menu pagou: a
+// aritmética copiada fica certa até o dia em que uma cópia não acompanha. As duas do bot
+// continuam como estavam de propósito: substituí-las é trivial e não muda nada, mas o bot
+// tem asserção de FORÇA medida, e mexer nele sem motivo é gastar risco à toa.
+const timeDaVistaNoTruco = (vista, cadeira) => (vista.duplas ? cadeira % 2 : cadeira);
+
 // ─── quem ganha a MÃO, e o melou ─────────────────────────────────────────────
 // `vencedores` é o time que ganhou cada vaza, na ordem: um número, `null` para empate, ou
 // `undefined` para vaza que ainda não aconteceu.
@@ -7668,24 +7690,38 @@ function fecharVaza(P) {
   P.vazas.push({ jogadas: P.mesa, vencedor, time });
   P.mesa = [];
 
+  // O QUE ACABOU DE ACONTECER, para quem for narrar. Até 07/08 a vaza fechava CALADA: as
+  // quatro cartas deslizavam para a pilha do vencedor e cabia ao jogador descobrir de que
+  // lado elas foram parar. Relato do Ricardo, jogando: "até descobrir qual lado de quem
+  // ganhou não fica prático".
+  //
+  // O motor DIZ, e quem escreve a frase é o `575-encaixes.js` — mesma divisão que o resto
+  // deste arquivo já faz: aqui a regra, lá a narração. `vencedor: null` é vaza melada.
+  //
+  // ELA VAI EM **TODOS** OS CAMINHOS DE SAÍDA, e não só no de mão aberta. A vaza que DECIDE
+  // a mão sai por `fecharMaoDoTruco`, e é justamente a que mais importa anunciar — prendê-la
+  // ao ramo feliz deixaria calada a única vaza que o jogador precisa entender.
+  const vaza = { numero: P.vazas.length, vencedor, time };
+
   const dono = donoDaMao(P.vazas.map(v => v.time));
   if (!dono.aberto) {
-    return dono.morreu
+    const r = dono.morreu
       ? fecharMaoDoTruco(P, { motivo: 'melou', time: null, pontos: 0 })
       : fecharMaoDoTruco(P, { motivo: 'vazas', time: dono.time, pontos: P.aposta });
+    return Object.assign({ vaza }, r);
   }
   // A MÃO ACABOU SEM DECIDIR? Só acontece se as três vazas melarem, e `donoDaMao` já trata.
   // Este guarda existe para o dia em que alguém mexer na tabela e esquecer um ramo — sem
   // ele, o motor pediria uma quarta carta que não existe e a mesa pararia calada.
   if (P.vazas.length >= VAZAS_POR_MAO) {
-    return fecharMaoDoTruco(P, { motivo: 'melou', time: null, pontos: 0 });
+    return Object.assign({ vaza }, fecharMaoDoTruco(P, { motivo: 'melou', time: null, pontos: 0 }));
   }
 
   // QUEM MELOU NÃO PERDE A SAÍDA: se a vaza empatou, sai o mesmo de antes. É o que impede a
   // saída de andar sozinha pela mesa numa mão de três empates.
   P.saiu = vencedor === null ? P.saiu : vencedor;
   P.vez = P.saiu;
-  return { ok: true };
+  return { ok: true, vaza };
 }
 
 // ─── a aposta ────────────────────────────────────────────────────────────────
@@ -7770,6 +7806,23 @@ function visaoDoTruco(P, cadeira) {
     naMao: P.maos.map(m => m.length),                  // dos outros, só quantas
     mesa: P.mesa,                                      // as cartas já jogadas nesta vaza
     vazas: P.vazas.map(v => ({ time: v.time, vencedor: v.vencedor, jogadas: v.jogadas })),
+    // QUEM ESTÁ GANHANDO A VAZA EM CURSO — pedido do Ricardo em 07/08, jogando: sem isto o
+    // jogador não tem parâmetro para decidir se gasta uma carta forte ou descarta.
+    //
+    // Mora na VISÃO e não na tela por três razões, e a terceira é a que decide: é uma
+    // pergunta de REGRA (quem bate quem depende da manilha e do naipe entre manilhas), a
+    // tela do convidado não tem `P` para respondê-la, e `medidoresDoTruco` recebe a vista e
+    // mais nada. Calculá-la em três lugares é como duas metades passam a discordar.
+    //
+    // NÃO FURA O INVARIANTE 3: sai de `P.mesa` e `P.manilha`, que já viajam inteiros no fio
+    // porque as cartas na mesa e a vira são públicas por definição do jogo. Nenhuma carta de
+    // mão alheia entra na conta.
+    //
+    // `undefined` (que o JSON descarta, e some no convidado do mesmo jeito) = não há vaza em
+    // curso; `null` = as mais fortes empataram entre times, ou seja a vaza está melando.
+    // Quem lê tem `vista.mesa.length` ao lado para separar os dois casos.
+    ganhandoAVaza: P.mesa.length
+      ? vencedorDaVaza(P.mesa, P.manilha, c => timeNoTruco(P, c)) : undefined,
     vira: P.vira,
     manilha: P.manilha,
     aposta: P.aposta,
@@ -8453,8 +8506,20 @@ function sincronizarMesaDoTruco(vista) {
   }
 
   // As cartas da vaza em curso, cada uma na direção de quem a jogou.
+  //
+  // A QUE ESTÁ GANHANDO leva marca e sobe um pouco. Quem responde é a VISÃO
+  // (`ganhandoAVaza`, em 520-partida.js) e não uma conta aqui: é pergunta de regra, e a tela
+  // do convidado não tem `P` para respondê-la. A marca acompanha a reconciliação como todo o
+  // resto — cada carta que cai pode roubar a liderança, e aí ela muda de dona sozinha.
+  const mandaAgora = (vista.mesa || []).length && vista.ganhandoAVaza !== null
+    && vista.ganhandoAVaza !== undefined
+    ? (vista.mesa.find(j => j.cadeira === vista.ganhandoAVaza) || {}).carta : null;
   for (const p of layoutDaVaza(vista.mesa || [], eu, n)) {
-    alvos.set(chaveCarta(p.carta), { carta: p.carta, x: p.x, z: p.z, rotY: p.rotY, baixo: false, y: 0 });
+    const ganhando = !!mandaAgora && mesmaCarta(p.carta, mandaAgora);
+    alvos.set(chaveCarta(p.carta), {
+      carta: p.carta, x: p.x, z: p.z, rotY: p.rotY, baixo: false,
+      y: ganhando ? ALTURA_GANHANDO : 0, ganhando,
+    });
   }
 
   // As vazas já ganhas, empilhadas de lado e viradas para baixo. Sem elas visíveis o jogador
@@ -8485,6 +8550,22 @@ function sincronizarMesaDoTruco(vista) {
       tocarBaque(0.5);
     }
     reg.alvo = alvo;
+
+    // A MARCA É PENDURADA E TIRADA AQUI, e não na animação: quem ganha a vaza só muda quando
+    // a vista muda, e a animação roda sessenta vezes por segundo. Criar e destruir um Mesh a
+    // cada quadro seria churn puro — a mesma razão que fez o `assinaturaMao` do dominó
+    // existir. É irmã do `marcarUltima` do tabuleiro, com uma diferença: lá a marca é do
+    // PASSADO (a última peça caiu ali) e some sozinha; aqui ela é do PRESENTE e tem de
+    // acompanhar a liderança, então a reconciliação manda nela como manda na posição.
+    if (alvo.ganhando && !reg.marca) {
+      reg.marca = new THREE.Mesh(geomGanhandoNoTruco, matGanhandoNoTruco);
+      reg.marca.rotation.x = -Math.PI / 2;
+      reg.marca.position.y = -CARTA_E / 2 - 0.004;      // colada no tampo, por baixo da carta
+      reg.obj.add(reg.marca);
+    } else if (!alvo.ganhando && reg.marca) {
+      reg.obj.remove(reg.marca);
+      reg.marca = null;
+    }
   }
 
   for (const [k, reg] of naMesaDoTruco) {
@@ -8521,6 +8602,41 @@ const matBrilhoDoTruco = new THREE.MeshBasicMaterial({
   color: 0xffc451, transparent: true, opacity: 0.5,
 });
 const geomBrilhoDoTruco = new THREE.CircleGeometry(CARTA_C * 0.62, 28);
+
+// ─── a marca de QUEM ESTÁ GANHANDO A VAZA ────────────────────────────────────
+// Pedido do Ricardo em 07/08/2026, jogando: sem saber quem está por cima não há parâmetro
+// para decidir se vale gastar uma carta forte. A frase equivalente está na linha da vez
+// (`notaDaVezNoTruco`, em 575-encaixes.js); esta é a resposta para quem está OLHANDO a mesa,
+// que é onde os olhos estão na hora de escolher.
+//
+// UM ANEL e não um disco, porque um disco por baixo de uma carta não aparece — a carta o
+// cobre inteiro. O anel sobra pelas bordas.
+//
+// E A CARTA SOBE JUNTO (`ALTURA_GANHANDO`), o que não é redundância: cor sozinha não é
+// informação acessível, e o realce tem de sobreviver a quem não distingue verde de âmbar e
+// a uma foto em preto e branco. É a mesma disciplina do `--fraco` da Fila 8, num meio
+// diferente — a altura é a redundância não-cromática.
+//
+// NÃO PULSA, de propósito. O brilho da prévia acima oscila para sempre enquanto está na
+// tela, e um segundo oscilador permanente na mesma cena é exatamente o que o
+// `prefers-reduced-motion` da Fila 9 saiu tirando (a lâmpada era "o único movimento que não
+// acaba nunca"). Esta marca fica parada: ela informa, não chama.
+const matGanhandoNoTruco = new THREE.MeshBasicMaterial({
+  color: 0x7fd18a, transparent: true, opacity: 0.62,
+});
+// O RAIO INTERNO SAI DA MEIA-DIAGONAL DA CARTA, e não de um número escolhido a olho:
+// `hypot(CARTA_L, CARTA_C) / 2` é 0.538, o ponto mais distante do centro que a carta ocupa.
+// Um anel mais estreito que isso fica escondido nos CANTOS e aparece só nas laterais — meia
+// marca, que a olho lê como defeito de desenho. Começando na diagonal ele aparece inteiro.
+//
+// E o externo cabe: as cartas da vaza ficam a `RAIO_DA_VAZA` (0.686) do centro, então numa
+// mesa de 4 os vizinhos estão a 0.97 um do outro. O anel vai a 0.65 do centro DA CARTA, e
+// como ele não entra na caixa medida (`criarCarta` expõe `userData.corpo`, e é só o corpo
+// que o `test-telas` mede) ele também não infla a mesa — é a mesma isenção que a marca da
+// última jogada do dominó tem, e ali ela custou 0.22 de caixa até alguém notar.
+const RAIO_GANHANDO = Math.hypot(CARTA_L, CARTA_C) / 2;
+const geomGanhandoNoTruco = new THREE.RingGeometry(RAIO_GANHANDO, RAIO_GANHANDO * 1.21, 30);
+const ALTURA_GANHANDO = 0.085;
 
 function mostrarPreviaDoTruco(vista) {
   esconderPreviaDoTruco();
@@ -8803,12 +8919,41 @@ function porQueNaoDaNoTruco(vista) {
 // A VIRA E A MANILHA são as duas, juntas, porque sozinhas nenhuma serve: a vira está na mesa
 // e dá para ver, mas quem NÃO joga truco todo dia não sabe derivar a manilha dela de cabeça —
 // e quem não sabe qual é a manilha não sabe o que tem na mão.
+// CONTINUAM SENDO TRÊS, e a VIRA foi a que saiu — em 07/08, para o placar de vazas entrar.
+//
+// O quarto painel foi tentado e MEDIDO: em retrato os seis tamanhos passavam, e em paisagem
+// 640×360 ele empurrou o `#topo` por cima da mão de um adversário. Conferido por mutação —
+// tirando só o painel novo, a cena volta a passar. Não é opinião sobre "ficou cheio": é a
+// única tela em que o `#topo` divide a faixa com as duas colunas.
+//
+// A VIRA É A CERTA A SAIR, e o comentário original já dizia por quê sem perceber: "a vira
+// está na mesa e dá para ver, mas quem não joga truco todo dia não sabe derivar a manilha
+// dela de cabeça". O painel existia pela MANILHA; a vira está desenhada no meio da mesa, em
+// tamanho de carta, e é a única dos quatro que o jogador lê sem painel nenhum.
+//
+// O que entra no lugar não é enfeite: a conta das vazas só existia empilhada de lado, e ler a
+// pilha é fazer a conta ao contrário — você vê onde as cartas pararam e daí deduz de quem
+// foram. Pedido do Ricardo, jogando: "até descobrir qual lado de quem ganhou não fica
+// prático".
 const medidoresDoTruco = vista => [
-  { rot: 'Vira', val: vista.vira ? nomeCurtoDaCarta(vista.vira) : '—' },
   { rot: 'Manilha', val: vista.manilha === null || vista.manilha === undefined
     ? '—' : VALORES[vista.manilha] },
   { rot: 'Vale', val: vista.pedido ? `${vista.aposta} → ${vista.pedido.valor}` : vista.aposta },
+  { rot: 'Vazas', val: placarDeVazas(vista) },
 ];
+
+// "1×0" do SEU ponto de vista, como o placar da partida. Vaza melada não conta para ninguém,
+// e é por isso que ela não aparece: somar melou de um lado seria mentir sobre quem está por
+// cima, e mostrá-la num terceiro número gastaria o painel inteiro para dizer "nada".
+function placarDeVazas(vista) {
+  const meu = timeDaVistaNoTruco(vista, vista.cadeira);
+  let nos = 0, eles = 0;
+  for (const v of vista.vazas || []) {
+    if (v.time === null || v.time === undefined) continue;
+    if (v.time === meu) nos++; else eles++;
+  }
+  return `${nos}×${eles}`;
+}
 
 // "3 paus" e não "3 de paus": o painel tem 74px e a fonte é de 17px. O nome inteiro está no
 // `nomeDaCarta`, que é o que a narração usa — ali há espaço e ali a frase é lida em voz alta.
@@ -8934,6 +9079,51 @@ const aberturaDoTruco = P =>
 // acidental. A guarda de FORMA da carta mora dentro de `jogarCarta` (`cartaValida`), pelo
 // mesmo motivo que o dominó registra — o motor também é chamado pelo bot e pela ponte das
 // suítes, que entram por baixo da rede.
+// ─── quem está ganhando a vaza EM CURSO ──────────────────────────────────────
+// A outra metade do pedido do Ricardo: "deixar quem está ganhando a rodada, para que tenha
+// um parâmetro do que jogar". A marca 3D na carta (550-mesa.js) responde para quem OLHA;
+// esta frase responde para quem lê, e é ela que o leitor de tela anuncia — o `#vez` é
+// `aria-live`, e é justamente por isso que a nota mora lá e não num painel novo.
+//
+// SILÊNCIO COM A MESA VAZIA, e de propósito: entre uma vaza e outra não há o que ganhar, e
+// uma nota que não muda vira ruído — a mesma razão que faz o `#vez` só escrever quando a
+// frase muda. `vista.mesa.length` é o que separa "não há vaza" de "a vaza está melando",
+// porque `ganhandoAVaza` devolve nada no primeiro caso e `null` no segundo.
+function notaDaVezNoTruco(vista) {
+  if (!vista.mesa || !vista.mesa.length) return '';
+  const g = vista.ganhandoAVaza;
+  if (g === null || g === undefined) return 'a vaza está empatada';
+  if (g === vista.cadeira) return 'você está ganhando a vaza';
+  // EM DUPLAS, "o seu time" é a informação que decide, e não o nome de quem jogou: com o
+  // parceiro por cima você descarta, e é o mesmo raciocínio de estar por cima sozinho.
+  if (vista.duplas && timeDaVistaNoTruco(vista, g) === timeDaVistaNoTruco(vista, vista.cadeira)) {
+    return `${vista.cadeiras[g].nome} (seu time) está ganhando`;
+  }
+  return `${vista.cadeiras[g].nome} está ganhando a vaza`;
+}
+
+// ─── quem ganhou a vaza ──────────────────────────────────────────────────────
+// PEDIDO DO RICARDO, jogando (07/08/2026): "falar quem ganhou a rodada, não somente deixar
+// as cartas no canto, pois até descobrir qual lado de quem ganhou não fica prático".
+//
+// Ele está certo, e a razão é geométrica: a pilha vai para o lado de QUEM VENCEU, então ler
+// a pilha é fazer a conta ao contrário — você vê onde as cartas pararam e daí deduz o
+// vencedor. Uma frase resolve na hora, e ela entra no MESMO fio da conversa que já narra as
+// jogadas, então também é lida por leitor de tela e sobrevive na rolagem.
+//
+// A ORDINAL É ESCRITA À MÃO, e são só três: `VAZAS_POR_MAO` é 3 por definição do truco
+// paulista, e uma tabela de três entradas é mais legível que uma regra de formação que
+// ninguém vai reusar. O `|| ` guarda o dia em que alguém mexer na constante.
+const ORDINAL_DA_VAZA = ['1ª', '2ª', '3ª'];
+function narrarVaza(P, vaza) {
+  if (!vaza) return [];
+  const qual = ORDINAL_DA_VAZA[vaza.numero - 1] || `${vaza.numero}ª`;
+  // MELOU: dizer "empatou" e não silenciar. A vaza melada é a que MAIS confunde — a mesa
+  // esvazia, ninguém marca, e sem a frase parece que o jogo comeu a rodada.
+  if (vaza.vencedor === null) return [`a ${qual} vaza empatou — ninguém leva`];
+  return [`${P.cadeiras[vaza.vencedor].nome} ganhou a ${qual} vaza`];
+}
+
 function aplicarNoTruco(P, cadeira, i) {
   if (P.fase !== 'mao' && P.fase !== 'onze') return { erro: 'a mão não está em jogo' };
   const nome = P.cadeiras[cadeira].nome;
@@ -8941,7 +9131,11 @@ function aplicarNoTruco(P, cadeira, i) {
   if (i.acao === 'jogar') {
     const r = jogarCarta(P, cadeira, i.carta);
     if (r.erro) return r;
-    return { ok: true, narracao: [`${nome} jogou ${nomeDaCarta(i.carta)}`].concat(fimDoTruco(P, r)) };
+    return {
+      ok: true,
+      narracao: [`${nome} jogou ${nomeDaCarta(i.carta)}`]
+        .concat(narrarVaza(P, r.vaza)).concat(fimDoTruco(P, r)),
+    };
   }
 
   // `trucar` E `aumentar` SÃO A MESMA CHAMADA, e os dois nomes existem porque as duas bocas
@@ -9166,6 +9360,10 @@ JOGOS.truco = {
     medidores: medidoresDoTruco,
     barra: barraDoTruco,
     fimDeMao: fimDeMaoDoTruco,
+    // O SEXTO ENCAIXE, e o primeiro OPCIONAL da série: a casa escreve "Vez de Fulano" e o
+    // jogo acrescenta o que mais importa naquele instante. O dominó não o declara, e a casa
+    // trata a ausência como "nada a dizer" em vez de exigir um `() => ''` de todo mundo.
+    notaDaVez: notaDaVezNoTruco,
   },
 
   // ─── o que as SUÍTES precisam alcançar ─────────────────────────────────────

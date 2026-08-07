@@ -29,6 +29,8 @@ const mod = await import(buildModule([
   'naMaoDoTruco', 'naMesaDoTruco', 'grupoMaoDoTruco', 'selecionarCarta', 'confirmarNoTruco',
   'cancelarEscolhaNoTruco', 'escolhidaNoTruco', 'barraDoTruco', 'medidoresDoTruco',
   'fimDeMaoDoTruco', 'semAMaoNoTruco', 'aplicarNoTruco', 'arrumarMaoDoTruco',
+  // Quem está ganhando a vaza e quem ganhou — os dois pedidos do Ricardo de 07/08.
+  'notaDaVezNoTruco', 'narrarVaza', 'placarDeVazas', 'timeDaVistaNoTruco',
   'temPreviaDoTruco', 'dicaDoTrucoParaACasa', 'porQueNaoDaNoTruco', 'HUD',
 ]));
 
@@ -324,6 +326,96 @@ console.log('\nas vazas decidem a mão');
   console.log(`  2 a 0 em duas vazas · placar ${P.placar.join('×')} · a saída andou para ${P.abridor}`);
 }
 
+// ─── quem está ganhando, e quem ganhou ───────────────────────────────────────
+// AS DUAS METADES DO PEDIDO DO RICARDO, de 07/08/2026, jogando: "no truco deixar quem está
+// ganhando a rodada, para que tenha um parâmetro do que jogar" e "falar quem ganhou a
+// rodada, não somente deixar as cartas no canto, pois até descobrir qual lado de quem
+// ganhou não fica prático".
+//
+// As duas são invisíveis para toda asserção que existia: `vencedorDaVaza` já era testada, e
+// o que faltava não era a REGRA — era a regra CHEGAR na tela. É a mesma distinção que fez a
+// Fase 4 custar o dobro do previsto: o motor bastava, quem não bastava era a tela.
+console.log('\nquem está ganhando a vaza, e quem ganhou');
+{
+  // Virou 4 → a manilha é o 5. Ninguém tem manilha aqui, então vale a escada normal.
+  const P = armar(mod.novaPartidaDoTruco(mesa(2)), [
+    [c('3', 'paus'), c('4', 'ouros'), c('5', 'copas')],
+    [c('K', 'ouros'), c('A', 'espadas'), c('6', 'paus')],
+  ], c('4', 'espadas'));
+  P.vez = 0; P.saiu = 0;
+
+  // MESA VAZIA NÃO TEM LÍDER, e o campo some em vez de mentir um `null` — que é o valor
+  // reservado para "empatou". Quem lê separa os dois pelo `vista.mesa.length` ao lado.
+  const v0 = mod.visaoDoTruco(P, 0);
+  ok(v0.ganhandoAVaza === undefined,
+    `com a mesa vazia o líder devia ser undefined, veio ${JSON.stringify(v0.ganhandoAVaza)}`);
+  ok(mod.notaDaVezNoTruco(v0) === '', 'a nota da vez falou de vaza com a mesa vazia — isso é ruído');
+
+  jogaIesima(P, 0);                                   // 0 joga o 3 (a mais forte do baralho)
+  const v1 = mod.visaoDoTruco(P, 0);
+  ok(v1.ganhandoAVaza === 0, `com uma carta na mesa quem joga está ganhando, veio ${v1.ganhandoAVaza}`);
+  ok(mod.notaDaVezNoTruco(v1) === 'você está ganhando a vaza',
+    `a nota saiu "${mod.notaDaVezNoTruco(v1)}"`);
+  // E O ADVERSÁRIO VÊ O MESMO FATO com outras palavras — é a mesma vista, lida de outra
+  // cadeira. Se a frase fosse montada na tela em vez de na visão, o convidado (que não tem
+  // `P`) não teria como montá-la.
+  const v1b = mod.visaoDoTruco(P, 1);
+  ok(v1b.ganhandoAVaza === 0 && mod.notaDaVezNoTruco(v1b) === 'C0 está ganhando a vaza',
+    `da cadeira 1 a nota saiu "${mod.notaDaVezNoTruco(v1b)}"`);
+
+  const r = jogaIesima(P, 0);                         // 1 joga o K → perde, 0 leva a vaza
+  ok(r.vaza && r.vaza.numero === 1 && r.vaza.vencedor === 0,
+    `o motor devia dizer que a 1ª vaza foi da cadeira 0, veio ${JSON.stringify(r.vaza)}`);
+  const nar = mod.aplicarNoTruco;                     // a frase, que é o que o jogador lê
+  ok(typeof nar === 'function', 'aplicarNoTruco sumiu da ponte');
+
+  // FECHADA A VAZA, a mesa esvazia e o líder some de novo — senão a marca 3D ficaria presa
+  // na carta que já foi para a pilha.
+  const v2 = mod.visaoDoTruco(P, 0);
+  ok(v2.ganhandoAVaza === undefined, 'a vaza fechou e ainda havia um líder marcado');
+  // PELO RÓTULO, e não pela posição: a lista de medidores já mudou de tamanho uma vez (o
+  // painel da vira saiu em 07/08 para o placar de vazas caber em paisagem), e um índice
+  // cravado transforma essa troca num `Cannot read properties of undefined` que MATA o
+  // processo e trunca a suíte — foi o que aconteceu aqui, e o arquivo já registrava a lição.
+  const vazasDe = v => (mod.medidoresDoTruco(v).find(m => m.rot === 'Vazas') || {}).val;
+  ok(vazasDe(v2) === '1×0', `depois de ganhar a 1ª o placar de vazas devia ser 1×0, veio ${vazasDe(v2)}`);
+  // E DO OUTRO LADO ele é 0×1 — o placar é do SEU ponto de vista, como o da partida.
+  ok(vazasDe(mod.visaoDoTruco(P, 1)) === '0×1', 'o placar de vazas não virou ao trocar de cadeira');
+}
+{
+  // EMPATE: as duas cartas do mesmo valor, times diferentes. `null` e não `undefined`, e a
+  // nota tem de DIZER que empatou — a vaza melada é a que mais confunde, porque a mesa
+  // esvazia e ninguém marca.
+  const P = armar(mod.novaPartidaDoTruco(mesa(2)), [
+    [c('K', 'paus'), c('4', 'ouros'), c('5', 'copas')],
+    [c('K', 'ouros'), c('A', 'espadas'), c('6', 'paus')],
+  ], c('4', 'espadas'));
+  P.vez = 0; P.saiu = 0;
+  jogaIesima(P, 0);
+  jogaIesima(P, 0);                                   // K contra K, times diferentes
+  ok(P.vazas.length === 1 && P.vazas[0].vencedor === null, 'as duas K deviam ter melado a vaza');
+  // A MELADA NÃO CONTA PARA NINGUÉM no placar de vazas: somá-la de um lado seria mentir
+  // sobre quem está por cima.
+  ok((mod.medidoresDoTruco(mod.visaoDoTruco(P, 0)).find(m => m.rot === 'Vazas') || {}).val === '0×0',
+    'a vaza melada entrou no placar de vazas para alguém');
+}
+{
+  // A VAZA QUE DECIDE A MÃO TAMBÉM É ANUNCIADA, e este é o caso que o desenho ingênuo perde:
+  // ela sai por `fecharMaoDoTruco`, num `return` diferente do caminho comum. Prender o
+  // recado ao ramo de mão aberta deixaria calada justamente a vaza que mais importa.
+  const P = armar(mod.novaPartidaDoTruco(mesa(2)), [
+    [c('3', 'paus'), c('2', 'copas'), c('4', 'ouros')],
+    [c('K', 'ouros'), c('Q', 'espadas'), c('7', 'paus')],
+  ], c('4', 'ouros'));
+  P.vez = 0; P.saiu = 0;
+  jogaIesima(P, 0); jogaIesima(P, 0);                 // 1ª vaza para a cadeira 0
+  jogaIesima(P, 0);
+  const r = jogaIesima(P, 0);                         // 2ª vaza fecha a mão
+  ok(P.fase === 'fimDeMao', `a mão devia ter fechado, a fase é '${P.fase}'`);
+  ok(r.vaza && r.vaza.numero === 2 && r.vaza.vencedor === 0,
+    `a vaza que fechou a mão saiu sem recado: ${JSON.stringify(r.vaza)}`);
+}
+
 console.log('\no melou, na mesa');
 {
   // As três vazas empatam: cartas de valores iguais, times diferentes.
@@ -444,22 +536,59 @@ console.log('\na mão de 11');
 
 console.log('\na fronteira de segurança');
 {
+  // A MÃO É ARMADA, e não sorteada, e é o conserto do falso positivo explicado abaixo.
+  //
+  // As cartas alheias são todas de valor ALTO (`K`, `A`, `2`, `3` → índices 9, 0… não: `A` é
+  // 0), então elas são escolhidas uma a uma para que NENHUMA delas seja um par que a visão
+  // produza por outro motivo. Uma carta é `[valor, naipe]` com valor 0..9 e naipe 0..3; os
+  // pares que a visão gera sem ser carta são o `placar` (`[0,0]` numa partida nova) e o
+  // `naMao` (contagens, `[3,3,3,3]` — e numa mesa de 2 ele é `[3,3]`, que é a Q de paus).
+  // Nenhuma das seis abaixo colide com esses.
   const P = mod.novaPartidaDoTruco(mesa(4));
+  P.maos = [
+    [c('A', 'ouros'), c('4', 'ouros'), c('5', 'ouros')],       // a SUA — pode aparecer
+    [c('K', 'espadas'), c('J', 'espadas'), c('7', 'espadas')],
+    [c('K', 'copas'), c('J', 'copas'), c('7', 'copas')],
+    [c('K', 'paus'), c('J', 'paus'), c('2', 'paus')],
+  ];
   const v = mod.visaoDoTruco(P, 0);
   ok(v.mao === P.maos[0], 'a visão não entregou a sua própria mão');
   // O INVARIANTE 3: a mão alheia NÃO trafega. Só a contagem — e a vira, que é pública por
   // definição do jogo.
   const meu = new Set(P.maos[0].map(mod.chaveCarta));
+  // A BUSCA CONTINUA VARRENDO A VISÃO INTEIRA — só a SUA mão sai, porque ela pode estar lá.
+  //
+  // A tentação, ao ver a reprovação, era branquear `placar` e `naMao` junto. **Isso teria
+  // cegado a asserção**: um vazamento por `naMao` (trocar as contagens pelas mãos é um
+  // caractere de diferença no motor) deixaria de ser visto, e a asserção mais assustadora da
+  // suíte viraria decoração. Quem sai de cena é a COLISÃO, não o campo — por isso as mãos
+  // acima são armadas.
+  //
+  // O FALSO POSITIVO ERA REAL e é o documentado: uma carta é `[valor, naipe]`, e `[0,0]` é
+  // tanto a A de ouros quanto um placar 0×0. O `CLAUDE.md` já registrava isso para o dominó,
+  // e a suíte do truco reproduziu o defeito letra por letra.
+  //
+  // E VALE MAIS A FORMA COMO ELE APARECEU: ficou escondido até uma seção NOVA, sem relação
+  // nenhuma com segurança, consumir sorteio a mais e mudar quem recebeu a A de ouros. É a
+  // família do `performance.now()` que desloca os temporizadores do bot — **teste que depende
+  // da ordem do sorteio guarda defeito latente até alguém mexer num vizinho**, e o sintoma
+  // chega disfarçado do pior erro possível.
   const texto = JSON.stringify(Object.assign({}, v, { mao: [] }));
-  let vazou = 0;
+  const vazou = [];
   for (let cad = 1; cad < 4; cad++) {
     for (const carta of P.maos[cad]) {
       if (meu.has(mod.chaveCarta(carta))) continue;
       // Procura o PAR, e não o texto solto: `[0,2]` também é um placar.
-      if (texto.includes(JSON.stringify(carta))) vazou++;
+      if (texto.includes(JSON.stringify(carta))) vazou.push(`${mod.nomeDaCarta(carta)} (cadeira ${cad})`);
     }
   }
-  ok(vazou === 0, `${vazou} carta(s) da mão alheia apareceram na visão`);
+  // QUANDO ELA REPROVA, ELA DIZ O QUÊ. A versão anterior contava e só: "1 carta(s) da mão
+  // alheia apareceram na visão" — e a busca por texto no JSON dá FALSO POSITIVO conhecido
+  // (o `CLAUDE.md` registra que `[0,0]` também é um placar 0×0). Sem o nome da carta, um
+  // falso positivo e um vazamento de verdade são a mesma linha de log, e a asserção mais
+  // assustadora da suíte vira um palpite caro — exatamente o que o `catch` que guardava só a
+  // `message` custou no `test-online`.
+  ok(vazou.length === 0, `carta(s) da mão alheia na visão: ${vazou.join(', ')}`);
   ok(JSON.stringify(v.naMao) === JSON.stringify([3, 3, 3, 3]), 'a contagem das mãos não bate');
   ok(Array.isArray(v.vira), 'a vira devia estar na visão — ela é pública');
   ok(v.acoes && Array.isArray(v.acoes.cartas), 'a visão não trouxe as ações');
@@ -865,16 +994,57 @@ console.log('\na casa senta na mesa de truco');
 
   // ─── os medidores ─────────────────────────────────────────────────────────
   const meds = mod.medidoresDoTruco(mod.vistaAtual);
-  ok(meds.length === 3, `o truco pediu ${meds.length} medidores, e o #topo tem lugar para três`);
-  ok(meds[0].rot === 'Vira' && String(meds[0].val).length > 1, 'o medidor da vira veio vazio');
-  ok(meds[1].rot === 'Manilha' && mod.VALORES.includes(String(meds[1].val)),
-    `a manilha saiu como "${meds[1].val}", que não é um valor de carta`);
-  ok(meds[2].val === 1, `a mão vale ${meds[2].val} antes de qualquer aposta, e devia valer 1`);
+  // QUANTOS CABEM É PERGUNTA DE TELA, E ESTA SUÍTE NÃO TEM TELA.
+  //
+  // A linha aqui era `meds.length === 3`, com a mensagem "o #topo tem lugar para três" — e
+  // ela gravava a IMPLEMENTAÇÃO, não o requisito. Quando o quarto medidor entrou (o placar de
+  // vazas, pedido do Ricardo em 07/08), esta suíte reprovou por o jogo ter MELHORADO: é
+  // letra por letra o caso do botão de som que exigia `=== '✕'` e caiu no dia em que o glifo
+  // foi consertado.
+  //
+  // O requisito é "o #topo não transborda e nenhum painel monta em cima de outro", e quem
+  // pode responder isso é o `test-telas` — que desde a v4.6 tem três cenas de truco em seis
+  // tamanhos de tela. O quarto medidor foi MEDIDO lá antes de entrar: zero transbordo e zero
+  // sobreposição em 360×640 e 390×844, que são os dois retratos mais apertados.
+  //
+  // O teto continua existindo porque um número sem teto vira uma lista que ninguém revisa —
+  // mas ele agora diz ONDE conferir, em vez de cravar o que existe hoje.
+  ok(meds.length <= 3, `o truco pediu ${meds.length} medidores. O QUARTO foi tentado e medido: ` +
+    `em retrato ele cabe, e em paisagem 640×360 ele empurra o #topo por cima da mão de um ` +
+    `adversário. Quem responde é \`node tests/test-telas.mjs 640x360 duplas\`, não esta suíte`);
+  ok(meds.every(m => m.rot && m.val !== undefined && m.val !== null),
+    'algum medidor veio sem rótulo ou sem valor — o #topo mostraria um painel em branco');
+  // A MANILHA É A QUE NÃO PODE FALTAR: ela não se deduz da mesa, e sem ela o jogador não sabe
+  // o que tem na mão. A VIRA saiu daqui em 07/08 — ela está desenhada no meio da mesa.
+  ok(meds[0].rot === 'Manilha' && mod.VALORES.includes(String(meds[0].val)),
+    `a manilha saiu como "${meds[0].val}", que não é um valor de carta`);
+  ok(meds[1].val === 1, `a mão vale ${meds[1].val} antes de qualquer aposta, e devia valer 1`);
+  // O PLACAR DE VAZAS começa em 0×0 e é do SEU ponto de vista — mesma convenção do placar da
+  // partida. Ele existe porque ler a pilha na mesa é fazer a conta ao contrário.
+  ok(meds[2] && meds[2].rot === 'Vazas' && meds[2].val === '0×0',
+    `o placar de vazas começou em "${meds[2] && meds[2].val}", e antes da primeira vaza é 0×0`);
+  // E A VIRA CONTINUA VISÍVEL, só que na MESA e não no painel — sem isto o conserto acima
+  // teria escondido a única carta pública do baralho e ninguém notaria.
+  ok(mod.naMesaDoTruco.has('vira'), 'a vira saiu do painel E não está desenhada na mesa');
+
+  // O BOTÃO DO PAINEL TEM DE ESTAR ESCONDIDO. O truco não declara `painel` no registro (as
+  // vazas ganhas estão à vista na mesa, e a pergunta "quantas peças de cada número já
+  // apareceram" não existe aqui), então a casa esconde o botão em vez de oferecer uma gaveta
+  // vazia — é a espécie de defeito que o `refletirMesaNosBotoes` existe para impedir: o jogo
+  // certo e a tela prometendo.
+  //
+  // Ela nasceu de uma dúvida de sonda: o `textContent` do `#acoes` numa mesa de truco dizia
+  // "Painel", e `textContent` NÃO sabe de CSS — ele lê filho escondido igual. A dúvida só
+  // fecha perguntando pela CLASSE, e é o que esta linha faz.
+  ok(!mod.JOGO.painel, 'o truco declarou um painel de apoio que ele não tem');
+  ok(mod.HUD.contar.classList.contains('oculta'),
+    'o botão do painel ficou visível numa mesa de truco — ele abriria uma gaveta vazia');
 
   // ─── a mesa em 3D ─────────────────────────────────────────────────────────
   // A VIRA PRECISA ESTAR DESENHADA. Ela é a única carta pública do baralho, e sem ela na mesa
   // o jogador não tem como saber qual é a manilha — o jogo fica ilegível.
   ok(mod.naMesaDoTruco.has('vira'), 'a vira não foi desenhada na mesa');
+
   ok(mod.naMaoDoTruco.length === 3, `a sua mão tem ${mod.naMaoDoTruco.length} cartas em 3D`);
   ok(mod.grupoMaoDoTruco.children.length === 3, 'as cartas da mão não entraram na cena');
 
@@ -892,6 +1062,46 @@ console.log('\na casa senta na mesa de truco');
   mod.confirmarNoTruco();
   ok(mod.P.maos[0].length === antes - 1, 'confirmar não tirou a carta da mão');
   ok(!mod.temPreviaDoTruco(), 'o fantasma ficou na mesa depois de jogar');
+
+  // ─── a marca de QUEM ESTÁ GANHANDO, em 3D ─────────────────────────────────
+  // A outra metade do pedido do Ricardo. A frase da linha da vez já foi conferida lá em cima
+  // (`notaDaVezNoTruco`); esta responde para quem está OLHANDO a mesa, que é onde os olhos
+  // estão na hora de escolher a carta.
+  //
+  // Sem asserção aqui a marca seria a única coisa desta onda que nada prova: o `test-telas`
+  // mede CAIXA, e a marca fica de fora da caixa DE PROPÓSITO (`criarCarta` expõe
+  // `userData.corpo`, e é só o corpo que entra no `Box3`) — justamente para não inflar a
+  // mesa. O que a isenta da medida de espaço a deixaria sem medida nenhuma.
+  //
+  // MORA NO FIM DA SEÇÃO, e não no meio: ela GASTA cartas, e o bloco acima exige mão de 3.
+  // Cena que mexe em estado compartilhado derruba a seguinte, e o sintoma chega longe da
+  // causa — é a lição do `MESA` deixado no Trio, aqui em terceiro meio.
+  const marcadas = () => [...mod.naMesaDoTruco.entries()].filter(([, r]) => r.marca);
+  // Uma carta já está na mesa (o `confirmarNoTruco` acima), então há um líder.
+  const uma = marcadas();
+  ok(uma.length === 1, `${uma.length} cartas marcadas como ganhando, e com uma na mesa devia ser 1`);
+  // E É A CARTA CERTA, não uma qualquer. Marcar "alguma" passaria numa asserção de contagem e
+  // mentiria na mesa — é a lição do atlas de pintas: "tem tinta em algum lugar" aprova
+  // qualquer borrão; a asserção que vale escolhe o ponto onde a tinta TEM de estar.
+  const vg = mod.visaoDoTruco(mod.P, 0);
+  const daVez = (mod.P.mesa || []).find(j => j.cadeira === vg.ganhandoAVaza);
+  ok(uma.length === 1 && daVez && uma[0][0] === mod.chaveCarta(daVez.carta),
+    'a marca de "está ganhando" caiu numa carta que não é a que está ganhando');
+  // FILHA DA CARTA — é isso que a faz deslizar junto, sem uma linha de animação.
+  ok(uma.length === 1 && uma[0][1].marca.parent === uma[0][1].obj,
+    'a marca não foi pendurada na carta, então ela não acompanharia o movimento');
+
+  // FECHADA A VAZA a marca some. Sem isto ela desceria para a pilha grudada na carta, e a
+  // mesa passaria a dizer que uma carta virada de barriga para baixo está ganhando.
+  // COM TETO: um `while` sem bound numa suíte é pior que uma reprovação — ele trava o
+  // processo e o log fica igual ao de uma suíte que nunca rodou.
+  for (let g = 0; g < 8 && mod.P.mesa.length; g++) {
+    mod.jogarCarta(mod.P, mod.P.vez, mod.P.maos[mod.P.vez][0]);
+  }
+  ok(mod.P.mesa.length === 0, 'não consegui fechar a vaza para conferir que a marca some');
+  mod.publicar();
+  const sobrando = marcadas().length;
+  ok(sobrando === 0, `a vaza fechou e ${sobrando} marca(s) ficaram para trás`);
 }
 
 // ─── a barra de apostas ──────────────────────────────────────────────────────
@@ -914,7 +1124,10 @@ console.log('\na barra de apostas oferece o que o motor aceita');
   ok(rotulos.some(r => r.includes('correr')), 'faltou "Correr" com pedido na mesa');
   ok(rotulos.some(r => r.includes('seis')), 'faltou o aumento para seis');
   // E o medidor tem de DIZER que subiu: "1 → 3". Sem isso o jogador aceita sem saber o quê.
-  ok(String(mod.medidoresDoTruco(vPedido)[2].val).includes('→'),
+  // PELO RÓTULO: esta linha era `[2]`, e `[2]` deixou de ser o "Vale" no dia em que o painel
+  // da vira saiu. Índice cravado numa lista que pode encolher é asserção que muda de assunto
+  // sem avisar — aqui ela passou a medir o placar de vazas e reprovou com o jogo certo.
+  ok(String((mod.medidoresDoTruco(vPedido).find(m => m.rot === 'Vale') || {}).val).includes('→'),
     'o medidor não mostrou a aposta pendente');
 
   // NO TOPO DA ESCADA não há para onde subir, e o botão tem de SUMIR. Botão que não faz nada

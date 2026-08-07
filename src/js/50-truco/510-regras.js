@@ -89,6 +89,17 @@ function vencedorDaVaza(jogadas, manilha, time) {
   return empatado ? null : melhor.cadeira;
 }
 
+// O TIME DE UMA CADEIRA, PARTINDO DA VISTA. Irmão de `timeNoTruco` (520-partida.js), que
+// parte de `P` — e são dois porque quem tem `P` é só o anfitrião: a tela do convidado só
+// recebe a visão, e ela precisa da mesma conta para saber de que lado uma vaza caiu.
+//
+// Declarado UMA vez porque a fórmula já estava escrita à mão em três lugares (`530-bot.js`
+// duas vezes, e agora os medidores) — é a doença do `28 - 7 * MESA.n` que o menu pagou: a
+// aritmética copiada fica certa até o dia em que uma cópia não acompanha. As duas do bot
+// continuam como estavam de propósito: substituí-las é trivial e não muda nada, mas o bot
+// tem asserção de FORÇA medida, e mexer nele sem motivo é gastar risco à toa.
+const timeDaVistaNoTruco = (vista, cadeira) => (vista.duplas ? cadeira % 2 : cadeira);
+
 // ─── quem ganha a MÃO, e o melou ─────────────────────────────────────────────
 // `vencedores` é o time que ganhou cada vaza, na ordem: um número, `null` para empate, ou
 // `undefined` para vaza que ainda não aconteceu.

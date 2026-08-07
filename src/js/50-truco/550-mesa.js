@@ -271,8 +271,20 @@ function sincronizarMesaDoTruco(vista) {
   }
 
   // As cartas da vaza em curso, cada uma na direção de quem a jogou.
+  //
+  // A QUE ESTÁ GANHANDO leva marca e sobe um pouco. Quem responde é a VISÃO
+  // (`ganhandoAVaza`, em 520-partida.js) e não uma conta aqui: é pergunta de regra, e a tela
+  // do convidado não tem `P` para respondê-la. A marca acompanha a reconciliação como todo o
+  // resto — cada carta que cai pode roubar a liderança, e aí ela muda de dona sozinha.
+  const mandaAgora = (vista.mesa || []).length && vista.ganhandoAVaza !== null
+    && vista.ganhandoAVaza !== undefined
+    ? (vista.mesa.find(j => j.cadeira === vista.ganhandoAVaza) || {}).carta : null;
   for (const p of layoutDaVaza(vista.mesa || [], eu, n)) {
-    alvos.set(chaveCarta(p.carta), { carta: p.carta, x: p.x, z: p.z, rotY: p.rotY, baixo: false, y: 0 });
+    const ganhando = !!mandaAgora && mesmaCarta(p.carta, mandaAgora);
+    alvos.set(chaveCarta(p.carta), {
+      carta: p.carta, x: p.x, z: p.z, rotY: p.rotY, baixo: false,
+      y: ganhando ? ALTURA_GANHANDO : 0, ganhando,
+    });
   }
 
   // As vazas já ganhas, empilhadas de lado e viradas para baixo. Sem elas visíveis o jogador
@@ -303,6 +315,22 @@ function sincronizarMesaDoTruco(vista) {
       tocarBaque(0.5);
     }
     reg.alvo = alvo;
+
+    // A MARCA É PENDURADA E TIRADA AQUI, e não na animação: quem ganha a vaza só muda quando
+    // a vista muda, e a animação roda sessenta vezes por segundo. Criar e destruir um Mesh a
+    // cada quadro seria churn puro — a mesma razão que fez o `assinaturaMao` do dominó
+    // existir. É irmã do `marcarUltima` do tabuleiro, com uma diferença: lá a marca é do
+    // PASSADO (a última peça caiu ali) e some sozinha; aqui ela é do PRESENTE e tem de
+    // acompanhar a liderança, então a reconciliação manda nela como manda na posição.
+    if (alvo.ganhando && !reg.marca) {
+      reg.marca = new THREE.Mesh(geomGanhandoNoTruco, matGanhandoNoTruco);
+      reg.marca.rotation.x = -Math.PI / 2;
+      reg.marca.position.y = -CARTA_E / 2 - 0.004;      // colada no tampo, por baixo da carta
+      reg.obj.add(reg.marca);
+    } else if (!alvo.ganhando && reg.marca) {
+      reg.obj.remove(reg.marca);
+      reg.marca = null;
+    }
   }
 
   for (const [k, reg] of naMesaDoTruco) {
@@ -339,6 +367,41 @@ const matBrilhoDoTruco = new THREE.MeshBasicMaterial({
   color: 0xffc451, transparent: true, opacity: 0.5,
 });
 const geomBrilhoDoTruco = new THREE.CircleGeometry(CARTA_C * 0.62, 28);
+
+// ─── a marca de QUEM ESTÁ GANHANDO A VAZA ────────────────────────────────────
+// Pedido do Ricardo em 07/08/2026, jogando: sem saber quem está por cima não há parâmetro
+// para decidir se vale gastar uma carta forte. A frase equivalente está na linha da vez
+// (`notaDaVezNoTruco`, em 575-encaixes.js); esta é a resposta para quem está OLHANDO a mesa,
+// que é onde os olhos estão na hora de escolher.
+//
+// UM ANEL e não um disco, porque um disco por baixo de uma carta não aparece — a carta o
+// cobre inteiro. O anel sobra pelas bordas.
+//
+// E A CARTA SOBE JUNTO (`ALTURA_GANHANDO`), o que não é redundância: cor sozinha não é
+// informação acessível, e o realce tem de sobreviver a quem não distingue verde de âmbar e
+// a uma foto em preto e branco. É a mesma disciplina do `--fraco` da Fila 8, num meio
+// diferente — a altura é a redundância não-cromática.
+//
+// NÃO PULSA, de propósito. O brilho da prévia acima oscila para sempre enquanto está na
+// tela, e um segundo oscilador permanente na mesma cena é exatamente o que o
+// `prefers-reduced-motion` da Fila 9 saiu tirando (a lâmpada era "o único movimento que não
+// acaba nunca"). Esta marca fica parada: ela informa, não chama.
+const matGanhandoNoTruco = new THREE.MeshBasicMaterial({
+  color: 0x7fd18a, transparent: true, opacity: 0.62,
+});
+// O RAIO INTERNO SAI DA MEIA-DIAGONAL DA CARTA, e não de um número escolhido a olho:
+// `hypot(CARTA_L, CARTA_C) / 2` é 0.538, o ponto mais distante do centro que a carta ocupa.
+// Um anel mais estreito que isso fica escondido nos CANTOS e aparece só nas laterais — meia
+// marca, que a olho lê como defeito de desenho. Começando na diagonal ele aparece inteiro.
+//
+// E o externo cabe: as cartas da vaza ficam a `RAIO_DA_VAZA` (0.686) do centro, então numa
+// mesa de 4 os vizinhos estão a 0.97 um do outro. O anel vai a 0.65 do centro DA CARTA, e
+// como ele não entra na caixa medida (`criarCarta` expõe `userData.corpo`, e é só o corpo
+// que o `test-telas` mede) ele também não infla a mesa — é a mesma isenção que a marca da
+// última jogada do dominó tem, e ali ela custou 0.22 de caixa até alguém notar.
+const RAIO_GANHANDO = Math.hypot(CARTA_L, CARTA_C) / 2;
+const geomGanhandoNoTruco = new THREE.RingGeometry(RAIO_GANHANDO, RAIO_GANHANDO * 1.21, 30);
+const ALTURA_GANHANDO = 0.085;
 
 function mostrarPreviaDoTruco(vista) {
   esconderPreviaDoTruco();

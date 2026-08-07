@@ -201,7 +201,18 @@ function desenharHUD(vista) {
   // Atribuir `textContent` troca o nó de texto mesmo que a frase seja idêntica, e o leitor
   // de tela anuncia a troca, não a diferença: sem esta guarda ele repetiria "Vez de Tião"
   // a cada compra do bot, e a região viva viraria a razão de desligar o leitor.
-  const frase = minhaVez ? 'Sua vez' : `Vez de ${vista.cadeiras[vista.vez].nome}`;
+  // A NOTA É DO JOGO, e é opcional. A casa sabe DE QUEM é a vez — isso é da mesa —, mas não
+  // sabe o que mais vale a pena dizer nesse instante: no truco é quem está ganhando a vaza
+  // em curso (sem isso não há parâmetro para decidir se gasta carta forte), e no dominó não
+  // há nada a acrescentar, então ele simplesmente não declara a chave.
+  //
+  // Ela vem PARA CÁ e não para um painel próprio por duas razões somadas: o `#vez` já é
+  // prosa e não custa layout nenhum — e o `#topo` do retrato já transbordou uma vez por um
+  // painel a mais —, e ele é `aria-live`, então a frase é ANUNCIADA quando muda. Um painel
+  // novo seria visto por quem olha e invisível para quem ouve.
+  const nota = JOGO.hud.notaDaVez ? JOGO.hud.notaDaVez(vista) : '';
+  const frase = (minhaVez ? 'Sua vez' : `Vez de ${vista.cadeiras[vista.vez].nome}`)
+    + (nota ? ` · ${nota}` : '');
   if (HUD.vez.textContent !== frase) HUD.vez.textContent = frase;
   HUD.vez.classList.toggle('minha', minhaVez);
 

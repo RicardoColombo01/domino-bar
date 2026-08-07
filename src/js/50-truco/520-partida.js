@@ -173,24 +173,38 @@ function fecharVaza(P) {
   P.vazas.push({ jogadas: P.mesa, vencedor, time });
   P.mesa = [];
 
+  // O QUE ACABOU DE ACONTECER, para quem for narrar. Até 07/08 a vaza fechava CALADA: as
+  // quatro cartas deslizavam para a pilha do vencedor e cabia ao jogador descobrir de que
+  // lado elas foram parar. Relato do Ricardo, jogando: "até descobrir qual lado de quem
+  // ganhou não fica prático".
+  //
+  // O motor DIZ, e quem escreve a frase é o `575-encaixes.js` — mesma divisão que o resto
+  // deste arquivo já faz: aqui a regra, lá a narração. `vencedor: null` é vaza melada.
+  //
+  // ELA VAI EM **TODOS** OS CAMINHOS DE SAÍDA, e não só no de mão aberta. A vaza que DECIDE
+  // a mão sai por `fecharMaoDoTruco`, e é justamente a que mais importa anunciar — prendê-la
+  // ao ramo feliz deixaria calada a única vaza que o jogador precisa entender.
+  const vaza = { numero: P.vazas.length, vencedor, time };
+
   const dono = donoDaMao(P.vazas.map(v => v.time));
   if (!dono.aberto) {
-    return dono.morreu
+    const r = dono.morreu
       ? fecharMaoDoTruco(P, { motivo: 'melou', time: null, pontos: 0 })
       : fecharMaoDoTruco(P, { motivo: 'vazas', time: dono.time, pontos: P.aposta });
+    return Object.assign({ vaza }, r);
   }
   // A MÃO ACABOU SEM DECIDIR? Só acontece se as três vazas melarem, e `donoDaMao` já trata.
   // Este guarda existe para o dia em que alguém mexer na tabela e esquecer um ramo — sem
   // ele, o motor pediria uma quarta carta que não existe e a mesa pararia calada.
   if (P.vazas.length >= VAZAS_POR_MAO) {
-    return fecharMaoDoTruco(P, { motivo: 'melou', time: null, pontos: 0 });
+    return Object.assign({ vaza }, fecharMaoDoTruco(P, { motivo: 'melou', time: null, pontos: 0 }));
   }
 
   // QUEM MELOU NÃO PERDE A SAÍDA: se a vaza empatou, sai o mesmo de antes. É o que impede a
   // saída de andar sozinha pela mesa numa mão de três empates.
   P.saiu = vencedor === null ? P.saiu : vencedor;
   P.vez = P.saiu;
-  return { ok: true };
+  return { ok: true, vaza };
 }
 
 // ─── a aposta ────────────────────────────────────────────────────────────────
@@ -275,6 +289,23 @@ function visaoDoTruco(P, cadeira) {
     naMao: P.maos.map(m => m.length),                  // dos outros, só quantas
     mesa: P.mesa,                                      // as cartas já jogadas nesta vaza
     vazas: P.vazas.map(v => ({ time: v.time, vencedor: v.vencedor, jogadas: v.jogadas })),
+    // QUEM ESTÁ GANHANDO A VAZA EM CURSO — pedido do Ricardo em 07/08, jogando: sem isto o
+    // jogador não tem parâmetro para decidir se gasta uma carta forte ou descarta.
+    //
+    // Mora na VISÃO e não na tela por três razões, e a terceira é a que decide: é uma
+    // pergunta de REGRA (quem bate quem depende da manilha e do naipe entre manilhas), a
+    // tela do convidado não tem `P` para respondê-la, e `medidoresDoTruco` recebe a vista e
+    // mais nada. Calculá-la em três lugares é como duas metades passam a discordar.
+    //
+    // NÃO FURA O INVARIANTE 3: sai de `P.mesa` e `P.manilha`, que já viajam inteiros no fio
+    // porque as cartas na mesa e a vira são públicas por definição do jogo. Nenhuma carta de
+    // mão alheia entra na conta.
+    //
+    // `undefined` (que o JSON descarta, e some no convidado do mesmo jeito) = não há vaza em
+    // curso; `null` = as mais fortes empataram entre times, ou seja a vaza está melando.
+    // Quem lê tem `vista.mesa.length` ao lado para separar os dois casos.
+    ganhandoAVaza: P.mesa.length
+      ? vencedorDaVaza(P.mesa, P.manilha, c => timeNoTruco(P, c)) : undefined,
     vira: P.vira,
     manilha: P.manilha,
     aposta: P.aposta,
