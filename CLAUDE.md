@@ -610,6 +610,62 @@ por mutação nas quatro direções, inclusive as duas de falso positivo.
   casa nos arquivos LF, e com `\n` cravado não casa nos CRLF — nos dois casos ele não estoura e
   deixa o arquivo intacto. O padrão tem de detectar a quebra do próprio arquivo antes de
   procurar, e **exigir que o casamento aconteceu**.
+- **SAÍDA NÃO-ZERO NÃO PROVA QUE A ASSERÇÃO PEGOU — prova que o COMANDO falhou.** O arquivo já
+  registrava duas formas de a conferência por mutação mentir (a mutação que não casa em CRLF; a
+  asserção que lança e trunca a suíte). Esta é a terceira, e a pior, porque ela mente na direção
+  **tranquilizadora**: os comandos de mutação levavam `>/dev/null`, que é sintaxe Unix, e o
+  `execSync` do Node no Windows usa `cmd.exe` — todas as rodadas morriam em *"O sistema não pode
+  encontrar o caminho especificado"*, saíam com código 1, e o script declarava "a asserção
+  pegou". **Duas mutações de VAZAMENTO DE MÃO foram dadas como verificadas sem que a suíte
+  tivesse rodado uma linha.** O conserto é classificar a saída: sem `✗` no texto, a rodada é
+  **INCONCLUSIVA**, e inconclusivo tem de ser barulhento. Refeitas com a guarda, as duas
+  mataram a asserção de verdade — mas isso só se soube depois.
+- **Índice cravado numa lista que o jogo DECLARA muda de assunto sem avisar.** As asserções dos
+  medidores liam `meds[2]`, e no dia em que o painel da vira saiu o `[2]` virou outro painel: uma
+  reprovou com o jogo certo e a outra **matou o processo** (`Cannot read properties of
+  undefined`), truncando a suíte. Encaixe que o jogo preenche se lê pelo RÓTULO
+  (`meds.find(m => m.rot === 'Vale')`), nunca pela posição — a mesma razão que fez a ponte
+  receber a PEÇA em vez do índice.
+- **Crase em COMENTÁRIO dentro de template literal é CÓDIGO.** O `test-telas.mjs` guarda dois
+  blocos gigantes em template literal (`AJUDA` e `MEDIR`), e o hábito da casa é comentar citando
+  nomes entre crases de markdown. Cada uma delas FECHA a string: três `SyntaxError` seguidos, e
+  o segundo e o terceiro só apareceram depois de consertar o primeiro, porque o parser para na
+  primeira. Ao comentar dentro daqueles dois blocos, `\``. E o conserto por script tem de
+  mexer **só em linha de comentário** — fora delas uma crase pode ser template aninhado legítimo.
+- **Helper de cena que passa ÍNDICE onde a ponte espera PEÇA desiste CALADO, e a cena fica
+  verde sem nunca ter acontecido.** A cena `confirmando` do `test-telas` existe desde a Fila 2
+  para medir "o rodapé com três coisas disputando a mesma faixa" — e **nunca levantou peça
+  nenhuma**. A ponte passou a receber a PEÇA (`selecionar: peca => …findIndex(m =>
+  mesmaPeca(m.peca, peca))`) justamente porque índice de tela quebra calado quando a mão
+  reordena; o helper não acompanhou. `mesmaPeca([1,6], 1)` lê `1[0]`, que é `undefined`, o
+  `findIndex` devolve −1 e `selecionarPeca(-1)` cai no `if (!m) return`. Medido: barra
+  `painel oculta`, 0 fantasmas. **É a família do `conn.open` e do `on()` que engolia ouvinte —
+  montagem que não alcança o estado interessante —, com uma porta nova: não é o dublê que está
+  incompleto, é o CONTRATO que andou e o teste ficou.** O remédio é o de sempre: cobrar que a
+  montagem conseguiu (`exigeEscolha` + `window.__cenaEscolheu`), senão o conserto de hoje se
+  desfaz calado amanhã.
+- **O falso positivo do `[0,0]` voltou no truco, e quem o expôs foi uma seção NOVA e sem
+  relação nenhuma.** A asserção do invariante 3 procura `JSON.stringify(carta)` no texto da
+  visão — e uma carta é `[valor, naipe]`, então a A de ouros é `[0,0]`, que é igual ao `placar`
+  de uma partida nova. O defeito estava lá desde que a suíte nasceu e **só apareceu quando três
+  `novaPartidaDoTruco` novas consumiram sorteio a mais e mudaram quem recebeu aquela carta**.
+  Duas lições: *teste que depende da ordem do sorteio semeado guarda defeito latente até alguém
+  mexer num vizinho*, e o sintoma chega **disfarçado do pior erro possível** (vazamento de mão).
+  E o conserto certo NÃO é branquear `placar` e `naMao` — isso cegaria a asserção para um
+  vazamento por ali. Quem sai de cena é a COLISÃO: as mãos passaram a ser armadas com cartas
+  que nenhum outro campo da visão consegue produzir. Conferido por duas mutações.
+- **Caixa analítica subestima a caixa MEDIDA, e a diferença tem de estar no número.** A escala
+  da mesa do truco pede folga contra os assentos usando meia-caixa em unidades de carta; o
+  `test-telas` mede `Box3.setFromObject` sobre as cartas de verdade. Pedindo 0,22 a suíte mediu
+  **0,13** — a pilha de vazas desloca cada carta, e a fileira do assento é medida com a rotação
+  real. Constante de folga em conta analítica é "a folga que eu quero MAIS o que a conta erra",
+  e o valor tem de ser conferido rodando.
+- **Sonda que mede antes de a tela ASSENTAR dá número diferente a cada rodada — e o instrumento
+  já existe.** Investigando o rodapé do truco, uma sonda própria deu resultados contraditórios
+  na mesma cena (uma vez `bottom 122`, outra `74`) e me levou a caçar um defeito de CSS que não
+  existia. O `test-telas` espera **oito quadros iguais** exatamente por isso, e foi ele que
+  respondeu de primeira. **Antes de escrever sonda nova, pergunte se a suíte já sabe perguntar
+  aquilo** — e se a sonda discordar dela, a suspeita começa pela sonda.
 
 ---
 
@@ -789,42 +845,38 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 
 | | |
 |---|---|
-| enviado | **v4.5.0** — a Fase 4 fechada: o truco SENTA NA MESA |
-| **PUBLICADO** | ⚠ **v4.2.1** — o Pages parou às 22:04 e **precisa de um clique**; ver a seção abaixo |
-| esta release | **v4.5.0** — o corpo do truco, e os cinco encaixes que a casa ganhou para caber nele |
-| as anteriores | v4.4.0 (bot + layout) · v4.3.0 (regras + motor) · v4.2.0 (`40-cartas/`) · v4.1.0 (a aba) · v4.0.0 (o contrato) |
-| Filas 5 a 11 | **todas fechadas**, e não há defeito conhecido em aberto |
+| enviado | **v4.5.2** — a Fase 4 fechada: o truco SENTA NA MESA |
+| **PUBLICADO** | ✔ **em dia** — o Pages destravou sozinho em 07/08 02:04 UTC; ver abaixo |
+| em curso | **v4.6** — as três cenas de truco no `test-telas`, e as duas coisas que o Ricardo pediu jogando |
+| as anteriores | v4.5.0 (o corpo do truco) · v4.4.0 (bot + layout) · v4.3.0 (regras + motor) · v4.2.0 (`40-cartas/`) · v4.1.0 (a aba) · v4.0.0 (o contrato) |
+| Filas 5 a 11 | **todas fechadas** |
 | o que vem | **a Fase 5** — o aplicativo: APK no GitHub Releases + Amazon Appstore |
-
-**AGORA HÁ ALGUMA COISA ATRÁS DO DEPLOY PENDENTE, e isto mudou com esta release:** até a
-v4.4 o truco não sentava na mesa e o dominó publicado era o mesmo desde a v4.2.1, então o
-Pages travado não custava nada a ninguém. Com o truco jogável, **o que está no ar deixou de
-ser o que existe** — e a régua continua sendo o conteúdo SERVIDO, não o `git rev-list`.
 
 ---
 
-#### O DEPLOY PAROU ÀS 22:04 — e precisa de um clique (06/08/2026)
+#### O DEPLOY DESTRAVOU — conferido em 07/08/2026, e desta vez pela régua certa
 
-**A última rodada de Pages que existiu foi a das 22:04.** Depois dela, **quatro pushes
-seguidos** não geraram rodada nenhuma. Isto é o mais preciso que dá para dizer, e é diferente
-do que esta seção já disse duas vezes:
+```
+servido  sw.js VERSAO 23dc31b4d8f9
+local    sw.js VERSAO 23dc31b4d8f9   ← IGUAIS
+servido  index.html com "Truco Paulista", JOGOS.truco (6×), MODOS_TRUCO, barraJogo
+```
 
-| push | o que aconteceu |
-|---|---|
-| v4.0.0, v4.0.1 (05/08 22:41 e 22:46) | **nenhuma rodada** |
-| v4.1.x (06/08 20:44) | rodada disparou, ficou **20 min `queued`** e foi **cancelada** |
-| v4.2.0 (21:57) e v4.2.1 (22:04) | rodaram e **publicaram em ~1 min** ← as últimas que rodaram |
-| v4.3.0, v4.3.1, v4.4.0 (22:5x em diante) | **nenhuma rodada**, quatro pushes seguidos |
+**Duas rodadas de Pages rodaram em 07/08, 01:52 e 02:04 UTC, as duas com sucesso**, sobre o
+`bc0e152` (Merge v4.5.1). Ninguém clicou em nada: destravou do lado do GitHub, como já tinha
+acontecido uma vez.
 
-**A leitura mudou com o quarto.** Um push que não dispara é ruído; quatro seguidos depois de
-um horário exato não são oscilação — **parou e ficou parado.** Então a recomendação deixa de
-ser "espere" e passa a ser **agir**: `Actions → a rodada das 22:04 → Re-run all jobs`, ou
-`Settings → Pages` reconfirmando *Deploy from a branch → main → / (root)*. Os dois são conta,
-não código, e `gh` não está instalado nesta máquina.
+**E há uma sutileza que só a régua certa responde:** o commit mais novo (`e2f9a7a`, v4.5.2)
+**não** gerou rodada. Pelo `git rev-list` isso pareceria "publicado", e pela lista de rodadas
+pareceria "faltando" — as duas leituras erradas. A v4.5.2 mexeu só em `CLAUDE.md` e
+`package.json`, ou seja **não muda uma linha do que o Pages serve**, então o conteúdo no ar
+É o atual. A régua continua sendo **o conteúdo SERVIDO**, e agora com um corolário: compare
+também *o que o commit pendente mudou* antes de concluir que falta deploy.
 
-O que continua valendo, e foi medido: **não é gatilho desconfigurado** (dois pushes
-dispararam sozinhos na mesma tarde, sem ninguém tocar em Settings) e **não é o jogo** — as
-sete suítes passaram contra o bundle local em todas as releases.
+**A lição de método que esta seção já tinha e que se confirma:** ela disse "RESOLVIDO" uma vez
+e teve de ser desdita duas horas depois. Um push que funcionou não prova que o gatilho está de
+pé — e quatro que não dispararam também não provaram que ele estava quebrado. **Só o conteúdo
+servido decide.**
 
 Dois corolários práticos, os dois pagos:
 
@@ -915,18 +967,54 @@ que as suítes rodaram inteiras com o site no ar três releases atrás.
 
 ---
 
-#### ONDE PAROU — fim da sessão de 06/08/2026 (v4.5.0)
+#### ONDE PAROU — sessão de 07/08/2026 (v4.6, em curso)
 
 **LEIA ISTO PRIMEIRO.** É o ponto exato de retomada, e é o ÚNICO — este arquivo já registrou
 que ponteiro de retomada é o item que mais apodrece aqui, e por isso não pode haver dois.
 
 ```
-main               v4.5.0, empurrada, árvore limpa, `0 0` contra o origin
-PUBLICADO          ⚠ v4.2.1 — o Pages parou às 22:04 e precisa de UM CLIQUE
-                   servido  sw.js VERSAO d0b4c9bb11d2   ← v4.2.1
-                   local    sw.js VERSAO 23dc31b4d8f9   ← v4.5.0
-worktree           NENHUM — a v4.5 foi mergeada, a branch apagada e o worktree removido
+main               v4.6.0, merge --no-ff com tag
+PUBLICADO          confira o SERVIDO — é a única régua (o curl está logo abaixo)
+worktree           NENHUM
+árvore             limpa
 ```
+
+**A v4.6 SAIU PELA RECEITA DA CASA:** branch `v4.6` nascida de `main`, três commits (a suíte,
+a funcionalidade, o registro), merge `--no-ff` com a tag `v4.6.0`, `npm run build && git add
+index.html` dentro do merge, e a branch apagada — a tag é o que fica.
+
+**A onda nasceu direto na `main` e teve de ser transplantada**, porque começou como uma task
+só e cresceu. Fica a nota de método: os dois assuntos desta onda se interleavam em quatro
+arquivos, e separá-los em commits exigiu fatiar hunk a hunk. **Fatiar para a FRENTE não
+funciona** — as posições `+` de um diff pressupõem que os hunks anteriores foram aplicados, e
+pular um desloca todos os seguintes em silêncio (deu `SyntaxError` no build, que é o desfecho
+bom; o ruim seria compilar). O que funciona é **partir do estado final e DESFAZER** os hunks do
+outro assunto: aí toda posição é absoluta no arquivo que se tem. E a conferência não é a saída
+do `git apply` — é `grep` pelos nomes que não podem ter sobrado: uma numeração minha estava
+errada e o `apply` não reclamou.
+
+**O que a v4.6 leva, em duas frentes:**
+
+| | |
+|---|---|
+| **a lacuna da v4.5** | três cenas de truco no `test-telas`, com o contrato `gruposDaMesa`/`rotuloDaMao` |
+| **o pedido do Ricardo** | quem está ganhando a vaza, e quem ganhou — ver a seção própria |
+| de tabela | 4 defeitos consertados, 3 deles achados pelas cenas novas |
+
+**Os quatro defeitos, e nenhum deles foi relatado por ninguém:**
+
+1. **`#acoes` × `#confirmar` sobrepostos no truco** (13.653px² em retrato) — dois números
+   fixos no rodapé, nenhuma caixa perguntando pela outra. Hoje a barra publica a própria
+   altura em `--alt-confirmar` e o rodapé se apoia nela.
+2. **A mesa do truco invadindo o assento** (folga −0,45) — faltava o terceiro teto da escala,
+   o corredor entre os assentos. É a Fila 7 repetida por outro jogo.
+3. **`#confirmar` cobrindo CINCO peças da mão em paisagem — no DOMINÓ**, e há meses. O item 10
+   subiu o `#acoes` para a faixa esquerda e nunca tocou na barra de confirmar, porque **a cena
+   que a mediria nunca a abriu** (ver a armadilha do helper que passava índice). Hoje ela vai
+   para a coluna direita, que é a única sobra medida.
+4. **O 4º medidor do truco empurrando o `#topo` sobre a mão de um adversário em paisagem** —
+   defeito NOVO, meu, achado por mutação. A vira saiu do painel (ela está desenhada na mesa) e
+   o placar de vazas ficou no lugar dela.
 
 **NÃO HÁ WORKTREE ABERTO**, e é de propósito: a onda acabou, e a receita para abrir o próximo
 está em "A reorganização → `git worktree`". Lembre do que ela custa: **`cd tests && npm install`
@@ -942,20 +1030,22 @@ continua no disco.
 **A FASE 4 FECHOU: o truco senta na mesa.** São dois jogos jogáveis, e o que sobra da v4 é a
 Fase 5, que não toca em `src/` e trava numa decisão de conta.
 
-**➜ O RICARDO VAI TESTAR NA PRÓXIMA SESSÃO.** Antes de qualquer outra coisa, leia
-**"⚑ PARA A SESSÃO DE TESTE"**, mais abaixo — ela tem onde testar (o `github.io` ainda NÃO tem
-truco), o que nunca foi tocado por mão humana, o mapa sintoma → arquivo, e o inventário
-completo das 28 mudanças desta onda.
+**➜ O RICARDO VAI TESTAR.** Antes de qualquer outra coisa, leia **"⚑ PARA A SESSÃO DE TESTE"**,
+mais abaixo — ela tem onde testar, o que nunca foi tocado por mão humana, o mapa sintoma →
+arquivo, e o inventário completo das mudanças desta onda.
 
-**AS TRÊS COISAS PARA FAZER, em ordem:**
+**O QUE SOBRA, em ordem:**
 
-1. **O CLIQUE NO PAGES** — `Actions → a rodada das 22:04 → Re-run all jobs`. **Isto mudou de
-   peso nesta release:** até a v4.4 nada que um jogador usasse estava atrás do deploy, porque
-   o truco não sentava na mesa. Agora está. Ver "O DEPLOY PAROU ÀS 22:04", logo acima.
-2. **A Fase 5, o aplicativo** — worktree próprio (`../domino-bar-app`). Ver "É AQUI QUE SE
-   RETOMA — a Fase 5", mais abaixo.
-3. **A cena de truco no `test-telas`** — a lacuna que esta release deixa de propósito, com o
-   motivo escrito. Ver "A LACUNA QUE ESTA RELEASE DEIXA".
+1. ~~**O CLIQUE NO PAGES**~~ ✔ **resolvido** — destravou sozinho em 07/08 02:04 UTC, e o
+   conteúdo servido bate com o local. Ver "O DEPLOY DESTRAVOU", logo acima.
+2. ~~**A cena de truco no `test-telas`**~~ ✔ **feita na v4.6**, e ela achou dois defeitos de
+   geometria mais um antigo do dominó. Ver "A LACUNA QUE A v4.5 DEIXOU".
+3. ~~**COMMITAR A v4.6.**~~ ✔ **feita** — três commits, merge `--no-ff`, tag `v4.6.0`.
+4. **CONFERIR O QUE ESTÁ NO AR.** *Commitado ≠ enviado ≠ publicado*, e o degrau que já custou
+   um dia a este projeto é sempre o próximo. A régua é o conteúdo SERVIDO, não o `git
+   rev-list`: `curl -s …/sw.js | grep VERSAO` contra o `grep VERSAO sw.js` local.
+5. **A Fase 5, o aplicativo** — worktree próprio (`../domino-bar-app`), e ela trava numa
+   decisão de conta do Ricardo (o repositório da user page). Ver "É AQUI QUE SE RETOMA".
 
 **O ARRANJO DE WORKTREE que a v4 usou, e o que ele ensinou:**
 
@@ -1058,6 +1148,41 @@ o projeto             9.226 linhas em src/
 3. **`pintarAbas()` entrou no `mostrarTela('telaMenu')`**, ao lado do `atualizarBotaoRetomar`,
    e não só no `abrirJogo`. Sem isso a trava acima seria **código morto**: `pintarAbas` só
    rodava ao trocar de jogo, ou seja nunca com a mesa ocupada.
+
+#### O PEDIDO DO RICARDO, de 07/08/2026, jogando
+
+Palavras dele: *"no truco deixar quem está ganhando a rodada, para que tenha um parâmetro do
+que jogar, e também falar quem ganhou a rodada, não somente deixar as cartas no canto, pois
+até descobrir qual lado de quem ganhou não fica prático"*.
+
+**Ele está certo, e a razão é geométrica:** a pilha de vazas vai para o lado de QUEM VENCEU,
+então ler a pilha é fazer a conta ao contrário — você vê onde as cartas pararam e daí deduz o
+vencedor. Nenhuma leitura de código chega a esse incômodo; é a fonte mais barata que este
+projeto tem, cobrando de novo. **A Fila 5, a 7 e a 10 saíram de jogar, e esta é a quarta.**
+
+| o que | onde |
+|---|---|
+| `vista.ganhandoAVaza` | `visaoDoTruco`. É pergunta de REGRA (manilha e naipe), a tela do convidado não tem `P`, e três lugares precisam da resposta — calculá-la em três é como duas metades passam a discordar |
+| a **marca 3D** na carta que está ganhando | anel no tampo **mais** a carta erguida em `ALTURA_GANHANDO`. As duas, porque cor sozinha não é informação acessível |
+| a **nota na linha da vez** | encaixe novo `JOGO.hud.notaDaVez(vista)`, o primeiro OPCIONAL da série. Vai no `#vez` porque ele é prosa (não custa layout) e é `aria-live` (é anunciado) |
+| a **narração** "Fulano ganhou a 1ª vaza" | `fecharVaza` passou a DIZER o que houve; quem escreve a frase é o `575-encaixes` |
+| o **placar de vazas** `1×0` | medidor do `#topo`, do seu ponto de vista, sempre visível |
+
+**Três coisas que só apareceram fazendo:**
+
+1. **A narração tem de sair em TODOS os caminhos de `fecharVaza`, e o ramo feliz é o menos
+   importante.** A vaza que DECIDE a mão sai por `fecharMaoDoTruco`, num `return` diferente —
+   prender o recado ao caminho comum deixaria calada justamente a vaza que o jogador precisa
+   entender. Há asserção só para esse ramo.
+2. **`undefined` e `null` querem dizer coisas diferentes em `ganhandoAVaza`**, e a diferença é
+   real: `undefined` (que o JSON descarta, e some no convidado do mesmo jeito) é "não há vaza
+   em curso"; `null` é "as mais fortes empataram, a vaza está melando". Quem lê separa os dois
+   com `vista.mesa.length` ao lado.
+3. **O QUARTO MEDIDOR NÃO COUBE**, e quem disse foi a mutação, não o olho. Em retrato os seis
+   tamanhos passavam; em paisagem 640×360 ele empurrou o `#topo` por cima da mão de um
+   adversário. A VIRA saiu no lugar dele — e o comentário original já dizia por quê sem
+   perceber: *"a vira está na mesa e dá para ver, mas quem não joga truco todo dia não sabe
+   derivar a manilha dela"*. O painel existia pela MANILHA.
 
 #### O que esta sessão deixou de FERRAMENTA
 
@@ -1199,23 +1324,29 @@ certa nunca foi "que ações existem", é **"o que aconteceu quando esta intenç
   **Nenhum dos dois aparece em caso escrito à mão, porque nenhum caso escrito à mão atravessa
   duas mãos.**
 
-#### A LACUNA QUE ESTA RELEASE DEIXA, dita de frente
+#### A LACUNA QUE A v4.5 DEIXOU — ✔ FECHADA na v4.6 (07/08/2026)
 
-**O `test-telas` não tem cena de truco**, e a decisão é de escopo, não esquecimento. A suíte
-supõe um jogo com MONTE: cinco lugares dela leem `j.grupoMonte` direto (as caixas, o extremo
-em NDC, o retrato de "parou de se mexer"), e um jogo sem monte estoura ali. As saídas eram
-duas, e nenhuma cabia junto do resto desta release:
+O `test-telas` tem **três cenas de truco** (`truco mão`, `truco confirmando`, `truco duplas`)
+nas seis telas. A saída escolhida foi a que a v4.5 já apontava como certa — **a suíte pergunta
+antes de medir** —, e ela ficou melhor do que o previsto: em vez de guardas espalhadas, **cada
+jogo DECLARA a própria mesa** (`gruposDaMesa()` e `rotuloDaMao` no `ponte` do registro), e a
+suíte itera o que vier. É o desenho dos cinco encaixes de HUD da v4.5, aplicado ao teste — o
+pife não mexe numa linha do `test-telas`.
 
-- **o truco expor um `grupoMonte` vazio na ponte** — barato e MENTIRA: ele não tem monte, e
-  uma ponte que mente é o começo de uma suíte que mede um mundo que não existe;
-- **a suíte perguntar antes de medir** — que é o certo, e mexe em cinco pontos da parte mais
-  delicada dela (a que virou determinística na Fila 5 e não pode voltar a oscilar).
+**A medição corrigiu o diagnóstico escrito aqui, e em dois pontos:** eram **quatro** lugares
+lendo `j.grupoMonte` e não cinco, e **nenhum deles era o primeiro a estourar** — quem quebra
+antes é `m.peca.join('|')`, porque a mão do truco carrega `carta`. Com o sétimo ponto
+(`naLinha`, que sai de `vista.linha` e não existe no truco) são **7 pontos em três famílias**.
+Décimo primeiro diagnóstico de leitura que esta base perde para um número.
 
-**O que cobre o 3D do truco hoje:** o `test-truco` mede as postas, a caixa da mesa e a
-amarração carta↔assento (a mesa espelhada, que passa em toda asserção de simetria); o
-`test-lembrar` remonta a mesa 3D a partir da partida guardada e exige a vira desenhada. O que
-NÃO está coberto é o que só a foto responde: **a mesa do truco cabe num celular em pé?** O
-`ESCALA_TRUCO_MAX` é o número a olhar quando isso for medido.
+**E as três cenas acharam DOIS defeitos na primeira rodada**, antes de qualquer mão humana:
+
+| | |
+|---|---|
+| `#acoes` × `#confirmar` sobrepostos em **13.653px²** | o rodapé tinha dois números fixos (`bottom: 74px` e `bottom: 8px`) e nenhuma caixa perguntava pela outra. A barra do truco tem 106px onde a do dominó tem 59 |
+| a mesa invadindo o assento, folga **−0,45** | a escala do truco tinha DOIS tetos e o dominó tem TRÊS: faltava o corredor entre os assentos. É a Fila 7 inteira, repetida por outro jogo |
+
+**O que sobra sem foto:** o truco ONLINE e o truco em telas que não estas seis.
 
 #### O que o TERCEIRO jogo (pife) herda pronto
 
@@ -1548,18 +1679,22 @@ mapa sintoma → arquivo (§3), o inventário completo das mudanças (§3b), com
 
 ### 1. ONDE TESTAR — e este é o item que já custou UM DIA a este projeto
 
-> **O `github.io` NÃO TEM TRUCO.** O que está no ar é a **v4.2.1**, e o truco só ficou jogável
-> na **v4.5.0**. Se você abrir o site e a aba do Truco disser "vem aí" — ou o jogo parecer o
-> mesmo de sempre —, **não é defeito: é o deploy parado**. Confira antes de relatar:
+> **O SITE JÁ TEM TRUCO** — conferido em 07/08: o `sw.js` servido é `23dc31b4d8f9`, igual ao
+> local, e o HTML no ar traz "Truco Paulista", `JOGOS.truco` e a barra de apostas.
+>
+> **A v4.6 ESTÁ COMMITADA E TAGUEADA**, com as duas coisas que você pediu — quem está ganhando
+> a vaza e quem ganhou. O que ela AINDA pode não ter é o terceiro degrau. **Confira antes de
+> relatar**, sempre, porque a fila do Pages já ficou travada por um dia inteiro:
 >
 > ```
 > curl -s https://ricardocolombo01.github.io/domino-bar/sw.js | grep VERSAO
+> grep VERSAO sw.js      # o local
 > ```
-> `d0b4c9bb11d2` = v4.2.1 (velho) · `23dc31b4d8f9` = v4.5.1 (o de agora)
+> Iguais = o site tem tudo o que está commitado. Diferentes = falta publicar, e aí **teste
+> local**, que é onde a versão nova sempre está.
 
-Isto é literalmente o dia perdido de 31/07 se repetindo por outra porta — lá era trabalho
-commitado e não enviado; aqui é enviado e não publicado. **Enquanto o Pages não rodar, teste
-LOCAL:**
+Esta armadilha já custou um dia inteiro a este projeto (31/07), e ela tem três degraus:
+**commitado ≠ enviado ≠ publicado**. **Para testar sem depender de nenhum deles:**
 
 | como | o que dá para testar |
 |---|---|
@@ -1576,7 +1711,8 @@ primeiro":
 
 | | por que é suspeito |
 |---|---|
-| **a mesa do truco no CELULAR** | é a lacuna declarada: o `test-telas` não tem cena de truco, então **nenhuma foto** do truco existe em nenhum tamanho de tela. `ESCALA_TRUCO_MAX = 2.35` (em `550-mesa.js`) é o número a mexer se a mesa ficar grande ou pequena demais |
+| ~~a mesa do truco no CELULAR~~ | ✔ **coberta desde a v4.6** — três cenas × seis telas, e elas acharam dois defeitos de geometria antes de qualquer mão humana. O que a foto NÃO responde continua sendo cor, legibilidade e tempo de animação |
+| **quem está ganhando a vaza** | a marca é um anel verde no tampo mais a carta erguida. Medida em posição e em "é a carta certa", **nunca vista por ninguém** — se ela não aparecer, ou aparecer na carta errada, é o primeiro relato que interessa |
 | **a carta virando de barriga para baixo** | a vaza recolhida DESLIZA para a pilha girando 180° em Z. Nunca foi vista por ninguém — só medida como posição |
 | **a barra de apostas** | Pedir truco · Aceitar · Aumentar · Correr. A suíte confere que os botões EXISTEM e que a intenção chega; ninguém clicou neles com o dedo |
 | **a mão de 11** | dois botões e uma fase própria. Testada em Node, nunca na tela |
@@ -1592,7 +1728,12 @@ alguém olhar os números.
 
 | se acontecer isto | olhar primeiro |
 |---|---|
-| a aba do Truco não aparece / diz "vem aí" | **é o deploy** (item 1), não o código |
+| a aba do Truco não aparece / diz "vem aí" | **é o deploy**, não o código — compare os dois `VERSAO` |
+| não vejo quem está ganhando a vaza | `vista.ganhandoAVaza` (`520-partida.js`) → a marca em `550-mesa.js` e a frase em `notaDaVezNoTruco` (575). São TRÊS superfícies: o anel na carta, a nota no `#vez` e o placar `Vazas` no topo — diga qual delas falhou |
+| ninguém anuncia quem ganhou a vaza | `fecharVaza` devolve `r.vaza`, e `narrarVaza` (575) escreve a frase. Ela sai na CONVERSA, junto das jogadas |
+| o placar `Vazas` mente | `placarDeVazas` (575) — ele é do SEU ponto de vista, e vaza melada não conta para ninguém |
+| sumiu o painel da Vira do topo | **é de propósito** (07/08): ele saiu para o `Vazas` caber em paisagem. A vira está desenhada no meio da mesa, em tamanho de carta |
+| a barra de confirmar cobre a mão | em retrato ela publica a altura em `--alt-confirmar` (130-hud) e o `#acoes` se apoia nela; em paisagem ela foi para a coluna direita. Ver os números no comentário do CSS |
 | o topo mostra "Pontas · Monte · Mão" no truco | `JOGO.hud.medidores` — `575-encaixes.js` e `desenharMedidores` (130-hud) |
 | botão do jogo errado, ou botão que não faz nada | `desenharBarra` (130-hud) — ele RELIGA o `onclick` a cada publicação, de propósito |
 | a carta não vai / o toque não responde | `estaNaMesa(JOGOS.truco)` nos ouvintes de `560-interacao.js`. Se o dominó estiver "roubando" o toque, é aqui |
@@ -1653,17 +1794,28 @@ O que faz um relato valer uma correção em vez de uma investigação:
 
 ### 5. O QUE JÁ ESTÁ MEDIDO — não vale reinvestigar
 
-Para eu não gastar tempo em coisa provada. Tudo isto rodou verde em 06/08/2026:
+Para eu não gastar tempo em coisa provada. **AS SETE SUÍTES DO PROJETO rodaram verdes em
+07/08/2026**, contra o código da v4.6 — não há uma herdada da release anterior:
 
 ```
-npm test         acoplamento (8) + cartas (51) + truco (320) + regras + mesa + jogo
-npm run lembrar  a partida dos DOIS jogos volta depois de recarregar
-npm run app      o jogo abre com a REDE DESLIGADA, com o PeerJS junto
-npm run textura  a peça não fica preta ao voltar de outro aplicativo
+npm test         acoplamento (8) + cartas (51) + truco (343) + regras + mesa + jogo
+npm run telas    seis telas × TREZE cenas (dez de dominó + três de truco), duas metades
+                 os dez casos de dominó saíram com os números IDÊNTICOS aos da v4.5,
+                 conferidos linha a linha contra a rodada anterior — só o rótulo do log
+                 mudou (`mesa` → `tabuleiro`), porque agora quem nomeia é o jogo
+                 folga mínima 0.29 (limiar 0.15), sempre em `truco duplas`
+npm run lembrar  a partida dos DOIS jogos volta depois de recarregar — 12 cenas
 npm run online   duas abas, mesa real, take-over, nome hostil, sair e voltar
-npm run telas    seis telas × dez cenas — folga mínima 0.33, idêntica à da v4.4
-11 mutações      cada uma matando exatamente a asserção dela
+npm run textura  a peça não fica preta ao voltar de outro aplicativo · 0 sorteios globais
+npm run app      o jogo abre com a REDE DESLIGADA, com o PeerJS junto
+mutações         a de segurança (2, uma por campo), a do helper de escolha, a do 4º medidor
 ```
+
+**As quatro de navegador foram rodadas DE PROPÓSITO, e não por zelo:** este arquivo tinha
+escrito que `lembrar` e `online` eram o risco desta onda — a primeira porque tem cena de
+truco e a `visaoDoTruco` ganhou campo, a segunda porque exercita `publicar`, que passou a
+publicar a altura da barra. **Nenhuma das duas se mexeu**, que era o esperado; a diferença é
+que agora isso é medição e não previsão.
 
 **O que essas suítes NÃO conseguem ver, por construção:** o truco em qualquer tamanho de tela,
 o truco online, o truco em duplas, e qualquer coisa que só o olho note — cor, legibilidade,
