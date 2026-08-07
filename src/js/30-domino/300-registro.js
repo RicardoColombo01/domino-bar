@@ -61,19 +61,24 @@ JOGOS.domino = {
   motor: {
     nova: novaPartida,
     visao: visaoDe,
-    jogar, comprar, passar,
     proximaMao: novaMao,
     time: timeDe,
     abandonar,
-    // "esta jogada que chegou pelo fio tem forma de jogada deste jogo?" — a guarda que
-    // impede uma mensagem torta de derrubar a mesa do anfitrião (C3 da Fila 11). No dominó
-    // é um par de números de 0 a 6; no truco será uma carta.
-    jogadaDoFio: p => Array.isArray(p) && p.length === 2
-      && p.every(n => Number.isInteger(n) && n >= 0 && n <= MAX_PINTAS),
-    // Duas jogadas são a mesma? O arrasto e a seleção precisam comparar sem saber a forma.
-    mesmaJogada: mesmaPeca,
-    // Como se chama o jeito como a mão acabou ("batida de carroça", "jogo trancado").
-    nomeDoFim: tipo => NOME_BATIDA[tipo] || '',
+    // "HÁ UMA VEZ DE ALGUÉM AGIR?" — serve tanto para a partida quanto para a vista, porque
+    // as duas carregam `fase` e `vez`. Era `fase === 'mao'` escrito em quatro lugares da
+    // casa, e o truco denunciou: lá a mão de 11 é uma fase em que a vez é sua e não há carta
+    // a jogar.
+    emJogo: p => p.fase === 'mao',
+    // A intenção inteira, validada e aplicada aqui dentro. Substituiu `jogar`/`comprar`/
+    // `passar` + `jogadaDoFio` + `nomeDoFim` + a narração escrita na casa — cinco encaixes
+    // por um, e a casa deixou de saber que uma jogada tem peça e ponta.
+    aplicar: aplicarNoDomino,
+    semAMao: semAMaoNoDomino,
+    abertura: aberturaDoDomino,
+    // O que não sobrevive ao JSON e o que só este jogo confere na partida guardada.
+    paraGuardar: guardarODomino,
+    deVolta: dominoDeVolta,
+    partidaValida: partidaDoDominoValida,
   },
 
   // ─── a mesa em 3D ──────────────────────────────────────────────────────────
@@ -105,7 +110,11 @@ JOGOS.domino = {
     // dominó, e a conta é da mesa. Foi para `10-casa/010-constantes.js` e a casa passou a
     // chamá-la direto. **Um encaixe some quando o que ele carregava se descobre da casa** —
     // e o contrato ficar menor é o sinal de que a fronteira melhorou, não piorou.
-    caixaDoMonte,
+    // Era `caixaDoMonte`, e o nome mentia desde sempre: o que ela mede é a FILEIRA do
+    // adversário naquele assento — a caixa que a mão dele ocupa no tampo —, e não o monte.
+    // Com o truco lendo o mesmo encaixe, um nome que só faz sentido num dos jogos passava a
+    // custar uma explicação por leitura.
+    caixaDoAssento: caixaDoMonte,
   },
 
   // ─── escolher → ver → confirmar ────────────────────────────────────────────
@@ -123,15 +132,32 @@ JOGOS.domino = {
   // ─── o bot ─────────────────────────────────────────────────────────────────
   // Níveis são QUANTA INFORMAÇÃO o bot recebe, não três algoritmos — e a dica é o bot
   // pensando com a sua mão, o que só é possível porque ele nunca trapaceou.
-  bot: { jogada: jogadaDoBot, dica: dicaDaVista, NIVEIS },
+  //
+  // `dica` devolve o que DIZER e o que FAZER; o `dicaDaVista` cru continua na ponte, para as
+  // suítes que perguntam pela jogada e não pela frase.
+  bot: { jogada: jogadaDoBot, dica: dicaDoDominoParaACasa, NIVEIS },
 
   // ─── o menu ────────────────────────────────────────────────────────────────
-  menu: { MODOS, MODO_PADRAO, baralho: baralhoDoModo, sobra: sobraDoBaralho },
+  // `baralho` e `sobra` SAÍRAM do contrato: a casa os chamava para escrever "28 peças, 7 para
+  // cada" e para saber se a compra livre valia — duas frases de dominó. Hoje ela pede a nota
+  // pronta e pergunta à própria opção se ela vale. Contrato menor, fronteira melhor.
+  menu: { MODOS, MODO_PADRAO, ALVOS: ALVOS_DO_DOMINO, OPCOES: OPCOES_DO_DOMINO, nota: notaDaMesaDoDomino },
 
-  // ─── os dois encaixes da tela ──────────────────────────────────────────────
-  // O painel de apoio já era um encaixe desde a v3.0.0 (`painelDoJogo`); ele passa a chegar
-  // pelo contrato, junto com os outros, em vez de por uma atribuição solta.
+  // ─── o que a casa DESENHA e o jogo descreve ────────────────────────────────
+  // O painel de apoio já era um encaixe desde a v3.0.0 (`painelDoJogo`). A v4.5 generalizou
+  // os outros quatro pelo mesmo desenho: a casa reserva o lugar e chama, o jogo preenche.
   painel: desenharContagem,
+  hud: {
+    medidores: medidoresDoDomino,
+    barra: barraDoDomino,
+    fimDeMao: fimDeMaoDoDomino,
+    // O botão que ABRE o painel acima. O rótulo e a promessa são do jogo — era a última
+    // frase de dominó viva no `src/pagina.html`.
+    painelBotao: {
+      rotulo: 'Contar',
+      titulo: 'Mostrar quantas peças de cada número já apareceram',
+    },
+  },
 
   // ─── o que as SUÍTES precisam alcançar ─────────────────────────────────────
   // A ponte `window.__jogo` (160-loop.js) expunha `grupoMonte`, `naMao` e `jogadaDoBot` —

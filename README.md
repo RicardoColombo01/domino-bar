@@ -1,15 +1,19 @@
 # Dominó de Bar
 
-Dominó dupla-seis em 3D numa mesa de boteco. De 2 a 4 jogadores, em qualquer mistura
-de gente e bot, na mesma tela ou pela internet.
+Uma **casa de jogos** de boteco em 3D: dominó dupla-seis e **truco paulista**, na mesma aba.
+De 2 a 4 jogadores, em qualquer mistura de gente e bot, na mesma tela ou pela internet.
 
 ### ▶ Jogar agora: **https://ricardocolombo01.github.io/domino-bar/**
 
-**Isto está virando uma casa de jogos.** Há uma faixa de abas no alto do menu, e o **Truco
-Paulista** já está lá — com as regras à mostra, o motor, o bot e o layout escritos e
-testados, mas ainda **sem a mesa em 3D e sem a barra de apostas**, então não dá para sentar
-nele. O link `?jogo=truco` abre direto. Cada jogo guarda a mesa e a partida **na chave dele**,
+**São dois jogos jogáveis.** Uma faixa de abas no alto do menu troca entre eles, e o link
+`?jogo=truco` abre o truco direto. Cada jogo guarda a mesa e a partida **na chave dele**,
 então espiar a aba do lado não custa a partida que está em andamento.
+
+O truco é o **paulista**: 40 cartas, vira e manilha corrida, sem envido e sem flor, até 12
+pontos, de 2 ou de 4 em duplas. Empataram as três vazas, **a mão morre** — é regra desta
+casa, e ela está escrita na tela junto com as outras. Tudo o que o dominó tem de mesa —
+online, conversa, hotseat, dica, teclado, partida guardada — **o truco herdou pronto**, e é
+por isso que ele coube em sete arquivos.
 
 **Dá para instalar como aplicativo**, e depois de uma partida ele **abre sem internet** — o
 service worker guarda o jogo e as duas bibliotecas. Também abre por duplo-clique no
@@ -54,7 +58,9 @@ graça. Bot nunca é obrigatório: dá para montar mesa só de gente.
 - **Contar** liga uma tabelinha do lado com quantas peças de cada número ainda não
   apareceram, contando as da mesa e as da sua mão — e quem já mostrou não ter o número,
   por ter passado. É a conta que jogador bom faz de cabeça; fica desligada por padrão.
-- **Comprar do monte** e **Passar a vez** aparecem no canto quando são possíveis.
+  (O truco não tem esse botão: as vazas ganhas já ficam empilhadas na mesa, à vista.)
+- **Comprar do monte** e **Passar a vez** aparecem no canto quando são possíveis — é o
+  mesmo lugar onde o truco põe *Pedir truco · Aceitar · Correr*.
 - No revezamento local, a tela avisa "passe o computador para o Zé" e **apaga as peças
   da cena** antes de trocar — não é só um overlay por cima.
 
@@ -132,6 +138,35 @@ na mesma regra da mesa de 4 sem precisar de regra nova.
   Carroça não conta, porque jogada numa ponta ela deixa a ponta no mesmo número.
 - **Sair no meio conta como derrota.** Partida até 6 pontos (ou 10, no menu).
 
+### E o truco, na outra aba
+
+**Truco paulista**, que é o de São Paulo e o de boteco: 40 cartas (saem 8, 9 e 10), sem
+envido e sem flor. Partida até 12, de 2 ou de 4 em duplas.
+
+| | |
+|---|---|
+| **força** | 4 · 5 · 6 · 7 · Q · J · K · A · 2 · 3 — o 4 é a mais fraca e o 3 a mais forte |
+| **a vira** | uma carta virada a cada mão; a **manilha** é a seguinte dela nessa ordem (virou 3, a manilha é o 4) |
+| **entre manilhas** | manda o naipe: ouros < espadas < copas < paus |
+| **a mão** | 3 cartas para cada, melhor de 3 vazas |
+| **a aposta** | truco **3** → seis **6** → nove **9** → doze **12**. Quem corre paga o que valia **antes** do pedido |
+| **mão de 11** | quem chega a 11 vê as cartas e decide jogar (valendo 3) ou entregar 1 ponto |
+
+**O "melou" é regra desta casa, e ela tem mais de uma leitura por aí.** Aqui a **primeira
+vaza é o desempate de tudo**: quem a ganhou leva qualquer mão que empate depois. E se as
+**três** empatarem, a mão **morre** — ninguém marca, e embaralha de novo. É irmã da cruzada
+valer 4 no dominó: nenhuma leitura de código chega a essa resposta, ela é escolha de casa.
+
+Na tela, o alto mostra **Vira · Manilha · Vale**, e a barra de ações vira a conversa da
+aposta: *Pedir truco* na sua vez, e *Aceitar · Aumentar para seis · Correr* quando o pedido
+é do outro lado. As vazas ganhas ficam **empilhadas de lado**, viradas para baixo, uma pilha
+por time — porque a conta das vazas é a informação mais importante da mesa depois da sua
+própria mão, e ninguém deveria ter de lembrar dela de cabeça.
+
+Toque na carta, ela levanta e o fantasma mostra onde vai cair; toque de novo, ou no botão, e
+ela vai. **⇄ Arrumar** ordena a mão por força, com a manilha no fim. Não há arrasto: são três
+cartas. O teclado é o mesmo do dominó (`←` `→`, `1` a `3`, `Enter`, `Esc`).
+
 **Compra livre:** ligada, dá para comprar do monte **mesmo podendo jogar** — e comprar não
 passa a vez, então dá para comprar até o monte secar, se quiser. Desligada (o padrão), só
 compra quem não tem jogada.
@@ -202,7 +237,7 @@ existe mais.
 Sem framework, sem bundler. Madeira, piso, as pintas das peças e todos os sons são gerados
 em código na hora — não há um único `.mp3` no repositório, e os únicos binários são os dois
 ícones do aplicativo, que o manifest exige em arquivo. Three.js e PeerJS vêm de CDN. São
-**7.917 linhas** em `src/`.
+**9.226 linhas** em `src/`.
 
 ```
 src/pagina.html      o molde
@@ -215,9 +250,8 @@ src/js/30-domino/    o que é DOMINÓ: constantes, baralho, regras, partida, bot
                      layout, peça 3D, tabuleiro, mão, interação, painel de contagem
 src/js/40-cartas/    BIBLIOTECA: naipes, valores, o baralho de 40 e a carta 3D —
                      o truco paga, o pife e o vinte-e-um herdam
-src/js/50-truco/     o que é TRUCO: regras, motor, bot e layout — tudo o que dá para
-                     provar no terminal. Falta a mesa em 3D e a barra de apostas,
-                     então ele ainda não senta na mesa
+src/js/50-truco/     o que é TRUCO: regras, motor, bot, layout, mesa 3D, interação
+                     e os encaixes de HUD — cinco arquivos, e nenhuma linha de rede
 ```
 
 São **três espécies de pasta**, e o `test-acoplamento` cobra a diferença: a **casa** não
@@ -232,7 +266,14 @@ A separação por pasta existe para o **segundo jogo**, e ela deixou de ser prom
 alcança **zero** nomes de dominó, e há um teste que mede isso a cada `npm test`
 (`test-acoplamento`, uma varredura por AST — `grep` não serve, porque `chave` e `valor`
 também são palavras portuguesas). A camada de rede, as cadeiras, o saguão, a conversa e o
-hotseat nunca precisaram saber que o jogo era dominó, e é isso que o Truco herda de graça.
+hotseat nunca precisaram saber que o jogo era dominó, e é isso que o Truco herdou de graça.
+
+**A casa fala com o jogo por ENCAIXES:** ela reserva o lugar e chama, o jogo preenche. Os
+medidores do alto da tela ("Pontas · Monte · Mão" no dominó, "Vira · Manilha · Vale" no
+truco), a barra de ações ("Comprar do monte" contra "Pedir truco / Aceitar / Correr"), a
+barra de confirmar, a tela de fim de mão e o painel de apoio — nenhum deles está escrito no
+HTML da casa. É o que permite que o mesmo `#acoes` sirva a "Passar a vez" e a "Pedir seis"
+sem uma linha de `if` perguntando qual jogo está na mesa.
 
 A carga tem **três tempos**: a casa DECLARA (010…160), cada jogo se REGISTRA em `JOGOS`
 (300, 500…), e o `900-arranque` escolhe quem senta e liga o loop. O terceiro tempo existe
@@ -257,7 +298,7 @@ npm test            build + o acoplamento e as três suítes de lógica (segundo
 npm run acoplamento a casa alcança ZERO nomes de jogo — varredura por AST, instantânea
                     (traz o `acorn`: rode `cd tests && npm install` uma vez)
 npm run cartas      o baralho de 40 e a carta 3D, no terminal
-npm run truco       as regras, o motor, o bot e o layout do truco, no terminal
+npm run truco       as regras, o motor, o bot, o layout e uma partida inteira do truco
 npm run app         build + manifest, ícones, e o jogo abrindo COM A REDE DESLIGADA
 npm run icones      regera os dois PNG a partir de src/icone.svg
 npm run telas       build + o jogo em seis tamanhos de tela, dez situações cada
@@ -316,10 +357,10 @@ versão que ela vai lançar — `v2`, `v3` —, que nasce de `main`, volta para 
 apagada. A tag é o que fica.
 
 ```
-main   … ── v1.10.0 ── v2.0.0 ── v2.2.0 ─────── v3.0.0 ── v3.1.0 ── v4.0.0 ─────── v4.1.0
-                              ╲            ╱          ╲          ╱      ╲         ╱
-                               ●──●──●──●──            ●──●──●──         ●──●──●──
-                                     v2                     v3              v4.1
+main   … ── v2.0.0 ── v3.0.0 ── v4.0.0 ── v4.1.0 ── v4.2.0 ── v4.3.0 ── v4.4.0 ── v4.5.0
+                   ╱         ╱         ╲         ╱         ╲                    ╱
+        ──●──●──●──  ●──●──●─           ●──●──●──           ●──●──●──●──●──●──●──
+              v2          v3               v4.1                     v4.5
 ```
 
 Até a v1.10.0 o projeto usava GitFlow, com uma `develop` entre as features e a `main`.
@@ -329,7 +370,7 @@ dois merges e dois rebuilds do bundle por release. **Um dia inteiro se perdeu po
 disso**, com a `develop` em dia e a `main` três releases atrás. Hoje há um lugar a menos
 para o trabalho ficar preso.
 
-Vinte e cinco releases até aqui, e três delas dizem bem o que este repositório é: a **v1.6.0** foi a
+Trinta e quatro releases até aqui, e três delas dizem bem o que este repositório é: a **v1.6.0** foi a
 primeira cujos itens vieram quase todos de **jogo de verdade, no celular**, e não de leitura
 de código; a **v1.7.1** veio do contrário — uma varredura atrás do que ainda não tinha
 incomodado ninguém; e a **v1.10.0** fechou os ramos que **existiam e nunca tinham rodado**.
@@ -376,6 +417,21 @@ ocupada** — trocar de jogo com uma partida viva gravaria a partida de um sob a
 outro. Ela também transformou a varredura de acoplamento, que vivia num arquivo temporário,
 no `test-acoplamento`: o invariante "a casa não conhece jogo nenhum" passou de fotografia a
 trava.
+
+A **v4.5.0** fecha a onda: **o truco senta na mesa**. O que ela custou não foi o truco — foi
+a casa. O `test-acoplamento` dizia zero desde a v4.0 e continuava certo (a casa não alcança
+um nome do dominó), mas ela ainda sabia a **forma** das coisas: que uma jogada tem `peca` e
+`ponta`, que uma ação se chama `comprar`, que o alto da tela mostra "Pontas · Monte · Mão",
+que uma mão acaba com alguém *batendo*, que a partida vai até 6 ou 10. Nada disso é nome de
+dominó — é o dominó desenhado em molde, e um truco que quisesse caber teria de fingir ter
+pontas. Cinco encaixes novos depois (medidores, barra de ações, fim de mão, `aplicar` e
+`emJogo`), **o contrato ficou MENOR do que era**: oito verbos saíram, cinco entraram. Contrato
+menor é sinal de fronteira melhor.
+
+E o truco pagou o preço de ser o segundo: ele inventou os encaixes. O terceiro jogo só os
+preenche. **Em número:** o truco inteiro são 7 arquivos e 1.778 linhas, contra ~3.400 da casa
+que ele não escreveu — online P2P, saguão, conversa, hotseat, som, boteco, enquadramento,
+gaveta do celular, teclado, telas de fim e partida guardada, tudo herdado sem uma linha.
 
 O dia a dia: `git switch -c v2` a partir de `main`, commits normais na branch, e no fim ela
 sobe a `version` do `package.json`, roda `npm test`, e volta para `main` com `--no-ff` e a

@@ -54,6 +54,15 @@ function novaMaoDoTruco(P) {
   P.mesa = [];                        // as cartas da vaza em curso
   P.aposta = 1;
   P.pedido = null;                    // { de, time, valor } enquanto alguém espera resposta
+  // QUEM PEDIU POR ÚLTIMO NÃO ATRAVESSA A MÃO. `donoDaAposta` existe para impedir a mesma
+  // dupla de subir a aposta duas vezes seguidas — "truco, seis" saindo da mesma boca —, e
+  // isso vale DENTRO de uma mão. Sem esta linha ele sobrevivia ao embaralho: o time que
+  // trucou na mão 3 e viu o outro aceitar ficava sem poder trucar na 4, na 5 e no resto da
+  // partida, calado.
+  //
+  // Achado pela partida inteira jogada pela casa, e não pelo motor puro: nenhum caso escrito
+  // à mão atravessa duas mãos, e é justamente atravessar que revela o campo que não zera.
+  P.donoDaAposta = null;
   P.correu = null;
   P.resultado = null;
   P.maoNum++;

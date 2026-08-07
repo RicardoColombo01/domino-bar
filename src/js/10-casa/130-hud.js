@@ -7,12 +7,12 @@
 
 const el = id => document.getElementById(id);
 const HUD = {
-  placar: el('placar'), pontas: el('pontasVal'), monte: el('monteVal'), maoN: el('maoVal'),
+  placar: el('placar'), medidores: el('medidores'),
   jogadores: el('jogadores'), vez: el('vez'), aviso: el('aviso'),
   conversa: el('conversa'), lista: el('conversaLista'),
   escrever: el('conversaEscrever'), texto: el('conversaTexto'),
   canal: el('btCanal'), abrirConversa: el('btConversa'),
-  comprar: el('btComprar'), passar: el('btPassar'), acoes: el('acoes'),
+  barra: el('barraJogo'), acoes: el('acoes'),
   arrumar: el('btArrumar'), contar: el('btContagem'), contagem: el('contagem'),
   dica: el('btDica'),
   sala: el('salaVal'), salaPainel: el('salaPainel'),
@@ -41,6 +41,64 @@ let contando = !!lido('contagem', false);
 // Jogo sem painel simplesmente não põe a chave, e o `?.` cobre: ninguém paga um `if`
 // perguntando qual jogo está na mesa.
 const painelDoJogo = vista => JOGO.painel?.(vista);
+
+// ─── os medidores do #topo ───────────────────────────────────────────────────
+// "Pontas · Monte · Mão" estava escrito no `src/pagina.html`, que é da CASA. É a MESMA
+// espécie de vazamento que a Fase 2 tirou dali (o título, os modos e as doze regras), e ele
+// sobreviveu pelo mesmo motivo: `test-acoplamento` mede identificadores, e marcação não tem
+// nenhum. A suíte dizia zero e estava certa — a pergunta é que era estreita.
+//
+// Cada medidor é `{ rot, val }`, e a casa não lê nem um nem outro: só desenha.
+let medidoresHTML = '';
+function desenharMedidores(vista) {
+  const html = (JOGO.hud.medidores(vista) || [])
+    .map(m => `<div class="painel dado"><span class="rot">${escapar(m.rot)}</span>` +
+              `<b>${escapar(m.val)}</b></div>`).join('');
+  // Só reescreve quando muda, e a razão é a mesma do `#vez`: `desenharHUD` roda em TODO
+  // `publicar()`, e trocar innerHTML derruba seleção de texto e força layout à toa.
+  if (html !== medidoresHTML) { medidoresHTML = html; HUD.medidores.innerHTML = html; }
+}
+
+// ─── a barra de ações do jogo ────────────────────────────────────────────────
+// O encaixe que a Fase 1 deixou de fora de propósito. O `#acoes` tinha "Comprar do monte" e
+// "Passar a vez" cravados no HTML, e o truco precisa de trucar / aceitar / correr / aumentar
+// — que nem sequer são jogadas, são APOSTAS.
+//
+// A forma ficou sendo a mais estreita que serve aos dois: **o jogo devolve uma lista de
+// botões, cada um com a INTENÇÃO pronta, e a casa desenha e devolve a intenção ao motor.**
+// A casa não interpreta `acao` — ela é opaca daqui até `JOGO.motor.aplicar`.
+let barraHTML = '';
+function desenharBarra(vista) {
+  const botoes = JOGO.hud.barra(vista) || [];
+  const html = botoes.map((b, i) =>
+    `<button class="btn${b.principal ? ' principal' : ''}" data-i="${i}"` +
+    `${b.titulo ? ` title="${escapar(b.titulo)}"` : ''}>${escapar(b.rotulo)}</button>`).join('');
+  if (html !== barraHTML) { barraHTML = html; HUD.barra.innerHTML = html; }
+  // RELIGA SEMPRE, mesmo com o HTML idêntico — e esta linha vale o parágrafo. O rótulo pode
+  // não mudar enquanto a INTENÇÃO muda: no truco, "Aumentar" continua "Aumentar" enquanto o
+  // valor por trás sobe de 6 para 9. Um `onclick` preso ao array da publicação anterior
+  // mandaria a aposta da vez passada.
+  //
+  // E é a lição do `montarModos` (Fase 2) na outra direção: quem GERA os botões liga os
+  // cliques deles — uma chamada solta no topo do módulo encontraria a faixa vazia.
+  HUD.barra.querySelectorAll('button').forEach(b => {
+    b.onclick = () => pedirAcao(botoes[+b.dataset.i].acao);
+  });
+}
+
+// O BOTÃO DO PAINEL DE APOIO é da casa; o que ele PROMETE é do jogo. O `title` dele dizia
+// "Mostrar quantas peças de cada número já apareceram" dentro do `src/pagina.html` — uma frase
+// que só faz sentido com pinta e monte, morando no arquivo que promete não saber que jogo
+// está na mesa. Foi a última linha de dominó no HTML da casa a cair.
+//
+// Repintado por `abrirJogo`, que é QUANDO ele muda — e não a cada `desenharHUD`, que roda
+// várias vezes por jogada. Um jogo sem painel não põe a chave, e o botão fica escondido de
+// qualquer jeito (ver `desenharHUD`).
+function pintarBotaoDoPainel() {
+  const b = JOGO.hud.painelBotao;
+  HUD.contar.textContent = b ? b.rotulo : 'Painel';
+  HUD.contar.title = b ? b.titulo : '';
+}
 
 const ETIQUETA ={ voce: 'você', local: 'nesta tela', bot: 'bot', online: 'online' };
 
@@ -112,9 +170,7 @@ const rotuloDoModo = modo => Object.hasOwn(JOGO.menu.MODOS, modo) && modo !== JO
   ? escapar(JOGO.menu.MODOS[modo].rotulo) + ' · ' : '';
 
 function desenharHUD(vista) {
-  HUD.pontas.textContent = vista.pontas ? vista.pontas.join('  ·  ') : '—';
-  HUD.monte.textContent = vista.monte;
-  HUD.maoN.textContent = vista.maoNum;
+  desenharMedidores(vista);
 
   // NÚMERO QUE VEM DO FIO TAMBÉM É TEXTO DE FORA, e foi por aqui que a regra do `escapar`
   // vazou pela quarta vez. Repare no desenho do defeito: o NOME ao lado já passava por
@@ -136,7 +192,10 @@ function desenharHUD(vista) {
       <span class="pecas">${'▮'.repeat(Math.max(0, Math.min(vista.naMao[i], 9) || 0))}<i>${escapar(vista.naMao[i])}</i></span>
     </div>`).join('');
 
-  const minhaVez = vista.vez === vista.cadeira && vista.fase === 'mao';
+  // "É a minha vez de agir?" deixou de ser `fase === 'mao'` escrito aqui: no truco há uma
+  // fase inteira — a mão de 11 — em que a vez é sua e ninguém joga carta. Quem responde é o
+  // motor do jogo, com a mesma função que a casa usa para saber se o turno anda.
+  const minhaVez = JOGO.motor.emJogo(vista) && vista.vez === vista.cadeira;
   // ESCREVER SÓ QUANDO MUDA, e isto não é economia: o #vez é `aria-live`, e `desenharHUD`
   // roda em TODO `publicar()` — várias vezes por jogada, inclusive quando a vez não andou.
   // Atribuir `textContent` troca o nó de texto mesmo que a frase seja idêntica, e o leitor
@@ -146,22 +205,21 @@ function desenharHUD(vista) {
   if (HUD.vez.textContent !== frase) HUD.vez.textContent = frase;
   HUD.vez.classList.toggle('minha', minhaVez);
 
-  const a = vista.acoes;
-  HUD.comprar.classList.toggle('oculta', !a.comprar);
-  HUD.passar.classList.toggle('oculta', !a.passar);
+  desenharBarra(vista);
   // Arrumar a mão e contar o jogo não dependem da vez — dá para se organizar enquanto
   // os outros jogam. Por isso a barra de ações passou a aparecer sempre que há mão.
   const temMao = vista.mao && vista.mao.length > 0;
   HUD.arrumar.classList.toggle('oculta', !temMao || vista.mao.length < 2);
-  HUD.contar.classList.toggle('oculta', !temMao);
+  // `!JOGO.painel` porque o botão ABRE o painel do jogo: um jogo sem painel teria aqui um
+  // botão que não faz nada, que é a espécie de defeito que o `refletirMesaNosBotoes` existe
+  // para impedir — o jogo está certo e a tela promete.
+  HUD.contar.classList.toggle('oculta', !temMao || !JOGO.painel);
   HUD.contar.classList.toggle('on', contando);
   // A dica, ao contrário de arrumar e contar, SÓ vale na sua vez: ela levanta uma peça e
   // abre a barra de confirmar, e fora da vez isso seria prometer uma jogada que o motor
   // vai recusar.
-  HUD.dica.classList.toggle('oculta', !temMao || !minhaVez || vista.fase !== 'mao');
-  HUD.acoes.classList.toggle('oculta', !a.comprar && !a.passar && !temMao);
-  // Quando a única saída é comprar, o botão precisa gritar: o jogador está travado.
-  HUD.comprar.classList.toggle('principal', a.comprar && !a.jogadas.length);
+  HUD.dica.classList.toggle('oculta', !temMao || !minhaVez);
+  HUD.acoes.classList.toggle('oculta', !barraHTML && !temMao);
 
   painelDoJogo(vista);
   desenharConversa(vista);
@@ -169,18 +227,20 @@ function desenharHUD(vista) {
   atualizarCortina();
 }
 
-// A barra de confirmação. O rótulo diz o NÚMERO da ponta, não "esquerda/direita" sozinho:
-// na hora de decidir o que importa é em que número a peça vai encostar.
-function mostrarConfirmacao(vista, m) {
-  el('confPeca').textContent = m.peca[0] + ' | ' + m.peca[1];
-  const pt = vista.pontas;
-  el('confBotoes').innerHTML = m.pontas.map(lado => {
-    const rotulo = !pt ? 'Abrir a mão com ela'
-      : lado === 'esq' ? `◀ encaixar no ${pt[0]}` : `encaixar no ${pt[1]} ▶`;
-    return `<button class="btn peq principal" data-lado="${lado}">${rotulo}</button>`;
-  }).join('');
+// A BARRA DE CONFIRMAÇÃO, descrita pelo jogo. Ela sabia ler uma peça (`m.peca[0] | m.peca[1]`)
+// e os dois lados de uma linha de dominó ('esq'/'dir'); uma carta não tem nem uma coisa nem
+// outra — o truco escolhe a carta e confirma, e ponto.
+//
+//   { titulo: '3 | 5',  botoes: [{ rotulo: '◀ encaixar no 3', dado: 'esq' }, …] }
+//
+// `dado` volta INTACTO para `JOGO.toque.confirmar`: é um símbolo do jogo, e a casa nunca o
+// lê. No dominó é o lado; no truco não é nada.
+function mostrarConfirmacao(escolha) {
+  el('confPeca').textContent = escolha.titulo;
+  el('confBotoes').innerHTML = escolha.botoes.map((b, i) =>
+    `<button class="btn peq principal" data-i="${i}">${escapar(b.rotulo)}</button>`).join('');
   el('confBotoes').querySelectorAll('button').forEach(b => {
-    b.onclick = () => JOGO.toque.confirmar(b.dataset.lado);
+    b.onclick = () => JOGO.toque.confirmar(escolha.botoes[+b.dataset.i].dado);
   });
   el('confirmar').classList.remove('oculta');
 }
@@ -376,37 +436,20 @@ function atualizarSaguao(naEspera) {
   atualizarConversa(vistaAtual);
 }
 
-// O que sobrou na mão de cada um. Tinha rótulo nenhum e o mesmo âmbar do placar do
-// topo, então lia-se como pontuação — e é o contrário: é o que ficou por jogar. Em
-// duplas mostra o subtotal do time, porque quem pontua é a dupla.
-function sobrouNaMao(vista) {
-  const r = vista.resultado;
-  if (!vista.duplas) {
-    return r.somas
-      .map((s, i) => `<div><span>${escapar(vista.cadeiras[i].nome)}</span><b>${escapar(s)}</b></div>`).join('');
-  }
-  return (r.somasPorTime || []).map((total, t) => {
-    const parcelas = r.somas.filter((_, i) => JOGO.motor.time(vista, i) === t).map(escapar).join(' + ');
-    return `<div><span>${nomeDoTime(vista, t)}<i>${parcelas}</i></span><b>${escapar(total)}</b></div>`;
-  }).join('');
-}
-
 function mostrarFimDeMao(vista) {
-  const r = vista.resultado;
-  const bateu = r.motivo === 'batida';
+  // COMO A MÃO ACABOU É DO JOGO, inteiro. Esta função sabia o que é bater, o que é trancar,
+  // o que é uma soma de peças e o que é a mão mais leve — quatro conceitos que não existem
+  // no truco, onde a mão acaba por vazas, por alguém correr, por entregar a mão de 11 ou
+  // porque melou. O jogo devolve as quatro frases; a casa põe cada uma no seu lugar.
+  const f = JOGO.hud.fimDeMao(vista);
   // Esta tela vinha sendo PULADA na mão que decide a partida: fecharMao põe fase='fim'
   // direto quando alguém chega ao alvo, e você caía no campeão sem nunca ver de onde
   // vieram os pontos. Agora ela aparece sempre, e o botão vira o passo para o resultado.
   const acabou = vista.fase === 'fim';
-  el('fimTitulo').textContent = bateu ? 'Bateu!' : 'Trancou';
-  el('fimTipo').textContent = JOGO.motor.nomeDoFim(r.tipo);
-  // "Zé e Tião fazem", não "faz": em duplas o sujeito é a dupla.
-  const fazem = vista.duplas ? 'fazem' : 'faz';
-  el('fimQuem').textContent = r.time === null
-    ? 'Empate na contagem — ninguém marca.'
-    : `${nomeDoTime(vista, r.time)} ${fazem} ${r.pontos === 1 ? '1 ponto' : `${r.pontos} pontos`}` +
-      (bateu ? '' : ` · mão mais leve com ${vista.cadeiras[r.vencedor].nome}`);
-  el('fimSobrou').innerHTML = sobrouNaMao(vista);
+  el('fimTitulo').textContent = f.titulo;
+  el('fimTipo').textContent = f.tipo;
+  el('fimQuem').textContent = f.quem;
+  el('fimSobrou').innerHTML = f.detalhe;
   el('btProxima').textContent = acabou ? 'Ver o resultado' : 'Próxima mão';
   // São duas condições diferentes, não uma. "Próxima mão" mexe na partida e o convidado
   // não tem uma na memória — o botão chamaria novaMao(null). "Ver o resultado" é

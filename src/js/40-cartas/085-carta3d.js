@@ -189,7 +189,15 @@ function criarCarta(carta, proprio) {
   const face = new THREE.Mesh(faceDaCarta(carta[0], carta[1]), matFaceCarta);
   face.rotation.x = -Math.PI / 2;
   face.position.y = CARTA_E / 2 + 0.003;
-  g.add(corpo, face);
+  // O VERSO VAI JUNTO, e não é simetria gratuita: uma carta que já foi jogada pode ser
+  // RECOLHIDA — quem ganha a vaza junta as cartas e as põe viradas na sua frente. Isso é uma
+  // volta de 180° no mesmo objeto, deslizando, e sem esta face o que apareceria do outro lado
+  // seria o creme liso do corpo. Girar o objeto que já está na mesa é mais barato e MUITO
+  // mais legível que trocá-lo por outro: com objeto novo não há de onde animar.
+  const costas = new THREE.Mesh(new THREE.PlaneGeometry(CARTA_L, CARTA_C), matVersoCarta);
+  costas.rotation.x = Math.PI / 2;
+  costas.position.y = -CARTA_E / 2 - 0.003;
+  g.add(corpo, face, costas);
   g.userData = { carta, corpo };
   return g;
 }
@@ -238,8 +246,10 @@ function criarFantasmaDeCarta(carta) {
 // pode conhecer `40-cartas/` — o `test-acoplamento` reprovaria, e com razão. Quem se expõe
 // aqui é a BIBLIOTECA, para a casa continuar sem saber que ela existe.
 //
-// Some quando o truco chegar: aí as cartas viram `JOGO.ponte` dele, que é onde o dominó já
-// põe as peças, e esta linha deixa de ter motivo.
+// A v4.5 CORRIGIU A PREVISÃO que estava escrita aqui ("some quando o truco chegar"). O truco
+// expõe as mesmas funções no `JOGO.ponte` dele, e isso serve às asserções DO TRUCO; o que este
+// arquivo precisa é ser alcançável **sem passar por jogo nenhum** — a biblioteca serve a três
+// jogos, e o teste dela não pode depender de qual está na mesa.
 window.__cartas = {
   criarCarta, criarVersoDeCarta, criarFantasmaDeCarta, faceDaCarta,
   medidas: { CARTA_L, CARTA_C, CARTA_E, CEL_CARTA, COLS_CARTA, LINS_CARTA },

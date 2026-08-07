@@ -51,7 +51,7 @@ const mod = await import(buildModule([
   // `peer.on('connection')` — lá dentro ele é inalcançável no harness, e é justamente ele
   // que põe o defeito relatado (sair e não conseguir voltar) dentro da suíte rápida.
   'desistiuDaMesa',
-  'ajustarCompraAoModo', 'sobraDoBaralho',
+  'ajustarOpcoesAoModo', 'sobraDoBaralho',
   // `acoesDe` entra para a cena do despachante PODER PROVAR que alcançou o ramo perigoso:
   // fora da vez (ou com peça obrigatória de fora da mão) ela devolve `jogadas: []`, o
   // `.some` de `jogar` curto-circuita e o TypeError do C3 nunca acontece — seis asserções
@@ -67,7 +67,7 @@ const mod = await import(buildModule([
   // convidado vem inteira do fio. Chamá-los direto é o que permite envenenar um campo de
   // cada vez numa vista de verdade — pela `atualizarVista` o teste mediria de quebra a mão,
   // o tabuleiro e o monte, e uma falha ali falaria de outra coisa.
-  'desenharHUD', 'mostrarFimDeMao', 'escapar',
+  'desenharHUD', 'mostrarFimDeMao', 'escapar', 'JOGO',
   // `linkAnfitriao` é o lado CONVIDADO do fio, e ele não tinha uma linha de teste: o
   // `linkAnfitriao.on('data')` mora dentro de dois callbacks aninhados do PeerJS. Com o
   // dublê gravando ouvintes dá para dirigi-lo, e é onde entra a vista que vem de fora.
@@ -683,7 +683,7 @@ console.log('\no select de cadeira mostra o que está valendo');
   // joga Clássico de 2 com compra livre e espia o Duelo espera a marca de volta ao voltar.
   {
     mod.MESA.modo = 'classico'; mod.MESA.n = 2; mod.MESA.compraVoluntaria = true;
-    mod.MESA.modo = 'duelo'; mod.MESA.n = 2; mod.ajustarCompraAoModo();
+    mod.MESA.modo = 'duelo'; mod.MESA.n = 2; mod.ajustarOpcoesAoModo();
     ok(mod.MESA.compraVoluntaria === true,
       'passar por um modo sem monte apagou a preferência de compra livre');
   }
@@ -695,6 +695,39 @@ console.log('\no select de cadeira mostra o que está valendo');
     ok(b && (b.split('</select>')[0].match(/<option /g) || []).length === 5,
       `a cadeira ${i} devia oferecer as 5 opções de sempre`);
   }
+}
+
+// ─── a barra de ações do dominó ──────────────────────────────────────────────
+// Ela virou ENCAIXE na v4.5 (`JOGO.hud.barra`), e até então não tinha uma linha de teste:
+// "Comprar do monte" e "Passar a vez" estavam escritos no `src/pagina.html`, e um
+// `classList.toggle('oculta', …)` invertido não derrubava suíte nenhuma. Agora a barra é
+// DADO — uma lista de botões que o jogo devolve —, e dado se confere.
+console.log('\na barra de ações oferece o que o motor aceita');
+{
+  const rotulos = (comprar, passar, jogadas) =>
+    mod.JOGO.hud.barra({ acoes: { comprar, passar, jogadas } }).map(b => b.rotulo.toLowerCase());
+
+  ok(rotulos(false, false, [{}]).length === 0,
+    'a barra ofereceu botão sem haver o que comprar nem o que passar');
+  ok(rotulos(true, false, [{}]).some(r => r.includes('comprar')), 'faltou "Comprar do monte"');
+  ok(rotulos(false, true, []).some(r => r.includes('passar')), 'faltou "Passar a vez"');
+  ok(!rotulos(false, true, []).some(r => r.includes('comprar')),
+    'ofereceu comprar onde o motor não oferece — botão que promete e não cumpre');
+
+  // "QUANDO A ÚNICA SAÍDA É COMPRAR, O BOTÃO PRECISA GRITAR." A regra é do dominó, e ela veio
+  // junto com o botão quando ele saiu do HTML da casa — sem ela, o jogador travado não tem
+  // para onde olhar.
+  const travado = mod.JOGO.hud.barra({ acoes: { comprar: true, passar: false, jogadas: [] } });
+  ok(travado[0] && travado[0].principal === true,
+    'comprar sem jogada nenhuma devia ser o botão principal');
+  const comJogada = mod.JOGO.hud.barra({ acoes: { comprar: true, passar: false, jogadas: [{}] } });
+  ok(comJogada[0] && !comJogada[0].principal,
+    'comprar virou principal mesmo havendo jogada — a ênfase perde o sentido');
+
+  // E A INTENÇÃO CHEGA PRONTA: a casa a devolve ao motor sem olhar dentro, e é isso que faz
+  // o mesmo `#acoes` servir a "Passar a vez" e a "Pedir seis".
+  ok(travado[0] && travado[0].acao && travado[0].acao.acao === 'comprar',
+    'o botão não trouxe a intenção pronta');
 }
 
 // Sensibilidade vestibular não é preferência estética: para quem tem, movimento na tela dá

@@ -49,11 +49,18 @@ function mesaLembrada() {
   // acima promete cobrir — a validação existia e tinha um buraco do tamanho do protótipo.
   const modo = Object.hasOwn(JOGO.menu.MODOS, g.modo) ? g.modo : JOGO.menu.MODO_PADRAO;
   const cabem = JOGO.menu.MODOS[modo].cadeiras;
-  return {
+  // O ALVO E AS OPÇÕES SAEM DO JOGO. Aqui estava `g.alvo === 10 ? 10 : 6` — os dois alvos do
+  // dominó cravados na casa —, e uma partida de truco vai até 12. Mesma validação de sempre:
+  // o guardado só vale se o jogo de HOJE ainda o oferece.
+  const opcoes = {};
+  for (const o of JOGO.menu.OPCOES) {
+    const escolhido = o.valores.find(x => x.v === g[o.campo]);
+    opcoes[o.campo] = (escolhido || o.valores[0]).v;
+  }
+  return Object.assign({
     modo,
     n: cabem.includes(g.n) ? g.n : cabem[0],
-    alvo: g.alvo === 10 ? 10 : 6,
-    compraVoluntaria: g.compraVoluntaria === true,
+    alvo: JOGO.menu.ALVOS.includes(g.alvo) ? g.alvo : JOGO.menu.ALVOS[0],
     cadeiras: NOMES.slice(0, 4).map((nome, i) => {
       const c = (Array.isArray(g.cadeiras) && g.cadeiras[i]) || {};
       const tipo = i === 0 ? 'voce' : (TIPOS_VALIDOS.has(c.tipo) ? c.tipo : 'bot');
@@ -87,7 +94,7 @@ function mesaLembrada() {
         vagaOnline: false,
       };
     }),
-  };
+  }, opcoes);
 }
 
 // A MESA NASCE VAZIA E É PREENCHIDA NO ARRANQUE, e não é preciosismo: `mesaLembrada()`
@@ -104,10 +111,15 @@ const MESA = {};
 // Guarda as quatro cadeiras, e não só as `n` em uso: quem joga em três e volta para
 // quatro esperava o nome do quarto de volta, não "Tião" outra vez.
 function lembrarMesa() {
-  guardarNoJogo('mesa', {
-    n: MESA.n, modo: MESA.modo, alvo: MESA.alvo, compraVoluntaria: MESA.compraVoluntaria,
+  const guardado = {
+    n: MESA.n, modo: MESA.modo, alvo: MESA.alvo,
     cadeiras: MESA.cadeiras.map(c => ({ nome: c.nome, tipo: c.tipo, nivel: c.nivel })),
-  });
+  };
+  // As opções do jogo, pelo nome que ELE deu — `compraVoluntaria` era o único e estava
+  // escrito aqui. Copiar campo a campo em vez de `Object.assign(…, MESA)` é de propósito: a
+  // MESA carrega `vagaOnline` e outras marcas de sessão que não podem ser persistidas.
+  for (const o of JOGO.menu.OPCOES) guardado[o.campo] = MESA[o.campo];
+  guardarNoJogo('mesa', guardado);
 }
 
 // O `escapar` no `value=` foi a TERCEIRA mordida da mesma classe. `listarSala` (150-rede)
@@ -159,15 +171,12 @@ function montarCadeiras() {
   atualizarBotaoComecar();
 }
 
-// O tamanho do baralho sai de baralhoDoModo, não de um 28 escrito aqui — foi assim que
-// esta linha quebrou quando os modos chegaram.
+// A linha embaixo das cadeiras: "28 peças, 7 para cada · monte com 14". Ela era escrita aqui
+// e falava de PEÇA e de MONTE — quem sabe o que a mesa distribui é o jogo. As duplas ficam
+// com a casa, porque duplas em cruz é regra de mesa e não de baralho.
 function notaDaMesa() {
-  const m = JOGO.menu.MODOS[MESA.modo];
-  const baralho = JOGO.menu.baralho(m).length;
-  const monte = baralho - m.pecasPorMao * MESA.n;
   return (MESA.n === 4 ? 'em duplas: 1 e 3 contra 2 e 4' : 'sem duplas') +
-    ` · ${baralho} peças, ${m.pecasPorMao} para cada · ` +
-    (monte > 0 ? `monte com ${monte}` : 'sem monte — quem não pode jogar, passa');
+    ' · ' + JOGO.menu.nota(MESA);
 }
 
 // Duelo é 1v1 e Trio é para três porque o baralho divide EXATO nessas contas: fora
@@ -181,26 +190,27 @@ function ajustarCadeirasAoModo() {
     b.disabled = !cabem.includes(n);
     b.classList.toggle('on', !b.disabled && n === MESA.n);
   });
-  ajustarCompraAoModo();
+  ajustarOpcoesAoModo();
 }
 
-// COMPRA LIVRE SÓ EXISTE ONDE EXISTE MONTE. O botão ficava aceso no Duelo, no Trio e no
-// Clássico de 4, prometendo uma regra que o motor descarta em silêncio — `acoesDe` exige
-// `temMonte` antes de qualquer coisa. É a mesma espécie de defeito que o
-// `refletirMesaNosBotoes` existe para impedir: o jogo está certo e a tela mente.
+// UMA OPÇÃO NEM SEMPRE VALE NA MESA QUE ESTÁ MONTADA. A compra livre do dominó ficava acesa
+// no Duelo, no Trio e no Clássico de 4, prometendo uma regra que o motor descarta em silêncio
+// — a mesma espécie de defeito que o `refletirMesaNosBotoes` existe para impedir: o jogo está
+// certo e a tela mente.
 //
-// A pergunta NÃO é "qual modo": o Clássico tem monte com 2 ou 3 jogadores e nenhum com 4.
-// Quem responde é `sobraDoBaralho`, em 020-baralho.js, pelo mesmo motivo de sempre —
-// aritmética de baralho escrita à mão no menu já quebrou uma vez.
+// Quem responde "vale aqui?" é o JOGO, com a mesa inteira na mão (não só o modo: o Clássico
+// tem monte com 2 ou 3 jogadores e NENHUM com 4). E o botão desligado vem com a nota dizendo
+// POR QUE não dá — botão apagado sem explicação é o jogo emudecendo.
 //
 // A preferência guardada NÃO é apagada quando o botão desliga: quem jogava Clássico de 2 com
 // compra livre e dá uma passada pelo Duelo esperava a marca de volta ao voltar. O motor
-// ignora o valor onde não há monte, então guardá-lo não custa nada — e é o `disabled` que
-// impede a promessa.
-function ajustarCompraAoModo() {
-  const temMonte = JOGO.menu.sobra(JOGO.menu.MODOS[MESA.modo], MESA.n) > 0;
-  el('compraLivre').querySelectorAll('button').forEach(b => { b.disabled = !temMonte; });
-  el('notaCompra').textContent = temMonte ? '' : 'sem monte nesta mesa';
+// ignora o valor onde a opção não vale, então guardá-lo não custa nada.
+function ajustarOpcoesAoModo() {
+  for (const o of JOGO.menu.OPCOES) {
+    const vale = !o.vale || o.vale(MESA);
+    el(o.id).querySelectorAll('button').forEach(b => { b.disabled = !vale; });
+    el(o.id + 'Nota').textContent = vale ? '' : (o.porQueNao || '');
+  }
 }
 
 const cadeirasOnline = () => MESA.cadeiras.slice(0, MESA.n).filter(c => c.tipo === 'online').length;
@@ -247,11 +257,41 @@ function montarModos() {
   grupo('modoMesa', 'modo', v => { MESA.modo = v; ajustarCadeirasAoModo(); montarCadeiras(); lembrarMesa(); });
 }
 
-// `ajustarCompraAoModo` entra aqui também, e não só no modo: o Clássico tem monte com 2 ou
+// `ajustarOpcoesAoModo` entra aqui também, e não só no modo: o Clássico tem monte com 2 ou
 // 3 jogadores e NENHUM com 4, então trocar só o número de jogadores muda a resposta.
-grupo('qtdJogadores', 'n', v => { MESA.n = +v; montarCadeiras(); ajustarCompraAoModo(); lembrarMesa(); });
-grupo('alvoPontos', 'alvo', v => { MESA.alvo = +v; lembrarMesa(); });
-grupo('compraLivre', 'livre', v => { MESA.compraVoluntaria = v === '1'; lembrarMesa(); });
+grupo('qtdJogadores', 'n', v => { MESA.n = +v; montarCadeiras(); ajustarOpcoesAoModo(); lembrarMesa(); });
+
+// ─── o alvo e as opções, gerados do jogo ─────────────────────────────────────
+// "6 pontos / 10 pontos" e a linha inteira da compra livre estavam escritas no
+// `src/pagina.html`. Um truco vai até 12 e não tem compra nenhuma — e mais uma vez o
+// `test-acoplamento` dizia zero com razão, porque marcação não tem identificador.
+//
+// Os `data-*` são os MESMOS de antes (`data-alvo`, `data-livre`), e não por acaso: eles são
+// a única superfície pela qual as suítes de navegador mexem no menu, e trocá-los seria
+// reescrever teste para caber em conserto — que é o contrário do que teste serve.
+function montarAlvos() {
+  el('alvoPontos').innerHTML = JOGO.menu.ALVOS
+    .map(v => `<button class="btn peq" data-alvo="${v}">${v} pontos</button>`).join('');
+  grupo('alvoPontos', 'alvo', v => { MESA.alvo = +v; lembrarMesa(); });
+}
+
+function montarOpcoes() {
+  el('opcoesDaMesa').innerHTML = JOGO.menu.OPCOES.map(o =>
+    `<span class="rot afastado">${escapar(o.rot)}</span>` +
+    `<div class="grupo" id="${escapar(o.id)}">` +
+    o.valores.map(x => `<button class="btn peq" data-${escapar(o.dado)}="${escapar(x.dado)}">` +
+      `${escapar(x.rotulo)}</button>`).join('') +
+    `</div><span class="nota" id="${escapar(o.id)}Nota"></span>`).join('');
+  // Quem gera os botões liga os cliques deles — a lição do `montarModos`, e aqui ela é
+  // obrigatória: os elementos não existem até esta linha rodar.
+  for (const o of JOGO.menu.OPCOES) {
+    grupo(o.id, o.dado, s => {
+      const achado = o.valores.find(x => x.dado === s);
+      if (achado) MESA[o.campo] = achado.v;
+      lembrarMesa();
+    });
+  }
+}
 
 // Os botões nascem marcados no HTML com o PADRÃO. Se a preferência lembrada for outra, a
 // marca tem de andar até ela — senão a tela diz "Clássico · 6 pontos" e a partida começa
@@ -266,7 +306,10 @@ function marcarGrupo(id, attr, valor) {
 function refletirMesaNosBotoes() {
   marcarGrupo('modoMesa', 'modo', MESA.modo);
   marcarGrupo('alvoPontos', 'alvo', MESA.alvo);
-  marcarGrupo('compraLivre', 'livre', MESA.compraVoluntaria ? 1 : 0);
+  for (const o of JOGO.menu.OPCOES) {
+    const atual = o.valores.find(x => x.v === MESA[o.campo]) || o.valores[0];
+    marcarGrupo(o.id, o.dado, atual.dado);
+  }
 }
 
 el('btComecar').onclick = () => {

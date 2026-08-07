@@ -29,9 +29,13 @@ __ESTILO__
 
 <div id="topo">
   <div class="painel" id="placar"></div>
-  <div class="painel dado"><span class="rot">Pontas</span><b id="pontasVal">—</b></div>
-  <div class="painel dado"><span class="rot">Monte</span><b id="monteVal">0</b></div>
-  <div class="painel dado"><span class="rot">Mão</span><b id="maoVal">1</b></div>
+  <!-- OS MEDIDORES SAEM DO JOGO. Aqui estava escrito "Pontas · Monte · Mão", que é o
+       vocabulário do dominó dentro do HTML da CASA — a mesma coisa que as doze linhas de
+       regra que a Fase 2 tirou daqui, e pelo mesmo motivo invisível: o `test-acoplamento`
+       varre identificadores, e marcação não tem nenhum. Um truco não tem ponta nem monte;
+       tem vira, aposta e vazas. Quem preenche é `JOGO.hud.medidores(vista)`.
+       O invólucro é `display: contents` para não virar uma caixa nova dentro do #topo. -->
+  <div id="medidores"></div>
   <!-- Só na mesa online. O código sempre foi feito para ser compartilhado — o alfabeto
        exclui I, O, 0 e 1 justamente porque ele é para ditar em voz alta —, e antes ele
        desaparecia da tela no instante em que a partida começava. -->
@@ -41,11 +45,16 @@ __ESTILO__
 <div id="jogadores"></div>
 
 <div id="acoes">
-  <button class="btn" id="btComprar">Comprar do monte</button>
-  <button class="btn" id="btPassar">Passar a vez</button>
+  <!-- A BARRA DO JOGO, que era "Comprar do monte" e "Passar a vez" escritos à mão. Foi o
+       encaixe que a Fase 1 deixou de fora de propósito, porque sem o truco escrito a forma
+       dele seria chute: hoje `acoesDoTruco` diz exatamente o que o botão precisa saber, e a
+       forma ficou sendo "o jogo devolve uma lista de botões; a casa desenha". -->
+  <div id="barraJogo"></div>
   <button class="btn peq" id="btDica" title="Sugerir uma jogada e dizer por quê">? Dica</button>
   <button class="btn peq" id="btArrumar" title="Agrupar a mão pelo seu número mais forte">⇄ Arrumar</button>
-  <button class="btn peq" id="btContagem" title="Mostrar quantas peças de cada número já apareceram">Contar</button>
+  <!-- O rótulo e o title saem do jogo (`JOGO.hud.painelBotao`): "quantas peças de cada
+       número já apareceram" é uma frase que só faz sentido com pinta e monte. -->
+  <button class="btn peq" id="btContagem">Painel</button>
 </div>
 
 <div id="contagem" class="painel oculta"></div>
@@ -140,20 +149,14 @@ __ESTILO__
 
     <div id="cadeiras"></div>
 
+    <!-- "6 pontos / 10 pontos" e "Compra livre" também eram dominó escrito à mão: uma
+         partida de truco vai até 12, e compra livre é uma regra que só existe onde existe
+         monte. Os alvos saem de `JOGO.menu.ALVOS` e as opções de `JOGO.menu.OPCOES` — um
+         jogo sem opção nenhuma simplesmente não desenha a segunda metade da linha. -->
     <div class="linha">
       <span class="rot">Partida até</span>
-      <div class="grupo" id="alvoPontos">
-        <button class="btn peq on" data-alvo="6">6 pontos</button>
-        <button class="btn peq" data-alvo="10">10 pontos</button>
-      </div>
-      <span class="rot" style="margin-left:18px">Compra livre</span>
-      <div class="grupo" id="compraLivre">
-        <button class="btn peq on" data-livre="0">não</button>
-        <button class="btn peq" data-livre="1">sim</button>
-      </div>
-      <!-- Escrito por ajustarCompraAoModo: o botão desligado diz que não dá, e esta nota
-           diz POR QUE não dá. Sem ela o jogador troca de modo e a regra some sem motivo. -->
-      <span class="nota" id="notaCompra"></span>
+      <div class="grupo" id="alvoPontos"></div>
+      <div id="opcoesDaMesa"></div>
     </div>
 
     <div class="linha acoesMenu">

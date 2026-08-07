@@ -1,16 +1,16 @@
 # Dominó de Bar — guia do projeto
 
-Uma **casa de jogos** de boteco em 3D no navegador. O dominó dupla-seis está pronto — de 2 a
-4 jogadores em qualquer mistura de gente e bot, na mesma tela ou pela internet —, e o **Truco
-Paulista** já tem aba, nome e regras à mostra, faltando o motor. No ar em
+Uma **casa de jogos** de boteco em 3D no navegador. **Dois jogos jogáveis**, na mesma aba: o
+dominó dupla-seis e o **Truco Paulista** — os dois de 2 a 4 jogadores, em qualquer mistura de
+gente e bot, na mesma tela ou pela internet. No ar em
 **https://ricardocolombo01.github.io/domino-bar/** (repo público `RicardoColombo01/domino-bar`).
 
 Sem framework, sem bundler, e **dois binários** — os ícones do aplicativo, exigidos pelo
-manifest: madeira, pintas e sons continuam gerados em canvas e WebAudio na hora. Three.js e
-PeerJS vêm de CDN, e o **service worker os guarda**, então depois de uma partida o jogo abre
-sem internet. **7.917 linhas** no total (`src/js` + `src/pagina.html` + `src/css/estilo.css`
-+ `src/sw.js`), conferido em 06/08/2026 — este número **envelhece**, e envelheceu: ficou
-dizendo 2.100 por três releases seguidas.
+manifest: madeira, pintas, cartas e sons continuam gerados em canvas e WebAudio na hora.
+Three.js e PeerJS vêm de CDN, e o **service worker os guarda**, então depois de uma partida o
+jogo abre sem internet. **9.226 linhas** no total (`src/js` + `src/pagina.html` +
+`src/css/estilo.css` + `src/sw.js`), conferido em 06/08/2026 — este número **envelhece**, e
+envelheceu: ficou dizendo 2.100 por três releases seguidas.
 
 **Conte com `node`, não com o PowerShell.** `Measure-Object -Line` **não conta linha em
 branco** e devolve ~450 a menos; a discordância entre as duas réguas já custou uma
@@ -24,7 +24,8 @@ npm run check     avisa se o index.html OU o sw.js estão desatualizados
 npm test          build + o acoplamento, as cartas e as três suítes de lógica
 npm run acoplamento  a casa alcança ZERO nomes de jogo (varredura por AST, instantânea)
 npm run cartas    o baralho de 40 e a carta 3D, no terminal
-npm run truco     as regras, o motor, o bot e o layout do truco (252 asserções)
+npm run truco     o truco inteiro: regras, motor, bot, layout, a mesa 3D, a barra de
+                  apostas e UMA PARTIDA DO COMEÇO AO FIM pela casa (320 asserções)
 npm run app       build + manifest, ícones e o jogo abrindo COM A REDE DESLIGADA (~30 s)
 npm run icones    regera icone-192.png e icone-512.png a partir de src/icone.svg
 npm run telas     build + o jogo em seis tamanhos de tela (retrato, paisagem, tablet, wide)
@@ -155,8 +156,9 @@ src/sw.js                        o molde do service worker, com __VERSAO__
 src/icone.svg                    a fonte dos dois PNG do manifest
 
 — 1º tempo: A CASA DECLARA ————————————————————————————————————————————————
-10-casa/010-constantes   JOGOS/JOGO/jogavel, cores, movimento reduzido, EMBARALHAR,
-                         ANGULO DA CADEIRA, guardar/lido/esquecer — e as chaves POR JOGO
+10-casa/010-constantes   JOGOS/JOGO/jogavel/estaNaMesa, cores, movimento reduzido,
+                         EMBARALHAR, ANGULO DA CADEIRA, CHEGAR PERTO (a suavização),
+                         guardar/lido/esquecer — e as chaves POR JOGO
 30-domino/015-constantes peça, MODOS, pontuação, medidas do tabuleiro
 30-domino/020-baralho    distribuir (com re-embaralho), quem abre, sobraDoBaralho
 30-domino/030-regras     encaixes, pontas, jogadas válidas, tipo de batida     ← puro
@@ -171,22 +173,27 @@ src/icone.svg                    a fonte dos dois PNG do manifest
 50-truco/520-partida     vazas, aposta, mão de 11, placar, visaoDoTruco
 50-truco/530-bot         que carta jogar E quando apostar; nível = informação
 50-truco/540-layout      onde cada carta cai; a vira no centro, as vazas de lado ← puro
+50-truco/550-mesa        a mesa do truco em 3D: a vira, a vaza, as pilhas, a sua mão
+50-truco/560-interacao   raycast: escolher → ver → confirmar (sem arrasto: são 3 cartas)
 30-domino/090-tabuleiro  reconcilia o tabuleiro com a visão; prévia da jogada
 30-domino/100-mao        sua mão em leque, mãos dos outros, monte
 30-domino/110-interacao  raycast: escolher → ver → confirmar
 10-casa/120-audio        WebAudio puro, sem arquivo
-10-casa/130-hud          placar, vez, botões, telas de fim, o encaixe painelDoJogo
+10-casa/130-hud          placar, vez, telas de fim — e os encaixes medidores/barra/painel
 30-domino/135-contagem   o que vai DENTRO do painel: quantas peças faltam aparecer
-10-casa/140-menu         montagem da mesa (as cadeiras) + os modos, gerados de JOGO.menu
+30-domino/137-encaixes   o que a casa PEDE, respondido em dominó: medidores, barra,
+                         confirmação, fim de mão, aplicar, dica, alvos e opções do menu
+10-casa/140-menu         montagem da mesa (as cadeiras) + modos, alvos e opções, gerados
 10-casa/141-abas         QUAL JOGO está na mesa: a faixa, a URL, a preferência, a ponte
 10-casa/145-saguao       a tela do online: código, quem chegou, os quatro cliques
 10-casa/150-rede         PeerJS, anfitrião autoritativo — ZERO chamadas ao DOM
 10-casa/160-loop         estado do app, turno, hotseat, render loop
+50-truco/575-encaixes    os mesmos encaixes, respondidos em truco — a aposta é a barra
 
 — 2º tempo: CADA JOGO SE REGISTRA ——————————————————————————————————————————
 30-domino/300-registro   o contrato do dominó: motor, mesa, toque, bot, menu, painel,
-                         regras (o texto que o menu mostra) e a ponte das suítes
-50-truco/590-registro    nome, resumo e regras — e `emBreve`, que o separa de JOGÁVEL
+                         hud, regras (o texto que o menu mostra) e a ponte das suítes
+50-truco/590-registro    o contrato do truco — o mesmo, sem `painel` e sem `emBreve`
 
 **O REGISTRO É O ÚLTIMO ARQUIVO DO JOGO**, e o número 590 (era 500) é o preço de descobrir
 isso: registro é executado NA HORA em que é concatenado, e a partir da Fase 4 ele cita
@@ -549,6 +556,60 @@ por mutação nas quatro direções, inclusive as duas de falso positivo.
   `flex-direction` do `.tela` teria mexido no `margin: auto` que conserta o topo inalcançável
   (Fila 10, item 2). O que não mexe em nada é ENVOLVER os dois num item só, e mudar o dono da
   margem automática.
+- **Acoplamento também se escreve em FORMA, e é a borda que o AST e o HTML não alcançam.** A
+  casa não citava um nome do dominó e mesmo assim sabia que uma jogada tem `peca` e `ponta`,
+  que uma ação se chama `comprar`, que o topo mostra "Pontas · Monte · Mão" e que uma mão acaba
+  com alguém BATENDO. `vista.pontas` é acesso a propriedade e "Pontas" é texto de marcação —
+  nenhum dos dois é identificador livre, e a varredura estava certa em dizer zero. **Ao auditar
+  a fronteira casa/jogo, a terceira pergunta (depois de "que nomes?" e "que textos?") é: a casa
+  sabe o FORMATO de alguma coisa que só um dos jogos tem?**
+- **`display: contents` é o que faz um invólucro gerado custar ZERO em layout.** Os medidores
+  do `#topo` e os botões do `#acoes` passaram a ser gerados pelo jogo, e um `<div>` comum ali
+  viraria UMA caixa flex dentro do pai — os quatro painéis encolheriam juntos como um bloco só,
+  e as regras de tela estreita (`#topo .painel`, `#acoes .btn`) continuariam casando com os
+  filhos enquanto brigavam com um pai que eles não deviam ter. Com `contents` o elemento some do
+  layout e o `test-telas` continua medindo exatamente as mesmas caixas de antes.
+- **Ouvinte global de jogo continua vivo quando o OUTRO jogo está na mesa.** Os
+  `addEventListener` são registrados na carga e o escopo é um só: um toque na carta de truco
+  passava primeiro pelo `pointerdown` do dominó, que não achava nada no raycast, concluía
+  "clicou na mesa vazia" e cancelava a escolha — fechando a barra de confirmar que o truco ia
+  abrir. **Não aparecia porque o dominó é concatenado ANTES**, e o truco reabria a barra em
+  seguida: a ordem dos arquivos escondendo o defeito, que é a pior espécie de sorte. Hoje todo
+  ouvinte de jogo começa com `if (!estaNaMesa(JOGOS.x)) return;`.
+- **Bug de regra que atravessa DUAS mãos não existe para caso escrito à mão.** `donoDaAposta`
+  (que impede a mesma dupla de subir a aposta duas vezes seguidas) não era zerado no embaralho,
+  então o time que trucou na mão 3 ficava sem poder trucar no resto da partida — calado. Quem
+  achou foi a partida INTEIRA jogada pela casa, e é por isso que ela vale as suas duas dezenas
+  de linhas: nenhum caso de teste escrito à mão atravessa um `novaMao`.
+- **Duas bocas falam com o motor, e elas têm vocabulários diferentes.** A barra manda
+  `{acao:'trucar'}` (o botão diz "Pedir truco" ou "Aumentar para seis", mas a ação é uma só) e o
+  bot manda o veredito de `responderAposta`, que é literalmente `'aceitar'|'correr'|'aumentar'`.
+  Sem os dois nomes no motor, a vez do bot que resolvia aumentar não acontecia — **mesa parada,
+  sem mensagem e sem botão**. Ao criar uma ação nova, pergunte QUEM a manda, no plural.
+- **Cena de teste montada por LANCE CONTADO é intermitente; o que vale é a CONDIÇÃO.** A cena
+  da partida de truco guardada jogava "6 lances" antes de recarregar — e 6 é exatamente a mão
+  inteira numa mesa de 2. Quantos lances cabem antes disso depende do sorteio: se alguém truca
+  e o outro corre, a mão acaba em 2; se ninguém aposta, ela vai até 6 e a sua mão fica VAZIA.
+  A asserção "a mão voltou para a tela" passou numa rodada e reprovou na seguinte, **no mesmo
+  commit**. É a intermitência da Fila 5 por uma porta nova — lá era a ANIMAÇÃO pega no meio,
+  aqui é o ESTADO montado pela moeda. O conserto é amarrar a parada ao que a cena precisa
+  (`while … && P.maos[0].length > 1`), e **cobrar que a montagem conseguiu** antes de medir:
+  sem essa guarda, uma montagem que parasse cedo demais faria as asserções passarem por
+  trivialidade.
+- **Uma reprovação nova pode acusar a RÉGUA do teste.** "A mesa não andou" apontou para um
+  retrato (`mão/fase/vez/cartas na mesa/placar`) que não incluía a APOSTA — e pedir truco e o
+  outro aceitar devolve a mesa exatamente ao mesmo ponto, mudando só o que a mão vale. A
+  asserção estava certa em cobrar "andou"; era o retrato que estava incompleto. É a mesma
+  disciplina de "medir antes de consertar", virada para o instrumento.
+- **`localStorage` NÃO EXISTE no harness de Node.** `partidaGuardada()` devolve `null` lá
+  sempre, e uma asserção de ida-e-volta escrita naquela suíte reprova dizendo "a casa recusou"
+  quando na verdade nada foi gravado — reprovação pelo motivo errado é pior que asserção
+  nenhuma. **Lógica no Node, sessão no Chrome:** o validador puro fica no `test-truco`, a
+  gravação fica no `test-lembrar`.
+- **Este repositório tem arquivos em CRLF E em LF.** Script de mutação com `\r\n` cravado não
+  casa nos arquivos LF, e com `\n` cravado não casa nos CRLF — nos dois casos ele não estoura e
+  deixa o arquivo intacto. O padrão tem de detectar a quebra do próprio arquivo antes de
+  procurar, e **exigir que o casamento aconteceu**.
 
 ---
 
@@ -728,15 +789,17 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 
 | | |
 |---|---|
-| enviado | **v4.4.0** — empurrada, `0 0` contra o origin, árvore limpa |
+| enviado | **v4.5.0** — a Fase 4 fechada: o truco SENTA NA MESA |
 | **PUBLICADO** | ⚠ **v4.2.1** — o Pages parou às 22:04 e **precisa de um clique**; ver a seção abaixo |
-| esta release | **v4.4.0** — o bot e o layout do truco: o cérebro completo |
-| as anteriores | v4.3.0 (regras + motor) · v4.2.0 (`40-cartas/`) · v4.1.0 (a aba) · v4.0.0 (o contrato) |
+| esta release | **v4.5.0** — o corpo do truco, e os cinco encaixes que a casa ganhou para caber nele |
+| as anteriores | v4.4.0 (bot + layout) · v4.3.0 (regras + motor) · v4.2.0 (`40-cartas/`) · v4.1.0 (a aba) · v4.0.0 (o contrato) |
 | Filas 5 a 11 | **todas fechadas**, e não há defeito conhecido em aberto |
-| o que vem | **a MESA do truco** — `550-mesa`, `560-interacao`, a `barraDoJogo` e o registro |
+| o que vem | **a Fase 5** — o aplicativo: APK no GitHub Releases + Amazon Appstore |
 
-**Nada que um jogador use está atrás do deploy pendente:** o truco não senta na mesa, e o
-dominó publicado é o mesmo desde a v4.2.1.
+**AGORA HÁ ALGUMA COISA ATRÁS DO DEPLOY PENDENTE, e isto mudou com esta release:** até a
+v4.4 o truco não sentava na mesa e o dominó publicado era o mesmo desde a v4.2.1, então o
+Pages travado não custava nada a ninguém. Com o truco jogável, **o que está no ar deixou de
+ser o que existe** — e a régua continua sendo o conteúdo SERVIDO, não o `git rev-list`.
 
 ---
 
@@ -852,14 +915,29 @@ que as suítes rodaram inteiras com o site no ar três releases atrás.
 
 ---
 
-#### ONDE PAROU — fim da sessão de 06/08/2026
+#### ONDE PAROU — fim da sessão de 06/08/2026 (v4.5.0)
 
-**LEIA ISTO PRIMEIRO.** É o ponto exato de retomada.
+**LEIA ISTO PRIMEIRO.** É o ponto exato de retomada, e é o ÚNICO — este arquivo já registrou
+que ponteiro de retomada é o item que mais apodrece aqui, e por isso não pode haver dois.
 
 ```
-main            v4.2.1, empurrada, árvore limpa, PUBLICADA
-worktree        ../domino-bar-jogos   (branch de trabalho; as mergeadas já foram apagadas)
+main               v4.5.0, empurrada, árvore limpa
+PUBLICADO          ⚠ v4.2.1 — o Pages parou às 22:04 e precisa de UM CLIQUE
+worktree           ../domino-bar-jogos  (a branch v4.5 já foi mergeada e apagada)
 ```
+
+**A FASE 4 FECHOU: o truco senta na mesa.** São dois jogos jogáveis, e o que sobra da v4 é a
+Fase 5, que não toca em `src/` e trava numa decisão de conta.
+
+**AS TRÊS COISAS PARA FAZER, em ordem:**
+
+1. **O CLIQUE NO PAGES** — `Actions → a rodada das 22:04 → Re-run all jobs`. **Isto mudou de
+   peso nesta release:** até a v4.4 nada que um jogador usasse estava atrás do deploy, porque
+   o truco não sentava na mesa. Agora está. Ver "O DEPLOY PAROU ÀS 22:04", logo acima.
+2. **A Fase 5, o aplicativo** — worktree próprio (`../domino-bar-app`). Ver "É AQUI QUE SE
+   RETOMA — a Fase 5", mais abaixo.
+3. **A cena de truco no `test-telas`** — a lacuna que esta release deixa de propósito, com o
+   motivo escrito. Ver "A LACUNA QUE ESTA RELEASE DEIXA".
 
 **O ARRANJO DE WORKTREE em uso, e por que ele é este:**
 
@@ -868,10 +946,13 @@ worktree        ../domino-bar-jogos   (branch de trabalho; as mergeadas já fora
 ../domino-bar-jogos    v4.x    o trabalho da onda
 ```
 
-Duas frentes bastam hoje porque as fases da v4 **se cruzam**: a Fase 4 mexe em `50-truco/` e
-vai mexer no `#acoes` do HUD (a `barraDoJogo`), que é da casa. Worktree serve a frentes que
-NÃO se cruzam — usá-lo para frentes que se cruzam é fabricar trabalho de merge. Quando a Fase
-5 (o APK) começar, aí sim ela merece um `../domino-bar-app` próprio: ela não toca em `src/`.
+Duas frentes bastaram porque as fases da v4 **se cruzam**, e a v4.5 provou isso no pior
+grau: escrever o truco obrigou a mexer em `pagina.html`, `estilo.css`, `130-hud`, `140-menu`,
+`141-abas`, `160-loop` e `010-constantes` — sete arquivos da CASA. Worktree serve a frentes
+que NÃO se cruzam; usá-lo para frentes que se cruzam é fabricar trabalho de merge.
+
+**A Fase 5 (o APK) é a primeira que merece um `../domino-bar-app` próprio**, e por um motivo
+concreto: ela não toca em `src/` uma linha. É `.well-known/`, Bubblewrap e conta de loja.
 
 **A armadilha que mordeu nesta sessão:** `git checkout -b` roda no diretório em que você
 está. Um `Set-Location` que falhou fez o comando seguinte criar a branch no worktree da
@@ -890,8 +971,40 @@ está. Um `Set-Location` que falhou fez o comando seguinte criar a branch no wor
 | ✔ Fase 2 | **a aba de escolher o jogo** (v4.1.0) |
 | ✔ Fase 3 | **`40-cartas/`** — o baralho de 40 e a carta 3D (v4.2.0) |
 | ✔ o melou | decidido: empataram as três vazas, **a mão morre** |
-| ◐ Fase 4 | `50-truco/` — **o CÉREBRO está pronto** (regras + motor, v4.3.0); falta o CORPO |
+| ✔ Fase 4 | `50-truco/` — o cérebro (v4.3.0), o bot e o layout (v4.4.0), **e o corpo (v4.5.0)** |
 | ⏳ Fase 5 | o aplicativo: APK no GitHub Releases + Amazon Appstore |
+
+**A FASE 4 FECHOU NA v4.5.0, e o que ela custou não foi o truco — foi a CASA.** Escrever
+`550-mesa`, `560-interacao` e o registro é meia sessão; o que levou a outra metade foi
+descobrir que a casa, com acoplamento medido em ZERO desde a v4.0, continuava sabendo a
+**forma** das coisas do dominó. Ver a seção própria, logo abaixo.
+
+**O que a v4.5 entregou, arquivo por arquivo:**
+
+| | |
+|---|---|
+| `50-truco/550-mesa.js` | a vira, a vaza em curso, as pilhas de vazas ganhas e a sua mão, tudo por RECONCILIAÇÃO — é o que faz a carta recolhida DESLIZAR para a pilha e virar de barriga para baixo, sem uma linha de animação |
+| `50-truco/560-interacao.js` | escolher → ver → confirmar, mais o teclado. **Sem arrasto**, e de propósito: são três cartas, e o arrasto do dominó existe para uma mão de catorze |
+| `50-truco/575-encaixes.js` | os cinco encaixes respondidos em truco. É aqui que mora a segunda dimensão de jogada — jogar uma carta OU apostar |
+| `50-truco/590-registro.js` | o contrato inteiro. **Sem `emBreve`** e **sem `painel`** (as vazas ganhas já estão à vista na mesa) |
+| `30-domino/137-encaixes.js` | os mesmos cinco, respondidos em dominó. Irmão do `135-contagem`: lá é o conteúdo do painel, aqui é o de todo o resto |
+| `10-casa/130-hud.js` | `desenharMedidores`, `desenharBarra`, `mostrarConfirmacao` e `mostrarFimDeMao` passam a DESENHAR o que o jogo descreve |
+| `10-casa/140-menu.js` | `montarAlvos`, `montarOpcoes` e `ajustarOpcoesAoModo` (era `ajustarCompraAoModo`) — o alvo e as opções saem de `JOGO.menu` |
+| `10-casa/160-loop.js` | `aplicarIntencao` entrega a intenção INTEIRA ao motor do jogo e recebe a narração de volta |
+| `10-casa/010-constantes.js` | ganhou `chegarPerto` (veio do dominó) e `estaNaMesa` |
+| `src/pagina.html` | perdeu "Pontas · Monte · Mão", "Comprar do monte", "Passar a vez", "6/10 pontos", "Compra livre" e o `title` do botão de contar |
+| `manifest.webmanifest` | o `shortcuts` passou a levar **os dois jogos** |
+
+**Os números desta release, para comparar amanhã:**
+
+```
+npm test              8 + 51 + 320 asserções            segundos
+telas (2 metades)     folga mínima 0.33 nas duas        idêntica à da main
+mutações              11, cada uma matando a sua
+truco                 7 arquivos, 1.778 linhas
+casa mexida           8 arquivos, ~310 linhas
+o projeto             9.226 linhas em src/
+```
 
 **O que a Fase 2 entregou, e o que ela obrigou a decidir:**
 
@@ -957,17 +1070,10 @@ está. Um `Set-Location` que falhou fez o comando seguinte criar a branch no wor
   estourava com cadeira fora da faixa. **Mutação não confere só a asserção — ela exercita o
   código por caminhos que o caminho feliz nunca toca.**
 
-#### A FASE 4, ao meio — o que está pronto e o que falta
+#### A FASE 4 FECHOU (v4.5.0) — e o caro foi a CASA, não o truco
 
-**É AQUI QUE SE RETOMA.** O truco tem **tudo o que dá para provar no terminal** — regras,
-motor, bot e layout — e nada do que precisa de tela. A divisão é de propósito: um erro achado
-no terminal custa segundos, achado depois do 3D custa horas. O `emBreve` do registro
-**continua lá**, e tem de continuar — não dá para sentar.
-
-**O que sobrou é exatamente a camada que exige navegador**, e ela é pequena porque as quatro
-de baixo já resolveram o difícil: `550-mesa` só traduz `layoutDaVaza` em `Object3D`, e
-`560-interacao` só chama `jogarCarta`. **É a segunda vez nesta v4 que a ordem "puro primeiro"
-paga** — na Fase 3 o mesmo desenho fez a carta 3D nascer com atlas testado.
+O truco senta na mesa. `emBreve` saiu do registro, e com ele a diferença entre registrado e
+jogável.
 
 | | |
 |---|---|
@@ -975,53 +1081,156 @@ paga** — na Fase 3 o mesmo desenho fez a carta 3D nascer com atlas testado.
 | ✔ `520-partida.js` | vazas, pedido/aceita/corre, mão de 11, placar, `visaoDoTruco` |
 | ✔ `530-bot.js` | jogar **e** apostar; o difícil ganha **58,8% em 400 partidas (3,5σ)** |
 | ✔ `540-layout.js` | onde cada carta cai — **puro**, como o `060-layout` do dominó |
-| ✔ `tests/test-truco.mjs` | **252 asserções**, 27 mutações, 60 partidas de varredura |
-| ⏳ `550-mesa.js` | sincronizar/animar em 3D, usando o `40-cartas/` que já existe |
-| ⏳ `560-interacao.js` | escolher → ver → confirmar |
-| ⏳ `barraDoJogo` | o encaixe do HUD para trucar/aceitar/correr. **Agora dá para desenhá-lo** |
-| ⏳ o registro | tirar o `emBreve` e pendurar motor/mesa/toque/bot/menu — é a última linha |
+| ✔ `550-mesa.js` | a vira, a vaza, as pilhas e a sua mão, reconciliadas com a vista |
+| ✔ `560-interacao.js` | escolher → ver → confirmar, mais o teclado. **Sem arrasto** — são 3 cartas |
+| ✔ `575-encaixes.js` | os cinco encaixes respondidos em truco: medidores, barra, confirmação, fim de mão, aplicar |
+| ✔ `590-registro.js` | o contrato inteiro. **Sem `painel`** — as vazas ganhas já estão à vista na mesa |
+| ✔ `tests/test-truco.mjs` | **320 asserções**, incluindo uma partida inteira jogada pela casa |
 
-**A `barraDoJogo` deixou de ser chute**, que era o motivo de ela ter ficado de fora da Fase 1:
-`acoesDoTruco` já diz exatamente o que o botão precisa saber — `trucar` é um número ou `null`,
-`aceitar` e `correr` são booleanos, e `NOME_DA_APOSTA[valor]` é o texto ("truco", "seis"). O
-encaixe pode ser tão pequeno quanto *"o jogo devolve uma lista de botões; a casa desenha"*.
+**O QUE A ESCRITA DO CORPO REVELOU, e é a lição desta release.** O `test-acoplamento` dizia
+ZERO desde a v4.0 e continuava certo: a casa não alcança nome nenhum do dominó. Mas ela sabia
+a **FORMA** das coisas, que a varredura por identificadores não vê:
 
-**Duas armadilhas já mapeadas para quando o corpo chegar:**
+| onde | o que a casa sabia |
+|---|---|
+| `src/pagina.html` | "Pontas · Monte · Mão", "Comprar do monte", "Passar a vez", "6 pontos / 10 pontos", "Compra livre" |
+| `desenharHUD` | `vista.pontas`, `vista.monte`, `a.comprar`, `a.passar`, `a.jogadas` |
+| `aplicarIntencao` | que uma jogada tem `peca` e `ponta`, e que os lados se chamam `'esq'`/`'dir'` |
+| `publicar` | como zerar `acoes` (`{jogadas: [], comprar: false, passar: false}`) |
+| `mostrarFimDeMao` | que uma mão acaba com alguém BATENDO, e que sobra peso na mão |
+| `partidaGuardada` | que toda partida tem `linha` e `monte` |
+| `mesaLembrada` | que a partida vai até 6 ou até 10 |
+| `comecarLocal` | `compraVoluntaria` |
+| o `title` do `#btContagem` | "Mostrar quantas peças de cada número já apareceram" |
 
-1. **A vira é PÚBLICA e precisa aparecer na mesa.** Ela não é a mão de ninguém — é a única
-   carta que a `visaoDe` de todos carrega. O 3D tem de desenhá-la, senão o jogador não sabe
-   qual é a manilha e o jogo fica ilegível.
-2. **A mesa do truco ESVAZIA a cada vaza.** No dominó a linha só cresce; aqui as cartas saem
-   da mesa três vezes por mão. O `sincronizar` tem de tratar remoção, que é um caminho que o
-   `090-tabuleiro.js` nunca precisou ter.
+A última linha dessa tabela é a mais instrutiva: o botão é da CASA (ele abre o encaixe
+`painelDoJogo`), e mesmo assim o que ele PROMETIA era uma frase de dominó. **Um elemento pode
+ser da casa e o texto dele ser do jogo** — hoje o rótulo e o `title` saem de
+`JOGO.hud.painelBotao`, repintados por `abrirJogo`, que é quando eles mudam.
 
-#### O que a Fase 4 herda pronto
+**É a mesma lição da Fase 2 pela terceira vez** — lá foi o HTML, aqui é o MOLDE. *Toda
+ferramenta de medição tem uma pergunta, e a pergunta tem borda*: a do AST é "identificadores",
+e nem "Pontas" no HTML nem `vista.pontas` no JavaScript são identificadores livres.
 
-Quando o truco chegar, estas coisas **já existem** e não devem ser reinventadas:
+**Os cinco encaixes novos**, todos pelo desenho que o `painelDoJogo` provou na v3.0.0 — *a
+casa reserva o lugar e chama, o jogo preenche*:
 
-- **O baralho e a carta 3D** (`40-cartas/`, v4.2.0). `baralho40()`, `distribuirCartas(n, porMao)`,
-  `cartaValida` (que é o `jogadaDoFio` do truco de graça), `criarCarta`, `criarVersoDeCarta`,
-  `criarFantasmaDeCarta` e `faceDaCarta`. **A biblioteca não sabe o que é manilha**, e não
-  pode passar a saber: o `test-acoplamento` reprova biblioteca alcançando nome de jogo.
-- **A ORDEM DE FORÇA é do truco e JÁ NASCEU LÁ** (`ORDEM_TRUCO`, em `510-regras.js`).
-  `VALORES` está em ordem de baralho (A 2 3 4 5 6 7 Q J K), não de força. E o desempate entre
-  manilhas está em `FORCA_NAIPE`, declarado por **id** e não pela posição em `NAIPES` — a
-  ordem daquele array calha de ser a mesma, e depender dela seria ler regra de truco de dentro
-  da pasta das cartas.
-- **`window.__cartas` SOME nesta fase.** É bancada temporária para as suítes; quando o truco
-  tiver `JOGO.ponte`, as cartas entram lá, como as peças do dominó.
-- **A aba não precisa de nada.** `jogavel()` passa a ser verdadeiro só de tirar a linha
-  `emBreve` do `50-truco/590-registro.js`, e o menu monta sozinho a partir de `menu.MODOS` —
-  que já existe (`MODOS_TRUCO`, com `cadeiras: [2, 4]`; três não fecha dois times).
-- **`CHAVES_DO_JOGO` já cobre o truco:** a mesa e a partida dele vão para `mesa.truco` e
-  `partida.truco` sem uma linha nova.
-- **O que AINDA falta e está previsto:** a `barraDoJogo` (o `#acoes` tem "Comprar" e "Passar"
-  escritos à mão, e truco precisa de trucar/aceitar/correr/aumentar) e o segundo atalho do
-  manifest. Os dois entram junto com o motor, e não antes: sem o truco escrito, a forma deles
-  seria chute.
-- **A pergunta em aberto para o Ricardo continua sendo o EMPATE DE VAZA (o "melou")** — regra
-  de casa, com mais de uma leitura defensável, como a cruzada valer 4. **Perguntar, não
-  escolher sozinho.**
+```
+JOGO.hud.medidores(vista)   os painéis do #topo   ["Vira · 3 paus", "Manilha · 4", "Vale · 1"]
+JOGO.hud.barra(vista)       os botões do #acoes   cada um com a INTENÇÃO pronta
+JOGO.hud.fimDeMao(vista)    título, tipo, quem, detalhe
+JOGO.motor.aplicar(P,c,i)   valida + aplica + devolve a NARRAÇÃO
+JOGO.motor.emJogo(p)        "há uma vez de alguém agir?" — serve à partida e à vista
+JOGO.menu.ALVOS / OPCOES    até quanto vai a partida, e o que mais a mesa oferece
+```
+
+**E O CONTRATO ENCOLHEU MESMO GANHANDO ISSO**, o que é o sinal que importa: `jogar`,
+`comprar`, `passar`, `jogadaDoFio`, `mesmaJogada`, `nomeDoFim`, `menu.baralho` e `menu.sobra`
+saíram — oito verbos por cinco. `aplicar` sozinho substituiu seis deles, porque a pergunta
+certa nunca foi "que ações existem", é **"o que aconteceu quando esta intenção chegou"**.
+
+**As duas armadilhas mapeadas na v4.4 estavam certas, e as duas foram pagas:**
+
+1. **A vira é PÚBLICA e precisa aparecer na mesa** — há asserção (`naMesaDoTruco.has('vira')`).
+2. **A mesa do truco ESVAZIA a cada vaza** — e a reconciliação resolveu isso de graça: a carta
+   recolhida não some, ela ganha um ALVO NOVO (a pilha do time) e desliza para lá virando de
+   barriga para baixo. Foi o que obrigou o `criarCarta` a ganhar um verso.
+
+**O que a implementação acrescentou, e que não estava previsto:**
+
+- **`chegarPerto` foi para a casa.** Terceira função a fazer esse caminho (`embaralhar`,
+  `anguloDaCadeira`, e agora ela). A pergunta que resolve: *fala de PEÇA e PONTA, ou de número?*
+- **`caixaDoMonte` virou `caixaDoAssento`.** O nome mentia desde sempre — o que ela mede é a
+  fileira do adversário, não o monte —, e com dois jogos lendo o mesmo encaixe isso passou a
+  custar uma explicação por leitura.
+- **`estaNaMesa(JOGOS.x)`, e a sorte que ela desfaz.** Os `addEventListener` dos DOIS jogos
+  ficam vivos ao mesmo tempo: um toque na carta de truco passava primeiro pelo `pointerdown`
+  do dominó, que não achava nada no raycast, concluía "clicou na mesa vazia" e CANCELAVA a
+  escolha — fechando a barra que o truco ia abrir. Não aparecia porque o dominó é concatenado
+  ANTES e o truco reabria a barra em seguida. **Era a ordem dos arquivos escondendo o defeito**,
+  que é a pior espécie de sorte.
+- **Dois defeitos de regra que só a partida INTEIRA acha.** `P.donoDaAposta` não era zerado em
+  `novaMaoDoTruco`, então o time que trucou na mão 3 ficava sem poder trucar no resto da
+  partida, calado. E `responderAposta` devolve `'aumentar'`, que o motor não conhecia: a vez do
+  bot que resolvia aumentar simplesmente não acontecia — mesa parada, sem mensagem e sem botão.
+  **Nenhum dos dois aparece em caso escrito à mão, porque nenhum caso escrito à mão atravessa
+  duas mãos.**
+
+#### A LACUNA QUE ESTA RELEASE DEIXA, dita de frente
+
+**O `test-telas` não tem cena de truco**, e a decisão é de escopo, não esquecimento. A suíte
+supõe um jogo com MONTE: cinco lugares dela leem `j.grupoMonte` direto (as caixas, o extremo
+em NDC, o retrato de "parou de se mexer"), e um jogo sem monte estoura ali. As saídas eram
+duas, e nenhuma cabia junto do resto desta release:
+
+- **o truco expor um `grupoMonte` vazio na ponte** — barato e MENTIRA: ele não tem monte, e
+  uma ponte que mente é o começo de uma suíte que mede um mundo que não existe;
+- **a suíte perguntar antes de medir** — que é o certo, e mexe em cinco pontos da parte mais
+  delicada dela (a que virou determinística na Fila 5 e não pode voltar a oscilar).
+
+**O que cobre o 3D do truco hoje:** o `test-truco` mede as postas, a caixa da mesa e a
+amarração carta↔assento (a mesa espelhada, que passa em toda asserção de simetria); o
+`test-lembrar` remonta a mesa 3D a partir da partida guardada e exige a vira desenhada. O que
+NÃO está coberto é o que só a foto responde: **a mesa do truco cabe num celular em pé?** O
+`ESCALA_TRUCO_MAX` é o número a olhar quando isso for medido.
+
+#### O que o TERCEIRO jogo (pife) herda pronto
+
+A pergunta que a Fase 4 existia para responder era "quanto custa o segundo jogo". Resposta
+medida: **o truco inteiro são 7 arquivos e 1.778 linhas**, contra as ~3.400 da casa que ele
+não escreveu — e a v4.5 mexeu em **310 linhas** dela para caber, em 8 arquivos. O que ele
+herdou, e que o pife e o 21 herdam de novo:
+
+- **Online P2P inteiro** — saguão, código de 4 letras, identidade de cliente, reconexão de 30 s,
+  o take-over de duas abas, a conversa geral e por dupla. Zero linhas no truco.
+- **Hotseat, som, boteco, luz, enquadramento, gaveta do celular, teclado, telas de fim,
+  partida guardada, `prefers-reduced-motion`.** Zero linhas.
+- **O baralho e a carta 3D** (`40-cartas/`). `baralho40()`, `distribuirCartas(n, porMao)`,
+  `cartaValida` (que virou a guarda de forma do truco de graça), `criarCarta`,
+  `criarVersoDeCarta`, `criarFantasmaDeCarta` e `faceDaCarta`. **A biblioteca não sabe o que é
+  manilha**, e não pode passar a saber: o `test-acoplamento` reprova biblioteca alcançando nome
+  de jogo. O pife pega o baralho de 40 pronto; o 21 vai querer as figuras que faltam.
+- **`chegarPerto`, `embaralhar`, `anguloDaCadeira` e `estaNaMesa`** já estão na casa.
+- **Os cinco encaixes de HUD**, que é a diferença entre o segundo e o terceiro jogo: o truco
+  teve de INVENTÁ-LOS (e é onde metade da v4.5 foi); o pife só os preenche.
+- **`CHAVES_DO_JOGO` já cobre qualquer jogo novo:** a mesa e a partida vão para `mesa.<id>` e
+  `partida.<id>` sem uma linha nova.
+
+**O que continua faltando e é sabidamente do truco:** o segundo atalho do `manifest` (o
+`shortcuts` leva só o dominó, porque um atalho de lançador que cai em "vem aí" promete o que
+não existe — e agora ele existe).
+
+**A ARMADILHA DO 21 continua escrita e continua valendo:** ele tem BANCA, e banca não é uma
+cadeira como as outras. O invariante 2 diz que o motor não sabe a diferença entre
+`voce`/`local`/`bot`/`online`; a banca fura isso, porque joga por regra fixa e não por escolha.
+É o único dos três que mexe no modelo de cadeira — e é por isso que ele **não** deve ser o
+próximo, apesar de parecer o mais simples.
+
+---
+
+#### É AQUI QUE SE RETOMA — a Fase 5, o aplicativo
+
+**Ela é a única fase que NÃO toca em `src/`**, e por isso é a primeira que merece um worktree
+próprio (`../domino-bar-app`). Também é a única que **para numa decisão de conta**, não de
+código:
+
+1. **O clique no Pages.** `Actions → a rodada das 22:04 → Re-run all jobs`. Sem isso, o truco
+   existe e ninguém joga — e agora isso custa alguma coisa, ao contrário de antes.
+2. **O repositório `ricardocolombo01.github.io`** (user page), com um `.nojekyll` VAZIO na
+   raiz e o `.well-known/assetlinks.json`. O `.nojekyll` não é opcional: o GitHub Pages não
+   serve pasta que começa com ponto, e o sintoma é um 404 que parece erro de caminho.
+   **Este passo é conta do Ricardo, e é o que trava tudo o que vem depois.**
+3. `bubblewrap init/build` → **conferir no celular que o app abre SEM barra de URL**, que é o
+   único teste que prova o assetlinks.
+4. O `.apk` num GitHub Release, e a conta grátis da Amazon com o mesmo arquivo.
+
+**O que já está pronto para ela:** o PWA inteiro (v3.0.0) — manifest, ícones, service worker,
+abrir sem internet —, e o `shortcuts` agora leva **os dois jogos**, que era a única linha do
+manifest que ainda esperava o truco.
+
+**Sem Play Store**, e a decisão está registrada: US$ 25 **e** 12 testadores reais opt-in por
+14 dias corridos. O `.aab` sai do mesmo Bubblewrap, então nada do que for feito aqui é jogado
+fora se ele mudar de ideia.
 
 ---
 
@@ -1269,10 +1478,12 @@ curl -s https://ricardocolombo01.github.io/domino-bar/sw.js | grep VERSAO
 **Hoje `npm test` tem de passar inteiro** — a fila está vazia e não há vermelha esperada.
 Qualquer reprovação é regressão.
 
-**Estado em 06/08/2026, conferido rodando:** `npm test` (com o acoplamento novo),
+**Estado em 06/08/2026 (v4.5.0), conferido rodando:** `npm test` (8 + 51 + 320 asserções),
 `npm run lembrar`, `npm run app`, `npm run textura`, `npm run online` e o `telas` nas duas
-metades. Não há defeito conhecido em aberto **no jogo**; o que está aberto é o deploy do
-Pages, que é conta e não código — ver "O DEPLOY QUE NÃO ACONTECEU".
+metades. Mais **11 mutações**, cada uma matando exatamente a sua — inclusive a que só o
+`test-lembrar` pega (a casa voltando a exigir `linha` e `monte` de toda partida guardada).
+Não há defeito conhecido em aberto **no jogo**; o que está aberto é o deploy do Pages, que é
+conta e não código — ver "O DEPLOY PAROU ÀS 22:04".
 
 **Suíte pesada roda sozinha** — o `test-telas` renderiza WebGL por software e o `test-online`
 tem prazo de navegação de 45 s; duas ao mesmo tempo viram falha que parece da rede. E o
@@ -3322,7 +3533,7 @@ página.
 
 </details>
 
-**FASE 4 — `50-truco/`.** As regras, testáveis:
+**FASE 4 — `50-truco/` ✔ FEITA (v4.3.0 · v4.4.0 · v4.5.0).** As regras, testáveis:
 
 ```
 baralho  40 cartas, sem 8 9 10
@@ -3352,6 +3563,13 @@ cruzada valer 4.
 segurança** do invariante 3. O bot ganha **decisão de aposta**, que é a parte nova e a mais
 difícil. Online, hotseat, conversa, saguão, identidade e reconexão **vêm prontos da casa**.
 
+**O QUE O PLANO NÃO PREVIU, e é a lição da fase:** ele dizia "o truco tem aposta e o dominó
+não; se `acoesDe` não bastar, isso aparece na Fase 4". O motor bastou de primeira — quem não
+bastou foi a **TELA**. `acoesDoTruco` devolve `trucar/aceitar/correr/onze` sem esforço; o que
+não cabia era o `#acoes` com dois botões escritos à mão no HTML, o `#topo` dizendo "Pontas ·
+Monte · Mão", e o `aplicarIntencao` da casa decodificando `peca` e `ponta`. **O risco estava
+escrito na camada errada.**
+
 **FASE 5 — o aplicativo.** Repo `ricardocolombo01.github.io` (user page) com `.nojekyll` +
 `.well-known/assetlinks.json` → `bubblewrap init/build` → **conferir no celular que o app abre
 SEM barra de URL**, que é o único teste que prova o assetlinks → `.apk` num GitHub Release →
@@ -3361,16 +3579,28 @@ conta grátis na Amazon com o mesmo `.apk`.
 
 1. ~~**O empate de vaza no truco (o "melou")**~~ ✔ **respondido em 06/08/2026: a mão morre.**
    Ver a tabela de regras acima.
-2. **Truco de 2 e de 4 (duplas)?** O plano assume os dois, porque a casa já faz duplas em cruz.
-   **Ainda em aberto** — mas é escolha de escopo, não de regra: a mesa de 2 é o caminho curto
-   para a Fase 4 andar, e a de 4 vem de graça se o `timeDe` da casa for reusado.
-3. **O repo da user page** é conta dele, não código.
+2. ~~**Truco de 2 e de 4 (duplas)?**~~ ✔ **os DOIS, e saiu de graça.** A previsão estava certa:
+   `timeNoTruco` é `duplas ? cadeira % 2 : cadeira`, uma linha, e a mesa de 4 herdou o canal
+   da dupla na conversa e o placar por time sem mais nada. `MODOS_TRUCO.paulista.cadeiras` é
+   `[2, 4]` — **três não fecha dois times**, e o menu já apaga o que não cabe no modo.
+3. **O repo da user page** é conta dele, não código. **É o que trava a Fase 5.**
 
-### Os riscos, ditos antes de começar
+### Os riscos, ditos antes de começar — e o placar deles
 
-- **A Fase 1 é a arriscada** — refatoração pura, em quase todo arquivo de `10-casa/`.
-- **O truco tem aposta e o dominó não.** É o único ponto em que o motor da casa pode não
-  aguentar de primeira; se `acoesDe` não bastar, isso aparece na Fase 4.
+**Vale reler esta lista depois de a onda acabar**, porque ela é o registro mais honesto de
+quanto vale um risco escrito antes de começar. Placar: **dois certos, um errado de camada, um
+superestimado.**
+
+- **A Fase 1 é a arriscada** — refatoração pura, em quase todo arquivo de `10-casa/`. ✔ CERTO,
+  e ela tropeçou nas três coisas que estão registradas na Fase 1 (o atalho de objeto, o
+  `Object.assign` comendo getters, a colisão de nome que o build pegou).
+- **O truco tem aposta e o dominó não.** ✘ **ERRADO DE CAMADA**, e é a lição mais útil daqui:
+  o motor bastou de primeira — `acoesDoTruco` devolve `trucar/aceitar/correr/onze` sem
+  esforço. Quem não bastou foi a **TELA**. O risco estava escrito uma camada abaixo de onde
+  ele morava.
+- **A carta 3D é uma fase inteira.** ◐ SUPERESTIMADO: ela foi uma fase, sim (v4.2.0), mas o
+  caro nela não foi o desenho — foi descobrir que `40-cartas/` é BIBLIOTECA e não jogo, o que
+  o `test-acoplamento` exigiu na primeira pasta que não se pendurava em `JOGOS`.
 - **TWA depende de navegador compatível no aparelho.** Em tablet Fire (que usa Silk, não
   Chrome) pode cair para aba comum; em celular Android normal, funciona. E se a Amazon
   reassinar o pacote, a impressão muda e o `assetlinks.json` precisa levar **as duas**.
