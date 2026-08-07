@@ -55,7 +55,7 @@ function sincronizarTabuleiro(vista) {
   const util = larguraUtilDoTabuleiro(
     caixa,
     larguraVisivelEm(0, TABULEIRO_Z) * 0.86,
-    assentosDaMesa(vista).lugares.map(l => l.monte),
+    assentosDaMesa(vista).lugares.map(l => l.caixa),
   );
   const e = escalaDoTabuleiro(caixa, util);
   escalaAlvo = e;
@@ -124,15 +124,13 @@ function mostrarPrevia(vista, peca, pontas) {
 const esconderPrevia = () => grupoPrevia.clear();
 const temPrevia = () => grupoPrevia.children.length > 0;
 
-// Interpolação exponencial: independe do framerate e não precisa de biblioteca.
+// `chegarPerto` FOI PARA A CASA (010-constantes.js) na v4.5. Ela fala de número e de tempo,
+// nunca de peça — e é a única função de suavização do projeto, o que a torna também o único
+// lugar onde "menos movimento" cabe numa linha. Com o truco, ou ela subia ou o segundo jogo
+// escreveria a própria cópia, que é como duas metades passam a discordar.
 //
-// É a ÚNICA função de suavização do projeto — treze chamadas, do tabuleiro e da mão —, e
-// é por isso que quem pediu menos movimento cabe aqui numa linha em vez de em treze. Com
-// a preferência ligada a peça não desliza: ela já está no lugar. Repare que ninguém perde
-// informação com isso — o deslizamento mostra o CAMINHO, e o que decide a jogada é o
-// destino, que continua exatamente onde estava.
-const chegarPerto = (atual, alvo, k, dt) =>
-  (movimentoReduzido() ? alvo : atual + (alvo - atual) * (1 - Math.exp(-k * dt)));
+// Terceira vez desta lição em três releases (`embaralhar`, `anguloDaCadeira`, e agora esta),
+// e a pergunta que a resolve é sempre a mesma: **ela fala de PEÇA e PONTA, ou fala de número?**
 
 function animarTabuleiro(dt) {
   grupoMesa.scale.setScalar(chegarPerto(grupoMesa.scale.x, escalaAlvo, 8, dt));

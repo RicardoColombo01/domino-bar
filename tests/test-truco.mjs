@@ -5,7 +5,7 @@
 // `ORDEM_TRUCO` aprovaria qualquer ordem. Aqui elas estão em NOME de carta ("3 de paus"), que
 // é como um jogador falaria — se o teste e o código discordarem, quem estiver errado é
 // visível a olho nu.
-import { installStubs, seedRandom, buildModule } from './harness.mjs';
+import { installStubs, seedRandom, buildModule, correrTimers, els } from './harness.mjs';
 
 installStubs();
 seedRandom(11);
@@ -20,6 +20,16 @@ const mod = await import(buildModule([
   'responderAposta', 'avaliarAposta', 'informacaoDoTruco', 'jogadaDoBotNoTruco', 'dicaDoTruco',
   'postaDaVaza', 'layoutDaVaza', 'postaDaVazaGanha', 'layoutDasVazas', 'caixaDaMesaDoTruco',
   'CARTA_C', 'CARTA_L', 'anguloDaCadeira',
+  // A CASA. Estes são os nomes que fazem o truco SENTAR: sem eles a suíte prova o cérebro e
+  // deixa o corpo — a mesa 3D, a barra de apostas, o caminho da intenção — sem uma linha.
+  'JOGOS', 'JOGO', 'JOGO_ID', 'abrirJogo', 'MESA', 'comecarLocal', 'pedirAcao',
+  'aplicarIntencao', 'publicar', 'P', 'vistaAtual', 'desenharHUD', 'mostrarFimDeMao',
+  'partidaGuardada', 'atualizarBotaoRetomar', 'podeAgirAgora',
+  // E o corpo do truco.
+  'naMaoDoTruco', 'naMesaDoTruco', 'grupoMaoDoTruco', 'selecionarCarta', 'confirmarNoTruco',
+  'cancelarEscolhaNoTruco', 'escolhidaNoTruco', 'barraDoTruco', 'medidoresDoTruco',
+  'fimDeMaoDoTruco', 'semAMaoNoTruco', 'aplicarNoTruco', 'arrumarMaoDoTruco',
+  'temPreviaDoTruco', 'dicaDoTrucoParaACasa', 'porQueNaoDaNoTruco', 'HUD',
 ]));
 
 let falhas = 0, n = 0;
@@ -814,6 +824,304 @@ console.log('\na mesa cabe no tampo');
   }
   const c4 = mod.caixaDaMesaDoTruco(4);
   console.log(`  mesa de 4: ${c4.x.toFixed(2)} × ${c4.z.toFixed(2)} de meia-caixa, dentro dos 6.1 do tampo`);
+}
+
+// ─── O TRUCO SENTA NA MESA ───────────────────────────────────────────────────
+// Tudo acima é o CÉREBRO — puro, e provado sem casa nenhuma. Este bloco é o CORPO: a aba, o
+// menu, a barra de apostas, a mesa em 3D e o caminho da intenção, que é por onde passam o seu
+// toque, o bot e a rede.
+//
+// A pergunta que ele existe para responder é uma só, e é a que mais dói neste projeto:
+// **a mesa PARA em algum lugar?** Estado de onde não se sai, sem mensagem e sem botão, é o
+// defeito que quatro filas passaram consertando.
+console.log('\na casa senta na mesa de truco');
+{
+  ok(mod.abrirJogo('truco'), 'a casa não conseguiu abrir o truco');
+  ok(mod.JOGO_ID === 'truco', `o jogo na mesa é ${mod.JOGO_ID}`);
+  // REGISTRADO ≠ JOGÁVEL, e a v4.5 é onde os dois se encontram: sem esta asserção, tirar o
+  // `emBreve` e esquecer o motor passaria despercebido até alguém clicar.
+  ok(!mod.JOGOS.truco.emBreve, 'o truco ainda está marcado como "em breve"');
+  ok(typeof mod.JOGO.motor.aplicar === 'function', 'o truco não pendurou o motor no contrato');
+  ok(!mod.JOGO.painel,
+    'o truco declarou um painel de apoio — sem ele, a casa esconde o botão "Contar"');
+
+  // O menu do truco: até 12, e nenhuma opção de mesa (compra livre é regra de monte).
+  ok(mod.JOGO.menu.ALVOS[0] === 12, `o alvo padrão do truco é ${mod.JOGO.menu.ALVOS[0]}, não 12`);
+  ok(mod.JOGO.menu.OPCOES.length === 0, 'o truco declarou opção de mesa que não existe nele');
+
+  // Mesa de 2: você e um bot difícil.
+  mod.MESA.n = 2;
+  mod.MESA.modo = 'paulista';
+  mod.MESA.alvo = 12;
+  mod.MESA.cadeiras[0].tipo = 'voce';
+  mod.MESA.cadeiras[1].tipo = 'bot';
+  mod.MESA.cadeiras[1].nivel = 'dificil';
+  mod.comecarLocal();
+
+  ok(!!mod.P, 'comecarLocal não montou partida nenhuma');
+  ok(mod.P.maos.every(m => m.length === 3), 'alguém não recebeu três cartas');
+  ok(Array.isArray(mod.P.vira) && mod.P.vira.length === 2, 'a vira não saiu do monte');
+  ok(mod.vistaAtual && mod.vistaAtual.vira, 'a vista não carrega a vira — a manilha fica invisível');
+
+  // ─── os medidores ─────────────────────────────────────────────────────────
+  const meds = mod.medidoresDoTruco(mod.vistaAtual);
+  ok(meds.length === 3, `o truco pediu ${meds.length} medidores, e o #topo tem lugar para três`);
+  ok(meds[0].rot === 'Vira' && String(meds[0].val).length > 1, 'o medidor da vira veio vazio');
+  ok(meds[1].rot === 'Manilha' && mod.VALORES.includes(String(meds[1].val)),
+    `a manilha saiu como "${meds[1].val}", que não é um valor de carta`);
+  ok(meds[2].val === 1, `a mão vale ${meds[2].val} antes de qualquer aposta, e devia valer 1`);
+
+  // ─── a mesa em 3D ─────────────────────────────────────────────────────────
+  // A VIRA PRECISA ESTAR DESENHADA. Ela é a única carta pública do baralho, e sem ela na mesa
+  // o jogador não tem como saber qual é a manilha — o jogo fica ilegível.
+  ok(mod.naMesaDoTruco.has('vira'), 'a vira não foi desenhada na mesa');
+  ok(mod.naMaoDoTruco.length === 3, `a sua mão tem ${mod.naMaoDoTruco.length} cartas em 3D`);
+  ok(mod.grupoMaoDoTruco.children.length === 3, 'as cartas da mão não entraram na cena');
+
+  // ─── escolher → ver → confirmar ───────────────────────────────────────────
+  // O caminho do toque, inteiro. A vez é forçada porque o que se mede aqui é o CAMINHO, e não
+  // o sorteio de quem abre.
+  mod.P.vez = 0;
+  mod.publicar();
+  const jogaveis = mod.naMaoDoTruco.filter(m => m.jogavel).length;
+  ok(jogaveis === 3, `só ${jogaveis} das 3 cartas ficaram jogáveis na sua vez`);
+
+  const antes = mod.P.maos[0].length;
+  mod.selecionarCarta(0);
+  ok(mod.temPreviaDoTruco(), 'escolher a carta não abriu o fantasma na mesa');
+  mod.confirmarNoTruco();
+  ok(mod.P.maos[0].length === antes - 1, 'confirmar não tirou a carta da mão');
+  ok(!mod.temPreviaDoTruco(), 'o fantasma ficou na mesa depois de jogar');
+}
+
+// ─── a barra de apostas ──────────────────────────────────────────────────────
+// O encaixe que a Fase 1 deixou de fora de propósito, porque sem o truco escrito a forma dele
+// seria chute. O que se cobra dela é o que ela promete: os botões que existem são exatamente
+// as ações que o motor aceita — nem uma a menos (silêncio), nem uma a mais (promessa).
+console.log('\na barra de apostas oferece o que o motor aceita');
+{
+  const P2 = mod.novaPartidaDoTruco(
+    [{ nome: 'A', tipo: 'voce' }, { nome: 'B', tipo: 'bot' }], { alvo: 12 });
+  const bt = mod.barraDoTruco(mod.visaoDoTruco(P2, P2.vez));
+  ok(bt.length === 1 && /truco/i.test(bt[0].rotulo),
+    `na vez normal a barra devia oferecer só "pedir truco", e veio: ${bt.map(b => b.rotulo).join(', ')}`);
+
+  const quemPediu = P2.vez;
+  mod.trucar(P2, quemPediu);
+  const vPedido = mod.visaoDoTruco(P2, P2.vez);
+  const rotulos = mod.barraDoTruco(vPedido).map(b => b.rotulo.toLowerCase());
+  ok(rotulos.some(r => r.includes('aceitar')), 'faltou "Aceitar" com pedido na mesa');
+  ok(rotulos.some(r => r.includes('correr')), 'faltou "Correr" com pedido na mesa');
+  ok(rotulos.some(r => r.includes('seis')), 'faltou o aumento para seis');
+  // E o medidor tem de DIZER que subiu: "1 → 3". Sem isso o jogador aceita sem saber o quê.
+  ok(String(mod.medidoresDoTruco(vPedido)[2].val).includes('→'),
+    'o medidor não mostrou a aposta pendente');
+
+  // NO TOPO DA ESCADA não há para onde subir, e o botão tem de SUMIR. Botão que não faz nada
+  // é a mesma doença do "o silêncio é o defeito", entrando pela porta da promessa.
+  P2.pedido = { de: 1, time: 1, valor: 12 };
+  P2.vez = 0;
+  const noTeto = mod.barraDoTruco(mod.visaoDoTruco(P2, 0)).map(b => b.rotulo.toLowerCase());
+  ok(!noTeto.some(r => r.includes('aumentar')), 'ofereceu aumentar no topo da escada (doze)');
+
+  // A mão de 11 tem DUAS saídas e nenhuma terceira: jogar valendo 3 ou entregar 1.
+  const P3 = mod.novaPartidaDoTruco(
+    [{ nome: 'A', tipo: 'voce' }, { nome: 'B', tipo: 'bot' }], { alvo: 12 });
+  P3.placar = [11, 4];
+  mod.novaMaoDoTruco(P3);
+  const b11 = mod.barraDoTruco(mod.visaoDoTruco(P3, P3.vez));
+  ok(b11.length === 2, `a mão de 11 ofereceu ${b11.length} saídas, e são duas`);
+  ok(b11.every(b => b.acao.acao === 'onze'), 'a mão de 11 ofereceu uma ação que não é dela');
+
+  // NA MÃO DE 11 A VEZ É SUA E NÃO HÁ CARTA A JOGAR, e é este jogo que obrigou a casa a parar
+  // de escrever `fase === 'mao'`. Sem `onze` no `emJogo`, `podeAgirAgora()` é falso: os dois
+  // botões aparecem na tela e NENHUM funciona, porque `pedirAcao` desiste na primeira linha —
+  // a mesa emudece exatamente no lance que decide a partida.
+  mod.MESA.n = 2;
+  mod.MESA.cadeiras[1].tipo = 'bot';
+  mod.comecarLocal();
+  mod.P.placar = [11, 4];
+  mod.novaMaoDoTruco(mod.P);
+  mod.publicar();
+  ok(mod.P.fase === 'onze', `a mesa devia estar na mão de 11 e está em ${mod.P.fase}`);
+  ok(mod.podeAgirAgora(), 'na mão de 11 a casa acha que não há nada a fazer');
+  mod.aplicarIntencao(0, { acao: 'onze', jogar: true });
+  ok(mod.P.aposta === 3, `jogar a mão de 11 devia pôr a mão valendo 3, e vale ${mod.P.aposta}`);
+
+  // AS DUAS BOCAS QUE PEDEM A MESMA COISA. A barra manda `trucar`; o bot manda o veredito de
+  // `responderAposta`, que é literalmente `'aumentar'`. Sem os dois nomes no motor, a vez do
+  // bot que resolve aumentar não acontece — mesa parada, sem mensagem e sem botão.
+  const P4 = mod.novaPartidaDoTruco(
+    [{ nome: 'A', tipo: 'voce' }, { nome: 'B', tipo: 'bot' }], { alvo: 12 });
+  mod.trucar(P4, P4.vez);
+  const antesDoAumento = P4.pedido.valor;
+  const rAumento = mod.JOGOS.truco.motor.aplicar(P4, P4.vez, { acao: 'aumentar' });
+  ok(!rAumento.erro, `o motor recusou "aumentar", que é o que o bot manda: ${rAumento.erro}`);
+  ok(P4.pedido && P4.pedido.valor > antesDoAumento,
+    'o "aumentar" do bot não subiu a aposta');
+
+  // A VISTA SEM A MÃO: a tela de troca do hotseat. A mão some E as cinco ações zeram — uma
+  // ação sobrevivente seria um botão vivo na tela que esconde as cartas do jogador anterior.
+  const v = mod.semAMaoNoTruco(mod.visaoDoTruco(P3, 0));
+  ok(v.mao.length === 0, 'a mão sobreviveu à vista travada');
+  ok(v.acoes.cartas.length === 0 && !v.acoes.aceitar && !v.acoes.correr
+    && !v.acoes.onze && v.acoes.trucar === null, 'sobrou ação na vista travada');
+}
+
+// ─── uma partida inteira pela casa ───────────────────────────────────────────
+// Do começo ao fim, com os quatro jogando pelo caminho REAL — `aplicarIntencao` →
+// `JOGO.motor.aplicar` → `publicar`. É a única asserção que prova que a mesa não empaca: o
+// laço tem teto, e bater no teto é a reprovação.
+//
+// A guarda "a mesa ANDOU" é o que a torna forte. Sem ela, um estado que se repete para sempre
+// só apareceria como estouro de teto, e o relatório diria "não acabou" em vez de dizer ONDE.
+console.log('\numa partida de truco do começo ao fim');
+{
+  mod.MESA.n = 4;
+  mod.MESA.cadeiras.forEach((c2, i) => { if (i) { c2.tipo = 'bot'; c2.nivel = 'normal'; } });
+  mod.comecarLocal();
+
+  let lances = 0, parou = null;
+  const TETO = 4000;
+  while (mod.P.fase !== 'fim' && lances < TETO) {
+    lances++;
+    if (mod.P.fase === 'fimDeMao') { mod.novaMaoDoTruco(mod.P); mod.publicar(); continue; }
+    const vez = mod.P.vez;
+    const acao = mod.jogadaDoBotNoTruco(mod.P, vez);
+    if (!acao) { parou = `cadeira ${vez} não teve o que fazer na fase ${mod.P.fase}`; break; }
+    // A APOSTA ENTRA NA MARCA, e isto foi a primeira reprovação desta suíte a acusar o
+    // TESTE e não o jogo: pedir truco e o outro aceitar devolve a mesa exatamente ao mesmo
+    // ponto — mesma mão, mesma vez, mesma carta na mesa, mesmo placar. O que mudou foi o
+    // que a mão VALE, e sem ele no retrato o avanço parecia estagnação.
+    const marca = () => `${mod.P.maoNum}/${mod.P.fase}/${mod.P.vez}/${mod.P.mesa.length}`
+      + `/${mod.P.aposta}/${mod.P.pedido ? mod.P.pedido.valor : '-'}/${mod.P.placar}`;
+    const antes = marca();
+    mod.aplicarIntencao(vez, acao);
+    correrTimers();
+    // O QUE O MOTOR RECUSOU vai junto. `catch` que guarda só a mensagem esconde ONDE, e um
+    // laço que só diz "não andou" é a mesma doença: o caro é descobrir qual ação e por quê.
+    if (antes === marca()) {
+      parou = `a mesa não andou: ${antes} · ação ${JSON.stringify(acao)}`
+        + ` · ações ${JSON.stringify(mod.acoesDoTruco(mod.P, vez))}`
+        + ` · aviso "${mod.HUD.aviso.textContent}"`;
+      break;
+    }
+  }
+  ok(!parou, `a mesa parou — ${parou}`);
+  ok(mod.P.fase === 'fim', `a partida não acabou em ${lances} lances (fase ${mod.P.fase})`);
+  ok(mod.P.placar.some(v => v >= 12), `ninguém chegou a 12: ${mod.P.placar.join(' × ')}`);
+  console.log(`  ${lances} lances · ${mod.P.maoNum} mãos · placar ${mod.P.placar.join(' × ')}`);
+}
+
+// ─── o HUD aguenta as quatro maneiras de a mão acabar ────────────────────────
+// `mostrarFimDeMao` desreferencia `vista.resultado` inteiro, e cada motivo preenche campos
+// diferentes. Um `undefined` aqui é a tela de fim de mão em branco — sem botão para sair dela.
+console.log('\na tela de fim de mão, nos quatro motivos');
+{
+  for (const motivo of ['vazas', 'correu', 'entregou', 'melou']) {
+    const P2 = mod.novaPartidaDoTruco(
+      [{ nome: 'Zé', tipo: 'voce' }, { nome: 'Tião', tipo: 'bot' }], { alvo: 12 });
+    P2.vazas = [{ time: 0 }, { time: 1 }, { time: motivo === 'melou' ? null : 0 }];
+    P2.resultado = {
+      motivo,
+      time: motivo === 'melou' ? null : 0,
+      pontos: motivo === 'melou' ? 0 : 3,
+      aposta: 3,
+      vazas: P2.vazas.map(v => v.time),
+      vira: P2.vira,
+    };
+    P2.fase = 'fimDeMao';
+    const v = mod.visaoDoTruco(P2, 0);
+    let erro = null;
+    try {
+      const f = mod.fimDeMaoDoTruco(v);
+      ok(!!f.titulo && !!f.tipo && !!f.quem, `o fim por "${motivo}" veio com campo vazio`);
+      ok(f.detalhe.includes('vaza'), `o fim por "${motivo}" não mostrou as vazas`);
+      mod.desenharHUD(v);
+      mod.mostrarFimDeMao(v);
+    } catch (e) { erro = e.message; }
+    ok(!erro, `a tela de fim por "${motivo}" estourou: ${erro}`);
+  }
+}
+
+// ─── a aposta não atravessa o embaralho ──────────────────────────────────────
+// `donoDaAposta` impede a MESMA dupla de subir a aposta duas vezes seguidas. Ele vale dentro
+// de uma mão — e sobrevivia a `novaMaoDoTruco`, o que deixava o time que trucou na mão 3 sem
+// poder trucar em nenhuma das seguintes, calado.
+//
+// Esta asserção nasce VERDE (o conserto veio antes dela, empurrado pela partida inteira), e
+// por isso a prova dela é MUTAÇÃO: tirando o `P.donoDaAposta = null` do `novaMaoDoTruco`, ela
+// cai — e a partida inteira volta a empacar.
+console.log('\na aposta não atravessa o embaralho');
+{
+  const P2 = mod.novaPartidaDoTruco(
+    [{ nome: 'A', tipo: 'voce' }, { nome: 'B', tipo: 'bot' }], { alvo: 12 });
+  const quem = P2.vez;
+  mod.trucar(P2, quem);
+  mod.aceitarTruco(P2, P2.vez);
+  ok(P2.donoDaAposta === mod.timeNoTruco(P2, quem), 'quem pediu não ficou marcado');
+  ok(mod.acoesDoTruco(P2, quem).trucar === null,
+    'o mesmo time conseguiu pedir duas vezes seguidas na mesma mão');
+
+  mod.novaMaoDoTruco(P2);
+  ok(P2.donoDaAposta === null, 'a marca da aposta sobreviveu ao embaralho');
+  P2.vez = quem;
+  ok(mod.acoesDoTruco(P2, quem).trucar === 3,
+    'quem trucou na mão passada ficou sem poder trucar na mão nova');
+}
+
+// ─── o validador da partida guardada ─────────────────────────────────────────
+// A casa exigia `linha` e `monte` de TODA partida guardada — dois campos de dominó. Com aquela
+// lista, o botão "continuar a partida de antes" nunca apareceria na aba do truco, calado. Hoje
+// a casa cobra o que ELA desreferencia e o jogo cobra o resto, e é o resto que se mede aqui.
+//
+// A IDA E VOLTA PELO ARMAZENAMENTO fica no `test-lembrar` (Chrome), e não por preguiça: o
+// harness de Node não tem `localStorage`, então `partidaGuardada()` devolveria `null` dizendo
+// "a casa recusou" quando na verdade nada foi gravado — asserção que reprova pelo motivo
+// errado é pior que asserção nenhuma. **Lógica no Node, sessão no Chrome.**
+console.log('\na partida de truco guardada é entrada de fora');
+{
+  mod.MESA.n = 2;
+  mod.MESA.cadeiras[1].tipo = 'bot';
+  mod.comecarLocal();
+  // O JSON de verdade, e não o objeto vivo: é assim que ela volta do armazenamento, e é onde
+  // um campo que não sobrevive à serialização apareceria.
+  const bom = JSON.parse(JSON.stringify(mod.P));
+  ok(mod.JOGO.motor.partidaValida(bom), 'o validador do truco recusou uma partida boa');
+  for (const campo of ['vira', 'vazas', 'mesa', 'manilha']) {
+    const torto = JSON.parse(JSON.stringify(mod.P));
+    delete torto[campo];
+    ok(!mod.JOGO.motor.partidaValida(torto),
+      `o validador aceitou uma partida de truco sem ${campo}`);
+  }
+  // E uma carta torta DENTRO da mão — o caso que uma validação por `Array.isArray` sozinha
+  // deixaria passar, e que estoura lá adiante no `forcaDaCarta`.
+  const maoTorta = JSON.parse(JSON.stringify(mod.P));
+  maoTorta.maos[0][0] = [99, 0];
+  ok(!mod.JOGO.motor.partidaValida(maoTorta), 'o validador aceitou uma carta fora do baralho');
+}
+
+// ─── a dica, e o silêncio que não pode existir ───────────────────────────────
+console.log('\na dica e o porquê da recusa');
+{
+  mod.comecarLocal();
+  mod.P.vez = 0;
+  mod.publicar();
+  const d = mod.dicaDoTrucoParaACasa(mod.vistaAtual);
+  ok(!!d && !!d.texto && !!d.aviso, 'a dica do truco não devolveu o que dizer');
+  ok(!!d && typeof d.mostrar === 'function', 'a dica não devolveu o gesto — ela tem de levantar a carta');
+  if (d && d.mostrar) d.mostrar();
+  ok(mod.temPreviaDoTruco(), 'a dica não levantou carta nenhuma');
+  mod.cancelarEscolhaNoTruco();
+
+  // O SILÊNCIO É O DEFEITO, NÃO A RECUSA: cada estado em que a carta não vai tem uma frase
+  // própria, e a genérica só vale onde não há nada melhor a dizer.
+  const vPedido = Object.assign({}, mod.vistaAtual, { pedido: { de: 1, time: 1, valor: 3 } });
+  ok(/aposta/i.test(mod.porQueNaoDaNoTruco(vPedido)),
+    'com aposta na mesa o jogo não explica por que a carta não vai');
+  const vOnze = Object.assign({}, mod.vistaAtual, { pedido: null, fase: 'onze' });
+  ok(/11/.test(mod.porQueNaoDaNoTruco(vOnze)), 'na mão de 11 o jogo não explica o que falta');
+  ok(mod.porQueNaoDaNoTruco(null).length > 0, 'sem vista, a recusa fica muda');
 }
 
 console.log(`\n${falhas ? falhas + ' falha(s)' : 'tudo certo'} — ${n} asserções`);

@@ -50,6 +50,20 @@ function trocarDeJogo(nome) {
 // registro dele.
 const jogavel = j => !!j && !j.emBreve;
 
+// "O JOGO DESTA PASTA É O QUE ESTÁ NA MESA?" — todo ouvinte global de um jogo começa com
+// isto, e a razão só apareceu quando o segundo jogo ficou jogável: os `addEventListener` dos
+// DOIS ficam vivos ao mesmo tempo, porque são registrados na carga e o escopo é um só.
+//
+// Sem a guarda, um toque na carta de truco passa primeiro pelo `pointerdown` do dominó — que
+// não acha nada no raycast, conclui "clicou na mesa vazia" e CANCELA a escolha, fechando a
+// barra de confirmar que o truco está prestes a abrir. Hoje isso não aparece porque o
+// dominó é concatenado antes e o truco reabre a barra logo em seguida: o defeito existe e é
+// a ORDEM DOS ARQUIVOS que o esconde, que é a pior espécie de sorte.
+//
+// Recebe o objeto do contrato, e não o nome: `estaNaMesa(JOGOS.domino)` não é o dominó
+// escrevendo o próprio id em texto, é ele apontando para si mesmo.
+const estaNaMesa = jogo => JOGO === jogo;
+
 // Fisher-Yates. Morava em `30-domino/020-baralho.js`, e embaralhar um array não é dominó —
 // é da casa, como `guardar` e `escapar`. Veio para cá quando o baralho de 40 do `40-cartas/`
 // precisou da mesma coisa: a alternativa era uma segunda cópia (que é como duas metades
@@ -94,6 +108,18 @@ const anguloDaCadeira = (i, eu, n) => ((i - eu + n) % n) * Math.PI * 2 / n;
 // enxergam.
 const MQ_MOVIMENTO = matchMedia('(prefers-reduced-motion: reduce)');
 const movimentoReduzido = () => MQ_MOVIMENTO.matches;
+
+// Interpolação exponencial: independe do framerate e não precisa de biblioteca. É a ÚNICA
+// função de suavização do projeto, e é por isso que quem pediu menos movimento cabe numa
+// linha em vez de em todas as chamadas. Com a preferência ligada a peça não desliza: ela já
+// está no lugar — e ninguém perde informação, porque o deslizamento mostra o CAMINHO e o que
+// decide a jogada é o destino.
+//
+// MOROU NO DOMINÓ (090-tabuleiro.js) até a v4.5. Ela fala de número e de tempo, nunca de
+// peça; com o truco, ou subia para cá ou o segundo jogo escreveria a própria cópia. É a
+// terceira função a fazer este caminho, depois de `embaralhar` e de `anguloDaCadeira`.
+const chegarPerto = (atual, alvo, k, dt) =>
+  (movimentoReduzido() ? alvo : atual + (alvo - atual) * (1 - Math.exp(-k * dt)));
 
 // A paleta do boteco. `luz` e `parede` são do cenário (070-cena.js); `marfim` é a cor de
 // quem senta na mesa, e hoje quem senta é peça de dominó — quando houver carta, ela pede a

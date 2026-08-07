@@ -1,7 +1,7 @@
 {
   "name": "Dominó de Bar",
   "short_name": "Dominó",
-  "description": "Dominó dupla-seis em 3D. De 2 a 4 jogadores, em qualquer mistura de gente e bot, na mesma tela ou pela internet.",
+  "description": "Uma casa de jogos de boteco em 3D: dominó dupla-seis e truco paulista. De 2 a 4 jogadores, em qualquer mistura de gente e bot, na mesma tela ou pela internet.",
   "lang": "pt-BR",
   "dir": "ltr",
   "start_url": "./",
@@ -14,6 +14,8 @@
   "categories": ["games"],
   "shortcuts": [
     { "name": "Dominó de Bar", "short_name": "Dominó", "url": "./?jogo=domino",
+      "icons": [{ "src": "./icone-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Truco Paulista", "short_name": "Truco", "url": "./?jogo=truco",
       "icons": [{ "src": "./icone-192.png", "sizes": "192x192", "type": "image/png" }] }
   ],
   "icons": [

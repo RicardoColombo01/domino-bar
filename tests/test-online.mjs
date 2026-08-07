@@ -390,7 +390,7 @@ try {
       const restaurar = () => {
         j.MESA.modo = antes.modo; j.MESA.n = antes.n;
         j.MESA.cadeiras[1].tipo = antes.c1.tipo; j.MESA.cadeiras[1].nivel = antes.c1.nivel;
-        j.montarCadeiras(); j.ajustarCompraAoModo();
+        j.montarCadeiras(); j.ajustarOpcoesAoModo();
       };
       j.MESA.cadeiras[1].tipo = 'bot'; j.MESA.cadeiras[1].nivel = 'normal';
       j.montarCadeiras();
@@ -454,17 +454,17 @@ try {
       const antes = { modo: j.MESA.modo, n: j.MESA.n };
       const estado = (modo, n) => {
         j.MESA.modo = modo; j.MESA.n = n;
-        j.ajustarCompraAoModo();
+        j.ajustarOpcoesAoModo();
         const bts = [...document.querySelectorAll('#compraLivre button')];
         return { botoes: bts.length, ligavel: bts.some(b => !b.disabled),
-                 nota: document.getElementById('notaCompra').textContent };
+                 nota: document.getElementById('compraLivreNota').textContent };
       };
       const r = {
         c2: estado('classico', 2), c3: estado('classico', 3), c4: estado('classico', 4),
         duelo: estado('duelo', 2), trio: estado('trio', 3),
       };
       j.MESA.modo = antes.modo; j.MESA.n = antes.n;
-      j.ajustarCompraAoModo();
+      j.ajustarOpcoesAoModo();
       return r;
     });
     ok(compra.c2.botoes === 2, `o grupo da compra livre devia ter 2 botões e tem ${compra.c2.botoes}`);
@@ -822,7 +822,7 @@ try {
 } catch (e) {
   if (process.env.DOMINO_DEBUG) console.error(e.stack);
   // DEFEITO NÃO É PROBLEMA DE REDE, e esta separação existe porque a alternativa já
-  // enganou: um `j.ajustarCompraAoModo is not a function` — nome novo que a ponte do
+  // enganou: um `j.ajustarOpcoesAoModo is not a function` — nome novo que a ponte do
   // 160-loop.js não expunha — saiu daqui com o recado "o broker gratuito do PeerJS ou a
   // sua rede não deixaram a conexão fechar", e a rede estava ótima.
   //

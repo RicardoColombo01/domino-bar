@@ -19,8 +19,14 @@ let viuOFimDaMao = false;      // já passou pelo fim de mão que encerrou a par
 let saindo = false;            // a pergunta "sair mesmo?" está no ar
 let timerBot = 0;
 
+// `fase === 'mao'` era o dominó escrito na casa, e o truco o denunciou: lá existe uma fase
+// inteira — a mão de 11 — em que a vez é sua, o motor espera por você e não há carta nenhuma
+// a jogar. `emJogo` é a pergunta que serve aos dois: "há uma vez de alguém agir?".
+//
+// Ela aceita tanto a PARTIDA quanto a VISTA, e de propósito: as duas carregam `fase` e `vez`,
+// então um verbo só cobre o `seguirOTurno` (que olha `P`) e este aqui (que olha a vista).
 const podeAgirAgora = () =>
-  !!vistaAtual && !travado && vistaAtual.fase === 'mao' && vistaAtual.vez === vistaAtual.cadeira;
+  !!vistaAtual && !travado && JOGO.motor.emJogo(vistaAtual) && vistaAtual.vez === vistaAtual.cadeira;
 
 function comecarLocal() {
   // CADEIRA ONLINE SEM NINGUÉM VIVO NELA VIRA BOT. Senão a partida nasce com uma cadeira
@@ -49,9 +55,11 @@ function comecarLocal() {
   });
   const cadeiras = MESA.cadeiras.slice(0, MESA.n)
     .map(c => ({ nome: c.nome, tipo: c.tipo, nivel: c.nivel }));
-  P = JOGO.motor.nova(cadeiras, {
-    alvo: MESA.alvo, compraVoluntaria: MESA.compraVoluntaria, modo: MESA.modo,
-  });
+  // `compraVoluntaria` estava escrito nesta linha, e é uma regra de dominó: as opções que a
+  // mesa carrega são as que o JOGO declarou no menu, e a casa só as repassa.
+  const regras = { alvo: MESA.alvo, modo: MESA.modo };
+  for (const o of JOGO.menu.OPCOES) regras[o.campo] = MESA[o.campo];
+  P = JOGO.motor.nova(cadeiras, regras);
   euNaTela = 0;
   travado = false;
   JOGO.mesa.esquecerArrumacao();               // mesa nova, mão nova: a arrumação de antes não vale
@@ -61,9 +69,10 @@ function comecarLocal() {
   avancar();
 }
 
+// `P.pecaObrigatoria` era dominó puro dentro da casa — o truco abre com uma VIRA, que é
+// outra frase inteiramente. O jogo escreve a linha; a casa só a narra.
 function anunciarAbertura() {
-  narrar(`Mão ${P.maoNum} · abre ${P.cadeiras[P.vez].nome}` +
-    (P.pecaObrigatoria ? ` com o ${P.pecaObrigatoria.join('|')}` : ''));
+  narrar(JOGO.motor.abertura(P));
 }
 
 function narrar(txt) {
@@ -82,9 +91,10 @@ function publicar() {
   if (!P) return;
   if (modo === 'anfitriao') espalharVistas();
   const v = JOGO.motor.visao(P, euNaTela);
-  atualizarVista(travado
-    ? Object.assign({}, v, { mao: [], acoes: { jogadas: [], comprar: false, passar: false } })
-    : v);
+  // A VISTA SEM A MÃO, para a tela de troca do hotseat. Ela zerava `acoes` com os campos do
+  // dominó escritos aqui (`jogadas`, `comprar`, `passar`) — e "zerar as ações" é uma frase
+  // que só o jogo sabe escrever, porque só ele sabe quais são.
+  atualizarVista(travado ? JOGO.motor.semAMao(v) : v);
   guardarPartida();
 }
 
@@ -119,7 +129,7 @@ function atualizarVista(v) {
 
 function seguirOTurno() {
   clearTimeout(timerBot);
-  if (!P || P.fase !== 'mao' || modo === 'convidado') return;
+  if (!P || !JOGO.motor.emJogo(P) || modo === 'convidado') return;
   const c = P.cadeiras[P.vez];
 
   if (c.tipo === 'bot') {
@@ -128,7 +138,7 @@ function seguirOTurno() {
     // aba congelava a mesa inteira — inclusive para quem está jogando online.
     const quem = P.vez, naMao = P.maoNum;
     timerBot = setTimeout(() => {
-      if (P && P.fase === 'mao' && P.vez === quem && P.maoNum === naMao && P.cadeiras[quem].tipo === 'bot')
+      if (P && JOGO.motor.emJogo(P) && P.vez === quem && P.maoNum === naMao && P.cadeiras[quem].tipo === 'bot')
         aplicarIntencao(quem, JOGO.bot.jogada(P, quem));
     }, 550 + Math.random() * 600);                       // pausa para dar para acompanhar
     return;
@@ -147,31 +157,24 @@ function pedirAcao(intencao) {
   aplicarIntencao(vistaAtual.cadeira, intencao);
 }
 
-// O único lugar que mexe na partida. Vale para o seu clique, para o bot e para o que
-// chega pela rede — e valida os três do mesmo jeito.
-// Uma peça como o FIO pode entregá-la: dois números de 0 a `MAX_PINTAS`, e nada mais.
-// `mesmaPeca` (020-baralho.js) lê `b[0]` sem guarda, então uma peça ausente ou nula LANÇA
-// lá dentro — e a exceção sobe pelo `conn.on('data')` do anfitrião, que é quem tem a
-// partida. Note que isto NÃO é sobre trapaça: `jogar` valida a jogada contra
-// `acoesDe(P, cadeira)`, que sai da mão do próprio jogador, então peça inventada continua
-// devolvendo 'jogada inválida' e a fronteira do invariante 3 segue de pé. É sobre a mesa
-// dos outros parar.
-// Quem sabe a FORMA de uma jogada é o jogo: no dominó é um par de números de 0 a 6, no
-// truco será uma carta. A casa só precisa saber que existe uma pergunta a fazer.
-const pecaDoFio = p => JOGO.motor.jogadaDoFio(p);
-
+// O único lugar que mexe na partida. Vale para o seu clique, para o bot e para o que chega
+// pela rede — e trata os três do mesmo jeito.
+//
+// A CASA DEIXOU DE SABER O QUE É UMA JOGADA. Ela decodificava `jogar` / `comprar` / `passar`,
+// conferia `'esq'`/`'dir'`, e escrevia `${peca[0]}|${peca[1]}` na narração — três coisas que
+// no truco não querem dizer nada. Hoje ela entrega a intenção inteira ao motor do jogo e
+// recebe de volta o que houve:
+//
+//   { erro }                        recusa, com o motivo
+//   { ok, narracao: ['…', '…'] }    aconteceu, e é isto que a mesa deve ouvir
+//
+// A guarda contra mensagem torta do fio (o C3 da Fila 11) foi JUNTO, e para o lugar certo:
+// quem sabe se `{acao:'jogar', peca:undefined}` tem forma de jogada é quem conhece a forma.
+// Isto não é sobre trapaça — o motor valida a jogada contra as ações da própria mão, e a
+// fronteira do invariante 3 segue de pé — é sobre a mesa dos OUTROS não parar.
 function aplicarIntencao(cadeira, i) {
-  if (!P || P.fase !== 'mao') return;
-  let r;
-  // A CADEIA ERA ABERTA NO FINAL, e é um defeito por si: `{t:'acao'}` sem campo nenhum
-  // caía no `else` e virava um PASSE válido — a rede conseguia passar a vez de alguém
-  // mandando uma mensagem vazia. Agora as três ações são nomeadas e o resto é recusa.
-  if (i.acao === 'jogar') {
-    if (!pecaDoFio(i.peca) || (i.ponta !== 'esq' && i.ponta !== 'dir')) r = { erro: 'jogada inválida' };
-    else r = JOGO.motor.jogar(P, cadeira, i.peca, i.ponta);
-  } else if (i.acao === 'comprar') r = JOGO.motor.comprar(P, cadeira);
-  else if (i.acao === 'passar') r = JOGO.motor.passar(P, cadeira);
-  else r = { erro: 'ação desconhecida' };
+  if (!P) return;
+  const r = JOGO.motor.aplicar(P, cadeira, i || {});
 
   // O SILÊNCIO É O DEFEITO, NÃO A RECUSA. `avisar` fala com quem está NESTA tela, e o
   // convidado nunca está: para ele a peça simplesmente não ia, sem uma palavra. Recusar
@@ -182,15 +185,7 @@ function aplicarIntencao(cadeira, i) {
     return;
   }
 
-  const nome = P.cadeiras[cadeira].nome;
-  if (i.acao === 'jogar') narrar(`${nome} jogou ${i.peca[0]}|${i.peca[1]}`);
-  else if (i.acao === 'comprar') { tocarCompra(); narrar(`${nome} comprou do monte`); }
-  else { tocarPasse(); narrar(`${nome} passou`); }
-
-  if (r.fim) {
-    tocarBatida();
-    narrar(r.fim.motivo === 'batida' ? `${nome} bateu — ${JOGO.motor.nomeDoFim(r.fim.tipo)}` : 'Jogo trancado');
-  }
+  for (const linha of r.narracao || []) narrar(linha);
   avancar();
 }
 
@@ -293,20 +288,16 @@ function sairDaPartida() {
 // fora o fim de mão e a troca de jogador.
 const HORAS_GUARDADA = 12;
 
-// `P.faltaNo` é um array de Set, e Set NÃO sobrevive a JSON: `JSON.stringify(new Set())`
-// dá `{}` — um objeto sem `.has` e sem `.indexOf`. Sem estas duas conversões a partida
-// retomada perdia calada quem passou em qual número (a marca da Fila 4) e o bot estourava
-// na primeira consulta, em `050-bot.js`. É a MESMA conversão que `visaoDe` faz para o fio,
-// e pela mesma razão: o que não sobrevive à serialização não existe do outro lado.
-const partidaParaGuardar = () =>
-  Object.assign({}, P, { faltaNo: P.faltaNo.map(s => Array.from(s)) });
-
-const partidaDeVolta = guardada => Object.assign({}, guardada, {
-  faltaNo: guardada.cadeiras.map((_, i) => {
-    const g = (guardada.faltaNo || [])[i];
-    return new Set(Array.isArray(g) ? g : []);
-  }),
-});
+// O QUE NÃO SOBREVIVE AO JSON É PROBLEMA DE QUEM O CRIOU. `P.faltaNo` é um array de `Set`, e
+// `JSON.stringify(new Set())` dá `{}` — um objeto sem `.has` e sem `.indexOf`; sem a
+// conversão nos dois sentidos, a partida retomada perdia calada quem passou em qual número e
+// o bot estourava na primeira consulta. Mas `faltaNo` é uma palavra de dominó, e a casa a
+// tinha escrita duas vezes.
+//
+// Um jogo cujo `P` já é dado puro — como o do truco — não põe as duas chaves e leva a
+// identidade de graça.
+const partidaParaGuardar = () => JOGO.motor.paraGuardar ? JOGO.motor.paraGuardar(P) : P;
+const partidaDeVolta = g => JOGO.motor.deVolta ? JOGO.motor.deVolta(g) : g;
 
 function guardarPartida() {
   // O convidado não tem partida na memória: é a invariante do online, não um esquecimento.
@@ -349,7 +340,12 @@ function partidaGuardada() {
   if (p.fase === 'fim') return null;
   // Os continentes que os consumidores desreferenciam sem perguntar. `partidaDeVolta` faz
   // `guardada.cadeiras.map`, `retomarPartida` lê `P.placar` e `P.maoNum`, o HUD lê tudo.
-  for (const campo of ['cadeiras', 'maos', 'placar', 'linha', 'monte'])
+  //
+  // `linha` e `monte` saíram desta lista: são campos DO DOMINÓ, e exigi-los aqui recusaria
+  // toda partida de truco guardada — o botão "continuar a partida de antes" simplesmente
+  // nunca apareceria naquela aba, calado, que é o defeito mais caro deste arquivo. Quem
+  // confere os campos do jogo é o jogo, logo abaixo.
+  for (const campo of ['cadeiras', 'maos', 'placar'])
     if (!Array.isArray(p[campo])) return null;
   if (!p.cadeiras.length || p.maos.length !== p.cadeiras.length) return null;
   if (!p.maos.every(Array.isArray)) return null;
@@ -364,6 +360,11 @@ function partidaGuardada() {
   if (!p.regras || typeof p.regras !== 'object') return null;
   if (!Object.hasOwn(JOGO.menu.MODOS, p.regras.modo)) return null;
   if (!JOGO.menu.MODOS[p.regras.modo].cadeiras.includes(p.n)) return null;
+
+  // E O QUE SÓ O JOGO SABE CONFERIR. A casa cobra o que ELA desreferencia; o dominó cobra a
+  // linha e o monte, o truco cobra a vira e as vazas. Recusar continua sendo degradação
+  // graciosa: some o botão de retomar, e o jogo abre normalmente.
+  if (JOGO.motor.partidaValida && !JOGO.motor.partidaValida(p)) return null;
 
   return g;
 }
@@ -462,8 +463,8 @@ addEventListener('keydown', ev => {
   if (ev.key === 'Escape') JOGO.toque.cancelar();
 });
 
-HUD.comprar.onclick = () => pedirAcao({ acao: 'comprar' });
-HUD.passar.onclick = () => pedirAcao({ acao: 'passar' });
+// Os dois `onclick` que moravam aqui — comprar e passar — foram embora com os botões: quem
+// os gera agora é `desenharBarra`, e quem gera os botões liga os cliques deles.
 // Arrumar e contar não passam pelo motor: são jeitos de OLHAR a sua própria mão, e
 // funcionam fora da sua vez de propósito.
 HUD.arrumar.onclick = () => { JOGO.mesa.arrumar(); tocarSoltar(); };
@@ -479,32 +480,18 @@ HUD.contar.onclick = () => {
 // onde ela cai, e levantar já mostra os fantasmas nas duas pontas e abre a barra de
 // confirmar. Ou seja: a dica termina no mesmo lugar que um clique seu terminaria — você
 // ainda confirma ou cancela, e ninguém joga por você.
+// A dica devolve o que DIZER e o que FAZER, e o fazer é uma função porque só o jogo sabe
+// qual clique é esse — no dominó ele levanta a peça e abre os fantasmas nas duas pontas.
+//
+//   null                                  não há o que sugerir
+//   { texto, aviso, mostrar? }            a linha da conversa, o balão, e o gesto
 function pedirDica() {
   if (!podeAgirAgora()) { avisar('A dica é para a sua vez.'); return; }
   const d = JOGO.bot.dica(vistaAtual);
   if (!d) { avisar('Nada a sugerir agora.'); return; }
-
-  // Só os porquês que pesaram de verdade, do mais forte para o mais fraco, e no máximo
-  // dois: uma lista de seis razões não ensina nada a quem está começando.
-  const razoes = (d.porques || []).slice()
-    .sort((a, b) => Math.abs(b.peso || 0) - Math.abs(a.peso || 0))
-    .slice(0, 2).map(p => p.texto);
-
-  if (d.acao !== 'jogar') {
-    anotar(`Dica: ${d.acao === 'comprar' ? 'comprar' : 'passar'} — ${razoes[0] || 'não há jogada'}`);
-    avisar(d.acao === 'comprar' ? 'Dica: compre do monte.' : 'Dica: passe a vez.');
-    return;
-  }
-
-  // Procura na ORDEM DA TELA, que desde a arrumação não é a de vista.mao — é o mesmo
-  // cuidado da ponte `selecionar` dos testes, e pela mesma razão.
-  const i = JOGO.mesa.naMao.findIndex(m => JOGO.motor.mesmaJogada(m.peca, d.peca));
-  if (i < 0) { avisar('Nada a sugerir agora.'); return; }
-  JOGO.toque.selecionar(i);
-  tocarSoltar();
-  const onde = d.ponta === 'esq' ? 'na esquerda' : 'na direita';
-  anotar(`Dica: ${d.peca[0]}|${d.peca[1]} ${onde}${razoes.length ? ' — ' + razoes.join('; ') : ''}`);
-  avisar(`Dica: ${d.peca[0]}|${d.peca[1]} ${onde}`, 2600);
+  if (d.mostrar) d.mostrar();
+  anotar(d.texto);
+  avisar(d.aviso, 2600);
 }
 
 HUD.dica.onclick = () => pedirDica();
@@ -604,9 +591,10 @@ window.__jogo = {
   // e por isso o teste do online precisa poder forçar esse redesenho para conferir que
   // o nome chega como texto, e não como elemento.
   montarCadeiras,
-  // A compra livre só é oferecida onde existe monte, e `disabled` num <button> só existe
-  // com DOM de verdade — daí a asserção morar no test-online e precisar chamar isto.
-  ajustarCompraAoModo,
+  // As opções que o jogo oferece nem sempre valem na mesa que está montada (a compra livre
+  // do dominó só existe onde existe monte), e `disabled` num <button> só existe com DOM de
+  // verdade — daí a asserção morar no test-online e precisar chamar isto.
+  ajustarOpcoesAoModo,
   get P() { return P; },
   get vista() { return vistaAtual; },
   // `maoNaTela` e `selecionar` foram para o `JOGO.ponte`: os dois falam de PEÇA — a ordem

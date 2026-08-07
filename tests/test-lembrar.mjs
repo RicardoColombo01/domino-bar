@@ -544,17 +544,27 @@ try {
       titulo: document.getElementById('tituloJogo').textContent,
       abas: [...document.querySelectorAll('#abasJogos button')].map(b => b.dataset.jogo),
       ativa: document.querySelector('#abasJogos button.on').dataset.jogo,
-      // REGISTRADO não é JOGÁVEL: sem motor não pode haver montagem de mesa na tela.
+      // JOGÁVEL DESDE A v4.5: a montagem da mesa aparece e o "vem aí" some. Até a v4.4 estas
+      // duas asserções eram as OPOSTAS — a mesma linha, no mesmo lugar, com o valor esperado
+      // invertido porque o jogo mudou de estado. É assim que uma suíte marca uma release.
       montagem: !document.getElementById('montagemDaMesa').classList.contains('oculta'),
       vemAi: document.getElementById('vemAi').textContent.length,
       regras: document.querySelectorAll('#regrasLista li').length,
+      // O MENU É DO JOGO: alvos, modos e opções saem de `JOGO.menu`, e não do HTML da casa.
+      // No truco a partida vai até 12 e não há compra livre — ela é regra de monte.
+      alvos: [...document.querySelectorAll('#alvoPontos button')].map(b => b.dataset.alvo),
+      opcoes: document.getElementById('opcoesDaMesa').children.length,
+      modos: [...document.querySelectorAll('#modoMesa button')].map(b => b.dataset.modo),
     }));
     ok(t.abas.length === 2, `a faixa deveria listar os dois jogos, veio ${t.abas.join()}`);
     ok(t.ativa === 'truco', `?jogo=truco deveria abrir o truco, abriu ${t.ativa}`);
     ok(/Truco/.test(t.titulo), `o cartão não é o do truco: "${t.titulo}"`);
-    ok(!t.montagem, 'jogo sem motor mostrou a montagem da mesa — um "Sentar e jogar" que não senta');
-    ok(t.vemAi > 20, 'o truco não disse o que falta para ele — botão apagado sem explicação');
+    ok(t.montagem, 'o truco ficou sem montagem de mesa — ele é jogável desde a v4.5');
+    ok(t.vemAi === 0, 'o truco ainda promete que "vem aí" depois de já ter chegado');
     ok(t.regras > 4, `as regras do truco não vieram do registro (${t.regras} itens)`);
+    ok(t.alvos[0] === '12', `o truco vai até 12, e o primeiro alvo na tela é ${t.alvos[0]}`);
+    ok(t.opcoes === 0, 'o truco desenhou opção de mesa — compra livre é regra de monte');
+    ok(t.modos.includes('paulista'), `os modos do truco não vieram do registro: ${t.modos.join()}`);
 
     // Nome inventado na URL é ENTRADA DE FORA e cai no padrão, sem derrubar a carga. A chave
     // de protótipo é o caso que já deu tela preta permanente uma vez (defeito 5 da Fila 6).
@@ -620,6 +630,99 @@ try {
     ok(ocupada.porque.length > 10, 'a aba travada não disse por quê');
     await pagina.evaluate(() => { limpar(); });
     console.log(`  ${t.abas.join(' | ')} · a URL manda, a preferência lembra, e a mesa ocupada não troca`);
+  }
+
+  // ─── 8. a partida de TRUCO volta depois de recarregar ──────────────────────
+  // A casa exigia `linha` e `monte` de toda partida guardada — dois campos de dominó. Com
+  // aquela lista, o botão "continuar a partida de antes" NUNCA apareceria na aba do truco, e
+  // ninguém saberia: não há erro, não há aviso, o botão simplesmente não nasce.
+  //
+  // Esta cena mora no Chrome e não no Node porque o harness não tem `localStorage`: lá
+  // `partidaGuardada()` devolveria `null` dizendo "a casa recusou" quando na verdade nada foi
+  // gravado — asserção que reprova pelo motivo errado é pior que asserção nenhuma.
+  console.log('\na partida de truco sobrevive à recarga');
+  {
+    await abrirCom('?jogo=truco');
+    const antes = await pagina.evaluate(() => {
+      limpar();
+      j.MESA.n = 2;
+      j.MESA.cadeiras[1].tipo = 'bot';
+      j.MESA.cadeiras[1].nivel = 'normal';
+      j.comecarLocal();
+      // Joga algumas cartas para a partida guardada não ser a distribuição intocada — o que
+      // se quer provar é que o ESTADO volta, e estado inicial volta por acidente.
+      //
+      // A CONDIÇÃO DE PARADA É `maos[0].length > 1`, E NÃO UM NÚMERO DE LANCES. A primeira
+      // versão jogava 6 lances fixos, e 6 é exatamente a mão inteira numa mesa de 2 — mas
+      // quantos lances cabem antes disso depende do SORTEIO: se alguém truca e o outro corre,
+      // a mão acaba em 2; se ninguém aposta, ela vai até 6 e a sua mão fica VAZIA. A asserção
+      // "a mão voltou para a tela" passava numa rodada e reprovava na seguinte, com o mesmo
+      // commit. É a intermitência da Fila 5 por uma porta nova: aqui não é a ANIMAÇÃO pega no
+      // meio, é o ESTADO montado pela moeda.
+      //
+      // Amarrar a parada ao que a cena precisa — "sobra pelo menos uma carta na sua mão" —
+      // torna a montagem determinística sem semear nada.
+      for (let i = 0; i < 12 && j.P && j.P.fase === 'mao' && j.P.maos[0].length > 1; i++) {
+        const a = j.jogadaDoBot(j.P, j.P.vez);
+        if (!a) break;
+        j.aplicarIntencao(j.P.vez, a);
+      }
+      const g = JSON.parse(localStorage.getItem('dominobar.partida.truco') || 'null');
+      return {
+        gravou: !!g,
+        // A VIRA e as VAZAS são os campos do truco: se a serialização os perdesse, o jogo
+        // voltaria sem saber qual é a manilha.
+        vira: g && Array.isArray(g.P.vira) ? g.P.vira.join(':') : '',
+        vazas: g ? (g.P.vazas || []).length : -1,
+        maoNum: g ? g.P.maoNum : -1,
+        naMesa: j.P ? j.P.mesa.length : -1,
+        // O QUE A MONTAGEM CONSEGUIU, para a cena poder afirmar que mediu alguma coisa. Sem
+        // isto, uma montagem que parasse cedo demais faria as asserções de baixo passarem
+        // por trivialidade — é a mesma guarda que o rodapé do `test-telas` cobra ("mediu > 0").
+        naMaoGuardada: g ? (g.P.maos[0] || []).length : -1,
+        // E a chave é a DO JOGO: `dominobar.partida` sem sufixo é do acervo antigo, e uma
+        // partida de truco gravada ali apagaria a de dominó.
+        semSufixo: localStorage.getItem('dominobar.partida') !== null,
+      };
+    });
+    ok(antes.gravou, 'a partida de truco não foi guardada');
+    ok(!antes.semSufixo, 'a partida de truco foi gravada na chave sem sufixo, por cima do dominó');
+    ok(antes.vira.length > 0, 'a vira não sobreviveu à serialização — o jogo volta sem manilha');
+    ok(antes.naMaoGuardada > 0,
+      `a montagem terminou com a sua mão vazia (${antes.naMaoGuardada}) — não há o que voltar, ` +
+      'e as asserções de baixo passariam por trivialidade');
+
+    await abrirCom('?jogo=truco');
+    const depois = await pagina.evaluate(() => ({
+      oferece: !document.getElementById('btRetomar').classList.contains('oculta'),
+      texto: document.getElementById('btRetomar').textContent,
+    }));
+    ok(depois.oferece, 'a casa não ofereceu retomar a partida de truco guardada');
+    ok(/[Pp]aulista|mão/.test(depois.texto), `o botão de retomar não descreve a partida: "${depois.texto}"`);
+
+    const voltou = await pagina.evaluate(() => {
+      document.getElementById('btRetomar').click();
+      const P = j.P;
+      return {
+        vivo: !!P,
+        maoNum: P ? P.maoNum : -1,
+        vira: P && Array.isArray(P.vira) ? P.vira.join(':') : '',
+        vazas: P ? P.vazas.length : -1,
+        naMesa: P ? P.mesa.length : -1,
+        // A MESA EM 3D tem de ter sido remontada a partir da vista, e a vira desenhada: sem
+        // ela na mesa o jogador não sabe qual é a manilha, e o jogo fica ilegível.
+        cartasNaMesa: j.naMesa ? j.naMesa.size : -1,
+        naMao: j.naMao ? j.naMao.length : -1,
+      };
+    });
+    ok(voltou.vivo, 'a partida de truco não voltou');
+    ok(voltou.vira === antes.vira, `a vira mudou ao voltar: ${antes.vira} → ${voltou.vira}`);
+    ok(voltou.maoNum === antes.maoNum, `a mão mudou ao voltar: ${antes.maoNum} → ${voltou.maoNum}`);
+    ok(voltou.vazas === antes.vazas, `as vazas mudaram ao voltar: ${antes.vazas} → ${voltou.vazas}`);
+    ok(voltou.cartasNaMesa >= 1, 'a mesa 3D voltou vazia — nem a vira foi desenhada');
+    ok(voltou.naMao > 0, 'a sua mão de truco não voltou para a tela');
+    await pagina.evaluate(() => { limpar(); });
+    console.log(`  mão ${voltou.maoNum}, vira ${voltou.vira}, ${voltou.cartasNaMesa} cartas na mesa`);
   }
 } catch (e) {
   console.error('  ✗ ' + e.message);

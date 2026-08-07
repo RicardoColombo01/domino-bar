@@ -29,7 +29,7 @@ const mirar = ev => {
   ponteiro.x = (ev.clientX / innerWidth) * 2 - 1;
   ponteiro.y = -(ev.clientY / innerHeight) * 2 + 1;
 };
-addEventListener('pointermove', mirar);
+addEventListener('pointermove', ev => { if (estaNaMesa(JOGOS.domino)) mirar(ev); });
 
 // O dedo não fica em cima da tela como o mouse: sem soltar a mira, a peça em que você
 // tocou por último ficava erguida para sempre, como um hover que nunca acaba.
@@ -38,7 +38,7 @@ function largarMira() {
   ponteiro.set(9, 9);                 // fora de qualquer coisa
 }
 const soltarMira = ev => {
-  if (ev.pointerType === 'mouse') return;
+  if (!estaNaMesa(JOGOS.domino) || ev.pointerType === 'mouse') return;
   largarMira();
 };
 addEventListener('pointerup', soltarMira);
@@ -76,7 +76,7 @@ function alvoSob() {
 // `apontada` a partir do raycast, então um cursor de teclado seria apagado no quadro
 // seguinte ao de ter sido posto. Mexer o ponteiro larga o teclado; teclar larga o ponteiro.
 let cursorTeclado = null;
-addEventListener('pointermove', () => { cursorTeclado = null; });
+addEventListener('pointermove', () => { if (estaNaMesa(JOGOS.domino)) cursorTeclado = null; });
 
 function atualizarPonteiro() {
   // Durante o arrasto o realce de "passando por cima" briga com a peça erguida no dedo.
@@ -100,7 +100,9 @@ function selecionarPeca(i) {
   if (!m || !m.jogavel || !vistaAtual) return;
   escolhida = chave(m.peca);
   mostrarPrevia(vistaAtual, m.peca, m.pontas);
-  mostrarConfirmacao(vistaAtual, m);
+  // A casa desenha a barra; quem escreve "encaixar no 3" é o dominó — ver
+  // `confirmacaoDoDomino`, em 137-encaixes.js.
+  mostrarConfirmacao(confirmacaoDoDomino(vistaAtual, m));
   tocarClique();
 }
 
@@ -112,7 +114,7 @@ function reavaliarEscolha(vista) {
   const m = escolhida === null ? null : naMaoPorChave(escolhida);
   if (!m || !m.jogavel || vista.fase !== 'mao' || vista.vez !== vista.cadeira) { cancelarEscolha(); return; }
   mostrarPrevia(vista, m.peca, m.pontas);
-  mostrarConfirmacao(vista, m);
+  mostrarConfirmacao(confirmacaoDoDomino(vista, m));
 }
 
 function cancelarEscolha() {
@@ -162,6 +164,7 @@ function encerrarArrasto() {
 }
 
 addEventListener('pointerdown', ev => {
+  if (!estaNaMesa(JOGOS.domino)) return;
   // Só reage a clique na MESA. Sem isto, clicar num botão da barra de confirmação
   // dispararia este handler primeiro (pointerdown vem antes de click), o raycast não
   // acharia nada, a escolha seria cancelada — e o botão abriria uma jogada vazia.
@@ -204,6 +207,7 @@ addEventListener('pointerdown', ev => {
 });
 
 addEventListener('pointermove', ev => {
+  if (!estaNaMesa(JOGOS.domino)) return;
   if (!arrasto || ev.pointerId !== arrasto.id) return;
   const m = naMaoPorChave(arrasto.k);
   if (!m) { encerrarArrasto(); return; }              // a mão mudou embaixo do dedo
@@ -230,6 +234,7 @@ addEventListener('pointermove', ev => {
 });
 
 function soltarArrasto(ev) {
+  if (!estaNaMesa(JOGOS.domino)) return;
   if (!arrasto || (ev && ev.pointerId !== arrasto.id)) return;
   const foiArrasto = foiMesmoArrasto(arrasto);
   const k = arrasto.k;
@@ -260,7 +265,7 @@ addEventListener('pointercancel', () => encerrarArrasto());
 //
 // Repare que aqui NÃO se pergunta se foi arrasto ou toque: um gesto interrompido pelo
 // sistema não é escolha de ninguém, e completá-lo como toque jogaria por você.
-function desistirDoGesto() { encerrarArrasto(); largarMira(); }
+function desistirDoGesto() { if (!estaNaMesa(JOGOS.domino)) return; encerrarArrasto(); largarMira(); }
 document.addEventListener('visibilitychange', () => { if (document.hidden) desistirDoGesto(); });
 addEventListener('blur', desistirDoGesto);
 
@@ -329,6 +334,7 @@ function escolherPeloTeclado(i) {
 const emControle = ev => /^(BUTTON|SELECT|A|SUMMARY|DETAILS)$/.test((ev.target || {}).tagName || '');
 
 addEventListener('keydown', ev => {
+  if (!estaNaMesa(JOGOS.domino)) return;
   if (/^(INPUT|TEXTAREA)$/.test((ev.target || {}).tagName || '')) return;
   if (!vistaAtual || !naMao.length) return;
 

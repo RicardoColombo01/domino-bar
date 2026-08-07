@@ -74,6 +74,19 @@ html, body {
 .dado { display: flex; flex-direction: column; align-items: center; min-width: 74px; }
 .dado b { font-size: 17px; font-variant-numeric: tabular-nums; color: var(--ambar); }
 
+/* OS TRÊS INVÓLUCROS QUE O JOGO PREENCHE, e `display: contents` é o ponto todo deles: o
+   elemento some do layout e os filhos viram filhos diretos do pai. Sem isso o #medidores
+   seria UMA caixa flex dentro do #topo (os quatro painéis do dominó encolheriam juntos como
+   um bloco só) e o #barraJogo, uma caixa dentro do #acoes — e as regras de tela estreita,
+   que são todas `#topo .painel` e `#acoes .btn`, continuariam casando com os filhos e
+   brigando com um pai que não deviam ter.
+
+   Não é enfeite de CSS: é o que faz o encaixe custar ZERO em layout, e é o que mantém o
+   `test-telas` medindo exatamente as mesmas caixas de antes. */
+#medidores, #barraJogo, #opcoesDaMesa { display: contents; }
+/* Era `style="margin-left:18px"` no HTML, e o HTML deixou de escrever esta linha. */
+.rot.afastado { margin-left: 18px; }
+
 /* O #topo é pointer-events:none para não roubar o toque da mesa — e isso também impediria
    SELECIONAR o código da sala, que é metade do motivo de mostrá-lo. Exceção pontual, como
    a que o #conversa já tem. `all` seleciona o código inteiro num toque, igual ao

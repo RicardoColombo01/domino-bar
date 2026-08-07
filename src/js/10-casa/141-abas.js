@@ -177,7 +177,11 @@ function abrirJogo(id) {
   if (jogavel(JOGO)) {
     // `Object.assign` e não `MESA = …`: a referência tem de continuar a mesma, porque o
     // projeto inteiro lê `MESA.n` direto. Mesma razão do arranque.
+    // Os três geram botões a partir do jogo, e os três TÊM de vir antes do
+    // `refletirMesaNosBotoes`: quem move a marca não pode correr sobre uma faixa vazia.
     montarModos();
+    montarAlvos();
+    montarOpcoes();
     Object.assign(MESA, mesaLembrada());
     refletirMesaNosBotoes();
     ajustarCadeirasAoModo();
@@ -187,6 +191,7 @@ function abrirJogo(id) {
   atualizarBotaoRetomar();
   porAPonteDoJogo();
   pintarOJogoNoMenu();
+  pintarBotaoDoPainel();
   pintarAbas();
 
   // GUARDA SEMPRE, inclusive quando a escolha veio da URL — decisão do Ricardo em 06/08/2026,

@@ -377,7 +377,7 @@ function assentosDaMesa(vista) {
   const lugares = crus.map(s => {
     const x = s.x * aperto;
     const espaco = Math.min(0.56, 4.2 * aperto / Math.max(s.quantas, 1));
-    return { ...s, x, espaco, monte: JOGO.mesa.caixaDoMonte(s.a, x, s.z, s.quantas, espaco) };
+    return { ...s, x, espaco, caixa: JOGO.mesa.caixaDoAssento(s.a, x, s.z, s.quantas, espaco) };
   });
   return { aperto, lugares };
 }
