@@ -138,6 +138,22 @@ SAGUAO.voltar.onclick = () => {
   const g = salaGuardada();
   if (!g) { avisar('O código daquela mesa venceu.'); atualizarBotaoVoltarMesa(); return; }
   tocarClique();
+
+  // A MESA TEM JOGO, e voltar para ela é voltar para o jogo dela. Sem esta linha o botão
+  // reabria a sala no jogo da PREFERÊNCIA: quem jogava truco online, espiava a aba do
+  // dominó e clicava aqui voltava com o código certo e a mesa errada — e do lado do
+  // anfitrião isso é pior ainda, porque `reabrirMesaOnline` casa o código com a partida
+  // guardada, que é guardada POR JOGO desde a v4.1.
+  //
+  // `g.jogo &&` porque sala de antes desta versão não tem o campo: ali o botão continua
+  // abrindo no jogo em que você está, que é exatamente o que ele fazia. E se a troca falhar
+  // (mesa ocupada, jogo que sumiu), `abrirJogo` devolve `false` e o certo é NÃO seguir:
+  // entrar assim mesmo é o defeito que esta linha existe para impedir.
+  if (g.jogo && g.jogo !== JOGO_ID && !abrirJogo(g.jogo)) {
+    avisar('Termine a partida desta mesa antes de voltar para a outra.');
+    return;
+  }
+
   if (g.anfitriao) { reabrirMesaOnline(); return; }
   entrarNumaMesa();                       // prepara a tela; ela já pré-preenche o campo
   conectarNaMesa(g.codigo);

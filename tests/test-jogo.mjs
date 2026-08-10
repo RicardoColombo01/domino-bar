@@ -19,6 +19,9 @@ const mod = await import(buildModule([
   // o botão mostrar ✕ não prova nada, era exatamente esse o defeito. `conexoes` diz
   // quais cadeiras online têm alguém vivo do outro lado.
   'ac', 'conexoes', 'montarCadeiras', 'abrirMesaOnline', 'encerrarRede',
+  // `JOGOS` e `JOGO_ID` para a cena do jogo no protocolo: o teste descobre o OUTRO jogo em
+  // vez de escrever 'truco' à mão, senão ele morre no dia em que a casa ganhar o pife.
+  'JOGOS', 'JOGO_ID', 'salaGuardada', 'vistaDoFio',
   // `apontada` é o realce da peça — o mesmo campo que o mouse alimenta e que o teclado
   // passou a alimentar também. Perguntar por ele é como se vê o cursor de teclado sem
   // inventar um segundo estado só para o teste.
@@ -1718,6 +1721,95 @@ console.log('\nmensagem torta não derruba a mesa');
        'o P.log voltou — ele não tem leitor nenhum e é serializado em toda publicação');
   }
   console.log('  o despachante aguenta lixo do fio — e a mesa não para');
+}
+
+// ─── A MESA TEM JOGO, e o protocolo passou a dizer qual ──────────────────────
+// Até a v4.6 nem o `ola` nem o `sentou` carregavam o id do jogo, e a sala guardada também
+// não. Consequências, as duas reais: um convidado com o DOMINÓ aberto sentava numa mesa de
+// TRUCO e recebia vistas que a mesa dele não sabe desenhar; e "Voltar à mesa" reabria a sala
+// no jogo da PREFERÊNCIA, não no da mesa.
+//
+// A cena roda com o DOMINÓ na mesa (é o jogo padrão desta suíte), então o forasteiro é o
+// truco. Ela usa o despachante de verdade — o mesmo caminho do bloco de cima.
+// ─── e a vista do DOMINÓ continua sendo conferida pelo dominó ────────────────
+// O outro lado do encaixe. `vistaDoFio` deixou de exigir `linha` na CASA — se o encaixe do
+// dominó não a cobrar, ninguém mais cobra, e a guarda que existe para impedir "o jogo preto
+// sem uma palavra" vira decoração. É o par que impede o conserto de virar a remoção da
+// guarda, e é ele que a mutação mata.
+console.log('\na vista de dominó continua conferida pelo dominó');
+{
+  mod.encerrarRede();
+  mod.MESA.n = 2; mod.MESA.modo = 'classico';
+  mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[1].nivel = 'normal';
+  mod.comecarLocal();
+  // Pelo JSON, que é como ela chega de verdade.
+  const v = JSON.parse(JSON.stringify(mod.visaoDe(mod.P, 1)));
+  ok(mod.vistaDoFio(v), 'a casa recusou uma vista de dominó boa');
+  for (const campo of ['linha', 'monte']) {
+    const torto = JSON.parse(JSON.stringify(v));
+    delete torto[campo];
+    ok(!mod.vistaDoFio(torto), `a casa aceitou uma vista de dominó sem ${campo}`);
+  }
+  // `monte` é NÚMERO na vista (a partida tem o array; a visão manda o tamanho). Copiar o
+  // `Array.isArray` do validador da partida recusaria toda vista de dominó.
+  const monteArray = JSON.parse(JSON.stringify(v)); monteArray.monte = [];
+  ok(!mod.vistaDoFio(monteArray), 'a casa aceitou um monte que não é contagem');
+  console.log('  o encaixe do dominó cobra linha e monte, e o monte é contagem');
+}
+
+console.log('\na mesa recusa quem chega no jogo errado');
+{
+  const abrirMesa = () => {
+    mod.encerrarRede();
+    mod.MESA.modo = 'classico'; mod.MESA.n = 3;
+    for (const i of [1, 2]) { mod.MESA.cadeiras[i].tipo = 'bot'; mod.MESA.cadeiras[i].nivel = 'normal'; }
+    mod.comecarLocal();
+    mod.MESA.cadeiras[1].tipo = 'online'; mod.MESA.cadeiras[1].nome = 'Visita';
+    mod.MESA.cadeiras[1].vagaOnline = false;
+    mod.abrirMesaOnline();
+    const conn = novaConn();
+    const houve = Peer.ultimo.disparar('connection', conn);
+    ok(houve === 1, `o anfitrião devia ter registrado 1 ouvinte de 'connection', e foram ${houve}`);
+    return conn;
+  };
+
+  // O outro jogo, lido de `JOGOS` e não escrito à mão: um literal 'truco' aqui seria o
+  // teste fixando um nome de jogo, e ele morre no dia em que a casa ganhar o pife.
+  const outro = Object.keys(mod.JOGOS).find(id => id !== mod.JOGO_ID);
+  ok(!!outro, 'a casa só tem um jogo registrado — esta cena não testaria nada');
+
+  {
+    const conn = abrirMesa();
+    conn.disparar('data', { t: 'ola', id: 'cliente-forasteiro', nome: 'Visita', jogo: outro });
+    const recusa = conn.enviadas.find(m => m && m.t === 'cheio');
+    ok(!!recusa, 'a mesa aceitou calada um convidado de outro jogo');
+    ok(recusa && recusa.porque === 'outrojogo',
+      `a recusa saiu com o motivo errado (${recusa && recusa.porque}) — mentir o motivo é o defeito da Fila 10`);
+    // O NOME DO JOGO TEM DE VIAJAR, senão o convidado é mandado adivinhar entre as abas.
+    ok(recusa && recusa.jogo === mod.JOGO_ID, 'a recusa não disse de que jogo a mesa é');
+    ok(!mod.conexoes || !mod.conexoes.size, 'o forasteiro ocupou uma cadeira mesmo recusado');
+  }
+
+  {
+    // E O CONVIDADO DO JOGO CERTO CONTINUA SENTANDO — sem este par, tirar a guarda inteira
+    // deixaria a suíte verde, e o conserto viraria "ninguém entra nunca".
+    const conn = abrirMesa();
+    conn.disparar('data', { t: 'ola', id: 'cliente-certo', nome: 'Visita', jogo: mod.JOGO_ID });
+    const sentou = conn.enviadas.find(m => m && m.t === 'sentou');
+    ok(!!sentou, 'a mesa recusou um convidado do MESMO jogo');
+    ok(sentou && sentou.jogo === mod.JOGO_ID, 'o `sentou` não disse de que jogo a mesa é');
+  }
+
+  {
+    // CONVIDADO DE VERSÃO ANTIGA não manda `jogo`, e tem de sentar como antes. É a mesma
+    // tolerância que o `nome` solto já pratica: quebrar quem não recarregou é pior que a
+    // falta do campo, e uma página em cache é o caso comum e não o exótico.
+    const conn = abrirMesa();
+    conn.disparar('data', { t: 'ola', id: 'cliente-antigo', nome: 'Visita' });
+    ok(conn.enviadas.some(m => m && m.t === 'sentou'),
+      'a mesa recusou um convidado de versão antiga — o campo novo virou obrigatório');
+  }
+  console.log('  a mesa diz de que jogo ela é, e recusa o forasteiro dizendo qual');
 }
 
 // TEMPORIZADOR QUE ACORDA DEPOIS DE O JOGADOR MUDAR DE IDEIA. Os três defeitos deste bloco

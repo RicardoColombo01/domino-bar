@@ -42,6 +42,21 @@
 // código que ninguém escreveu, que é precisamente o que o `merge=ours` do `.gitattributes` e
 // o `npm run check` existem para impedir. Aqui o aviso é barulhento; quem decide é você.
 //
+// ─── guarda 5 · O COMANDO TEM DE CONSTRUIR — as suítes leem o BUNDLE ─────────
+// Achado na v4.7, e é a QUINTA forma de esta conferência mentir. `buildModule` (harness.mjs)
+// lê o `index.html` GERADO, não o `src/`: um comando sem `node build.mjs` na frente roda
+// contra o bundle da última construção, e a mutação — aplicada, casada, confirmada em `src/`
+// — simplesmente não chega ao teste. Sai "a mutação SOBREVIVEU", e é mentira.
+//
+// Ela mente na direção ALARMANTE, ao contrário da guarda 3, e por isso é menos perigosa: um
+// falso "sobreviveu" faz olhar, um falso "pegou" faz seguir em frente. Mas as duas medem o
+// código errado, e o remédio é o mesmo — use os scripts do `package.json`
+// (`npm test`, `npm run truco`, `npm run online`), que já começam com `node build.mjs`.
+// Rodar `node tests/test-jogo.mjs` na mão é justamente o atalho que não serve aqui.
+//
+// Repare que ela e a guarda 4 são as duas metades do mesmo fato: o bundle é gerado, então ou
+// ele entra no meio do caminho (guarda 5) ou sobra sujo no fim (guarda 4).
+//
 // ─── e uma coisa que NÃO é defeito do mutador ────────────────────────────────
 // Quando o conserto tem DUAS camadas, mutar UMA delas sai verde — a irmã segura o caso. Isso
 // é o desenho, não asserção fraca. A prova honesta é mutar o PAR. Quem mexer numa camada e

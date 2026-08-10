@@ -24,7 +24,7 @@ const mod = await import(buildModule([
   // deixa o corpo — a mesa 3D, a barra de apostas, o caminho da intenção — sem uma linha.
   'JOGOS', 'JOGO', 'JOGO_ID', 'abrirJogo', 'MESA', 'comecarLocal', 'pedirAcao',
   'aplicarIntencao', 'publicar', 'P', 'vistaAtual', 'desenharHUD', 'mostrarFimDeMao',
-  'partidaGuardada', 'atualizarBotaoRetomar', 'podeAgirAgora',
+  'partidaGuardada', 'atualizarBotaoRetomar', 'podeAgirAgora', 'vistaDoFio',
   // E o corpo do truco.
   'naMaoDoTruco', 'naMesaDoTruco', 'grupoMaoDoTruco', 'selecionarCarta', 'confirmarNoTruco',
   'cancelarEscolhaNoTruco', 'escolhidaNoTruco', 'barraDoTruco', 'medidoresDoTruco',
@@ -1312,6 +1312,61 @@ console.log('\na partida de truco guardada é entrada de fora');
   const maoTorta = JSON.parse(JSON.stringify(mod.P));
   maoTorta.maos[0][0] = [99, 0];
   ok(!mod.JOGO.motor.partidaValida(maoTorta), 'o validador aceitou uma carta fora do baralho');
+}
+
+// ─── o validador da VISTA QUE CHEGA PELO FIO — o irmão esquecido ─────────────
+// A seção de cima conta que a casa exigia `linha` e `monte` de toda partida guardada, e que
+// isso foi consertado. `vistaDoFio` (`150-rede.js`) é o IRMÃO daquele validador, no mesmo
+// papel — conferir entrada de fora antes de os desenhistas a desreferenciarem — e ele ficou
+// para trás exigindo `Array.isArray(v.linha)`, que é a linha da mesa do DOMINÓ.
+//
+// O efeito não é cosmético. No convidado, `if (m.t === 'vista' && vistaDoFio(m.v))` é a
+// ÚNICA porta por onde a vista entra: recusada, o `esconderTelas()` não roda e ele fica
+// preso no saguão PARA SEMPRE, sem uma palavra. É o defeito que este projeto mais odeia, e
+// a ironia é que `vistaDoFio` nasceu justamente para impedir "o jogo preto sem uma palavra".
+//
+// É a pergunta que o CLAUDE.md manda fazer a cada guarda: QUEM É O IRMÃO DESTA LINHA, e ele
+// tem a mesma guarda? Aqui a resposta era não, e o segundo jogo é quem cobrou.
+//
+// PELO JSON, e não pelo objeto vivo: é assim que a vista chega de verdade, e um campo que
+// não sobrevive à serialização (`undefined`, um `Set`) apareceria aqui e em nenhum outro
+// lugar desta suíte.
+console.log('\na vista de truco atravessa o fio');
+{
+  mod.MESA.n = 2;
+  mod.MESA.cadeiras[1].tipo = 'bot';
+  mod.comecarLocal();
+
+  const doFio = c => JSON.parse(JSON.stringify(mod.JOGO.motor.visao(mod.P, c)));
+
+  ok(mod.vistaDoFio(doFio(1)), 'a casa recusou uma vista de truco boa — o convidado fica preso no saguão');
+  ok(mod.vistaDoFio(doFio(0)), 'a casa recusou a vista da cadeira 0');
+
+  // AS OUTRAS FASES TÊM CAMPOS DIFERENTES, e é onde um validador estrito demais volta a
+  // calar a mesa — só que agora por dentro do próprio conserto. A mão de 11 e o fim de mão
+  // são as duas que mudam a forma da vista.
+  mod.P.fase = 'onze'; mod.P.decideOnze = 0;
+  ok(mod.vistaDoFio(doFio(1)), 'a casa recusou a vista da mão de 11');
+  mod.P.fase = 'fim'; mod.P.resultado = { tipo: 'pontos', time: 0, pontos: 1 };
+  ok(mod.vistaDoFio(doFio(1)), 'a casa recusou a vista de fim de partida');
+
+  // E a guarda tem de continuar GUARDANDO: ela existe porque uma vista sem `cadeiras` mata a
+  // tela no primeiro `sincronizar`. Afrouxá-la até aceitar qualquer coisa troca um defeito
+  // por outro, e este par é o que impede o conserto de virar a remoção da guarda.
+  //
+  // ESTAS DEZ NASCEM VERDES POR TRIVIALIDADE, e está dito de propósito: hoje a casa recusa
+  // TODA vista de truco, então recusar uma torta não prova nada. Elas só passam a medir
+  // alguma coisa depois do conserto — e quem as prova é a MUTAÇÃO, não esta rodada.
+  mod.P.fase = 'mao';
+  for (const campo of ['cadeiras', 'placar', 'acoes', 'mao', 'naMao']) {
+    const torto = doFio(1);
+    delete torto[campo];
+    ok(!mod.vistaDoFio(torto), `a casa aceitou uma vista de truco sem ${campo}`);
+  }
+  ok(!mod.vistaDoFio(null), 'a casa aceitou uma vista nula');
+  ok(!mod.vistaDoFio({}), 'a casa aceitou um objeto vazio como vista');
+  const foraDaFaixa = doFio(1); foraDaFaixa.vez = 9;
+  ok(!mod.vistaDoFio(foraDaFaixa), 'a casa aceitou uma vez fora da faixa de cadeiras');
 }
 
 // ─── a dica, e o silêncio que não pode existir ───────────────────────────────

@@ -56,6 +56,8 @@ JOGOS.truco = {
     // `paraGuardar` e `deVolta` NÃO entram: o `P` do truco é dado puro, e a casa cai na
     // identidade. Um encaixe que não se declara é um encaixe que não custa nada.
     partidaValida: partidaDoTrucoValida,
+    // O irmão dele para a vista do fio. Mais frouxo de propósito — ver o comentário dele.
+    vistaValida: vistaDoTrucoValida,
   },
 
   // ─── a mesa em 3D ──────────────────────────────────────────────────────────

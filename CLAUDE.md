@@ -8,8 +8,8 @@ gente e bot, na mesma tela ou pela internet. No ar em
 Sem framework, sem bundler, e **dois binários** — os ícones do aplicativo, exigidos pelo
 manifest: madeira, pintas, cartas e sons continuam gerados em canvas e WebAudio na hora.
 Three.js e PeerJS vêm de CDN, e o **service worker os guarda**, então depois de uma partida o
-jogo abre sem internet. **9.643 linhas** no total (`src/js` + `src/pagina.html` +
-`src/css/estilo.css` + `src/sw.js`), conferido em 07/08/2026 — este número **envelhece**, e
+jogo abre sem internet. **9.648 linhas** no total (`src/js` + `src/pagina.html` +
+`src/css/estilo.css` + `src/sw.js`), conferido em 10/08/2026 — este número **envelhece**, e
 envelheceu: ficou dizendo 2.100 por três releases seguidas.
 
 **Conte com `node`, não com o PowerShell.** `Measure-Object -Line` **não conta linha em
@@ -33,8 +33,11 @@ npm run telas     build + o jogo em seis tamanhos de tela (retrato, paisagem, ta
 npm run textura   build + as texturas sobrevivem a sair do jogo e voltar (~40 s)
 npm run lembrar   build + o que sobrevive a RECARREGAR a página (preferências, retomar)
 npm run shots     build + screenshots no Chrome de verdade (tests/shots/)
-npm run online    testa o online abrindo duas abas e uma mesa real
-                  aceita escolher: node tests/test-online.mjs --so=saguao
+npm run online    testa o online abrindo duas abas e uma mesa real — SEIS cenas, e desde a
+                  v4.7 uma delas é de TRUCO (jogada e aposta pelo fio, mais a recusa de quem
+                  chega no jogo errado). Toda aba é obrigada a dizer o JOGO: `abrirJogo` grava
+                  a preferência sempre, e as abas dividem a mesma origem
+                  aceita escolher: node tests/test-online.mjs --so=truco
 npm run fechamento  caça fechamento forçado jogando milhares de mãos (~3 min)
 npm run servir    servidor local (o online não fecha conexão em file://)
 
@@ -684,6 +687,36 @@ por mutação nas quatro direções, inclusive as duas de falso positivo.
   hunks do outro assunto**, porque aí toda posição é absoluta no arquivo que se tem. E a
   conferência não é a saída do `git apply`, que ficou verde com uma numeração minha errada: é
   `grep` pelos nomes que **não podem ter sobrado**, mais os que **têm de estar lá**.
+- **VALIDADOR é onde o acoplamento se esconde melhor — e ele é a QUINTA pergunta da fronteira
+  casa/jogo.** As quatro anteriores (que nomes? que textos? que forma? que formato?) não
+  alcançam `vistaDoFio`, e por três razões somadas: `v.linha` é **acesso a propriedade** e não
+  identificador livre, então o `test-acoplamento` diz zero e está CERTO; ele mora na camada
+  que ninguém suspeita (a rede tem 3 menções a vocabulário de dominó em 857 linhas); e **uma
+  guarda que recusa em silêncio nunca reprova um teste — ela só deixa de acontecer**. Um
+  validador descreve o formato do dado por definição, então ele é o último lugar onde a forma
+  de um jogo sobrevive. Ao auditar a fronteira, **abra os validadores**.
+- **A pergunta do IRMÃO não é retórica, e ela cobrou duas vezes.** O `partidaGuardada` exigia
+  `linha` e `monte` de toda partida guardada e foi consertado na v4.5; o `vistaDoFio`, que faz
+  a mesma coisa para a vista que chega pelo fio, ficou para trás com o mesmo defeito por três
+  releases. Este arquivo já escrevia *"segurança aplicada num lugar e esquecida no vizinho é o
+  padrão que este repositório repete há quatro filas"* — e repetiu de novo. **Ao mexer em
+  qualquer guarda, liste os irmãos dela ANTES de fechar.**
+- **Encaixe de validação pode ser FROUXO de propósito, e o rigor é que arma a cilada.** O
+  `vistaValida` do truco cobra só `mesa` e `vazas`, e a tentação de copiar o `partidaValida`
+  (que cobra `vira` e `manilha`) é grande. A forma da vista **muda com a fase**: cobrar campo
+  que some na mão de 11 recusaria aquela vista em silêncio — o mesmo defeito, refeito por
+  dentro do próprio conserto. **Guarda cujo erro é SILENCIOSO paga rigor com defeito**, e a
+  pergunta certa é "o que esta guarda protege?" — se a tela já é defensiva, ela não protege a
+  tela, protege a fronteira entre jogos, e aí o mínimo basta.
+- **SAÍDA DE MUTAÇÃO "SOBREVIVEU" TAMBÉM MENTE — a quinta forma, e ela é do BUNDLE.**
+  `buildModule` (`harness.mjs`) lê o `index.html` **gerado**, não o `src/`: um comando de
+  mutação sem `node build.mjs` na frente roda contra o bundle da última construção, e a
+  mutação — aplicada, casada, confirmada na fonte — **não chega ao teste**. Sai "a mutação
+  SOBREVIVEU", e é mentira. Mente na direção ALARMANTE (ao contrário da guarda 3, que mente
+  tranquilizando), então é a menos perigosa das cinco — mas mede o código errado igual. O
+  remédio: use os scripts do `package.json`, que já começam com o build. **Esta e a guarda 4
+  são as duas metades do mesmo fato:** o bundle é gerado, então ou ele entra no meio do
+  caminho, ou sobra sujo no fim.
 - **Desfazer a mutação alcança a FONTE, não o que o comando GEROU.** Um comando de mutação que
   inclui `node build.mjs` deixa o `index.html` e o `sw.js` construídos a partir do código
   mutado, e eles sobrevivem ao `finally` — o `git status` fica sujo com um bundle que contém
@@ -981,7 +1014,7 @@ curl -s "https://api.github.com/repos/RicardoColombo01/domino-bar/actions/runs?p
 
 Se depois de algumas horas a rodada continuar `queued` ou tiver sumido, aí sim vale
 **Actions → re-run**, ou **Settings → Pages** reconfirmando *Deploy from a branch → main →
-/ (root)*. `gh` não está instalado nesta máquina; a API pública responde sem autenticação.
+/ (root)*. `gh` ESTÁ instalado (2.97.0), mas na conta `Ricardo-Colombo-pixaflow`, que tem `push: false` neste repositório: serve para AUDITAR, não para publicar. A API pública responde sem autenticação.
 
 </details>
 </details>
@@ -992,41 +1025,88 @@ que as suítes rodaram inteiras com o site no ar três releases atrás.
 
 ---
 
-#### ONDE PAROU — fim da sessão de 07/08/2026 (v4.6 fechada)
+#### ONDE PAROU — fim da sessão de 10/08/2026 (v4.7 fechada)
 
 **LEIA ISTO PRIMEIRO.** É o ponto exato de retomada, e é o ÚNICO — este arquivo já registrou
 que ponteiro de retomada é o item que mais apodrece aqui, e por isso não pode haver dois.
 
 ```
-main         v4.6.1, mesclada e tagueada, árvore limpa, npm run check em dia
-ENVIADO      ✗ NÃO — há commits locais à frente do origin. É AQUI QUE SE COMEÇA
-PUBLICADO    ✗ não, por consequência
+main         v4.6.1 mesclada e tagueada; a v4.7 sai da branch `v4.7`
+ENVIADO      ✗ NÃO — a v4.6 E a v4.7 estão paradas aqui. É AQUI QUE SE COMEÇA
+PUBLICADO    ✗ não, por consequência — o servido é o sw.js 23dc31b4d8f9 (v4.5.1)
 worktree     NENHUM
 ```
 
-> ## ⚠ A PRIMEIRA COISA A FAZER
+> ## ⚠ O PUSH ESTÁ BLOQUEADO POR CREDENCIAL, e isto é NOVO
 >
-> ```
-> git rev-list --left-right --count origin/main...main    # deve dar 0 N, com N > 0
-> git push origin main --tags
-> ```
+> `git push origin main --tags` devolve **403**:
+> *"Permission to RicardoColombo01/domino-bar.git denied to Ricardo-Colombo-pixaflow."*
 >
-> **O trabalho da v4.6 está COMMITADO e NÃO ENVIADO.** Foi decisão explícita do Ricardo parar
-> no commit — ele pediu o commit, não o envio, e enviar publica no site ao vivo. Não é
-> esquecimento; é um degrau à espera de uma decisão que já pode ter sido tomada desde então.
+> **O `gh` DESTA MÁQUINA NÃO SERVE, e o arquivo dizia o contrário.** Ele afirmava em três
+> lugares que *"`gh` não está instalado nesta máquina"* — **está** (2.97.0), autenticado, mas
+> na conta **`Ricardo-Colombo-pixaflow`**, e `gh api repos/RicardoColombo01/domino-bar --jq
+> .permissions` devolve `{"push": false}`. O `credential.helper = store` do `.gitconfig`
+> guarda essa mesma conta, e foi ela que o `gh auth setup-git` escreveu por cima da que
+> funcionava em 07/08. **Serve para auditar o Pages; não serve para publicar.**
 >
-> **Confira antes de supor qualquer coisa.** *Commitado ≠ enviado ≠ publicado* são TRÊS
-> lugares, e este projeto já perdeu um dia inteiro por confundir dois deles — o Ricardo testou
-> o `github.io` e viu os mesmos defeitos porque nada tinha saído da máquina. Depois do push,
-> a régua de PUBLICADO é o conteúdo SERVIDO, nunca o `git rev-list`:
+> **O Ricardo não pode trocar a autenticação** — ele está trabalhando com a outra conta em
+> outros projetos, e `gh auth login` a substituiria. Decisão dele em 10/08: **ele sobe as duas
+> releases quando for conveniente.** As saídas, para quando chegar a hora:
 >
+> 1. `RicardoColombo01/domino-bar → Settings → Collaborators` convidando `Ricardo-Colombo-pixaflow`
+>    com **Write** (o push passa a funcionar daqui, sem tocar em conta nenhuma);
+> 2. um **fine-grained token** da conta dona, escopo só neste repositório, configurado
+>    **por repositório** para não encostar na credencial global.
+>
+> **E os commits só existem NESTA máquina** — não há como enviá-los de outro computador,
+> porque nenhum outro os tem. Isto matou a saída que parecia óbvia.
+>
+> Depois do push, a régua continua sendo o **conteúdo SERVIDO**:
 > ```
 > curl -s https://ricardocolombo01.github.io/domino-bar/sw.js | grep VERSAO
-> grep VERSAO sw.js          # o local. Em 07/08 ele diz c93b56e82375
+> grep VERSAO sw.js
 > ```
->
-> Iguais, está tudo no ar. Diferentes, espere a fila do Pages — ela já ficou travada por horas
-> e **engole o push seguinte**, então empurrar de novo não adianta e não prova nada.
+> O pipeline do Pages está **saudável** (duas rodadas `success` em 07/08), então deve publicar
+> em minutos — o travamento de dias não voltou.
+
+#### ⚠ A v4.7 — O TRUCO ONLINE ESTAVA QUEBRADO, e ninguém sabia
+
+Este arquivo listava o truco online entre "o que nunca foi tocado por mão humana", com a
+ressalva certa: *"o truco herda a rede inteira e nada nele é específico — mas 'herda de graça'
+é uma AFIRMAÇÃO, não uma medição"*. **A medição desmentiu a afirmação.**
+
+```
+150-rede.js   const vistaDoFio = v => … Array.isArray(v.linha) && …
+520-partida   visaoDoTruco → 23 campos, e NENHUM se chama `linha`
+150-rede.js   if (m.t === 'vista' && vistaDoFio(m.v)) { esconderTelas(); … }
+```
+
+`linha` é a linha da mesa do DOMINÓ. Numa mesa de truco online, `vistaDoFio` devolvia `false`
+para **toda** vista que chegava, o `esconderTelas()` nunca rodava, e **o convidado ficava
+preso no saguão para sempre, sem uma palavra** — a espécie de defeito que este projeto mais
+odeia. **A ironia:** aquela função nasceu para impedir *"ele fica com o jogo preto sem uma
+palavra"*.
+
+**ERA O IRMÃO ESQUECIDO DO `partidaGuardada`.** Aquele validador pagou este mesmo defeito com
+`linha` e `monte`, foi consertado na v4.5, e o vizinho ficou para trás — exatamente o padrão
+que este arquivo nomeia há quatro filas: *"segurança aplicada num lugar e esquecida no
+vizinho"*, com a pergunta que ele manda fazer: **"quem é o irmão desta linha, e ele tem a
+mesma guarda?"**
+
+| o que a v4.7 leva | |
+|---|---|
+| `JOGO.motor.vistaValida` | encaixe **opcional**, no molde do `partidaValida`: a casa confere o continente comum, o jogo confere o que é dele |
+| o do truco é mais FROUXO | de propósito — a mesa dele já é defensiva em todo ponto (`vista.mesa \|\| []`), e cobrar `vira`/`manilha` recusaria a vista da **mão de 11** em silêncio, refazendo o defeito por dentro do conserto |
+| o jogo no PROTOCOLO | `ola` e `sentou` carregam `jogo`; a sala guardada também; `salaGuardada` o valida com `Object.hasOwn` |
+| a recusa DIZ o jogo | *"Essa mesa é de Truco Paulista."* — o nome sai de `JOGOS[id].nome`, nunca de um literal na casa |
+| "Voltar à mesa" | reabre no jogo **da sala**, não no da preferência |
+| cena `truco` no `test-online` | a suíte só jogava dominó; agora joga, aposta e é recusada no jogo errado |
+| `abrir(nome, jogo, id)` | o **jogo virou obrigatório** em toda aba — `abrirJogo` grava a preferência incondicionalmente e as abas dividem a origem |
+
+**Cinco mutações, cada uma matando exatamente a sua: 4 · 3 · 4 · 1 · 1.**
+
+**O que NÃO foi rodado, e por quê:** o `telas`. Nenhuma mudança desta onda toca geometria,
+CSS ou o 3D — são rede, registro e um getter na ponte.
 
 **A v4.6 SAIU PELA RECEITA DA CASA:** branch `v4.6` nascida de `main`, três commits (a suíte,
 a funcionalidade, o registro), merge `--no-ff` com a tag `v4.6.0`, `npm run build && git add
@@ -1086,9 +1166,12 @@ arquivo, e o inventário completo das mudanças desta onda.
 2. ~~**A cena de truco no `test-telas`**~~ ✔ **feita na v4.6**, e ela achou dois defeitos de
    geometria mais um antigo do dominó. Ver "A LACUNA QUE A v4.5 DEIXOU".
 3. ~~**COMMITAR A v4.6.**~~ ✔ **feita** — três commits, merge `--no-ff`, tag `v4.6.0`.
-4. **CONFERIR O QUE ESTÁ NO AR.** *Commitado ≠ enviado ≠ publicado*, e o degrau que já custou
-   um dia a este projeto é sempre o próximo. A régua é o conteúdo SERVIDO, não o `git
-   rev-list`: `curl -s …/sw.js | grep VERSAO` contra o `grep VERSAO sw.js` local.
+4. **ENVIAR A v4.6 E A v4.7, e é o único item BLOQUEADO.** Não é esquecimento nem decisão
+   pendente: o push devolve **403** porque a credencial desta máquina é de outra conta. Ver a
+   caixa em "ONDE PAROU" — as duas saídas estão escritas, e as duas são conta e não código.
+   Depois, a régua é o conteúdo SERVIDO, nunca o `git rev-list`.
+4b. ~~**O truco online**~~ ✔ **feito na v4.7** — e não era lacuna de teste, era defeito: o
+   convidado ficava preso no saguão. Ver a seção própria.
 5. **A Fase 5, o aplicativo** — worktree próprio (`../domino-bar-app`), e ela trava numa
    decisão de conta do Ricardo (o repositório da user page). Ver "É AQUI QUE SE RETOMA".
 
@@ -1159,7 +1242,7 @@ telas (2 metades)     folga mínima 0.33 nas duas        idêntica à da main
 mutações              11, cada uma matando a sua
 truco                 7 arquivos, 1.778 linhas
 casa mexida           8 arquivos, ~310 linhas
-o projeto             9.226 linhas em src/
+o projeto             9.226 linhas em src/   (em 10/08 são 9.648)
 ```
 
 **O que a Fase 2 entregou, e o que ela obrigou a decidir:**
@@ -1669,7 +1752,7 @@ Registrado para não ser redescoberto do zero — e com o motivo de não ser pri
 1. **O CLIQUE NO PAGES.** `Actions → a rodada das 22:04 → Re-run all jobs`, ou
    `Settings → Pages` reconfirmando *Deploy from a branch → main → / (root)*. Quatro pushes
    seguidos não geraram rodada, o que já não é oscilação. **É a única coisa entre o truco e
-   quem joga**, e `gh` não está instalado nesta máquina.
+   quem joga**. E o `gh` desta máquina não resolve: ele existe, mas na conta `Ricardo-Colombo-pixaflow`, sem permissão de escrita aqui.
 2. **O REPOSITÓRIO `ricardocolombo01.github.io`** (user page), com um `.nojekyll` VAZIO na raiz
    e o `.well-known/assetlinks.json`. Sem ele o TWA abre com barra de URL e não passa por
    aplicativo. É o que trava a Fase 5 inteira.
@@ -1765,7 +1848,7 @@ primeiro":
 | **a carta virando de barriga para baixo** | a vaza recolhida DESLIZA para a pilha girando 180° em Z. Nunca foi vista por ninguém — só medida como posição |
 | **a barra de apostas** | Pedir truco · Aceitar · Aumentar · Correr. A suíte confere que os botões EXISTEM e que a intenção chega; ninguém clicou neles com o dedo |
 | **a mão de 11** | dois botões e uma fase própria. Testada em Node, nunca na tela |
-| **o truco ONLINE** | o `test-online` só joga dominó. O truco herda a rede inteira e nada nele é específico — mas "herda de graça" é uma afirmação, não uma medição |
+| ~~**o truco ONLINE**~~ | ✔ **medido na v4.7, e a afirmação estava ERRADA**: ele NÃO herdava de graça — `vistaDoFio` recusava toda vista de truco e o convidado ficava preso no saguão. Consertado, com cena própria no `test-online` (mesa real, jogada e aposta pelo fio). O que a suíte ainda não vê: truco online em **duplas** (4 cadeiras) e a conversa por dupla numa mesa de truco |
 | **o truco em DUPLAS (4 cadeiras)** | o `timeNoTruco` é uma linha e está testado; o canal da dupla na conversa e o placar por time nunca foram vistos numa mesa de truco |
 | **o dominó, de novo** | ele mudou MAIS que o truco em superfície: os botões, os medidores do topo, a barra de confirmar e a tela de fim de mão passaram todos a ser gerados. As suítes dizem que está idêntico; olho humano é a outra régua |
 
@@ -4247,6 +4330,10 @@ depois de instalado.
 | `peerjs.min.js` | 92.865 | 92.865 |
 | `index.html` (com o CSS dentro) | 314.078 | 317.063 |
 | **total** | **1.679.915** | **1.080.609** |
+
+**ESTA TABELA É DA v3.0.0 E ENVELHECEU** — o truco engordou o bundle. Medido em 10/08/2026:
+`index.html` **511.961** (era 317.063), e o total offline **1.275.507**. Continua abaixo dos
+1,64 MB de antes do three minificado, mas o `index.html` já é 40% do download.
 
 **O ganho de graça era real e saiu numa linha:** o importmap apontava para
 `three.module.js` **não minificado**. 47% a menos no maior download da página. A segunda

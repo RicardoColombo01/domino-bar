@@ -79,6 +79,8 @@ JOGOS.domino = {
     paraGuardar: guardarODomino,
     deVolta: dominoDeVolta,
     partidaValida: partidaDoDominoValida,
+    // O que só este jogo confere na VISTA que chega pelo fio — irmão do `partidaValida`.
+    vistaValida: vistaDoDominoValida,
   },
 
   // ─── a mesa em 3D ──────────────────────────────────────────────────────────

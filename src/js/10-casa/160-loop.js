@@ -595,6 +595,13 @@ window.__jogo = {
   // do dominó só existe onde existe monte), e `disabled` num <button> só existe com DOM de
   // verdade — daí a asserção morar no test-online e precisar chamar isto.
   ajustarOpcoesAoModo,
+  // QUAL JOGO ESTÁ NA MESA. É da casa e não da ponte do jogo — um jogo não pode ser a fonte
+  // da resposta "quem está na mesa", porque a pergunta existe justamente quando não se sabe.
+  //
+  // GETTER e não valor: `abrirJogo` troca o `JOGO_ID` em tempo de execução, e uma cópia
+  // tirada no arranque seria uma fotografia do primeiro jogo para sempre — foi exatamente o
+  // que o `Object.assign` comendo getters custou na Fase 1.
+  get JOGO_ID() { return JOGO_ID; },
   get P() { return P; },
   get vista() { return vistaAtual; },
   // `maoNaTela` e `selecionar` foram para o `JOGO.ponte`: os dois falam de PEÇA — a ordem

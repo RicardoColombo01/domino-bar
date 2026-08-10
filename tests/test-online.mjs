@@ -34,7 +34,7 @@ const so = (args.find(a => a.startsWith('--so=')) || '').slice(5).split(',').fil
 // A lista existe para que uma cena inexistente REPROVE em vez de rodar zero asserção e
 // imprimir "tudo certo" — verde vazio é a armadilha que o `diff` de arquivos vazios já
 // pagou aqui. Quem acrescentar cena nova acrescenta o nome aqui, no mesmo commit.
-const CENAS = ['duelo', 'conversa', 'saguao', 'nomes', 'voltar'];
+const CENAS = ['duelo', 'conversa', 'saguao', 'nomes', 'voltar', 'truco'];
 for (const s of so) if (!CENAS.includes(s)) {
   // Cena que não existe é ERRO e não "rodar tudo": um erro de digitação daria a suíte
   // inteira quando se pediu uma cena, ou zero asserção — e as duas mentem.
@@ -73,22 +73,38 @@ const navegador = await puppeteer.launch({
 // 8s e a segunda estourou 45s. Injetar o id é o mesmo efeito por um custo que não existe.
 //
 // Passar `id` de outra aba é dizer "é a MESMA pessoa, noutra aba".
+//
+// O `jogo` É OBRIGATÓRIO, e a razão é a mesma que o `test-telas` já pagou: `abrirJogo` faz
+// `guardar('jogo', id)` INCONDICIONALMENTE (decisão do Ricardo em 06/08 — a URL e o clique
+// valem a mesma coisa), e as abas do Puppeteer dividem a mesma origem, logo o mesmo
+// `localStorage`. Uma cena de truco deixaria `dominobar.jogo = 'truco'` para as cenas de
+// dominó seguintes — e elas reprovariam por causa da cena anterior, que é o defeito de teste
+// mais caro deste projeto (a mesma lição do `MESA` entre cenas e do `localStorage` das telas).
+//
+// Quem manda é a URL, que vence a preferência (`141-abas.js`). Deixar o padrão implícito
+// seria pior que escrever: um dia o primeiro jogo registrado muda e as cenas trocam de
+// assunto caladas.
 let abas = 0;
-const abrir = async (nome, id) => {
+const abrir = async (nome, jogo, id) => {
+  if (!jogo) { console.error(`a aba "${nome}" foi aberta sem dizer o JOGO`); process.exit(2); }
   const p = await navegador.newPage();
   const meu = id || `CLIENTEDETESTE${++abas}`;
   await p.evaluateOnNewDocument(v => localStorage.setItem('dominobar.cliente', JSON.stringify(v)), meu);
   p.idDeTeste = meu;
   await p.setViewport({ width: 1200, height: 760 });
   p.on('pageerror', e => { console.error(`  ✗ exceção em ${nome}: ${e.message}`); falhas++; });
-  await p.goto(URL_JOGO, { waitUntil: 'networkidle2', timeout: 45000 });
+  await p.goto(`${URL_JOGO}?jogo=${jogo}`, { waitUntil: 'networkidle2', timeout: 45000 });
   await p.waitForFunction('window.__jogo && window.__jogo.pronto', { timeout: 30000, polling: 400 });
+  // A aba abriu no jogo que a cena pediu? Sem esta linha, um id de jogo errado cairia no
+  // padrão em silêncio e a cena mediria o jogo errado dizendo o nome certo.
+  const abriu = await p.evaluate(() => window.__jogo.JOGO_ID);
+  ok(abriu === jogo, `a aba "${nome}" pediu ${jogo} e abriu ${abriu}`);
   return p;
 };
 
 try {
-  const anfitriao = await abrir('anfitrião');
-  const convidado = await abrir('convidado');
+  const anfitriao = await abrir('anfitrião', 'domino');
+  const convidado = await abrir('convidado', 'domino');
 
   const temPeerJS = await anfitriao.evaluate(() => typeof Peer !== 'undefined');
   if (!temPeerJS) throw new Error('PeerJS não carregou (sem internet?)');
@@ -258,7 +274,7 @@ try {
     // no celular. A aba nova assume a cadeira e a velha é avisada — antes as duas brigavam
     // pela mesa, cada uma consumindo uma vaga.
     console.log('\na mesma pessoa entra noutra aba');
-    const outraAba = await abrir('outra aba', convidado.idDeTeste);
+    const outraAba = await abrir('outra aba', 'domino', convidado.idDeTeste);
     await outraAba.evaluate(cod => {
       document.getElementById('btEntrar').click();
       document.getElementById('onlineEntrada').value = cod;
@@ -283,9 +299,9 @@ try {
     // 1 e 2. O parceiro do anfitrião é a cadeira 2; a cadeira 1 é adversária. É o único
     // arranjo que responde à pergunta que interessa: a fala da dupla vaza?
     console.log('\na conversa da mesa');
-    const dono = await abrir('dono');
-    const parceiro = await abrir('parceiro');
-    const rival = await abrir('rival');
+    const dono = await abrir('dono', 'domino');
+    const parceiro = await abrir('parceiro', 'domino');
+    const rival = await abrir('rival', 'domino');
 
     await dono.evaluate(() => {
       const j = window.__jogo;
@@ -571,7 +587,7 @@ try {
     // seria pior —, e uma asserção em cima disso gravaria a regra errada, que é o erro que
     // os itens 1 e 2 da Fila 5 pagaram duas vezes.
     console.log('\ntrês abas da mesma pessoa, no saguão de uma mesa de 4');
-    const anf4 = await abrir('anfitrião de 4');
+    const anf4 = await abrir('anfitrião de 4', 'domino');
     await anf4.evaluate(() => {
       const j = window.__jogo;
       j.MESA.modo = 'classico'; j.MESA.n = 4;
@@ -588,7 +604,7 @@ try {
     // diz "é a mesma pessoa" sem pagar o cache HTTP de um contexto isolado.
     const MESMA = 'LIADETESTE';
     const sentar = async (nome) => {
-      const p = await abrir(nome, MESMA);
+      const p = await abrir(nome, 'domino', MESMA);
       await p.evaluate(c => {
         window.__jogo.MESA.cadeiras[0].nome = 'Lia';
         document.getElementById('btEntrar').click();
@@ -649,7 +665,7 @@ try {
     // dois. As regras do desempate em si (onde entra o número, o que cede para caber nos 14)
     // são função pura e estão provadas no test-jogo, em milissegundos.
     console.log('\nduas pessoas com o mesmo nome, pelo campo do saguão');
-    const anfN = await abrir('anfitrião dos nomes');
+    const anfN = await abrir('anfitrião dos nomes', 'domino');
     await anfN.evaluate(() => {
       const j = window.__jogo;
       j.MESA.modo = 'classico'; j.MESA.n = 3;
@@ -676,8 +692,8 @@ try {
         { timeout: 30000, polling: 400 });
     };
 
-    const um = await abrir('Ricardo 1');
-    const dois = await abrir('Ricardo 2');
+    const um = await abrir('Ricardo 1', 'domino');
+    const dois = await abrir('Ricardo 2', 'domino');
     await entrarComCampo(um, 'Ricardo');
     await entrarComCampo(dois, 'Ricardo');
     await anfN.evaluate(() => new Promise(r => setTimeout(r, 800)));
@@ -710,7 +726,7 @@ try {
     // `esquecer('sala')` fechava as três portas de volta de uma vez); com revanche a cadeira
     // dele virou bot para sempre e a mesa respondia "já está cheia", que é mentira.
     console.log('\no convidado sai e volta para a mesa');
-    const anfV = await abrir('anfitrião do voltar');
+    const anfV = await abrir('anfitrião do voltar', 'domino');
     await anfV.evaluate(() => {
       const j = window.__jogo;
       j.MESA.modo = 'classico'; j.MESA.n = 3;
@@ -724,7 +740,7 @@ try {
       { timeout: 25000, polling: 400 });
     const codV = await anfV.evaluate(() => document.getElementById('onlineCodigo').textContent);
 
-    const visita = await abrir('a visita');
+    const visita = await abrir('a visita', 'domino');
     const entrar = async () => {
       await visita.evaluate(c => {
         document.getElementById('btEntrar').click();
@@ -818,6 +834,129 @@ try {
 
     console.log('  voltou depois da revanche e assumiu a cadeira que tinha virado bot');
     await visita.close(); await anfV.close();
+  }
+
+  // ─── O TRUCO ONLINE ────────────────────────────────────────────────────────
+  // A LACUNA QUE ESTA SUÍTE TINHA: ela só jogava dominó, e o CLAUDE.md registrava o truco
+  // online como "herda a rede inteira — mas herdar de graça é uma AFIRMAÇÃO, não uma
+  // medição". A medição desmentiu a afirmação: `vistaDoFio` exigia `Array.isArray(v.linha)`,
+  // que é a linha da mesa do DOMINÓ, e recusava TODA vista de truco. O `esconderTelas()` não
+  // rodava e o convidado ficava preso no saguão para sempre, sem uma palavra.
+  //
+  // Por isso a primeira asserção daqui não é de truco, é de CASA: o convidado saiu da tela.
+  if (rodar('truco')) {
+    console.log('\no truco senta na mesa online');
+    const anfT = await abrir('anfitrião do truco', 'truco');
+    const visT = await abrir('visita do truco', 'truco');
+
+    await anfT.evaluate(() => {
+      const j = window.__jogo;
+      j.MESA.n = 2; j.MESA.modo = 'paulista';
+      j.MESA.cadeiras[0].nome = 'Anfitriã';
+      j.MESA.cadeiras[1].tipo = 'online'; j.MESA.cadeiras[1].nome = 'Visita';
+      document.getElementById('btComecar').click();
+    });
+    await anfT.waitForFunction(
+      () => (document.getElementById('onlineCodigo').textContent || '').match(/^[A-Z0-9]{4}$/),
+      { timeout: 25000, polling: 400 });
+    const codT = await anfT.evaluate(() => document.getElementById('onlineCodigo').textContent);
+    console.log(`  código da mesa de truco: ${codT}`);
+
+    // A SALA GUARDADA PASSOU A SABER DE QUE JOGO ELA É — e é aqui que se prova, antes de a
+    // visita passar por cima do registro (mesma origem, mesmo localStorage).
+    const salaT = await anfT.evaluate(() => window.__jogo.salaGuardada());
+    ok(salaT && salaT.jogo === 'truco',
+      `a mesa de truco foi guardada como "${salaT && salaT.jogo}" — "Voltar à mesa" reabriria no jogo errado`);
+
+    await visT.evaluate(cod => {
+      document.getElementById('btEntrar').click();
+      document.getElementById('onlineEntrada').value = cod;
+      document.getElementById('btConectar').click();
+    }, codT);
+    await anfT.waitForFunction(
+      () => document.getElementById('onlineLista').textContent.includes('chegou'), { timeout: 30000, polling: 400 });
+    await anfT.evaluate(() => document.getElementById('btIniciarOnline').click());
+
+    // A ASSERÇÃO QUE NASCEU VERMELHA. Antes do conserto ela estourava o prazo aqui: a vista
+    // chegava e era descartada, então `telaOnline` nunca era escondida e a mão nunca vinha.
+    let sentou = true;
+    await visT.waitForFunction('window.__jogo.vista && window.__jogo.vista.mao.length === 3',
+      { timeout: 25000, polling: 400 })
+      .catch(() => { sentou = false; ok(false, 'a vista de truco não chegou ao convidado — ele ficou preso no saguão'); });
+
+    if (sentou) {
+      const vT = await visT.evaluate(() => JSON.parse(JSON.stringify(window.__jogo.vista)));
+      ok(vT.cadeira === 1, `o convidado do truco deveria ser a cadeira 1, veio ${vT.cadeira}`);
+      ok(vT.modo === 'paulista', `o modo não chegou ao convidado (veio ${vT.modo})`);
+      ok(Array.isArray(vT.vazas) && Array.isArray(vT.mesa), 'a vista chegou sem os campos do truco');
+      ok(Array.isArray(vT.vira) && Number.isInteger(vT.manilha),
+        'a vira e a manilha não chegaram — sem elas ninguém sabe o que é forte');
+      ok(vT.duplas === false, 'a mesa de 2 chegou como duplas');
+      ok(!await visT.evaluate(() => !!window.__jogo.P), 'o convidado não pode ter a partida na memória');
+      ok(await visT.evaluate(() => document.getElementById('telaOnline').classList.contains('oculta')),
+        'o convidado continuou olhando o saguão com a partida em curso');
+
+      // A FRONTEIRA DE SEGURANÇA, no segundo jogo. A carta é `[valor, naipe]`, e o
+      // `JSON.stringify` no texto da vista daria FALSO POSITIVO — a A de ouros é `[0,0]`,
+      // igual ao placar de uma partida nova. Compara carta a carta, como o dominó faz.
+      const norma = c => c[0] + ':' + c[1];
+      const maoAnf = await anfT.evaluate(() => window.__jogo.P.maos[0].map(c => c.slice()));
+      const visiveis = new Set([...vT.mao, ...vT.mesa.map(j => j.carta), vT.vira].map(norma));
+      const vazadas = maoAnf.map(norma).filter(k => visiveis.has(k));
+      ok(vazadas.length === 0, `a mão do anfitrião vazou no truco: ${vazadas.join(', ')}`);
+      console.log(`  o anfitrião tem ${maoAnf.length} cartas · o convidado enxerga ${visiveis.size} · vazaram ${vazadas.length}`);
+
+      // ─── a jogada e a APOSTA pelo fio ───────────────────────────────────────
+      // A aposta é a segunda dimensão de jogada, e ela só existe neste jogo: o dominó não
+      // tem nada equivalente, então este caminho nunca foi exercitado pela rede.
+      console.log('\no convidado joga e aposta pelo fio');
+      await anfT.evaluate(() => {
+        const j = window.__jogo;
+        if (j.P.vez === 0) j.aplicarIntencao(0, j.jogadaDoBot(j.P, 0));
+      });
+      await visT.waitForFunction('window.__jogo.vista.vez === window.__jogo.vista.cadeira',
+        { timeout: 15000, polling: 400 }).catch(() => ok(false, 'a vez não chegou ao convidado do truco'));
+
+      const apostaAntes = await anfT.evaluate(() => window.__jogo.P.aposta);
+      await visT.evaluate(() => window.__jogo.pedirAcao({ acao: 'trucar' }));
+      await anfT.waitForFunction('!!window.__jogo.P.pedido', { timeout: 15000, polling: 400 })
+        .catch(() => ok(false, 'o truco pedido pelo convidado não chegou no anfitrião'));
+      const pedido = await anfT.evaluate(() => window.__jogo.P.pedido);
+      ok(pedido && pedido.de === 1, `o pedido chegou de quem não pediu (${pedido && pedido.de})`);
+      console.log(`  a aposta era ${apostaAntes} e o convidado pediu — o anfitrião registrou o pedido`);
+
+      // Aceitar do lado do anfitrião: a mão passa a valer mais, e é o que fecha o ciclo da
+      // aposta atravessando a rede nos DOIS sentidos.
+      await anfT.evaluate(() => window.__jogo.aplicarIntencao(0, { acao: 'aceitar' }));
+      await visT.waitForFunction('window.__jogo.vista.aposta > 1', { timeout: 15000, polling: 400 })
+        .catch(() => ok(false, 'o aceite do anfitrião não voltou para o convidado'));
+      const valeAgora = await visT.evaluate(() => window.__jogo.vista.aposta);
+      ok(valeAgora > apostaAntes, `a mão devia valer mais depois do truco aceito (${apostaAntes} → ${valeAgora})`);
+      console.log(`  a mão passou a valer ${valeAgora} — a aposta atravessou nos dois sentidos`);
+    }
+
+    // ─── A MESA TEM JOGO, e quem chega no jogo errado é recusado DIZENDO QUAL ──
+    // O outro lado do conserto: sem isto, um convidado com o dominó aberto sentava numa
+    // mesa de truco e mandava a mesa dele desenhar uma vista que ela não sabe ler.
+    console.log('\nquem chega no jogo errado é recusado, e sabe por quê');
+    const forasteiro = await abrir('forasteiro de dominó', 'domino');
+    await forasteiro.evaluate(cod => {
+      document.getElementById('btEntrar').click();
+      document.getElementById('onlineEntrada').value = cod;
+      document.getElementById('btConectar').click();
+    }, codT);
+    await forasteiro.waitForFunction(
+      () => /outro jogo|Truco/i.test(document.getElementById('onlineErro').textContent || ''),
+      { timeout: 25000, polling: 400 })
+      .catch(() => ok(false, 'a mesa de truco não recusou o convidado de dominó — ou recusou calada'));
+    const recado = await forasteiro.evaluate(() => document.getElementById('onlineErro').textContent);
+    // O NOME DO JOGO TEM DE APARECER: "é de outro jogo" sem dizer qual manda a pessoa
+    // adivinhar entre as abas, e recusar sem explicar é o defeito que a Fila 10 consertou.
+    ok(/Truco/i.test(recado), `a recusa não disse de que jogo a mesa é: "${recado}"`);
+    ok(!/cheia/i.test(recado), `a recusa mentiu o motivo: "${recado}"`);
+    console.log(`  "${recado.trim()}"`);
+
+    await forasteiro.close(); await visT.close(); await anfT.close();
   }
 } catch (e) {
   if (process.env.DOMINO_DEBUG) console.error(e.stack);
