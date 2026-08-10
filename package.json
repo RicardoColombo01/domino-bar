@@ -1,6 +1,6 @@
 {
   "name": "domino-bar",
-  "version": "4.6.1",
+  "version": "4.7.0",
   "private": true,
   "description": "Casa de jogos de boteco em 3D: dominó e truco paulista, 2 a 4 jogadores, bots opcionais e online P2P sem servidor",
   "scripts": {
