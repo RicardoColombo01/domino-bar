@@ -1811,6 +1811,12 @@ mapa sintoma → arquivo (§3), o inventário completo das mudanças (§3b), com
 
 ### 1. ONDE TESTAR — e este é o item que já custou UM DIA a este projeto
 
+> **EM 10/08 O SITE ESTÁ DUAS RELEASES ATRÁS.** O `sw.js` servido continua `23dc31b4d8f9`
+> (v4.5.1) e o local é `a72ce27eec71` (v4.7.0): a v4.6 e a v4.7 estão commitadas, tagueadas e
+> **não enviadas**, porque o push devolve 403 — ver a caixa em "ONDE PAROU". **Teste LOCAL**
+> (duplo-clique no `index.html`, ou `npm run servir` para o online), que é onde a versão nova
+> está. O parágrafo abaixo vale para depois do envio.
+>
 > **O SITE JÁ TEM TRUCO** — conferido em 07/08: o `sw.js` servido é `23dc31b4d8f9`, igual ao
 > local, e o HTML no ar traz "Truco Paulista", `JOGOS.truco` e a barra de apostas.
 >
