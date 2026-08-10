@@ -348,3 +348,21 @@ const partidaDoTrucoValida = p =>
   cartaValida(p.vira) && Number.isInteger(p.manilha) &&
   Array.isArray(p.vazas) && Array.isArray(p.mesa) &&
   p.maos.every(m => m.every(cartaValida));
+
+// O IRMÃO DELE, para a vista que chega pelo FIO — e ele é DELIBERADAMENTE mais frouxo que o
+// de cima, por duas razões que só apareceram medindo.
+//
+// 1. A MESA DO TRUCO JÁ É DEFENSIVA. `550-mesa.js` escreve `vista.mesa || []`,
+//    `vista.vazas || []` e `if (vista.vira)` em todos os pontos de leitura — não há um
+//    desreferenciamento sem guarda para proteger. Logo esta função NÃO existe para salvar a
+//    tela do truco de si mesma; ela existe para que uma vista de OUTRO jogo não seja
+//    desenhada nesta mesa.
+// 2. POR ISSO ELA NÃO COBRA `vira` NEM `manilha`, e a tentação de cobrar é grande, porque o
+//    validador da partida os cobra dez linhas acima. A forma da vista MUDA COM A FASE, e uma
+//    recusa aqui é SILENCIOSA: é exatamente o defeito que este encaixe está consertando,
+//    refeito por dentro do conserto. Cobrar campo que some numa fase é como o convidado
+//    volta a ficar preso no saguão — só que na mão de 11 em vez de sempre.
+//
+// `mesa` e `vazas` são arrays em TODAS as fases (vazios, nunca ausentes), e nenhum dos dois
+// existe numa vista de dominó. É o mínimo que separa os dois jogos sem inventar rigor.
+const vistaDoTrucoValida = v => Array.isArray(v.mesa) && Array.isArray(v.vazas);

@@ -160,6 +160,9 @@ function guardarMesaDoAnfitriao() {
   if (modo !== 'anfitriao' || !codigoDaSala) return;
   guardar('sala', {
     quando: Date.now(), codigo: codigoDaSala, anfitriao: true,
+    // O JOGO DA MESA. Sem ele, reabrir a sua mesa depois de espiar a outra aba a reabriria no
+    // jogo errado — o código certo, as cadeiras certas e a partida de outro jogo.
+    jogo: JOGO_ID,
     donos: Array.from(donoDaCadeira.entries()),
   });
 }
@@ -241,6 +244,23 @@ function tentarAbrir(tentativa, codigoDesejado) {
         // página em cache), e ele senta como anônimo — o comportamento de antes. Quebrar
         // quem não recarregou seria pior que a falta de identidade dele.
         if (m.t !== 'ola' && m.t !== 'nome') return;
+        // A MESA TEM JOGO, e até aqui o protocolo não dizia qual. Um convidado com o dominó
+        // aberto que digitasse o código de uma mesa de truco sentava, recebia vistas de
+        // truco e mandava a mesa de dominó sincronizá-las — e o caminho de volta ("Voltar à
+        // mesa") reabria no jogo da PREFERÊNCIA, não no da sala.
+        //
+        // Recusar, e RECUSAR DIZENDO QUAL JOGO É (decisão do Ricardo, 10/08/2026). As três
+        // saídas eram defensáveis; esta ganhou por coerência com duas regras da casa: nunca
+        // recusar calado, e não trocar o jogo de quem está do lado de fora — a faixa de abas
+        // já TRAVA com a mesa ocupada exatamente para não fazer isso.
+        //
+        // `typeof m.jogo === 'string'` e não `m.jogo !== JOGO_ID`: convidado de versão antiga
+        // não manda o campo e continua sentando, que é a mesma tolerância que a linha de
+        // baixo já pratica com o `nome` solto.
+        if (m.t === 'ola' && typeof m.jogo === 'string' && m.jogo !== JOGO_ID) {
+          try { conn.send({ t: 'cheio', porque: 'outrojogo', jogo: JOGO_ID }); } catch (e) { void e; }
+          return;
+        }
         cadeira = sentar(conn, m.t === 'ola' ? String(m.id || '').slice(0, TAMANHO_ID) : '', m.nome);
         return;
       }
@@ -489,12 +509,26 @@ const nomesVizinhos = cadeira =>
 // perguntar. O conteúdo hostil (um placar que é string, por exemplo) quem trata é o
 // `escapar` do 130-hud.js — são duas defesas para dois danos diferentes, e nenhuma delas
 // faz o trabalho da outra.
+//
+// ELA EXIGIA `linha`, QUE É A LINHA DA MESA DO DOMINÓ, e com isso recusava TODA vista de
+// truco: o `esconderTelas()` não rodava e o convidado ficava preso no saguão para sempre,
+// sem uma palavra — exatamente o defeito que esta função nasceu para impedir, virado contra
+// o segundo jogo.
+//
+// Ela é o IRMÃO do `partidaGuardada` (160-loop.js), que pagou este mesmo defeito com `linha`
+// e `monte` e foi consertado na v4.5 — e ficou para trás. É a pergunta que este projeto
+// manda fazer a cada guarda: QUEM É O IRMÃO DESTA LINHA, e ele tem a mesma guarda?
+//
+// A divisão é a mesma de lá: a casa cobra o que ELA e o HUD desreferenciam; o jogo cobra o
+// que é dele. O encaixe é OPCIONAL, no molde de `motor.paraGuardar`/`motor.deVolta` — jogo
+// que não o declare passa só pelo continente comum, e isso é degradação graciosa, não buraco.
 const vistaDoFio = v => !!v && typeof v === 'object' &&
-  Array.isArray(v.linha) && Array.isArray(v.mao) && Array.isArray(v.naMao) &&
+  Array.isArray(v.mao) && Array.isArray(v.naMao) &&
   Array.isArray(v.placar) && Array.isArray(v.cadeiras) && v.cadeiras.length > 0 &&
   !!v.acoes && typeof v.acoes === 'object' &&
   Number.isInteger(v.vez) && v.vez >= 0 && v.vez < v.cadeiras.length &&
-  Number.isInteger(v.cadeira) && v.cadeira >= 0 && v.cadeira < v.cadeiras.length;
+  Number.isInteger(v.cadeira) && v.cadeira >= 0 && v.cadeira < v.cadeiras.length &&
+  (!JOGO.motor.vistaValida || JOGO.motor.vistaValida(v));
 
 function trocarDeNome(cadeira, nome) {
   if (typeof nome !== 'string') return false;
@@ -572,7 +606,10 @@ function sentar(conn, id, nome) {
     esperando.delete(cadeira);
     if (P && P.fase !== 'fim') narrar(`${MESA.cadeiras[cadeira].nome} voltou para a mesa.`);
   }
-  conn.send({ t: 'sentou', cadeira, cadeiras: cadeiras.map(c => c.nome),
+  // `jogo` viaja aqui também, e não só na recusa: é o que permite ao convidado guardar a
+  // sala sabendo de que jogo ela é, mesmo tendo entrado por um caminho que não passa pelo
+  // `ola` (a volta automática depois de uma queda manda o `ola`, mas o take-over não).
+  conn.send({ t: 'sentou', cadeira, cadeiras: cadeiras.map(c => c.nome), jogo: JOGO_ID,
               esperando: !!(P && P.fase === 'fim') });
   listarSala();
   // PARTIDA ACABADA NÃO É PARTIDA PARA MOSTRAR A QUEM CHEGA. Quem senta agora não jogou
@@ -685,7 +722,22 @@ const RECUSA = {
   cheio: 'Essa mesa já está cheia — todas as cadeiras têm gente jogando.',
   guardadas: 'A cadeira desta mesa está guardada para quem caiu. Tente de novo em alguns segundos.',
   semvaga: 'Essa mesa não tem cadeira de visitante agora — quem abriu a mesa precisa deixar uma vaga.',
+  outrojogo: 'Essa mesa é de outro jogo. Troque de jogo na faixa lá em cima e entre de novo.',
 };
+
+// O QUARTO MOTIVO PRECISA DE UM DADO, e por isso não cabe na tabela: dizer "é de outro jogo"
+// sem dizer QUAL manda a pessoa adivinhar entre as abas. O nome sai de `JOGOS[…].nome`, que é
+// o próprio jogo se declarando — escrever "Truco Paulista" aqui seria a casa sabendo o nome
+// de um jogo, que é o acoplamento que a v4.0.0 gastou uma release inteira tirando.
+//
+// E o `JOGOS[m.jogo] &&` não é zelo: `m.jogo` vem do FIO. Um anfitrião de versão futura pode
+// nomear um jogo que esta página não tem, e aí a frase genérica é a resposta certa.
+function porQueARecusa(m) {
+  const j = typeof m.jogo === 'string' && JOGOS[m.jogo];
+  if (m.porque === 'outrojogo' && j && j.nome)
+    return `Essa mesa é de ${j.nome}. Troque de jogo na faixa lá em cima e entre de novo.`;
+  return RECUSA[m.porque] || RECUSA.cheio;
+}
 
 // LARGAR A MESA, do lado de quem é convidado. Mora aqui e não no 160-loop porque conhece o
 // `codigoDaSala` e o `linkAnfitriao`.
@@ -698,7 +750,7 @@ const RECUSA = {
 // tinha decorado as quatro letras ficava de fora com a sala ainda aberta.
 function largarAMesa() {
   if (linkAnfitriao && linkAnfitriao.open) linkAnfitriao.send({ t: 'desisto' });
-  if (codigoDaSala) guardar('sala', { quando: Date.now(), codigo: codigoDaSala, anfitriao: false });
+  if (codigoDaSala) guardar('sala', { quando: Date.now(), codigo: codigoDaSala, anfitriao: false, jogo: JOGO_ID });
   deixandoAMesa = true;
   // A MESMA FOLGA DO RAMO DO ANFITRIÃO, e pelo mesmo motivo escrito lá: `peer.destroy()`
   // aborta o que ainda não saiu do SCTP, e o que ainda não saiu é justamente o `desisto` —
@@ -744,13 +796,15 @@ function conectarNaMesa(codigo) {
       erroOnline('Conectado. Esperando o anfitrião começar…');
       // `ola` e não `nome`: é o aperto de mão que diz QUEM chegou, e é ele que faz o
       // anfitrião devolver a cadeira certa em vez da que sobrou.
-      linkAnfitriao.send({ t: 'ola', id: meuId(), nome: MESA.cadeiras[0].nome });
+      // `jogo` é campo NOVO na mensagem de sempre: anfitrião antigo o ignora e senta como
+      // antes; anfitrião novo o usa para recusar quem chegou no jogo errado.
+      linkAnfitriao.send({ t: 'ola', id: meuId(), nome: MESA.cadeiras[0].nome, jogo: JOGO_ID });
     });
     linkAnfitriao.on('data', m => {
       // Já saiu: o que chegar nos 400 ms de folga é da mesa que ele acabou de deixar, e a
       // vista do abandono o levaria do menu de volta para a tela da derrota.
       if (deixandoAMesa) return;
-      if (m.t === 'cheio') { pararDeConectar(RECUSA[m.porque] || RECUSA.cheio); return; }
+      if (m.t === 'cheio') { pararDeConectar(porQueARecusa(m)); return; }
       // A sua cadeira foi assumida por você mesmo, noutra aba ou noutro aparelho. Não é
       // erro nem queda: é o take-over do anfitrião, e dizer "a mesa fechou" seria mentira.
       if (m.t === 'expulso') {
@@ -777,7 +831,7 @@ function conectarNaMesa(codigo) {
         // que o código presta. `anfitriao: false` é o que separa este guardado do que o
         // `guardarMesaDoAnfitriao` escreve — a mesma chave serve aos dois papéis, e o
         // botão do menu lê essa marca para saber se oferece "voltar" ou "reabrir".
-        guardar('sala', { quando: Date.now(), codigo: codigoDaSala, anfitriao: false });
+        guardar('sala', { quando: Date.now(), codigo: codigoDaSala, anfitriao: false, jogo: JOGO_ID });
         // A partir daqui há com quem conversar, e `modo` já é 'convidado': a conversa do
         // saguão liga. O tamanho da lista de nomes é o número de cadeiras, e é dele que
         // sai se a mesa é em duplas — o convidado não tem MESA.n do anfitrião.
@@ -869,6 +923,18 @@ function salaGuardada() {
   // outra pessoa depende de ela ainda estar de pé (2 h).
   const horas = g.anfitriao ? 12 : HORAS_SALA;
   if (!g.quando || Date.now() - g.quando > horas * 3600e3) return null;
+
+  // O JOGO DA SALA — entrada de fora como todo o resto daqui, e por isso `Object.hasOwn` e
+  // não `JOGOS[g.jogo] ?`: o buraco do protótipo (`JOGOS['constructor']` é truthy num objeto
+  // literal) deu tela preta permanente uma vez, e deixar dois padrões de validação no mesmo
+  // projeto é como o primeiro volta.
+  //
+  // AUSENTE É VÁLIDO, e de propósito: sala guardada antes desta versão não tem o campo, e
+  // recusá-la faria o botão "voltar à mesa" sumir para quem já estava numa mesa quando a
+  // página atualizou. Sem o campo o botão abre no jogo em que você está, que é o que ele
+  // fazia até aqui — degradação graciosa, e não um caminho novo.
+  if (g.jogo !== undefined && !(typeof g.jogo === 'string' && Object.hasOwn(JOGOS, g.jogo)))
+    return null;
   return g;
 }
 

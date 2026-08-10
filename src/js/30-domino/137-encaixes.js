@@ -237,3 +237,17 @@ const dominoDeVolta = g => Object.assign({}, g, {
 // (`cadeiras`, `maos`, `placar`, `n`, `vez`, `regras`); estes são os que só este jogo
 // desreferencia — e partida guardada é entrada de fora como qualquer outra.
 const partidaDoDominoValida = p => Array.isArray(p.linha) && Array.isArray(p.monte);
+
+// O IRMÃO DELE, para a vista que chega pelo FIO. Mesma divisão: a casa confere o continente
+// comum (`cadeiras`, `vez`, `mao`…), e aqui fica o que só o dominó desreferencia.
+//
+// Os dois campos são os que a mesa lê SEM PERGUNTAR: `sincronizarTabuleiro` faz
+// `vista.linha.map`, e `sincronizarMonte` usa `vista.monte` como limite de laço. `pontas` e
+// `faltaNo` ficam de fora de propósito — os dois usos delas já têm guarda no lugar
+// (`vista.pontas ? … : '—'`), e cobrar aqui o que já é opcional lá aperta a porta sem
+// fechar buraco nenhum.
+//
+// E repare que `monte` é NÚMERO, não array: a vista manda `P.monte.length`. Copiar o
+// `Array.isArray` da linha de cima recusaria toda vista de dominó — o defeito que este
+// encaixe existe para consertar, refeito ao escrevê-lo.
+const vistaDoDominoValida = v => Array.isArray(v.linha) && Number.isInteger(v.monte);
