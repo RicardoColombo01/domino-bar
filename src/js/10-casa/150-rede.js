@@ -528,7 +528,24 @@ const vistaDoFio = v => !!v && typeof v === 'object' &&
   !!v.acoes && typeof v.acoes === 'object' &&
   Number.isInteger(v.vez) && v.vez >= 0 && v.vez < v.cadeiras.length &&
   Number.isInteger(v.cadeira) && v.cadeira >= 0 && v.cadeira < v.cadeiras.length &&
+  // O `resultado`, e ele é do CONTINENTE COMUM apesar de a forma ser de cada jogo: é a
+  // `fase` que decide qual tela desenhar, e as duas telas de fim o desreferenciam DIRETO
+  // (`const r = vista.resultado`). Sem esta linha, uma vista de fim de mão sem `resultado`
+  // passava e a tela do convidado MORRIA com TypeError, sem uma palavra e sem botão — o
+  // C3 da Fila 12, reproduzido nos dois jogos.
+  //
+  // É O IRMÃO ESQUECIDO PELA TERCEIRA VEZ: o `partidaGuardada` passou a cobrar `regras`
+  // "porque é o campo cuja falta dava tela preta" (v4.5), esta função foi consertada na
+  // v4.7 — e `resultado`, que é o mesmo defeito pela porta do fio, ficou fora das duas.
+  // A guarda de FAIXA de quem está dentro dele é do `nomeDaCadeira`, no HUD: aqui se
+  // confere que o continente existe, lá que o índice aponta para alguém.
+  (!ehFaseDeFim(v.fase) || (!!v.resultado && typeof v.resultado === 'object')) &&
   (!JOGO.motor.vistaValida || JOGO.motor.vistaValida(v));
+
+// As duas fases em que a tela de fim é desenhada, e portanto em que `resultado` é lido.
+// Escrito aqui e não em cada jogo porque `fase` é da MESA: os dois jogos usam estes dois
+// nomes, e é o `160-loop.js` (a casa) que escolhe a tela a partir deles.
+const ehFaseDeFim = fase => fase === 'fimDeMao' || fase === 'fim';
 
 function trocarDeNome(cadeira, nome) {
   if (typeof nome !== 'string') return false;
@@ -841,9 +858,23 @@ function conectarNaMesa(codigo) {
       if (m.t === 'vista' && vistaDoFio(m.v)) { esconderTelas(); ligarMurmuro(); atualizarVista(m.v); }
       // A outra ponta do `avisarCadeira`: o convidado finalmente ouve por que a jogada
       // dele não foi. Mesmo canal do erro local, para não haver dois jeitos de recusar.
+      // OS TRÊS TÊM TETO, e até a Fila 12 só o primeiro tinha. `log` e `chat` entravam
+      // inteiros no DOM do convidado: medido, uma mensagem de 4 MB vira uma linha de 4 MB, e
+      // o teto de 40 da conversa é em LINHAS — 40 × 100 KB são 4 MB vivos ao mesmo tempo.
+      //
+      // É o C4 da Fila 11 ESPELHADO. Lá era o convidado castigando o anfitrião pelo
+      // `{t:'nome'}`, e o conserto foi copiar os dois guardas que o `receberChat` já tinha
+      // dez linhas abaixo; aqui é o anfitrião castigando o convidado, e o guarda a copiar
+      // estava uma linha acima. *Quem é o irmão desta linha, e ele tem a mesma guarda?*
+      //
+      // `TAMANHO_FALA` serve às três: a fala é escrita por gente e 160 é a regra do chat; a
+      // narração é gerada pelo jogo, e a maior que os dois produzem tem ~90 caracteres com
+      // nomes no limite dos 14 (medido). Folga de 70, e nenhuma constante nova.
       if (m.t === 'erro') avisar(String(m.txt || '').slice(0, TAMANHO_FALA));
-      if (m.t === 'log') anotar(m.txt);
-      if (m.t === 'chat') dizer(vistaAtual, m.de, m.canal, m.txt, m.nome);
+      if (m.t === 'log') anotar(String(m.txt || '').slice(0, TAMANHO_FALA));
+      if (m.t === 'chat') dizer(vistaAtual, m.de, m.canal,
+        String(m.txt || '').slice(0, TAMANHO_FALA),
+        String(m.nome || '').slice(0, TAMANHO_NOME));
     });
     linkAnfitriao.on('close', () => {
       // Quem fechou foi você. Sem esta linha, sair de propósito ainda levava um "A mesa

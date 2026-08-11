@@ -73,6 +73,51 @@ console.log('\na versão do cache');
 const sw = fs.readFileSync(path.join(RAIZ, 'sw.js'), 'utf8');
 const versao = (sw.match(/const VERSAO = '([^']*)'/) || [])[1];
 ok(versao && /^[a-f0-9]{12}$/.test(versao), `o sw.js não tem versão carimbada (achei "${versao}")`);
+
+// ─── a faxina do activate só alcança o que é NOSSO ───────────────────────────
+// `CacheStorage` é escopado por ORIGEM, não pelo scope do worker: `caches.keys()` devolve os
+// caches de TODO projeto Pages de `ricardocolombo01.github.io`. O filtro antigo era
+// `n !== CACHE`, e ele apagava os dos vizinhos (C6 da Fila 12).
+//
+// Custa zero hoje e fica caro na FASE 5, que cria a user page exatamente nessa origem — e o
+// sintoma apareceria no OUTRO projeto. Esta asserção existe para a Fase 5 não redescobrir.
+//
+// Roda o worker de verdade com dublês, e não por `grep` no fonte: o que se quer saber é o
+// que o `activate` FAZ, e uma varredura de texto aprovaria qualquer filtro parecido.
+console.log('\na faxina do cache não passa da nossa cerca');
+{
+  const apagados = [];
+  const ouvintes = new Map();
+  const antes = { self: global.self, caches: global.caches };
+  global.self = {
+    addEventListener: (t, cb) => ouvintes.set(t, cb),
+    registration: { scope: 'https://ricardocolombo01.github.io/domino-bar/' },
+    skipWaiting: () => {}, clients: { claim: () => {} },
+  };
+  global.caches = {
+    keys: async () => [`dominobar-${versao}`, 'dominobar-velho', 'userpage-v1', 'workbox-precache-outro'],
+    delete: async n => { apagados.push(n); return true; },
+    open: async () => ({ addAll: async () => {}, put: async () => {} }),
+    match: async () => undefined,
+  };
+  try {
+    new Function(sw)();
+    await ouvintes.get('activate')({ waitUntil: p => p });
+    await new Promise(r => setTimeout(r, 50));
+    // Guarda de montagem: sem ela, um `activate` que não apagasse NADA passaria nas duas
+    // asserções de baixo por trivialidade — é a armadilha do dublê vazio.
+    ok(apagados.length > 0, 'montagem: o activate não apagou cache nenhum, nem o nosso velho');
+    ok(apagados.includes('dominobar-velho'),
+      'o activate deixou de apagar a NOSSA versão velha — a cota enche e o `guardar()` falha calado');
+    const alheios = apagados.filter(n => !n.startsWith('dominobar-'));
+    ok(alheios.length === 0,
+      `o activate apagou cache que não é nosso: ${alheios.join(', ')} — CacheStorage é por ORIGEM, ` +
+      `e a Fase 5 põe a user page nessa mesma origem`);
+    console.log(`  apagou ${apagados.length} de 4 caches da origem, e nenhum de vizinho`);
+  } finally {
+    global.self = antes.self; global.caches = antes.caches;
+  }
+}
 ok(!sw.includes('__VERSAO__'), 'o marcador __VERSAO__ sobrou no sw.js — o build não carimbou');
 
 // Esta refaz a conta do build, e é de propósito que ela seja modesta sobre o que prova: o

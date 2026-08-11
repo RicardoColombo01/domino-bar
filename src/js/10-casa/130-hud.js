@@ -134,9 +134,32 @@ function avisar(txt, ms = 2200) {
   avisoTimer = setTimeout(() => HUD.aviso.classList.remove('vendo'), ms);
 }
 
+// O NOME DE UMA CADEIRA, COM GUARDA DE FAIXA. `time` vem do `resultado` da vista, e a vista
+// do convidado vem inteira do fio: um índice torto fazia `vista.cadeiras[9].nome` estourar
+// DENTRO do desenho do fim de mão, e a tela do convidado parava sem uma palavra (C3 da
+// Fila 12, reproduzido nos dois jogos). 'Alguém' é o mesmo padrão que o `dizer` já usa para
+// a fala de uma cadeira que a vista não conhece — recusar em silêncio aqui é o certo, porque
+// quem recusa a vista inteira é o `vistaDoFio`, uma camada acima.
+const nomeDaCadeira = (vista, i) => {
+  const c = vista.cadeiras && vista.cadeiras[i];
+  return c && c.nome != null ? String(c.nome) : 'Alguém';
+};
+
+// DUAS FUNÇÕES E NÃO UMA, e a separação é o conserto do C1 e do C2 da Fila 12 pela raiz.
+//
+// `nomeDoTime` devolvia HTML **escapado** e o nome dela não dizia isso, então os dois
+// consumidores que não montam marcação erraram de jeitos opostos: o fim de mão do truco a
+// reescapava (`Zé &amp;amp; Cia`) e a tela de campeão a jogava em `textContent` (`Zé &amp;
+// Cia` na tela). Com a versão de TEXTO explícita, cada consumidor pede o que precisa e o
+// escape volta a ser responsabilidade de quem monta o HTML — que é a regra do resto da casa.
+function nomeDoTimeTexto(vista, time) {
+  if (!vista.duplas) return nomeDaCadeira(vista, time);
+  return `${nomeDaCadeira(vista, time)} e ${nomeDaCadeira(vista, time + 2)}`;
+}
+
 function nomeDoTime(vista, time) {
-  if (!vista.duplas) return escapar(vista.cadeiras[time].nome);
-  return `${escapar(vista.cadeiras[time].nome)} e ${escapar(vista.cadeiras[time + 2].nome)}`;
+  if (!vista.duplas) return escapar(nomeDaCadeira(vista, time));
+  return `${escapar(nomeDaCadeira(vista, time))} e ${escapar(nomeDaCadeira(vista, time + 2))}`;
 }
 
 // O nome em DUAS PARTES, para a tela decidir quanto dele cabe. Em faixa estreita o CSS
@@ -519,9 +542,11 @@ function mostrarFimDePartida(vista) {
     if (campeao === fora || p > vista.placar[campeao]) campeao = t;
   });
   const meuTime = JOGO.motor.time(vista, vista.cadeira);
-  el('campeao').textContent = nomeDoTime(vista, campeao);
+  // `textContent`, logo o nome vai em TEXTO — não na versão escapada. Esta linha mostrava
+  // `Zé &amp; Cia` na tela mais visível do jogo (C2 da Fila 12).
+  el('campeao').textContent = nomeDoTimeTexto(vista, campeao);
   el('campeaoTitulo').textContent = fora >= 0
-    ? (fora === meuTime ? 'Você saiu da mesa' : `${vista.cadeiras[vista.desistiu].nome} saiu da mesa`)
+    ? (fora === meuTime ? 'Você saiu da mesa' : `${nomeDaCadeira(vista, vista.desistiu)} saiu da mesa`)
     : (campeao === meuTime ? 'Você ganhou a partida' : 'Fim de partida');
   // A tela dizia quem ganhou e não de quanto. Mesmo template do placar do topo.
   el('placarFinal').innerHTML = vista.placar

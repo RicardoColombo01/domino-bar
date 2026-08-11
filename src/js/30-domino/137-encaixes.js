@@ -68,12 +68,17 @@ function confirmacaoDoDomino(vista, m) {
 // subtotal do time, porque quem pontua é a dupla.
 function sobrouNaMao(vista) {
   const r = vista.resultado;
+  // `somas` pode não vir: a vista do convidado é do fio, e o `vistaDoFio` cobra que
+  // `resultado` EXISTA, não a forma dele — cobrar a forma ali seria a casa sabendo o
+  // formato de um jogo (C3 da Fila 12). Quem conhece a forma é este arquivo, e a lista
+  // vazia é degradação graciosa: o painel fica sem linhas em vez de a tela morrer.
+  const somas = Array.isArray(r.somas) ? r.somas : [];
   if (!vista.duplas) {
-    return r.somas
-      .map((s, i) => `<div><span>${escapar(vista.cadeiras[i].nome)}</span><b>${escapar(s)}</b></div>`).join('');
+    return somas
+      .map((s, i) => `<div><span>${escapar(nomeDaCadeira(vista, i))}</span><b>${escapar(s)}</b></div>`).join('');
   }
   return (r.somasPorTime || []).map((total, t) => {
-    const parcelas = r.somas.filter((_, i) => timeDe(vista, i) === t).map(escapar).join(' + ');
+    const parcelas = somas.filter((_, i) => timeDe(vista, i) === t).map(escapar).join(' + ');
     return `<div><span>${nomeDoTime(vista, t)}<i>${parcelas}</i></span><b>${escapar(total)}</b></div>`;
   }).join('');
 }
@@ -89,7 +94,9 @@ function fimDeMaoDoDomino(vista) {
     quem: r.time === null
       ? 'Empate na contagem — ninguém marca.'
       : `${nomeDoTime(vista, r.time)} ${fazem} ${r.pontos === 1 ? '1 ponto' : `${r.pontos} pontos`}` +
-        (bateu ? '' : ` · mão mais leve com ${vista.cadeiras[r.vencedor].nome}`),
+        // `nomeDaCadeira` e não `vista.cadeiras[…].nome`: no convidado esta vista vem do fio,
+        // e um `vencedor` torto estourava aqui dentro do desenho (C3 da Fila 12).
+        (bateu ? '' : ` · mão mais leve com ${nomeDaCadeira(vista, r.vencedor)}`),
     detalhe: sobrouNaMao(vista),
   };
 }

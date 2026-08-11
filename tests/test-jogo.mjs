@@ -71,6 +71,10 @@ const mod = await import(buildModule([
   // cada vez numa vista de verdade — pela `atualizarVista` o teste mediria de quebra a mão,
   // o tabuleiro e o monte, e uma falha ali falaria de outra coisa.
   'desenharHUD', 'mostrarFimDeMao', 'escapar', 'JOGO',
+  // A Fila 12: `nomeDoTime` devolve HTML e `nomeDoTimeTexto` devolve texto — a separação é
+  // o conserto do C1 e do C2, e sem as duas expostas não há como afirmar qual é qual.
+  // `linhasDoLog` e `limparConversa` medem o TAMANHO do que o convidado recebe (C4).
+  'nomeDoTime', 'nomeDoTimeTexto', 'linhasDoLog', 'mostrarFimDePartida',
   // `linkAnfitriao` é o lado CONVIDADO do fio, e ele não tinha uma linha de teste: o
   // `linkAnfitriao.on('data')` mora dentro de dois callbacks aninhados do PeerJS. Com o
   // dublê gravando ouvintes dá para dirigi-lo, e é onde entra a vista que vem de fora.
@@ -2075,6 +2079,132 @@ console.log('\nnúmero que vem do fio também é texto de fora');
     ok(mod.vistaAtual === boa, 'a vista boa não chegou à tela — o guarda está recusando o que devia passar');
   }
   console.log('  número do fio passa pelo escapar, como o nome ao lado dele');
+}
+
+// ─── FILA 12 ────────────────────────────────────────────────────────────────
+// Os três achados da varredura de 11/08 que moram na casa. Todos NASCERAM VERMELHOS
+// contra o código anterior — foram escritos depois de reproduzir cada um rodando.
+console.log('\no fim de mão que chega pelo fio');
+{
+  mod.MESA.n = 2;
+  mod.MESA.cadeiras[0].tipo = 'voce'; mod.MESA.cadeiras[0].nome = 'Ana';
+  mod.MESA.cadeiras[1].tipo = 'bot';  mod.MESA.cadeiras[1].nome = 'Bot';
+  mod.comecarLocal();
+  const boa = JSON.parse(JSON.stringify(mod.visaoDe(mod.P, 1)));
+
+  // C3 · `resultado` era o único campo que a tela de fim desreferencia DIRETO e que
+  // nenhum validador cobria. `vistaDoFio` aceitava, e `mostrarFimDeMao` estourava —
+  // no convidado isso é a tela parada, sem palavra e sem botão.
+  //
+  // As duas metades do conserto são medidas SEPARADAMENTE, porque falham de jeitos
+  // diferentes e uma sozinha não cobre a outra: o `vistaDoFio` barra o continente
+  // ausente, e o `nomeDaCadeira` barra o índice torto DENTRO de um continente válido.
+  // Mutar só uma deixa a irmã segurando parte dos casos — é a lição do par
+  // `clearTimeout`/geração, e por isso está escrita aqui.
+  for (const [rotulo, r] of [['ausente', undefined], ['nulo', null]]) {
+    const v = Object.assign({}, boa, { fase: 'fimDeMao' });
+    if (r === undefined) delete v.resultado; else v.resultado = r;
+    ok(!mod.vistaDoFio(v),
+      `uma vista de fim de mão com resultado ${rotulo} passou pelo vistaDoFio — e quem a desenha estoura`);
+  }
+  // ...e o índice torto, que passa pelo continente e só quebra lá dentro.
+  for (const [rotulo, res] of [
+    ['vazio', {}],
+    ['time fora da faixa', { motivo: 'batida', tipo: 'simples', time: 9, pontos: 1, vencedor: 9, somas: [3, 4] }],
+    ['time de protótipo', { motivo: 'batida', tipo: 'simples', time: 'constructor', pontos: 1, somas: [3, 4] }],
+  ]) {
+    const v = Object.assign({}, boa, { fase: 'fimDeMao', resultado: res });
+    let e = null;
+    if (mod.vistaDoFio(v)) { try { mod.mostrarFimDeMao(v); } catch (err) { e = err; } }
+    ok(!e, `resultado ${rotulo} matou a tela de fim de mão: ${e && e.message}`);
+  }
+  // E O CONTRÁRIO, senão o conserto vira um "recusa tudo" e as cinco acima ficam verdes
+  // com o jogo quebrado — a mesma guarda que a cena da vista do fio já usa logo acima.
+  ok(mod.vistaDoFio(boa), 'a vista LEGÍTIMA (fase de mão) foi recusada pelo guarda novo');
+  const vFim = Object.assign({}, boa, { fase: 'fimDeMao', resultado: mod.P.resultado || { motivo: 'batida', tipo: 'simples', time: 0, pontos: 1, somas: [0, 9] } });
+  ok(mod.vistaDoFio(vFim), 'uma vista de fim de mão COM resultado foi recusada — o guarda apertou demais');
+  console.log('  vista de fim de mão sem resultado não passa, e com resultado torto não mata a tela');
+}
+
+console.log('\no nome do time: texto é texto, html é html');
+{
+  // C1 e C2 · `nomeDoTime` devolve HTML escapado e o nome dela não dizia isso. Quem monta
+  // marcação usa essa; quem escreve `textContent` usa a de TEXTO. O valor está escrito à
+  // mão de propósito: comparar com uma segunda chamada da mesma função seria comparar a
+  // função com ela mesma, que é a armadilha do dublê vazio noutra forma.
+  const vista = { duplas: false, cadeiras: [{ nome: 'Zé & Cia' }, { nome: 'Bot' }], cadeira: 0 };
+  ok(mod.nomeDoTimeTexto(vista, 0) === 'Zé & Cia',
+    `nomeDoTimeTexto devolveu ${JSON.stringify(mod.nomeDoTimeTexto(vista, 0))}, e texto não leva entidade`);
+  ok(mod.nomeDoTime(vista, 0) === 'Zé &amp; Cia',
+    `nomeDoTime devolveu ${JSON.stringify(mod.nomeDoTime(vista, 0))}, e html leva escape uma vez só`);
+  // A guarda de faixa das duas, que é a segunda metade do C3.
+  const vazio = { duplas: false, cadeiras: [] };
+  ok(mod.nomeDoTimeTexto(vazio, 9) === 'Alguém' && mod.nomeDoTime(vazio, 9) === 'Alguém',
+    'cadeira inexistente devia virar "Alguém" nas duas, e não estourar');
+  // EM DUPLAS as duas metades passam pelo mesmo caminho — sem isto, o conserto poderia
+  // ter arrumado só o ramo de 2 cadeiras, que é o que quase toda asserção deste arquivo usa.
+  const dupla = { duplas: true, cadeiras: [{ nome: 'A & B' }, { nome: 'x' }, { nome: 'C' }, { nome: 'y' }] };
+  ok(mod.nomeDoTimeTexto(dupla, 0) === 'A & B e C',
+    `em duplas o texto saiu ${JSON.stringify(mod.nomeDoTimeTexto(dupla, 0))}`);
+  ok(mod.nomeDoTime(dupla, 0) === 'A &amp; B e C',
+    `em duplas o html saiu ${JSON.stringify(mod.nomeDoTime(dupla, 0))}`);
+
+  // E A LINHA QUE CONSOME, que é o C2 de verdade. As quatro asserções acima medem as duas
+  // FUNÇÕES, e a mutação provou que isso não basta: trocando `nomeDoTimeTexto` por
+  // `nomeDoTime` na tela de campeão, a suíte inteira ficou VERDE. Asserção que não pega a
+  // mutação não protege a linha — é a regra da casa, e ela cobrou aqui.
+  mod.MESA.n = 2;
+  mod.MESA.cadeiras[0].tipo = 'voce'; mod.MESA.cadeiras[0].nome = 'Zé & Cia';
+  mod.MESA.cadeiras[1].tipo = 'bot';  mod.MESA.cadeiras[1].nome = 'Bot';
+  mod.comecarLocal();
+  const vFim = Object.assign({}, mod.visaoDe(mod.P, 0), {
+    fase: 'fim', placar: [6, 0], alvo: 6, desistiu: null,
+    resultado: { motivo: 'batida', tipo: 'simples', time: 0, pontos: 1, somas: [0, 9] },
+  });
+  mod.mostrarFimDePartida(vFim);
+  const campeao = els.get('campeao').textContent;
+  ok(campeao === 'Zé & Cia',
+    `a tela de campeão mostrou ${JSON.stringify(campeao)} — em textContent o nome vai CRU, ` +
+    `senão o jogador lê a entidade`);
+  console.log('  o nome do time sai escapado uma vez no html, cru no texto, e a tela de campeão usa o certo');
+}
+
+console.log('\no que o convidado recebe tem teto');
+{
+  // C4 · `log` e `chat` entravam inteiros no DOM; só `erro`, a linha de cima, cortava.
+  // NÃO se mede TEMPO aqui: o custo real é do navegador, e este harness dubla o DOM —
+  // asserção de tempo mediria o dublê, que é a lição que a Fila 11 deixou escrita.
+  // Mede-se o TAMANHO, que é o defeito em si e é determinístico.
+  // Zerar as TRÊS, como as outras cenas de rede deste arquivo: só `encerrarRede` deixa
+  // `conectando` de pé e o `conectarNaMesa` seguinte desiste calado, sem criar peer.
+  mod.encerrarRede(); mod.voltarSozinho(''); mod.pararDeConectar('');
+  mod.conectarNaMesa('AAAA');
+  Peer.ultimo.disparar('open');
+  const link = mod.linkAnfitriao;
+  ok(link && link.ouvintes.has('data'), 'montagem: o despachante do convidado não foi instalado');
+
+  const GIGANTE = 'A'.repeat(200000);
+  mod.limparConversa();
+  link.disparar('data', { t: 'log', txt: GIGANTE });
+  const doLog = (mod.linhasDoLog[0] || {}).innerHTML || '';
+  ok(mod.linhasDoLog.length === 1, 'montagem: a narração gigante não chegou à conversa');
+  ok(doLog.length <= 200,
+    `uma narração de 200 KB entrou na conversa com ${doLog.length} caracteres — o teto do vizinho é 160`);
+
+  mod.limparConversa();
+  link.disparar('data', { t: 'chat', de: 0, canal: 'geral', txt: GIGANTE, nome: 'Fulano' });
+  const doChat = (mod.linhasDoLog[0] || {}).innerHTML || '';
+  ok(mod.linhasDoLog.length === 1, 'montagem: a fala gigante não chegou à conversa');
+  ok(doChat.length <= 300,
+    `uma fala de 200 KB entrou na conversa com ${doChat.length} caracteres`);
+
+  // E A MENSAGEM NORMAL CONTINUA INTEIRA — sem isto, cortar em zero passaria nas duas.
+  mod.limparConversa();
+  link.disparar('data', { t: 'log', txt: 'Sebastiãozinh0 correu — o outro time marca 3' });
+  ok(((mod.linhasDoLog[0] || {}).innerHTML || '').includes('o outro time marca 3'),
+    'a narração de tamanho normal foi cortada — o teto está apertado demais');
+  mod.encerrarRede();
+  console.log('  narração e fala que chegam pelo fio têm o mesmo teto do aviso ao lado');
 }
 
 console.log(falhas ? `\n${falhas} falha(s)` : '\ntudo certo');
