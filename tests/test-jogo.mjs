@@ -2126,6 +2126,69 @@ console.log('\no fim de mão que chega pelo fio');
   console.log('  vista de fim de mão sem resultado não passa, e com resultado torto não mata a tela');
 }
 
+// ─── FILA 13 ────────────────────────────────────────────────────────────────
+console.log('\no CONTEÚDO da vista, e não só o continente');
+{
+  // A Fila 12 fez os validadores cobrarem que os campos EXISTEM e são arrays. A Fila 13
+  // mediu o passo seguinte: `Array.isArray(v.linha)` deixa `linha: [null]` passar, e quem
+  // desenha estoura. O `|| []` espalhado pelas telas protege contra o campo AUSENTE e
+  // **não** contra o campo presente com outro tipo — `('xx' || [])` é `'xx'`.
+  //
+  // Vale para os DOIS jogos, e é por isso que as duas metades desta cena existem: consertar
+  // um e esquecer o vizinho é o padrão que este repositório repete há seis filas.
+  mod.MESA.n = 2;
+  mod.MESA.cadeiras[0].tipo = 'voce'; mod.MESA.cadeiras[1].tipo = 'bot';
+  mod.comecarLocal();
+  mod.publicar();
+  const boa = JSON.parse(JSON.stringify(mod.vistaAtual));
+  ok(mod.vistaDoFio(boa), 'montagem: a vista boa de dominó já não passa — o resto não mediria nada');
+
+  for (const [rot, f] of [
+    ['linha[0] nulo',   v => { v.linha = [null]; }],
+    ['linha[0] texto',  v => { v.linha = ['xx']; }],
+    ['linha[0] curto',  v => { v.linha = [[1]]; }],
+    ['mao[0] nulo',     v => { v.mao = [null]; }],
+    ['pontas texto',    v => { v.pontas = 'xx'; }],
+  ]) {
+    const v = JSON.parse(JSON.stringify(boa)); f(v);
+    ok(!mod.vistaDoFio(v),
+      `uma vista com ${rot} passou pelo validador — e ela mata a tela de quem a desenha`);
+  }
+  // A PONTA AUSENTE CONTINUA VALENDO: `pontas` é nulo antes da primeira peça, e recusar
+  // isso trancaria o convidado no saguão em toda mão nova. É a razão 2 do comentário do
+  // truco, e ela vale aqui também — cobrar o que some numa fase é o defeito por dentro
+  // do conserto.
+  const semPontas = JSON.parse(JSON.stringify(boa));
+  semPontas.pontas = null;
+  ok(mod.vistaDoFio(semPontas), 'a vista SEM pontas foi recusada — ela é legítima no começo da mão');
+  console.log('  peça torta dentro da linha não chega à mesa, e ponta ausente continua passando');
+}
+
+console.log('\no fim de mão em DUPLAS, com o resultado que vem do fio');
+{
+  // `somasPorTime` levava `|| []` enquanto o irmão `somas` ganhou `Array.isArray` — e os
+  // dois estão na MESMA função, uma linha abaixo da outra. Foi o defeito que a Fila 12
+  // existia para caçar, cometido DENTRO do conserto dela e achado pela varredura seguinte.
+  //
+  // SÓ APARECE EM DUPLAS: com dois jogadores o `sobrouNaMao` nem chega no ramo do time, e
+  // toda a cena acima usa mesa de 2. Foi por isso que o conserto ficou sem asserção até a
+  // mutação cobrar — a montagem é que não alcançava o ramo.
+  mod.MESA.n = 4;
+  for (let i = 0; i < 4; i++) { mod.MESA.cadeiras[i].tipo = i ? 'bot' : 'voce'; mod.MESA.cadeiras[i].nome = 'J' + i; }
+  mod.comecarLocal();
+  mod.publicar();
+  const v = JSON.parse(JSON.stringify(mod.vistaAtual));
+  ok(v.duplas === true, 'montagem: a mesa de 4 devia ser em duplas, senão o ramo do time não roda');
+  v.fase = 'fimDeMao';
+  v.resultado = { motivo: 'tranca', tipo: 'simples', time: 0, pontos: 1, vencedor: 0,
+                  somas: [3, 4, 5, 6], somasPorTime: 'xx' };
+  ok(mod.vistaDoFio(v), 'montagem: a vista precisa PASSAR, senão o teste mede a recusa e não o desenho');
+  let e = null;
+  try { mod.mostrarFimDeMao(v); } catch (err) { e = err; }
+  ok(!e, `um somasPorTime que não é array matou a tela de fim de mão em duplas: ${e && e.message}`);
+  console.log('  em duplas, o subtotal torto não derruba a tela');
+}
+
 console.log('\no nome do time: texto é texto, html é html');
 {
   // C1 e C2 · `nomeDoTime` devolve HTML escapado e o nome dela não dizia isso. Quem monta

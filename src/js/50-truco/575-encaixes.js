@@ -370,4 +370,18 @@ const partidaDoTrucoValida = p =>
 //
 // `mesa` e `vazas` são arrays em TODAS as fases (vazios, nunca ausentes), e nenhum dos dois
 // existe numa vista de dominó. É o mínimo que separa os dois jogos sem inventar rigor.
-const vistaDoTrucoValida = v => Array.isArray(v.mesa) && Array.isArray(v.vazas);
+//
+// A RAZÃO 1 ESTAVA ERRADA, e a Fila 13 mediu: a mesa é defensiva contra o campo AUSENTE
+// (`vista.vazas || []`) e não contra o campo PRESENTE COM OUTRO TIPO. Três vistas passavam
+// e matavam a tela — `vazas: [null]` (mesa 3D, dica E hud), `vazas: [{jogadas:'xx'}]` e
+// `mesa: [null]`. `|| []` protege contra `undefined`; contra `'xx'` ele entrega a string
+// para o `.map`.
+//
+// Cobrar o ELEMENTO não reabre a razão 2: `[].every(…)` é `true`, então a mão de 11 — que
+// tem `mesa` e `vazas` vazios — continua passando. O que se cobra é a FORMA de quem está
+// dentro, e ela não muda com a fase.
+const vazaDoFioValida = z => !!z && typeof z === 'object' &&
+  (z.jogadas === undefined || Array.isArray(z.jogadas));
+const naMesaDoFioValida = j => !!j && typeof j === 'object';
+const vistaDoTrucoValida = v => Array.isArray(v.mesa) && Array.isArray(v.vazas) &&
+  v.mesa.every(naMesaDoFioValida) && v.vazas.every(vazaDoFioValida);

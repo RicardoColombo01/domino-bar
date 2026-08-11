@@ -72,12 +72,19 @@ function sobrouNaMao(vista) {
   // `resultado` EXISTA, não a forma dele — cobrar a forma ali seria a casa sabendo o
   // formato de um jogo (C3 da Fila 12). Quem conhece a forma é este arquivo, e a lista
   // vazia é degradação graciosa: o painel fica sem linhas em vez de a tela morrer.
+  //
+  // AS DUAS PELO MESMO CRITÉRIO, e a segunda é o irmão que ficou para trás no conserto
+  // ORIGINAL — dentro da onda que existia justamente para caçar guarda esquecida no
+  // vizinho. `somasPorTime` levava `|| []`, que não protege contra valor TRUTHY não-array:
+  // uma string ali passava e o `.map` estourava, matando a tela do convidado em duplas.
+  // Achado pela varredura seguinte, um dia depois. `Array.isArray` nas duas.
   const somas = Array.isArray(r.somas) ? r.somas : [];
+  const porTime = Array.isArray(r.somasPorTime) ? r.somasPorTime : [];
   if (!vista.duplas) {
     return somas
       .map((s, i) => `<div><span>${escapar(nomeDaCadeira(vista, i))}</span><b>${escapar(s)}</b></div>`).join('');
   }
-  return (r.somasPorTime || []).map((total, t) => {
+  return porTime.map((total, t) => {
     const parcelas = somas.filter((_, i) => timeDe(vista, i) === t).map(escapar).join(' + ');
     return `<div><span>${nomeDoTime(vista, t)}<i>${parcelas}</i></span><b>${escapar(total)}</b></div>`;
   }).join('');
@@ -257,4 +264,18 @@ const partidaDoDominoValida = p => Array.isArray(p.linha) && Array.isArray(p.mon
 // E repare que `monte` é NÚMERO, não array: a vista manda `P.monte.length`. Copiar o
 // `Array.isArray` da linha de cima recusaria toda vista de dominó — o defeito que este
 // encaixe existe para consertar, refeito ao escrevê-lo.
-const vistaDoDominoValida = v => Array.isArray(v.linha) && Number.isInteger(v.monte);
+//
+// OS ELEMENTOS TAMBÉM, e é o achado da Fila 13. `Array.isArray(v.linha)` valida o
+// CONTINENTE e deixa o conteúdo livre: `linha: [null]` passava e `sincronizarTabuleiro`
+// estourava; `mao: [null]` matava `sincronizarMao`; `pontas: 'xx'` matava o HUD, apesar da
+// guarda `vista.pontas ? …` — que protege contra AUSENTE e não contra TRUTHY DE OUTRO TIPO.
+// O comentário acima dizia que `pontas` ficava de fora porque "o uso já tem guarda no
+// lugar"; a guarda existia e não bastava.
+//
+// `[].every(…)` é `true`, então cobrar o elemento não recusa vista de fase nenhuma — que é
+// a ressalva que faz o `vistaValida` do truco ser frouxo de propósito. Aqui não há esse
+// custo: a forma de uma peça é a mesma em toda fase.
+const vistaDoDominoValida = v => Array.isArray(v.linha) && Number.isInteger(v.monte) &&
+  v.linha.every(jogadaDoFioDoDomino) &&
+  v.mao.every(jogadaDoFioDoDomino) &&
+  (v.pontas === null || v.pontas === undefined || Array.isArray(v.pontas));
