@@ -33,11 +33,13 @@ npm run telas     build + o jogo em seis tamanhos de tela (retrato, paisagem, ta
 npm run textura   build + as texturas sobrevivem a sair do jogo e voltar (~40 s)
 npm run lembrar   build + o que sobrevive a RECARREGAR a página (preferências, retomar)
 npm run shots     build + screenshots no Chrome de verdade (tests/shots/)
-npm run online    testa o online abrindo duas abas e uma mesa real — SEIS cenas, e desde a
-                  v4.7 uma delas é de TRUCO (jogada e aposta pelo fio, mais a recusa de quem
-                  chega no jogo errado). Toda aba é obrigada a dizer o JOGO: `abrirJogo` grava
-                  a preferência sempre, e as abas dividem a mesma origem
-                  aceita escolher: node tests/test-online.mjs --so=truco
+npm run online    testa o online abrindo abas e mesas reais — SETE cenas, e desde a v4.7
+                  DUAS são de truco: `truco` (mesa de 2 — jogada e aposta pelo fio, mais a
+                  recusa de quem chega no jogo errado) e, desde a v4.8, `trucoduplas` —
+                  QUATRO abas e nenhum bot, onde um convidado responde ao truco de outro.
+                  Toda aba é obrigada a dizer o JOGO: `abrirJogo` grava a preferência
+                  sempre, e as abas dividem a mesma origem
+                  aceita escolher: node tests/test-online.mjs --so=trucoduplas
 npm run fechamento  caça fechamento forçado jogando milhares de mãos (~3 min)
 npm run servir    servidor local (o online não fecha conexão em file://)
 
@@ -723,7 +725,19 @@ por mutação nas quatro direções, inclusive as duas de falso positivo.
   a mutação. Commitar aquilo é publicar código que ninguém escreveu, que é exatamente o que o
   `merge=ours` e o `npm run check` existem para impedir. O `tests/mutar.mjs` avisa; o `npm run
   check` é quem prova. **Vale para qualquer ferramenta que desfaz: pergunte o que mais o
-  comando tocou.**
+  comando tocou.** Conferido em 10/08: depois de cinco mutações o `git status` acusou
+  `index.html` e `sw.js` sujos, e o `npm run check` reprovou — o conserto é `npm run build`, e
+  a prova de que a fonte voltou inteira é o `sw.js` recuperar o MESMO resumo de antes.
+- **A régua de ENVIADO é o remoto CONSULTADO, e `git rev-list` não é ela.** Este arquivo já
+  cobrava *commitado ≠ enviado ≠ publicado* e mandava usar
+  `git rev-list --left-right --count origin/main...main` para os dois últimos degraus. **Ele
+  não serve para o degrau do meio:** compara com o `origin/main` **local**, que é um ref em
+  cache e pode ter qualquer idade — respondeu `0 0` num dia em que o arquivo inteiro afirmava
+  que duas releases estavam paradas na máquina, e responderia `0 0` do mesmo jeito se
+  estivessem. Quem responde é **`git ls-remote origin refs/heads/main`**, que pergunta ao
+  servidor e não escreve nada (o `git fetch` também resolve, mas mexe nos refs — para
+  *auditar*, o `ls-remote` é a pergunta certa). **São TRÊS réguas para três perguntas: o log
+  local, o remoto consultado, e o `curl` do conteúdo servido.**
 
 ---
 
@@ -899,20 +913,23 @@ campo acha o que está escrito certo e mesmo assim não funciona.
 **Leia isto primeiro ao retomar.** É o estado real do trabalho, o que ele produziu, o que
 fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numerados mais abaixo.
 
-#### ESTADO EM UMA OLHADA (06/08/2026)
+#### ESTADO EM UMA OLHADA (10/08/2026)
 
 | | |
 |---|---|
-| enviado | **v4.5.2** — a Fase 4 fechada: o truco SENTA NA MESA |
-| **PUBLICADO** | ✔ **em dia** — o Pages destravou sozinho em 07/08 02:04 UTC; ver abaixo |
-| em curso | **v4.6** — as três cenas de truco no `test-telas`, e as duas coisas que o Ricardo pediu jogando |
-| as anteriores | v4.5.0 (o corpo do truco) · v4.4.0 (bot + layout) · v4.3.0 (regras + motor) · v4.2.0 (`40-cartas/`) · v4.1.0 (a aba) · v4.0.0 (o contrato) |
+| enviado | **v4.7.1** — `origin/main` = `main` = `ff7726b`, conferido com `git ls-remote` |
+| **PUBLICADO** | ✔ **em dia** — `sw.js` servido `a72ce27eec71` = o local; `index.html` no ar byte a byte igual |
+| em curso | **v4.8** — a cena `trucoduplas` no `test-online`: o truco de 4 cadeiras pelo fio |
+| as anteriores | v4.7.0 (o truco online) · v4.6.0 (as cenas de truco no `telas`) · v4.5.0 (o corpo do truco) · v4.4.0 (bot + layout) · v4.3.0 (regras + motor) · v4.2.0 (`40-cartas/`) · v4.1.0 (a aba) · v4.0.0 (o contrato) |
 | Filas 5 a 11 | **todas fechadas** |
-| o que vem | **a Fase 5** — o aplicativo: APK no GitHub Releases + Amazon Appstore |
+| o que vem | **a Fase 5** — o aplicativo: APK no GitHub Releases + Amazon Appstore. **É o único item aberto, e é conta e não código** |
 
 ---
 
 #### O DEPLOY DESTRAVOU — conferido em 07/08/2026, e desta vez pela régua certa
+
+> **ESTES NÚMEROS SÃO DE 07/08 e não são o estado de hoje** — o de hoje está no "ESTADO EM UMA
+> OLHADA", logo acima (`a72ce27eec71`). Esta seção fica pelo MÉTODO, que é o que não envelhece.
 
 ```
 servido  sw.js VERSAO 23dc31b4d8f9
@@ -1025,49 +1042,146 @@ que as suítes rodaram inteiras com o site no ar três releases atrás.
 
 ---
 
-#### ONDE PAROU — fim da sessão de 10/08/2026 (v4.7 fechada)
+#### ONDE PAROU — sessão de 10/08/2026 (a v4.8 em curso)
 
 **LEIA ISTO PRIMEIRO.** É o ponto exato de retomada, e é o ÚNICO — este arquivo já registrou
 que ponteiro de retomada é o item que mais apodrece aqui, e por isso não pode haver dois.
 
 ```
-main         v4.6.1 mesclada e tagueada; a v4.7 sai da branch `v4.7`
-ENVIADO      ✗ NÃO — a v4.6 E a v4.7 estão paradas aqui. É AQUI QUE SE COMEÇA
-PUBLICADO    ✗ não, por consequência — o servido é o sw.js 23dc31b4d8f9 (v4.5.1)
+main         v4.7.1 mesclada e tagueada
+ENVIADO      ✔ SIM — origin/main = main = ff7726b, e as tags v4.6.0/v4.7.0/v4.7.1 no remoto
+PUBLICADO    ✔ SIM — sw.js servido a72ce27eec71 = o local; index.html no ar BYTE A BYTE
+             igual (496.052), e a rodada do Pages saiu `success` em 10/08 23:40 UTC
 worktree     NENHUM
+
+A v4.8   ✔ COMMITADA, MESCLADA em main e TAGUEADA `v4.8.0` — a branch foi apagada
+         ✗ NÃO ENVIADA — é AQUI que se começa amanhã, e é UM comando
+         a onda mexeu em DOIS arquivos e em NENHUMA linha de src/:
+           tests/test-online.mjs   a cena `trucoduplas` + os helpers içados
+           CLAUDE.md               este registro
 ```
 
-> ## ⚠ O PUSH ESTÁ BLOQUEADO POR CREDENCIAL, e isto é NOVO
+> ### ➜ O PRIMEIRO COMANDO DE AMANHÃ
 >
-> `git push origin main --tags` devolve **403**:
-> *"Permission to RicardoColombo01/domino-bar.git denied to Ricardo-Colombo-pixaflow."*
->
-> **O `gh` DESTA MÁQUINA NÃO SERVE, e o arquivo dizia o contrário.** Ele afirmava em três
-> lugares que *"`gh` não está instalado nesta máquina"* — **está** (2.97.0), autenticado, mas
-> na conta **`Ricardo-Colombo-pixaflow`**, e `gh api repos/RicardoColombo01/domino-bar --jq
-> .permissions` devolve `{"push": false}`. O `credential.helper = store` do `.gitconfig`
-> guarda essa mesma conta, e foi ela que o `gh auth setup-git` escreveu por cima da que
-> funcionava em 07/08. **Serve para auditar o Pages; não serve para publicar.**
->
-> **O Ricardo não pode trocar a autenticação** — ele está trabalhando com a outra conta em
-> outros projetos, e `gh auth login` a substituiria. Decisão dele em 10/08: **ele sobe as duas
-> releases quando for conveniente.** As saídas, para quando chegar a hora:
->
-> 1. `RicardoColombo01/domino-bar → Settings → Collaborators` convidando `Ricardo-Colombo-pixaflow`
->    com **Write** (o push passa a funcionar daqui, sem tocar em conta nenhuma);
-> 2. um **fine-grained token** da conta dona, escopo só neste repositório, configurado
->    **por repositório** para não encostar na credencial global.
->
-> **E os commits só existem NESTA máquina** — não há como enviá-los de outro computador,
-> porque nenhum outro os tem. Isto matou a saída que parecia óbvia.
->
-> Depois do push, a régua continua sendo o **conteúdo SERVIDO**:
 > ```
-> curl -s https://ricardocolombo01.github.io/domino-bar/sw.js | grep VERSAO
-> grep VERSAO sw.js
+> git ls-remote origin refs/heads/main   # o remoto  — hoje ainda ff7726b
+> git rev-parse main                     # o local   — já com a v4.8
+> git push origin main --tags
 > ```
-> O pipeline do Pages está **saudável** (duas rodadas `success` em 07/08), então deve publicar
-> em minutos — o travamento de dias não voltou.
+>
+> **NÃO houve `npm run build` dentro do merge, e é a única vez que isso vale:** a onda não
+> tocou `src/`, então o bundle não muda. Quem provou foi o `npm run check`, rodado depois do
+> merge — se um dia ele reclamar ali, o build entra e o `git add index.html` junto.
+>
+> **E CUIDADO COM A RÉGUA AQUI**, porque esta release cai justamente na exceção: como `src/`
+> não mudou, o `sw.js` servido continua `a72ce27eec71` **de propósito** — ele é um resumo do
+> bundle, e bundle igual dá resumo igual. **Os dois baterem NÃO prova que o push chegou.**
+> Quem prova é o `git ls-remote`. É a armadilha do `e2f9a7a` (v4.5.2) de novo, e ela volta
+> toda vez que uma onda mexe só em `CLAUDE.md` e em testes.
+
+**O BLOQUEIO DE CREDENCIAL ACABOU.** As duas releases que este arquivo dava como paradas na
+máquina estão no ar; o 403 virou registro histórico, logo abaixo. Nada a fazer ali.
+
+**E O PROJETO NÃO TEM DEFEITO CONHECIDO EM ABERTO**, medido em 10/08 e não lembrado: as OITO
+suítes rodaram verdes contra este código — `npm test`, `online` (7 cenas), `lembrar`,
+`textura`, `app`, `telas` (as duas metades, folga mínima 0.29 nas duas), `check`, mais as 5
+mutações. O que sobra é a **Fase 5**, que é conta e não código.
+
+> ### ⚠ A RÉGUA DE "ENVIADO" É O REMOTO CONSULTADO, e isto custou um diagnóstico errado
+>
+> `git rev-list --left-right --count origin/main...main` respondeu **`0 0`** — e responderia
+> `0 0` do mesmo jeito com tudo por enviar, porque ele compara com o `origin/main` **local**,
+> que é um ref em cache e pode estar de qualquer idade. Quem respondeu de verdade foi:
+>
+> ```
+> git ls-remote origin refs/heads/main refs/tags/v4.7.1   # o servidor, sem alterar nada
+> git rev-parse main                                      # o local, para comparar
+> ```
+>
+> É a lição de *"a régua de PUBLICADO é o conteúdo SERVIDO"* com um degrau novo por baixo:
+> **commitado ≠ enviado ≠ publicado, e as três réguas são três perguntas diferentes** — o log
+> local, o remoto consultado, e o `curl`. `git fetch` também resolve, mas escreve; o
+> `ls-remote` responde sem tocar em nada, o que o torna a pergunta certa para *auditar*.
+
+<details><summary>o registro do 403, de quando o push estava bloqueado (05–10/08/2026)</summary>
+
+`git push origin main --tags` devolvia **403**:
+*"Permission to RicardoColombo01/domino-bar.git denied to Ricardo-Colombo-pixaflow."*
+
+**O `gh` DESTA MÁQUINA NÃO SERVIA, e o arquivo dizia o contrário.** Ele afirmava em três
+lugares que *"`gh` não está instalado nesta máquina"* — **está** (2.97.0), autenticado, mas
+na conta **`Ricardo-Colombo-pixaflow`**, e `gh api repos/RicardoColombo01/domino-bar --jq
+.permissions` devolvia `{"push": false}`. O `credential.helper = store` do `.gitconfig`
+guardava essa mesma conta, e foi ela que o `gh auth setup-git` escreveu por cima da que
+funcionava em 07/08. **Servia para auditar o Pages; não para publicar.**
+
+As duas saídas registradas na época, para se o 403 voltar:
+
+1. `RicardoColombo01/domino-bar → Settings → Collaborators` convidando `Ricardo-Colombo-pixaflow`
+   com **Write** (o push passa a funcionar daqui, sem tocar em conta nenhuma);
+2. um **fine-grained token** da conta dona, escopo só neste repositório, configurado
+   **por repositório** para não encostar na credencial global.
+
+**E os commits só existiam NESTA máquina** — não havia como enviá-los de outro computador,
+porque nenhum outro os tinha. Isso matou a saída que parecia óbvia.
+
+</details>
+
+#### A v4.8 — O TRUCO ONLINE EM DUPLAS, e a vez em que a máquina estava CERTA
+
+A v4.7 fechou dizendo que *"herda de graça é uma AFIRMAÇÃO, não uma medição"*, e sobrava uma
+afirmação do mesmo tipo: o truco online em **duplas**. A cena `truco` do `test-online` é de
+DUAS cadeiras, onde `duplas` é `false` — ali o `timeNoTruco` é a identidade, o canal da dupla
+não tem para quem vazar e o placar tem uma entrada por cadeira. **Metade daquelas linhas
+nunca tinha rodado.**
+
+**Desta vez a medição CONFIRMOU a afirmação, e isso é um desfecho e não um anticlímax.** As
+sete asserções nasceram VERDES, e o arquivo é duro sobre o que isso vale sozinho: nada. A
+entrega da onda é a **conferência por mutação** — cinco, cada uma matando a sua:
+
+| mutação | mortas |
+|---|---|
+| `timeNoTruco` → `(P, c) => c` (ignora duplas) | **2** — a fala da dupla e o bloqueio da parceira |
+| `espalharChat`: o canal da dupla vira geral | **1** — *"A FALA DA DUPLA VAZOU"* |
+| `visaoDoTruco`: `mao` vira a do PARCEIRO | **1** — e ela nomeia as cartas: `7:3, 3:1, 6:3` |
+| `trucar`: responde o PRÓPRIO time | **6** — a cascata inteira da aposta |
+| `donoDaAposta` comparado por CADEIRA e não por time | **1** — a parceira pôde subir |
+
+**O arranjo da mesa é o experimento inteiro** — quatro abas, nenhum bot:
+
+```
+cadeira 0  anfitriã   time 0     cadeira 2  parceiro    time 0
+cadeira 1  adversária time 1     cadeira 3  adversário  time 1
+```
+
+As duplas são em CRUZ, e a ordem de chegada é o que as decide. É o único arranjo em que "a
+fala da dupla vaza?" tem um adversário para vazar, e em que **quem responde ao truco de um
+convidado é OUTRO convidado** — o pedido faz convidado → anfitrião → convidado, caminho que a
+mesa de 2 nunca percorre porque lá quem responde é sempre quem tem `P`.
+
+**NENHUM BOT, e as duas razões são de medição:** um bot na cadeira 3 andaria com a mesa embaixo
+das asserções (a intermitência que o `pararBots` existe para matar, entrando por outra porta),
+e — o que decide — **as ações de uma cadeira só são observáveis se ela tiver uma VISTA**. Ler
+`acoesDoTruco` por dentro mediria o que o motor calculou; ler a vista da aba mede o que o FIO
+entregou, que é a pergunta desta suíte.
+
+**A ARMADILHA QUE QUASE FEZ UMA ASSERÇÃO PASSAR PELO MOTIVO ERRADO**, e ela é a lição desta
+onda: `acoesDoTruco` devolve `nada` — com `trucar: null` — para **qualquer cadeira fora da
+vez**. A asserção "a parceira de quem pediu não pode subir" cobrando só o `null` passaria com
+a regra APAGADA, porque quase sempre não é a vez dela. O que a torna honesta é cobrar
+`cartas.length > 0` ao lado: é a vez dela, ela pode jogar, e mesmo assim não pode subir. E o
+**contraste** fecha — no mesmo ponto da mesma mão, a cadeira do outro time tem `trucar = 6`.
+**Sem o par, um `trucar` sempre nulo passaria pelas duas asserções.**
+
+Duas coisas menores que a onda deixou:
+
+- **`conversa` e `falarComo` subiram para o escopo da suíte.** Eram `const` dentro da cena
+  `conversa`, e a cena nova precisa dos dois. Duplicá-los seria a doença do `28 - 7 * MESA.n`:
+  duas cópias certas até uma não acompanhar a outra.
+- **A caminhada da mesa joga a PRIMEIRA carta da mão, não a do bot.** O bot decide apostar às
+  vezes, e um pedido no meio pararia a caminhada — cena montada por moeda é a intermitência
+  que a Fila 5 pagou, e o arquivo já registra que "cena montada por LANCE CONTADO é
+  intermitente; o que vale é a CONDIÇÃO".
 
 #### ⚠ A v4.7 — O TRUCO ONLINE ESTAVA QUEBRADO, e ninguém sabia
 
@@ -1166,14 +1280,17 @@ arquivo, e o inventário completo das mudanças desta onda.
 2. ~~**A cena de truco no `test-telas`**~~ ✔ **feita na v4.6**, e ela achou dois defeitos de
    geometria mais um antigo do dominó. Ver "A LACUNA QUE A v4.5 DEIXOU".
 3. ~~**COMMITAR A v4.6.**~~ ✔ **feita** — três commits, merge `--no-ff`, tag `v4.6.0`.
-4. **ENVIAR A v4.6 E A v4.7, e é o único item BLOQUEADO.** Não é esquecimento nem decisão
-   pendente: o push devolve **403** porque a credencial desta máquina é de outra conta. Ver a
-   caixa em "ONDE PAROU" — as duas saídas estão escritas, e as duas são conta e não código.
-   Depois, a régua é o conteúdo SERVIDO, nunca o `git rev-list`.
+4. ~~**ENVIAR A v4.6 E A v4.7**~~ ✔ **feito** — o 403 saiu do caminho, `origin/main` = `main`
+   = `ff7726b`, e o Pages publicou em 10/08 23:40 UTC. O que sobra da lição é a **régua**:
+   quem responde "enviado?" é `git ls-remote`, não `git rev-list` contra um ref em cache.
 4b. ~~**O truco online**~~ ✔ **feito na v4.7** — e não era lacuna de teste, era defeito: o
    convidado ficava preso no saguão. Ver a seção própria.
+4c. ~~**O truco online em DUPLAS**~~ ✔ **medido na v4.8** — a última afirmação não medida
+   desta camada. Desta vez a máquina estava CERTA: sete asserções nasceram verdes, e a prova
+   é a mutação. Ver a seção própria.
 5. **A Fase 5, o aplicativo** — worktree próprio (`../domino-bar-app`), e ela trava numa
    decisão de conta do Ricardo (o repositório da user page). Ver "É AQUI QUE SE RETOMA".
+   **É o único item aberto do projeto**, e não é código.
 
 **O ARRANJO DE WORKTREE que a v4 usou, e o que ele ensinou:**
 
@@ -1747,12 +1864,10 @@ Registrado para não ser redescoberto do zero — e com o motivo de não ser pri
 
 #### Perguntas em aberto para o Ricardo
 
-**EM 06/08/2026 (v4.5.0) SÃO TRÊS, e nenhuma é de programador:**
+**EM 10/08/2026 (v4.8) SÃO DUAS, e nenhuma é de programador:**
 
-1. **O CLIQUE NO PAGES.** `Actions → a rodada das 22:04 → Re-run all jobs`, ou
-   `Settings → Pages` reconfirmando *Deploy from a branch → main → / (root)*. Quatro pushes
-   seguidos não geraram rodada, o que já não é oscilação. **É a única coisa entre o truco e
-   quem joga**. E o `gh` desta máquina não resolve: ele existe, mas na conta `Ricardo-Colombo-pixaflow`, sem permissão de escrita aqui.
+1. ~~**O CLIQUE NO PAGES**~~ ✔ **fechada** — o pipeline está saudável e publicando em minutos;
+   a rodada da v4.7.1 saiu `success` em 10/08 23:40 UTC e o conteúdo servido bate com o local.
 2. **O REPOSITÓRIO `ricardocolombo01.github.io`** (user page), com um `.nojekyll` VAZIO na raiz
    e o `.well-known/assetlinks.json`. Sem ele o TWA abre com barra de URL e não passa por
    aplicativo. É o que trava a Fase 5 inteira.
@@ -1811,25 +1926,25 @@ mapa sintoma → arquivo (§3), o inventário completo das mudanças (§3b), com
 
 ### 1. ONDE TESTAR — e este é o item que já custou UM DIA a este projeto
 
-> **EM 10/08 O SITE ESTÁ DUAS RELEASES ATRÁS.** O `sw.js` servido continua `23dc31b4d8f9`
-> (v4.5.1) e o local é `a72ce27eec71` (v4.7.0): a v4.6 e a v4.7 estão commitadas, tagueadas e
-> **não enviadas**, porque o push devolve 403 — ver a caixa em "ONDE PAROU". **Teste LOCAL**
-> (duplo-clique no `index.html`, ou `npm run servir` para o online), que é onde a versão nova
-> está. O parágrafo abaixo vale para depois do envio.
+> **O SITE ESTÁ EM DIA — conferido em 10/08/2026.** O `sw.js` servido é `a72ce27eec71`, igual
+> ao local, e o `index.html` no ar é **byte a byte** o mesmo (496.052). A v4.6 e a v4.7 estão
+> no ar, com as duas coisas que você pediu jogando: **quem está ganhando a vaza** e **quem
+> ganhou**. Pode testar direto no `github.io`.
 >
-> **O SITE JÁ TEM TRUCO** — conferido em 07/08: o `sw.js` servido é `23dc31b4d8f9`, igual ao
-> local, e o HTML no ar traz "Truco Paulista", `JOGOS.truco` e a barra de apostas.
->
-> **A v4.6 ESTÁ COMMITADA E TAGUEADA**, com as duas coisas que você pediu — quem está ganhando
-> a vaza e quem ganhou. O que ela AINDA pode não ter é o terceiro degrau. **Confira antes de
-> relatar**, sempre, porque a fila do Pages já ficou travada por um dia inteiro:
+> **Confira antes de relatar mesmo assim**, sempre — a fila do Pages já ficou travada por um
+> dia inteiro, e este projeto já perdeu um dia por causa disso:
 >
 > ```
 > curl -s https://ricardocolombo01.github.io/domino-bar/sw.js | grep VERSAO
 > grep VERSAO sw.js      # o local
 > ```
 > Iguais = o site tem tudo o que está commitado. Diferentes = falta publicar, e aí **teste
-> local**, que é onde a versão nova sempre está.
+> local** (duplo-clique no `index.html`, ou `npm run servir` para o online), que é onde a
+> versão nova sempre está.
+>
+> E se a dúvida for "isto chegou a SAIR da máquina?", quem responde é
+> `git ls-remote origin refs/heads/main` — nunca o `git rev-list`, que compara com um ref em
+> cache e diz `0 0` com tudo por enviar.
 
 Esta armadilha já custou um dia inteiro a este projeto (31/07), e ela tem três degraus:
 **commitado ≠ enviado ≠ publicado**. **Para testar sem depender de nenhum deles:**
@@ -1854,8 +1969,8 @@ primeiro":
 | **a carta virando de barriga para baixo** | a vaza recolhida DESLIZA para a pilha girando 180° em Z. Nunca foi vista por ninguém — só medida como posição |
 | **a barra de apostas** | Pedir truco · Aceitar · Aumentar · Correr. A suíte confere que os botões EXISTEM e que a intenção chega; ninguém clicou neles com o dedo |
 | **a mão de 11** | dois botões e uma fase própria. Testada em Node, nunca na tela |
-| ~~**o truco ONLINE**~~ | ✔ **medido na v4.7, e a afirmação estava ERRADA**: ele NÃO herdava de graça — `vistaDoFio` recusava toda vista de truco e o convidado ficava preso no saguão. Consertado, com cena própria no `test-online` (mesa real, jogada e aposta pelo fio). O que a suíte ainda não vê: truco online em **duplas** (4 cadeiras) e a conversa por dupla numa mesa de truco |
-| **o truco em DUPLAS (4 cadeiras)** | o `timeNoTruco` é uma linha e está testado; o canal da dupla na conversa e o placar por time nunca foram vistos numa mesa de truco |
+| ~~**o truco ONLINE**~~ | ✔ **medido na v4.7, e a afirmação estava ERRADA**: ele NÃO herdava de graça — `vistaDoFio` recusava toda vista de truco e o convidado ficava preso no saguão. Consertado, com cena própria no `test-online` (mesa real, jogada e aposta pelo fio) |
+| ~~**o truco em DUPLAS (4 cadeiras)**~~ | ✔ **medido na v4.8, e desta vez a afirmação estava CERTA** — cena `trucoduplas`: quatro abas, o parceiro não vê a mão do parceiro, a fala da dupla não vaza, um convidado responde ao truco de outro, e `donoDaAposta` bloqueia a parceira de quem pediu. Nasceu tudo verde; a prova são as **cinco mutações**. O que continua sem foto é a mesa de 4 no **CELULAR** com gente de verdade |
 | **o dominó, de novo** | ele mudou MAIS que o truco em superfície: os botões, os medidores do topo, a barra de confirmar e a tela de fim de mão passaram todos a ser gerados. As suítes dizem que está idêntico; olho humano é a outra régua |
 
 ### 3. MAPA: sintoma → onde ele mora
@@ -1932,21 +2047,26 @@ O que faz um relato valer uma correção em vez de uma investigação:
 
 ### 5. O QUE JÁ ESTÁ MEDIDO — não vale reinvestigar
 
-Para eu não gastar tempo em coisa provada. **AS SETE SUÍTES DO PROJETO rodaram verdes em
-07/08/2026**, contra o código da v4.6 — não há uma herdada da release anterior:
+Para eu não gastar tempo em coisa provada. **AS OITO SUÍTES DO PROJETO rodaram verdes em
+10/08/2026**, contra o código da v4.8 — não há uma herdada de release anterior. Isto fecha a
+lacuna que a v4.7 deixou de propósito (ela pulou o `telas` por não tocar em geometria): o
+`telas` voltou a rodar, nas duas metades, e deu **a mesma folga mínima 0.29** da v4.6 —
+número igual entre rodadas distantes é a régua de DETERMINISMO, não só de aprovação.
 
 ```
 npm test         acoplamento (8) + cartas (51) + truco (343) + regras + mesa + jogo
 npm run telas    seis telas × TREZE cenas (dez de dominó + três de truco), duas metades
-                 os dez casos de dominó saíram com os números IDÊNTICOS aos da v4.5,
-                 conferidos linha a linha contra a rodada anterior — só o rótulo do log
-                 mudou (`mesa` → `tabuleiro`), porque agora quem nomeia é o jogo
-                 folga mínima 0.29 (limiar 0.15), sempre em `truco duplas`
+                 rodado de novo em 10/08 contra a v4.8: folga mínima 0.29 (limiar 0.15)
+                 nas DUAS metades, sempre em `truco duplas` — o mesmo número da v4.6,
+                 que é o que prova determinismo e não só aprovação
+                 a 2ª metade passa de 10 min e cai para segundo plano: é esperado
 npm run lembrar  a partida dos DOIS jogos volta depois de recarregar — 12 cenas
-npm run online   duas abas, mesa real, take-over, nome hostil, sair e voltar
+npm run online   SETE cenas: mesa real, take-over, nome hostil, sair e voltar, e as duas de
+                 truco — a de 2 cadeiras e a `trucoduplas`, de QUATRO abas (v4.8)
 npm run textura  a peça não fica preta ao voltar de outro aplicativo · 0 sorteios globais
 npm run app      o jogo abre com a REDE DESLIGADA, com o PeerJS junto
-mutações         a de segurança (2, uma por campo), a do helper de escolha, a do 4º medidor
+mutações         a de segurança (2, uma por campo), a do helper de escolha, a do 4º medidor,
+                 e as CINCO da v4.8 (duplas), cada uma matando a sua: 2 · 1 · 1 · 6 · 1
 ```
 
 **As quatro de navegador foram rodadas DE PROPÓSITO, e não por zelo:** este arquivo tinha
@@ -1955,24 +2075,30 @@ truco e a `visaoDoTruco` ganhou campo, a segunda porque exercita `publicar`, que
 publicar a altura da barra. **Nenhuma das duas se mexeu**, que era o esperado; a diferença é
 que agora isso é medição e não previsão.
 
-**O que essas suítes NÃO conseguem ver, por construção:** o truco em qualquer tamanho de tela,
-o truco online, o truco em duplas, e qualquer coisa que só o olho note — cor, legibilidade,
-tempo de animação, "isso parece defeito". É exatamente a fatia que uma tarde de jogo cobre.
+**O que essas suítes NÃO conseguem ver, por construção** — e a lista encolheu: o truco em tela
+que não seja uma das seis, a mesa de 4 no CELULAR com gente de verdade, e qualquer coisa que
+só o olho note — cor, legibilidade, tempo de animação, "isso parece defeito". É exatamente a
+fatia que uma tarde de jogo cobre, e **jogar continua sendo a fonte mais barata deste
+projeto**: as Filas 5, 7 e 10 saíram dela, e o pedido de "quem está ganhando a vaza" também.
 
 ---
 
 #### Como retomar em cinco minutos
 
 ```
-git fetch origin && git rev-list --left-right --count origin/main...main   # tem de dar 0 0
+# ENVIADO? Pergunte ao SERVIDOR, não ao ref em cache: o `git rev-list` compara com o
+# `origin/main` LOCAL e já respondeu `0 0` com duas releases paradas na máquina.
+git ls-remote origin refs/heads/main   # o remoto
+git rev-parse main                     # o local — os dois hashes têm de bater
+
 git worktree list      # deve haver SÓ a main; a próxima onda abre a sua
 git branch -a          # a próxima onda nasce numa branch com o nome da versão
 npm run check          # o bundle está em dia com src/?
 npm test               # o acoplamento + as três suítes de lógica, segundos
 
-# E A QUARTA RÉGUA, que a v4.1 aprendeu do jeito caro: o que está NO AR.
+# E A RÉGUA DE PUBLICADO, que a v4.1 aprendeu do jeito caro: o que está NO AR.
 curl -s https://ricardocolombo01.github.io/domino-bar/sw.js | grep VERSAO
-grep VERSAO sw.js      # o local, para comparar — em 06/08 eles DISCORDAM
+grep VERSAO sw.js      # o local — em 10/08 eles BATEM (a72ce27eec71)
 ```
 
 **E ABRA O JOGO NAS DUAS ABAS.** Cinco suítes verdes não substituem trinta segundos olhando:

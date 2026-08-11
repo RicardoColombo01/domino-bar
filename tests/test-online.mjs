@@ -34,7 +34,7 @@ const so = (args.find(a => a.startsWith('--so=')) || '').slice(5).split(',').fil
 // A lista existe para que uma cena inexistente REPROVE em vez de rodar zero asserção e
 // imprimir "tudo certo" — verde vazio é a armadilha que o `diff` de arquivos vazios já
 // pagou aqui. Quem acrescentar cena nova acrescenta o nome aqui, no mesmo commit.
-const CENAS = ['duelo', 'conversa', 'saguao', 'nomes', 'voltar', 'truco'];
+const CENAS = ['duelo', 'conversa', 'saguao', 'nomes', 'voltar', 'truco', 'trucoduplas'];
 for (const s of so) if (!CENAS.includes(s)) {
   // Cena que não existe é ERRO e não "rodar tudo": um erro de digitação daria a suíte
   // inteira quando se pediu uma cena, ou zero asserção — e as duas mentem.
@@ -101,6 +101,18 @@ const abrir = async (nome, jogo, id) => {
   ok(abriu === jogo, `a aba "${nome}" pediu ${jogo} e abriu ${abriu}`);
   return p;
 };
+
+// A CONVERSA, para as duas cenas que a exercitam — a `conversa` (dominó) e a `trucoduplas`.
+// Moram aqui em cima porque o canal da dupla é da CASA e não de um jogo: quem decide quem lê
+// é `espalharChat` com o `JOGO.motor.time`, e é a mesma máquina nos dois. Duplicá-las por
+// cena seria a doença do `28 - 7 * MESA.n` — duas cópias que ficam certas até uma não
+// acompanhar a outra.
+const conversa = p => p.evaluate(() => document.getElementById('conversaLista').textContent);
+const falarComo = (p, canal, txt) => p.evaluate(([c, t]) => {
+  window.__jogo.trocarCanal(c);
+  document.getElementById('conversaTexto').value = t;
+  window.__jogo.falar();
+}, [canal, txt]);
 
 try {
   const anfitriao = await abrir('anfitrião', 'domino');
@@ -316,13 +328,6 @@ try {
       () => (document.getElementById('onlineCodigo').textContent || '').match(/^[A-Z0-9]{4}$/),
       { timeout: 25000, polling: 400 });
     const cod2 = await dono.evaluate(() => document.getElementById('onlineCodigo').textContent);
-
-    const conversa = p => p.evaluate(() => document.getElementById('conversaLista').textContent);
-    const falarComo = (p, canal, txt) => p.evaluate(([c, t]) => {
-      window.__jogo.trocarCanal(c);
-      document.getElementById('conversaTexto').value = t;
-      window.__jogo.falar();
-    }, [canal, txt]);
 
     // A ordem importa: a primeira conexão pega a cadeira 1 (a adversária), a segunda a 2.
     //
@@ -957,6 +962,228 @@ try {
     console.log(`  "${recado.trim()}"`);
 
     await forasteiro.close(); await visT.close(); await anfT.close();
+  }
+
+  // ─── O TRUCO ONLINE EM DUPLAS ──────────────────────────────────────────────
+  // A ÚLTIMA AFIRMAÇÃO NÃO MEDIDA desta camada, e a v4.7 já mostrou o que elas custam: o
+  // CLAUDE.md dizia que "o truco herda a rede inteira e nada nele é específico", e a medição
+  // desmentiu — `vistaDoFio` exigia a `linha` do DOMINÓ e recusava toda vista de truco, com o
+  // convidado preso no saguão para sempre. A cena `truco` acima é de DUAS cadeiras, onde
+  // `duplas` é `false`: ali o `timeNoTruco` é a identidade, o canal da dupla não tem para
+  // quem vazar e o placar tem uma entrada por cadeira. Metade dessas linhas nunca rodou.
+  //
+  // QUATRO ABAS E NENHUM BOT, e as duas razões são de medição:
+  //   · um bot na cadeira 3 andaria com a mesa embaixo das asserções — é a intermitência que
+  //     o `pararBots` existe para matar no test-telas, entrando aqui por outra porta;
+  //   · e o que decide: as ações da cadeira 3 só são observáveis se ela tiver uma VISTA. Ler
+  //     `acoesDoTruco` por dentro mediria o que o motor calculou; ler a vista da aba mede o
+  //     que o FIO entregou, que é a pergunta desta suíte.
+  if (rodar('trucoduplas')) {
+    console.log('\no truco online em duplas: quatro cadeiras, dois times');
+    const anf = await abrir('anfitriã (cadeira 0)', 'truco');
+    const advA = await abrir('adversária A (cadeira 1)', 'truco');
+    const parc = await abrir('parceiro (cadeira 2)', 'truco');
+    const advB = await abrir('adversário B (cadeira 3)', 'truco');
+
+    await anf.evaluate(() => {
+      const j = window.__jogo;
+      j.MESA.n = 4; j.MESA.modo = 'paulista';
+      j.MESA.cadeiras[0].nome = 'Anfitriã';
+      for (const c of [1, 2, 3]) j.MESA.cadeiras[c].tipo = 'online';
+      document.getElementById('btComecar').click();
+    });
+    await anf.waitForFunction(
+      () => (document.getElementById('onlineCodigo').textContent || '').match(/^[A-Z0-9]{4}$/),
+      { timeout: 25000, polling: 400 });
+    const codD = await anf.evaluate(() => document.getElementById('onlineCodigo').textContent);
+    console.log(`  código da mesa de duplas: ${codD}`);
+
+    // A ORDEM DE CHEGADA É A ORDEM DAS CADEIRAS, e aqui ela é o experimento inteiro: as
+    // duplas são em CRUZ (0&2 × 1&3), então quem chega primeiro senta na 1 — ADVERSÁRIA do
+    // anfitrião — e o segundo na 2, que é o parceiro dele. É o único arranjo em que "a fala
+    // da dupla vaza?" tem um adversário para vazar, e em que quem responde a um truco de
+    // convidado é OUTRO convidado.
+    const entrarNaMesa = (pagina, nome) => pagina.evaluate(([c, n]) => {
+      window.__jogo.MESA.cadeiras[0].nome = n;
+      document.getElementById('btEntrar').click();
+      document.getElementById('onlineEntrada').value = c;
+      document.getElementById('btConectar').click();
+    }, [codD, nome]);
+    const jaChegaram = q => anf.waitForFunction(
+      n => (document.getElementById('onlineLista').textContent.match(/chegou/g) || []).length === n,
+      { timeout: 30000, polling: 400 }, q);
+
+    await entrarNaMesa(advA, 'AdvA');     await jaChegaram(1);
+    await entrarNaMesa(parc, 'Parceiro'); await jaChegaram(2);
+    await entrarNaMesa(advB, 'AdvB');     await jaChegaram(3);
+    await anf.evaluate(() => document.getElementById('btIniciarOnline').click());
+
+    // ─── A GUARDA DE MONTAGEM ────────────────────────────────────────────────
+    // Sem ela, tudo abaixo passa por trivialidade se alguém não sentar. É a família do
+    // `conn.open` que fazia `espalharVistas` nunca mandar nada e do helper que passava índice
+    // onde a ponte esperava peça: montagem que não alcança o estado interessante, com a suíte
+    // verde. Diz QUEM faltou, porque "a mesa não montou" transforma um defeito num palpite.
+    const cadeiras = [['AdvA', advA, 1], ['Parceiro', parc, 2], ['AdvB', advB, 3]];
+    let mesaDePe = true;
+    for (const [nome, p] of cadeiras) {
+      const sentou = await p.waitForFunction(
+        'window.__jogo.vista && window.__jogo.vista.mao.length === 3',
+        { timeout: 25000, polling: 400 }).then(() => true).catch(() => false);
+      ok(sentou, `${nome} não recebeu a mão de truco — ficou preso no saguão`);
+      if (!sentou) mesaDePe = false;
+    }
+
+    if (mesaDePe) {
+      const vistaDe = p => p.evaluate(() => JSON.parse(JSON.stringify(window.__jogo.vista)));
+      const v1 = await vistaDe(advA), v2 = await vistaDe(parc), v3 = await vistaDe(advB);
+      ok(v1.cadeira === 1 && v2.cadeira === 2 && v3.cadeira === 3,
+        `as cadeiras vieram fora de ordem: ${v1.cadeira}, ${v2.cadeira}, ${v3.cadeira}`);
+
+      // O ESPELHO DA CENA DE 2, que cobra `duplas === false`. Sem este campo no fio a tela do
+      // convidado calcula o time errado: `timeDaVistaNoTruco` sai daqui e de mais lugar
+      // nenhum, e com ele erram a marca de quem ganha a vaza, a nota do `#vez` e o placar.
+      ok(v1.duplas === true && v2.duplas === true && v3.duplas === true,
+        'a mesa de 4 não chegou como duplas para os convidados');
+      // O PLACAR É POR TIME: dois números, não um por cadeira. É o mesmo array que o HUD lê.
+      ok(v2.placar.length === 2,
+        `o placar chegou com ${v2.placar.length} entradas, e em duplas são 2`);
+
+      // ─── O INVARIANTE 3 ENTRE PARCEIROS ────────────────────────────────────
+      // A ASSERÇÃO QUE MAIS IMPORTA DESTA CENA. Em duplas a intuição "parceiros dividem" é
+      // forte, e no truco é FALSA — cada um vê só a própria mão. A cena de 2 só consegue
+      // perguntar se o ADVERSÁRIO vê; esta é a única que pergunta pelo parceiro.
+      //
+      // Carta a carta, nunca por `JSON.stringify` do texto da vista: a A de ouros é `[0,0]` e
+      // colide com o `placar` de uma partida nova. Esse falso positivo já mordeu a suíte de
+      // truco e chegou disfarçado do pior erro possível — vazamento de mão.
+      const norma = c => c[0] + ':' + c[1];
+      const maoAnf = await anf.evaluate(() => window.__jogo.P.maos[0].map(c => c.slice()));
+      const vePeloParceiro = new Set([...v2.mao, ...v2.mesa.map(j => j.carta), v2.vira].map(norma));
+      const vazouAoParceiro = maoAnf.map(norma).filter(k => vePeloParceiro.has(k));
+      ok(vazouAoParceiro.length === 0,
+        `a mão da anfitriã vazou para o PARCEIRO dela: ${vazouAoParceiro.join(', ')}`);
+      console.log(`  4 cadeiras · duplas ${v1.duplas} · placar com ${v2.placar.length} entradas · ` +
+        `vazaram ${vazouAoParceiro.length} cartas para o parceiro`);
+
+      // ─── A FALA DA DUPLA, NUMA MESA DE TRUCO ───────────────────────────────
+      // `espalharChat` decide quem lê com `JOGO.motor.time` e o `P.duplas` que veio do truco.
+      // A cena `conversa` exercita essa máquina só em dominó — aqui é o segundo jogo passando
+      // pela mesma porta, e o `time` está sob a mesma chave `motor` nos dois registros.
+      await falarComo(anf, 'dupla', 'guardo a manilha');
+      await parc.waitForFunction(
+        () => document.getElementById('conversaLista').textContent.includes('guardo a manilha'),
+        { timeout: 15000, polling: 300 })
+        .catch(() => ok(false, 'a fala da dupla não chegou ao parceiro numa mesa de truco'));
+      // Dá tempo de a mensagem ERRADA chegar, se for chegar: sem esta espera, "não vazou"
+      // seria indistinguível de "ainda não chegou".
+      await advA.evaluate(() => new Promise(r => setTimeout(r, 1200)));
+      const vazouAFala = (await conversa(advA)).includes('guardo a manilha');
+      ok(!vazouAFala,
+        'A FALA DA DUPLA VAZOU para o adversário numa mesa de TRUCO — o canal virou geral');
+
+      // ─── A APOSTA ATRAVESSANDO O FIO ENTRE DOIS CONVIDADOS ─────────────────
+      // O que a mesa de 2 não alcança: lá quem responde a um truco é sempre o anfitrião, que
+      // é quem tem `P`. Aqui a cadeira 1 pede e `trucar()` passa a vez para a primeira cadeira
+      // ADVERSÁRIA a partir dela — a 2, que é outro convidado. O pedido faz o caminho
+      // convidado → anfitrião → convidado, e a resposta faz o de volta.
+      const vezAgora = () => anf.evaluate(() => window.__jogo.P.vez);
+      // Anda a mesa pelo lado do ANFITRIÃO, que é a autoridade. Joga a PRIMEIRA carta da mão
+      // em vez de pedir ao bot: o bot decide apostar às vezes, e um pedido no meio pararia a
+      // caminhada — cena montada por moeda é a intermitência que a Fila 5 pagou.
+      const jogarPor = vez => anf.evaluate(v => {
+        const j = window.__jogo;
+        if (j.P.fase !== 'mao' || j.P.pedido || j.P.vez !== v) return false;
+        j.aplicarIntencao(v, { acao: 'jogar', carta: j.P.maos[v][0] });
+        return true;
+      }, vez);
+      const andarAte = async (alvo, teto = 8) => {
+        for (let i = 0; i < teto; i++) {
+          const vez = await vezAgora();
+          if (vez === alvo) return true;
+          if (!await jogarPor(vez)) return false;
+        }
+        return (await vezAgora()) === alvo;
+      };
+
+      const chegouNa1 = await andarAte(1);
+      ok(chegouNa1, 'a cena não levou a vez até a cadeira 1 — nada abaixo dela mediu coisa alguma');
+
+      if (chegouNa1) {
+        // QUEM ESTÁ GANHANDO A VAZA, pelo fio. É pergunta de REGRA, e a tela do convidado não
+        // tem `P` para respondê-la — em duplas ela ganha um segundo consumidor, a nota do
+        // `#vez` que diz "(seu time)" quando quem está por cima é o parceiro.
+        const naVez = await vistaDe(advA);
+        if (naVez.mesa.length) {
+          const g = naVez.ganhandoAVaza;
+          ok(g === null || naVez.mesa.some(j => j.cadeira === g),
+            `ganhandoAVaza aponta para a cadeira ${g}, que não pôs carta nesta vaza`);
+        }
+
+        const apostaAntes = await anf.evaluate(() => window.__jogo.P.aposta);
+        await advA.evaluate(() => window.__jogo.pedirAcao({ acao: 'trucar' }));
+        await parc.waitForFunction(
+          'window.__jogo.vista && window.__jogo.vista.acoes && window.__jogo.vista.acoes.aceitar === true',
+          { timeout: 15000, polling: 400 })
+          .catch(() => ok(false, 'o truco da cadeira 1 não chegou como resposta na cadeira 2'));
+        const pedido = await anf.evaluate(() => window.__jogo.P.pedido);
+        ok(pedido && pedido.de === 1 && pedido.time === 1,
+          `o pedido chegou torto: ${JSON.stringify(pedido)}`);
+        const respondeu = await vezAgora();
+        ok(respondeu === 2,
+          `quem responde ao truco da cadeira 1 devia ser a 2 (adversária), e veio a ${respondeu}`);
+
+        await parc.evaluate(() => window.__jogo.pedirAcao({ acao: 'aceitar' }));
+        await advA.waitForFunction('window.__jogo.vista.aposta > 1', { timeout: 15000, polling: 400 })
+          .catch(() => ok(false, 'o aceite da cadeira 2 não voltou para quem pediu'));
+        const vale = await advA.evaluate(() => window.__jogo.vista.aposta);
+        ok(vale > apostaAntes, `a mão devia valer mais depois do aceite (${apostaAntes} → ${vale})`);
+        console.log(`  a 1 pediu · a ${respondeu} respondeu · a mão passou de ${apostaAntes} para ${vale}`);
+
+        // ─── `donoDaAposta` BLOQUEIA O PARCEIRO DE QUEM PEDIU ────────────────
+        // A regra é por TIME, e é INVISÍVEL numa mesa de 2 — lá "o outro time" e "o outro
+        // jogador" são a mesma pessoa. Quem pediu foi a 1; a 3 é a parceira dela e, aceito o
+        // truco, também não pode subir. É a espécie do `donoDaAposta` que não era zerado no
+        // embaralho: regra de time que só a mesa de 4 consegue contradizer.
+        //
+        // A ARMADILHA, e é por ela que `cartas` entra na asserção: `acoesDoTruco` devolve
+        // `nada` — com `trucar: null` — para QUALQUER cadeira fora da vez. Cobrar só o `null`
+        // passaria pelo motivo errado, e passaria até com a regra apagada. `cartas.length > 0`
+        // é o que prova que é a vez dela e que o bloqueio veio da regra.
+        const abaDe = { 1: advA, 2: parc, 3: advB };
+        const visto = new Map();
+        for (let i = 0; i < 8 && visto.size < 3; i++) {
+          const vez = await vezAgora();
+          const emJogo = await anf.evaluate(
+            () => window.__jogo.P.fase === 'mao' && !window.__jogo.P.pedido);
+          if (!emJogo) break;
+          if (abaDe[vez] && !visto.has(vez)) {
+            await abaDe[vez].waitForFunction(
+              c => window.__jogo.vista && window.__jogo.vista.vez === c,
+              { timeout: 15000, polling: 300 }, vez).catch(() => {});
+            visto.set(vez, await abaDe[vez].evaluate(
+              () => JSON.parse(JSON.stringify(window.__jogo.vista.acoes))));
+          }
+          if (!await jogarPor(vez)) break;
+        }
+
+        const a3 = visto.get(3), a2 = visto.get(2);
+        ok(a3 && a3.cartas.length > 0,
+          'a cena não alcançou a vez da cadeira 3 com carta na mão — sem isso a asserção seguinte é decoração');
+        if (a3 && a3.cartas.length > 0) {
+          ok(a3.trucar === null,
+            'a cadeira 3 pôde subir a aposta que a PARCEIRA dela acabou de pedir — `donoDaAposta` deixou de ser por time');
+        }
+        // O CONTRASTE, e é ele que separa a regra do acaso: no MESMO ponto da mesma mão, uma
+        // cadeira do time que NÃO é dono da aposta tem de poder subir. Sem este par, um
+        // `trucar` sempre nulo passaria pelas duas asserções.
+        ok(a2 && a2.cartas.length > 0 && a2.trucar !== null,
+          `o time que não pediu devia poder aumentar, e veio trucar=${a2 && a2.trucar}`);
+        console.log(`  dono da aposta é o time da 1 · a 3 (parceira) tem trucar=${a3 && a3.trucar} · ` +
+          `a 2 (outro time) tem trucar=${a2 && a2.trucar}`);
+      }
+    }
+
+    await advB.close(); await parc.close(); await advA.close(); await anf.close();
   }
 } catch (e) {
   if (process.env.DOMINO_DEBUG) console.error(e.stack);
