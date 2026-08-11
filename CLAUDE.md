@@ -8,9 +8,10 @@ gente e bot, na mesma tela ou pela internet. No ar em
 Sem framework, sem bundler, e **dois binários** — os ícones do aplicativo, exigidos pelo
 manifest: madeira, pintas, cartas e sons continuam gerados em canvas e WebAudio na hora.
 Three.js e PeerJS vêm de CDN, e o **service worker os guarda**, então depois de uma partida o
-jogo abre sem internet. **9.648 linhas** no total (`src/js` + `src/pagina.html` +
-`src/css/estilo.css` + `src/sw.js`), conferido em 10/08/2026 — este número **envelhece**, e
-envelheceu: ficou dizendo 2.100 por três releases seguidas.
+jogo abre sem internet. **9.768 linhas** no total (`src/js` + `src/pagina.html` +
+`src/css/estilo.css` + `src/sw.js`), conferido em 11/08/2026 — este número **envelhece**, e
+envelheceu duas vezes: ficou dizendo 2.100 por três releases seguidas, e a medição de 10/08
+(9.648) já estava velha no dia seguinte. **Rode a conta, não leia o número daqui.**
 
 **Conte com `node`, não com o PowerShell.** `Measure-Object -Line` **não conta linha em
 branco** e devolve ~450 a menos; a discordância entre as duas réguas já custou uma
@@ -917,12 +918,12 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 
 | | |
 |---|---|
-| enviado | **v4.8.0** — `origin/main` = `main` = `1b5732f`, conferido com `git ls-remote` |
-| **PUBLICADO** | ✔ **em dia** — `sw.js` servido `a72ce27eec71` = o local; `index.html` no ar byte a byte igual. A v4.8 **não muda o bundle**: é suíte e registro |
-| em curso | **nada** — a fila está vazia e as oito suítes estão verdes |
+| enviado | **v4.9.0** — conferido com `git ls-remote`, que é a régua de ENVIADO (o `git rev-list` compara com um ref em cache e já respondeu `0 0` com duas releases paradas) |
+| **PUBLICADO** | conferir com `curl`. **A v4.9 MUDA o bundle** — ao contrário da v4.8 —, então desta vez o `sw.js` servido TEM de mudar: ele é um resumo do `index.html`, e o novo é `27648ab61191` |
+| em curso | **nada** — a **Fila 12** (varredura de 11/08) foi aberta e FECHADA na mesma sessão: 7 achados, 7 consertos, 7 mutações. Saiu na **v4.9.0** |
 | as anteriores | v4.7.0 (o truco online) · v4.6.0 (as cenas de truco no `telas`) · v4.5.0 (o corpo do truco) · v4.4.0 (bot + layout) · v4.3.0 (regras + motor) · v4.2.0 (`40-cartas/`) · v4.1.0 (a aba) · v4.0.0 (o contrato) |
-| Filas 5 a 11 | **todas fechadas** |
-| o que vem | **a Fase 5** — o aplicativo: APK no GitHub Releases + Amazon Appstore. **É o único item aberto, e é conta e não código** |
+| Filas 5 a 12 | **todas fechadas** |
+| o que vem | **a Fase 5** — o aplicativo: APK no GitHub Releases + Amazon Appstore. **É o único item aberto, e é conta e não código** — o pré-requisito de código que ela tinha (o C6, o service worker apagando cache de vizinho na mesma origem) saiu na v4.9.0 |
 
 ---
 
@@ -1042,27 +1043,38 @@ que as suítes rodaram inteiras com o site no ar três releases atrás.
 
 ---
 
-#### ONDE PAROU — sessão de 10/08/2026 (a v4.8 em curso)
+#### ONDE PAROU — sessão de 11/08/2026 (a varredura da Fila 12)
 
 **LEIA ISTO PRIMEIRO.** É o ponto exato de retomada, e é o ÚNICO — este arquivo já registrou
 que ponteiro de retomada é o item que mais apodrece aqui, e por isso não pode haver dois.
 
 ```
-main         v4.7.1 mesclada e tagueada
-ENVIADO      ✔ SIM — origin/main = main = ff7726b, e as tags v4.6.0/v4.7.0/v4.7.1 no remoto
-PUBLICADO    ✔ SIM — sw.js servido a72ce27eec71 = o local; index.html no ar BYTE A BYTE
-             igual (496.052), e a rodada do Pages saiu `success` em 10/08 23:40 UTC
-worktree     NENHUM
+main         v4.8.1 era o ponto de partida (c1165a9), enviada e publicada
 
-A v4.8   ✔ FECHADA E NO AR — commit, merge `--no-ff`, tag `v4.8.0`, branch apagada,
-         e ENVIADA: `git ls-remote` devolve 1b5732f nos dois lados, com a tag junto.
-         a onda mexeu em DOIS arquivos e em NENHUMA linha de src/:
-           tests/test-online.mjs   a cena `trucoduplas` + os helpers içados
-           CLAUDE.md               este registro
+A FILA 12  ✔ FECHADA — a terceira varredura do projeto, feita em 11/08 sobre o projeto
+           INTEIRO, e os SETE achados CONSERTADOS na mesma sessão. O Ricardo pediu a
+           varredura sob "anotar agora, decidir depois" e, com os sete escritos,
+           mandou consertar tudo.
 
-AMANHÃ    não há nada pendente de código. A fila está VAZIA e as oito suítes estão
-          verdes. O que sobra é a Fase 5 (o APK), que trava numa decisão de CONTA do
-          Ricardo — e a fonte mais barata deste projeto, que é JOGAR.
+           cada conserto com asserção, e CADA ASSERÇÃO CONFERIDA POR MUTAÇÃO — que
+           aqui não era opcional: os consertos vieram antes das asserções, então
+           todas nasceram verdes. Sete mutações, e UMA SOBREVIVEU na primeira
+           tentativa (a do C2), o que obrigou a reescrever a asserção.
+
+           src/     130-hud · 150-rede · 137-encaixes · 575-encaixes · 560-interacao · sw
+           tests/   test-jogo · test-truco · test-app
+           mais o package.json (estava em 4.7.1 com a v4.8 já tagueada) e este registro
+
+AS OITO SUÍTES VERDES contra este código, rodadas uma de cada vez em 11/08:
+           npm test · online (7 cenas) · lembrar · app · textura · check
+           telas nas DUAS metades, folga mínima 0.29 nas duas — o MESMO número da
+           v4.6 e da v4.8, que é a régua de determinismo e não só de aprovação
+
+AMANHÃ     não há defeito conhecido em aberto. O que sobra é a FASE 5 (o APK), que
+           trava numa decisão de conta do Ricardo — e agora com um pré-requisito de
+           código a menos, porque o C6 saiu nesta onda.
+           E a fonte mais barata deste projeto continua sendo JOGAR: o truco em
+           duplas no CELULAR, com gente de verdade, é o que nenhuma suíte alcança.
 ```
 
 > ### ⚠ ESTA RELEASE NÃO MUDA O QUE O JOGADOR VÊ, e isso desarma a régua de sempre
@@ -1080,10 +1092,18 @@ AMANHÃ    não há nada pendente de código. A fila está VAZIA e as oito suít
 **O BLOQUEIO DE CREDENCIAL ACABOU.** As duas releases que este arquivo dava como paradas na
 máquina estão no ar; o 403 virou registro histórico, logo abaixo. Nada a fazer ali.
 
-**E O PROJETO NÃO TEM DEFEITO CONHECIDO EM ABERTO**, medido em 10/08 e não lembrado: as OITO
-suítes rodaram verdes contra este código — `npm test`, `online` (7 cenas), `lembrar`,
-`textura`, `app`, `telas` (as duas metades, folga mínima 0.29 nas duas), `check`, mais as 5
-mutações. O que sobra é a **Fase 5**, que é conta e não código.
+**AS OITO SUÍTES CONTINUAM VERDES**, medido em 10/08 e não lembrado — `npm test`, `online`
+(7 cenas), `lembrar`, `textura`, `app`, `telas` (as duas metades, folga mínima 0.29 nas duas),
+`check`, mais as 5 mutações.
+
+> **E MESMO ASSIM O PROJETO PASSOU A TER SETE DEFEITOS CONHECIDOS EM ABERTO** — a Fila 12, de
+> 11/08. Esta linha dizia "nenhum defeito conhecido" e **estava certa pela régua que tinha**:
+> nenhum dos sete reprova suíte nenhuma. Eles não são regressão; são o que ninguém tinha
+> procurado ainda, e é literalmente para isso que uma varredura existe (a Fila 6 e a Fila 11
+> nasceram assim, com tudo verde). **Suíte verde mede o que alguém já pensou em perguntar.**
+
+O que sobra, em ordem: a **Fila 12** (sete achados, ordem recomendada na seção dela) e a
+**Fase 5**, que é conta e não código.
 
 > ### ⚠ A RÉGUA DE "ENVIADO" É O REMOTO CONSULTADO, e isto custou um diagnóstico errado
 >
@@ -1286,9 +1306,13 @@ arquivo, e o inventário completo das mudanças desta onda.
 4c. ~~**O truco online em DUPLAS**~~ ✔ **medido na v4.8** — a última afirmação não medida
    desta camada. Desta vez a máquina estava CERTA: sete asserções nasceram verdes, e a prova
    é a mutação. Ver a seção própria.
-5. **A Fase 5, o aplicativo** — worktree próprio (`../domino-bar-app`), e ela trava numa
+5. **A FILA 12** — a varredura de 11/08, com sete confirmados anotados e nenhum consertado.
+   **É o que tem código para escrever**, e cinco dos sete são uma ou duas linhas. Começa pelo
+   C3 (tela morta no convidado). Ver a seção própria.
+6. **A Fase 5, o aplicativo** — worktree próprio (`../domino-bar-app`), e ela trava numa
    decisão de conta do Ricardo (o repositório da user page). Ver "É AQUI QUE SE RETOMA".
-   **É o único item aberto do projeto**, e não é código.
+   Não é código — **mas o C6 da Fila 12 é, e é pré-requisito dela**: o service worker apaga
+   o cache de vizinhos na mesma origem, que é exatamente onde a user page vai nascer.
 
 **O ARRANJO DE WORKTREE que a v4 usou, e o que ele ensinou:**
 
@@ -3904,6 +3928,338 @@ tinha uma linha lá.
 que o build gera um `index.html` **autossuficiente**. Não gera: o CSS continua externo
 (`index.html:12` é um `<link>`). São 2 arquivos locais + 2 do CDN — e **um service worker
 precisa saber disso**.
+
+---
+
+## Fila 12 — a varredura de 11/08/2026 ✔ fechada (v4.9.0)
+
+**Terceira varredura da história do projeto** (a primeira deu a Fila 6, a segunda a Fila 11).
+Pedido do Ricardo com a fila vazia, a v4.8.1 no ar e nada relatado em campo. Escopo escolhido
+por ele: **o projeto inteiro**, e não só o código novo.
+
+**O desfecho mudou no meio.** A varredura foi feita sob "anotar agora, decidir depois" (a
+regra da Fila 11), e com os sete escritos o Ricardo mandou consertar tudo. **Os sete estão
+fechados na v4.9.0**, cada um com asserção e **cada asserção conferida por MUTAÇÃO** — que
+aqui não era opcional: os consertos vieram antes das asserções, então todas nasceram verdes,
+e asserção que nasce verde não prova nada sozinha.
+
+**As sete mutações mataram as suas: 2 · 1 · 2 · 1 · 2 · 1 · (1).** E **uma sobreviveu na
+primeira tentativa** — ver "o que o conserto ensinou", no fim desta fila.
+
+**A janela era grande e mensurável.** A varredura anterior é de 04/08; desde então entraram a
+reorganização em pastas, o PWA, o contrato `JOGOS`, a aba, `40-cartas/`, **o truco inteiro** e
+o truco online. **~3.100 das 9.768 linhas de `src/` nasceram depois da última varredura.**
+
+**Os SETE confirmados foram reproduzidos rodando**, em Node contra o bundle, com a saída
+colada ao lado. Nenhum é hipótese de leitura — e duas hipóteses minhas de leitura foram
+desmentidas pela medição no meio do caminho, as duas registradas abaixo.
+
+### A ordem recomendada, e por quê
+
+| | o quê | por quê |
+|---|---|---|
+| 1º | **C3** | **tela morta no convidado**, e é o irmão esquecido do `partidaGuardada` pela terceira vez |
+| 2º | **C1** e **C2** | um jogador chamado `Zé & Cia` vê entidade HTML na tela. Duas linhas |
+| 3º | **C6** | não custa nada hoje e **fica caro exatamente quando a Fase 5 acontecer** |
+| 4º | **C4** | teto que o vizinho de cima já tem, copiado para os dois de baixo |
+| 5º | **C5**, **C7** | uma linha cada |
+
+**C1, C2 e C7 são uma linha. C3 e C4 são duas.** Nenhum é caro.
+
+---
+
+### C1 · O fim de mão do truco escapa DUAS vezes ✔ feito
+
+`50-truco/575-encaixes.js:147`. `nomeDoTime()` (`10-casa/130-hud.js:138`) **já devolve HTML
+escapado**, e o truco o passa por `escapar()` outra vez ao montar o `detalhe`.
+
+```
+nome usado: "Zé & Cia"
+detalhe: "<div><span>1ª vaza</span><b>Zé &amp;amp; Cia</b></div>…"   ← DUPLO
+```
+
+O irmão em dominó (`30-domino/137-encaixes.js:77`) interpola `nomeDoTime` **sem** reescapar,
+que é o certo. É o padrão que este arquivo nomeia há cinco filas — *"aplicado num lugar e
+esquecido no vizinho"* — **pelo lado do excesso**, que é uma porta nova.
+
+**Por que nenhuma das oito suítes vê:** não lança, não vaza, não quebra layout. Só desenha
+errado, e só para nomes com `& < > " '`. **Defeito que erra bonito é o que mais dura** — é a
+mesma propriedade que fez o lá-e-lô da Fila 5 sobreviver anos.
+
+### C2 · A tela de campeão mostra a entidade crua ✔ feito
+
+`10-casa/130-hud.js:522` — `el('campeao').textContent = nomeDoTime(vista, campeao);`
+
+HTML escapado indo para `textContent`. Medido: `"Zé &amp; Cia"` **na tela**, no momento mais
+visível do jogo. Em duplas é pior, porque `nomeDoTime` monta `A e B` com os dois escapados.
+
+**É o C1 de cabeça para baixo, e os dois vêm da mesma causa:** `nomeDoTime` devolve HTML e
+**o nome dela não diz isso**. Um consumidor reescapa, outro joga em `textContent`, e os dois
+estão errados de jeitos opostos. Ao consertar, a pergunta é se a função não deveria devolver
+TEXTO e deixar o escape com quem monta a marcação — que é a regra do resto da casa.
+
+### C3 · `resultado` é o campo da vista que ninguém valida — e ele MATA a tela do convidado ✔ feito
+
+**O mais grave da fila, e o único que deixa o jogador sem saída.**
+
+`vistaDoFio` (`150-rede.js:525`) valida `mao`, `naMao`, `placar`, `cadeiras`, `acoes`, `vez` e
+`cadeira` — e **não valida `resultado` nem `fase`**. Mas é `fase` que decide qual tela
+desenhar, e `mostrarFimDeMao` desreferencia `vista.resultado` **direto** (`const r =
+vista.resultado`, e depois `vista.cadeiras[r.vencedor].nome`).
+
+Medido, nos **dois** jogos:
+
+```
+═══ DOMINO ═══
+  resultado AUSENTE      vistaDoFio ACEITA   ‼ TypeError: … (reading 'motivo')
+  resultado = null       vistaDoFio ACEITA   ‼ TypeError: … (reading 'motivo')
+  resultado = {}         vistaDoFio ACEITA   ‼ TypeError: … (reading 'nome')
+  time fora da faixa     vistaDoFio ACEITA   ‼ TypeError: … (reading 'nome')
+  time = "constructor"   vistaDoFio ACEITA   ‼ TypeError: … (reading 'nome')
+═══ TRUCO ═══
+  resultado AUSENTE      vistaDoFio ACEITA   ‼ TypeError: … (reading 'vazas')
+  resultado = null       vistaDoFio ACEITA   ‼ TypeError: … (reading 'vazas')
+  resultado = {}         vistaDoFio ACEITA   ‼ TypeError: … (reading 'nome')
+  time fora da faixa     vistaDoFio ACEITA   ‼ TypeError: … (reading 'nome')
+```
+
+A exceção sobe de dentro do `linkAnfitriao.on('data')`: a tela do convidado **para**, e ele
+não tem botão nenhum. É o C5 da Fila 11 (tela preta por dado guardado) **na outra porta de
+entrada** — o fio em vez do `localStorage`.
+
+**É O IRMÃO ESQUECIDO PELA TERCEIRA VEZ, e a linhagem está escrita neste arquivo:** o
+`partidaGuardada` passou a cobrar `regras` *"porque é o campo cuja falta dava tela preta"*
+(v4.5); o `vistaDoFio` foi consertado na v4.7 depois de recusar toda vista de truco; e
+**`resultado` — o campo cuja falta dá tela morta no convidado — nunca entrou em nenhum dos
+dois**. Este arquivo já manda perguntar *"quem é o irmão desta linha, e ele tem a mesma
+guarda?"*, e a resposta foi não outra vez.
+
+**Como eu tropecei nele:** por acidente, **duas vezes**, montando sondas de outra frente. Uma
+vista de fim de mão com o campo torto é fácil de produzir sem querer — o que diz alguma coisa
+sobre a chance de ela aparecer por bug em vez de por má-fé.
+
+**Ao consertar, o lugar é discutível e vale pensar**: `vistaDoFio` na casa (mas `resultado` é
+do jogo), o `vistaValida` de cada jogo (mas aí são dois lugares), ou tornar `mostrarFimDeMao`
+defensivo (mas guarda que recusa em silêncio esconde defeito). **A Fila 11 já ensinou que
+guarda no lugar errado é guarda que não guarda.**
+
+### C4 · O convidado recebe `log` e `chat` sem teto de tamanho ✔ feito
+
+`150-rede.js:844-846`, três linhas seguidas, e **só a primeira tem guarda**:
+
+```js
+if (m.t === 'erro') avisar(String(m.txt || '').slice(0, TAMANHO_FALA));   // ← corta em 160
+if (m.t === 'log')  anotar(m.txt);                                        // ← nada
+if (m.t === 'chat') dizer(vistaAtual, m.de, m.canal, m.txt, m.nome);      // ← nada
+```
+
+Medido, com uma mensagem de 4 MB:
+
+```
+--- erro (tem slice) ---   aviso na tela: 160 caracteres
+--- log  ---               linhas na conversa: 1  tamanhos: [ 4000000 ]
+--- chat ---               linhas na conversa: 1  tamanhos: [ 4000014 ]
+--- 45 mensagens de 100 KB ---
+  linhas guardadas: 40 (o teto é 40)   soma no DOM: 4.000.000 caracteres
+```
+
+**O teto de 40 é em LINHAS, não em bytes** — 40 × 100 KB são 4 MB vivos no DOM ao mesmo tempo.
+
+É o **C4 da Fila 11 espelhado**: lá era o convidado castigando o anfitrião pelo `{t:'nome'}`,
+e o conserto foi copiar os dois guardas que o `receberChat` já tinha dez linhas abaixo. Aqui é
+o anfitrião castigando o convidado, e o guarda a copiar está **uma linha acima**.
+
+**O modelo de ameaça é o mesmo que a Fila 11 usou no C6 e aceitou:** qualquer aba pode ser
+anfitriã, logo um anfitrião modificado é entrada de fora. Via chat legítimo não passa — o
+anfitrião corta em 160 antes de espalhar (`:1045`).
+
+### C5 · O truco não trata gesto interrompido pelo sistema ✔ feito
+
+Medido — inventário de ouvintes na carga:
+
+```
+blur                       1     ← o projeto inteiro tem UM, e é do dominó
+document:visibilitychange  2
+dominó tem visibilitychange/blur? SIM
+truco  tem visibilitychange/blur? ‼ NÃO
+```
+
+O dominó solta a mira por **três** portas (`pointerup`, `pointercancel` e `desistirDoGesto`,
+que o `visibilitychange`/`blur` chamam); o truco só pelas duas primeiras. E o item 6 da Fila 5
+já escreveu por que isso não basta: ***"O `pointerup` é um evento que o navegador PROMETE e
+não garante. Dedo saindo pela beirada, troca de app, gaveta de notificação: nenhum deles manda
+`pointerup`."***
+
+**Sintoma:** no celular, tocar numa carta e sair para outro aplicativo — volta com a carta
+erguida. **Não trava** (o toque seguinte corrige), porque o truco não tem arrasto para ficar
+preso; o comentário do próprio `560-interacao.js` descreve exatamente este defeito ao explicar
+por que a mira precisa ser solta, e cobre um caso a menos do que descreve.
+
+### C6 · O service worker apaga o cache de VIZINHOS na mesma origem ✔ feito
+
+`src/sw.js:39` — `ns.filter(n => n !== CACHE)`.
+
+**`CacheStorage` é escopado por ORIGEM, não pelo scope do worker.** O `activate` do domino-bar
+apaga todo cache de `ricardocolombo01.github.io` que não seja o dele. Medido:
+
+```
+APAGADOS pelo activate do domino-bar:
+  dominobar-velho          nosso (certo)
+  userpage-v1              ‼ NÃO É NOSSO
+  workbox-precache-outro   ‼ NÃO É NOSSO
+
+filtro de hoje:  ns.filter(n => n !== CACHE)
+filtro correto:  ns.filter(n => n.startsWith('dominobar-') && n !== CACHE)
+```
+
+**Custa ZERO hoje** — não existe outro aplicativo naquela origem. **E fica caro exatamente
+quando a Fase 5 acontecer**, que é o único item aberto do projeto: ela cria
+`ricardocolombo01.github.io` como user page, na mesma origem. Um vizinho com service worker
+próprio passaria a ser esvaziado toda vez que alguém abrisse o dominó — e o sintoma apareceria
+no OUTRO projeto, que é o pior lugar para procurar.
+
+**É o achado mais barato da fila e o de melhor momento:** chegou antes do problema.
+
+### C7 · Índice cravado numa lista que o jogo DECLARA — dentro da suíte ✔ feito
+
+`tests/test-truco.mjs:1019-1025` lê `meds[0]`, `meds[1]` e `meds[2]` por POSIÇÃO. E o pior é
+`meds[1].val === 1`, que **não confere rótulo nenhum**.
+
+Este arquivo já registra a armadilha e o dia em que ela cobrou: *"as asserções dos medidores
+liam `meds[2]`, e no dia em que o painel da vira saiu o `[2]` virou outro painel: uma reprovou
+com o jogo certo e a outra MATOU o processo"*. A lição foi aplicada em **três** lugares do
+mesmo arquivo (`:380`, `:399`, `:1130` leem por `.find(m => m.rot === …)`) e **esquecida
+neste**. O irmão esquecido, agora dentro da própria suíte.
+
+---
+
+### As SUSPEITAS — registradas COMO suspeita
+
+| # | onde | o quê |
+|---|---|---|
+| S1 | `50-truco/`, `30-domino/`, `40-cartas/` | **nenhum arquivo de jogo usa `Object.hasOwn`** — os 16 usos estão todos em `10-casa/`. Onde isso alcança dado de fora: `NOME_DA_APOSTA[a.trucar]` (`575-encaixes.js:80,97`), com `acoes` vindo do fio. O `\|\| a.trucar` salva quase tudo; `'constructor'` interpola a função. **Cosmético, e exige anfitrião hostil** — mas é o padrão da casa que os jogos não herdaram |
+| S2 | `150-rede.js:331` | `donoDaCadeira` restaurado exige `Number.isInteger` e **não a faixa**. É a S6 da Fila 11, **mantida sem mudança** — os leitores continuam limitados por `MESA.n` |
+| S3 | `pagina.html:63`, `estilo.css:205`, `130-hud.js:192` | `class="pecaEscolhida"` e `class="pecas"` são vocabulário de DOMINÓ no HTML e no CSS da CASA, e hoje a caixa mostra carta também. Não muda comportamento; é o quarto degrau da fronteira (o que o AST não vê), e foi ali que doze linhas de regra sobreviveram à v4.0 |
+| S4 | `tests/harness.mjs` | **`document.activeElement` não existe no dublê.** Os dois jogos o usam para largar o botão de confirmar (`moverCursorNoTruco`, `141-abas.js:89`), e o jogo guarda com `if (foco && …)` — então o ramo **nunca roda em Node**. É o conserto do *"Enter joga a carta ANTIGA"* sem uma asserção |
+| **S5** | `tests/harness.mjs` | **O RAYCAST DO THREE NÃO ACHA NADA EM NODE**, e esta é a maior das quatro. Descoberta ao escrever a cena do C5: projetando a carta para NDC (valores dentro do quadro) e disparando `pointermove`, `apontada` fica `null` — **e vale igual para o dominó**, logo é o dublê. Consequência: *nenhuma asserção de Node jamais mirou uma peça ou uma carta com o ponteiro*; tudo entra pelo teclado ou chamando `selecionarPeca` direto. É a 12ª vez da série, e de espécie nova — o dublê não engole método, ele não RASTREIA |
+
+### O que foi investigado e NÃO é defeito — não refaça
+
+**Duas destas desmentiram uma leitura minha desta mesma sessão**, e ficam registradas por isso:
+
+- **`partidaDoTrucoValida` faz `p.maos.every(…)` sem `Array.isArray(p.maos)` antes** — parecia
+  o C5 refeito por dentro do próprio conserto. **Não é:** `partidaGuardada` (`160-loop.js:348`)
+  já cobra `Array.isArray` nos três continentes **e** `p.maos.every(Array.isArray)` antes de
+  chamar o encaixe do jogo. A ordem está certa.
+- **O `<title>Dominó de Bar` no HTML da casa** — parecia vazamento de jogo na casa de jogos.
+  **Não é:** o `manifest.webmanifest` diz `"name": "Dominó de Bar"` e `"short_name": "Dominó"`,
+  e só a `description` virou "casa de jogos" (v4.5). O título é **a marca**, coerente com o
+  manifest e com o domínio. Mexer nele seria trocar a identidade do aplicativo instalado.
+- **O anfitrião com o TRUCO na mesa aguenta toda mensagem malformada.** Onze intenções tortas
+  (`jogar` sem carta, carta `null`/`[]`/`[99,99]`/`'constructor'`/`{length:2}`, ação
+  `'constructor'` e `'__proto__'`, `acao` ausente): **nenhuma exceção, e a partida não mudou**.
+  A guarda mora em `cartaValida` dentro de `jogarCarta` (`520-partida.js:155`), e ela basta —
+  o truco não ter `jogadaDoFio` no registro é deliberado e está certo.
+- **O C6 da Fila 11 não reabriu nos encaixes novos.** `placar`, `aposta` e `manilha`
+  envenenados com `<img src=x onerror=…>` saem **escapados** pelos medidores e pelo placar.
+- **`vistaDoFio` com o truco funciona** — a vista boa passa, e `sem vira`/`vira lixo`/`sem
+  manilha` são aceitas **de propósito** (a mão de 11 não tem vira) sem o HUD estourar. A
+  frouxidão deliberada da v4.7 continua certa pelo motivo escrito.
+- **Nada cresce sem teto.** Partida inteira jogada pela casa: o `JSON` de `P` vai de 723→824
+  no dominó e 422→739 no truco. **Os dois `P` sobrevivem a `JSON` sem perder campo** — não há
+  um segundo `Set` como o `P.faltaNo`. O `P.log` da S4 da Fila 11 não existe mais.
+- **`P.vazas.push({ jogadas: P.mesa })` NÃO é aliasing armado**: `fecharVaza` faz `P.mesa = []`
+  (reatribui). Continua frágil por construção — quem trocar por `P.mesa.length = 0` esvazia as
+  vazas guardadas em silêncio —, mas hoje está correto.
+- **Os três `setTimeout` da rede têm as DUAS camadas** (handle cancelado + guarda de geração no
+  disparo), e o de `160-loop.js:271` tem a guarda. O conserto da Fila 11 está de pé.
+- **As flags do truco têm as mesmas guardas do dominó.** `atualizarPonteiroDoTruco` clampa o
+  cursor de teclado a cada quadro, `moverCursorNoTruco` e `escolherCartaPeloTeclado` conferem
+  faixa, e `escolhidaNoTruco` se auto-limpa na reconciliação (`550-mesa.js:168`).
+- **Todo ouvinte global de jogo tem `estaNaMesa`** — os que chamam função nomeada têm a guarda
+  dentro dela (`soltarMira`, `soltarArrasto`, `desistirDoGesto`, `soltarMiraDoTruco`).
+- **A fronteira casa/jogo está limpa nas cinco perguntas menos a quarta** (ver S3): o
+  `npm run acoplamento` dá 8/8, a casa lê 13 campos de `vista` e **nenhum é de um jogo só**,
+  ela só confere que `acoes` é objeto, e **não há variável CSS usada e não declarada**.
+
+### Os NÚMEROS que envelheceram — medidos em 11/08/2026
+
+| | o que este arquivo dizia | o medido | |
+|---|---|---|---|
+| `package.json` | — | **`4.7.1`**, com as tags `v4.8.0` e `v4.8.1` já saídas | ✔ **4.9.0** |
+| linhas de `src/` | 9.648 (10/08) | **9.768** | ✔ corrigido |
+| `index.html` | 496.052 | **520.326** (local **e** servido, byte a byte) | ✔ corrigido |
+| orçamento offline | 1.080.609 | **1.283.872** — e o `index.html` já é **41%** do download | ✔ corrigido |
+
+`tests/.gerado/` tem **50 arquivos, 45 deles detritos** de ondas fechadas (`sonda-var5.mjs`,
+`a-hud.patch`, `m3-de.txt`, `telas-metade1.txt`). **Está no `.gitignore`**, então não é sujeira
+versionada — é desordem local, e a pasta que a reorganização criou para `tests/` ficar limpa
+deixou de estar ela mesma.
+
+### O que os CONSERTOS ensinaram — e uma mutação sobreviveu
+
+**A mutação do C2 SOBREVIVEU na primeira tentativa, e ela é a lição da onda.** As quatro
+asserções que eu tinha escrito mediam as duas FUNÇÕES (`nomeDoTime` escapa uma vez,
+`nomeDoTimeTexto` não escapa) — e trocando de volta `nomeDoTimeTexto` por `nomeDoTime` **na
+linha do campeão**, a suíte inteira ficou verde. Testar as peças não é testar a montagem: o
+defeito nunca esteve nas funções, esteve em **qual delas a linha chama**. O conserto foi uma
+asserção que monta a tela de fim de partida e lê `el('campeao').textContent`; refeita, a
+mutação morreu. **Sem o mutador, o C2 teria ido para a `main` "com asserção" e sem proteção.**
+
+**O `nomeDaCadeira` nasceu aqui, e ele é a resposta ao C3 que o `vistaDoFio` não podia dar.**
+A validação do fio confere que `resultado` EXISTE — cobrar a forma dele ali seria a casa
+sabendo o formato de um jogo, que é justamente o acoplamento que a v4.5 passou desmontando.
+Quem confere o índice é o HUD, na hora de ler o nome. **São duas camadas, e elas falham de
+jeitos diferentes:** `vistaDoFio` barra o continente ausente, `nomeDaCadeira` barra o índice
+torto dentro de um continente válido. Mutar uma sozinha deixa a irmã segurando parte dos
+casos — é o par `clearTimeout`/geração de novo, e por isso está escrito ao lado da asserção.
+
+**O `sobrouNaMao` do dominó entrou no conserto do C3 sem estar na lista.** Ele faz
+`r.somas.map` direto, e um `resultado` presente mas vazio (`{}`) passa pelo `vistaDoFio` e
+estoura ali. Foi a asserção que o achou, não a leitura — a terceira metade de um defeito que
+eu tinha mapeado em duas.
+
+**E O HARNESS FICOU PARA TRÁS PELA DÉCIMA SEGUNDA VEZ — mas de um jeito novo: ele não engole
+método nenhum, ele não RASTREIA.** A cena do C5 tentou mirar com o dedo projetando a carta
+para NDC e disparando `pointermove`; `apontada` fica `null`. **Vale igual para o DOMINÓ**,
+o que prova que é o dublê e não o jogo: **o raycast do Three não acha nada no harness de
+Node.** Consequência real, e maior que esta cena: *nenhuma asserção de Node jamais mirou uma
+peça ou uma carta com o ponteiro* — tudo o que existe entra pelo teclado ou chamando
+`selecionarPeca` direto. A cena do C5 mede o `ponteiroDoTruco` (o outro efeito de
+`largarMira`), com o motivo escrito ao lado; consertar o raycast é trabalho de outra onda, e
+está anotado como a primeira lacuna da próxima fila.
+
+**A cena do C5 errou de caminho antes de acertar, e o erro é instrutivo:** a primeira versão
+mirava pelo TECLADO, e reprovou — porque `atualizarPonteiro` repõe o cursor de teclado a cada
+quadro, **e isso está certo**. Quem joga de teclado não perde o cursor por trocar de
+aplicativo; o que o sistema interrompe é o gesto do dedo. *Asserção vermelha nem sempre acusa
+o código* — a Fila 11 já escrevia isso, e aqui ela acusou a cena.
+
+**A mutação do C7 é de outra espécie, e é a única honesta para ele:** não se muta o teste, se
+**muta o JOGO** — um medidor novo inserido antes dos outros. Com índice cravado, as três
+asserções reprovariam com o jogo funcionando; lendo por rótulo, elas passam e sobra **uma só**
+falha, a legítima (o teto de 3 painéis, que existe porque o quarto não cabe em paisagem).
+**1 falha em vez de 4 é a medida do conserto.**
+
+### O que esta varredura ensinou sobre o método
+
+- **Reproduzir achou o que ler não acharia, e desmentiu duas leituras minhas** (as duas na
+  tabela acima). Continua valendo o que este arquivo repete desde a Fila 5: hipótese de leitura
+  é barata e por isso mesmo grudenta.
+- **A armadilha do dublê vazio pegou a MINHA sonda.** A primeira versão da sonda do truco no
+  fio montou a vista com `JOGOS.truco.motor.visaoDe(…)`, que **não existe no contrato**: `v`
+  saiu `{}` e **todos** os casos "recusaram", inclusive a vista boa — um relatório inteiro de
+  verdes falsos. Só apareceu porque a linha "vista boa passa? **false**" não fazia sentido.
+  **Sonda tem de medir a si mesma:** a versão que vale tira a vista do que TRAFEGOU
+  (`conn.enviadas`), não de uma chamada minha ao motor.
+- **Eu escrevi um número que não medi**, no plano desta própria sessão (`index.html` = 511.961;
+  o certo é 520.326). É exatamente o vício que este arquivo combate — *rode o teste, não leia o
+  número daqui* — e ele reincide até em quem está escrevendo a regra.
+- **Cinco dos sete confirmados são o mesmo padrão**: uma guarda existe e o vizinho não a tem.
+  C1/C2 (escape), C3 (validador), C4 (teto na linha de cima), C5 (o irmão em outro jogo), C7
+  (o irmão dentro da suíte). **Seis filas seguidas com o mesmo padrão não é azar: é o formato
+  deste código** — dois jogos, dois lados do fio, dois validadores, duas telas de fim. A
+  pergunta *"quem é o irmão desta linha?"* devia ser um passo de revisão, não uma lição.
 
 ---
 
