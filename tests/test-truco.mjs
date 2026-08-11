@@ -1428,6 +1428,42 @@ console.log('\no nome no fim de mão sai escapado UMA vez');
   console.log('  Zé & Cia aparece como Zé & Cia, e não como Zé &amp; Cia');
 }
 
+console.log('\no CONTEÚDO da vista de truco, e não só o continente');
+{
+  // O IRMÃO da cena do dominó (test-jogo). `vistaDoTrucoValida` cobrava
+  // `Array.isArray(v.mesa) && Array.isArray(v.vazas)` e deixava o conteúdo livre — três
+  // vistas passavam e matavam a tela em TRÊS superfícies (a mesa 3D, a dica e o HUD).
+  //
+  // O comentário daquele encaixe dizia que a mesa "já é defensiva em todo ponto de leitura".
+  // Ela é, contra o campo AUSENTE: `vista.vazas || []`. Contra `'xx'` o `||` entrega a
+  // string para o `.map`. **A razão estava escrita e mesmo assim errada** — foi preciso
+  // medir para ver a diferença entre ausente e presente-com-outro-tipo.
+  mod.abrirJogo('truco');
+  mod.MESA.n = 2;
+  mod.MESA.cadeiras[0].tipo = 'voce'; mod.MESA.cadeiras[1].tipo = 'bot';
+  mod.comecarLocal();
+  mod.publicar();
+  const boa = JSON.parse(JSON.stringify(mod.vistaAtual));
+  ok(mod.vistaDoFio(boa), 'montagem: a vista boa de truco já não passa — o resto não mediria nada');
+
+  for (const [rot, f] of [
+    ['vaza nula',        v => { v.vazas = [null]; }],
+    ['vaza número',      v => { v.vazas = [7]; }],
+    ['jogadas em texto', v => { v.vazas = [{ jogadas: 'xx', time: 0 }]; }],
+    ['carta na mesa nula', v => { v.mesa = [null]; }],
+  ]) {
+    const v = JSON.parse(JSON.stringify(boa)); f(v);
+    ok(!mod.vistaDoFio(v), `uma vista de truco com ${rot} passou — e ela mata a mesa, a dica e o hud`);
+  }
+  // E A FROUXIDÃO DELIBERADA CONTINUA: a mão de 11 não tem vira nem manilha, e `mesa` e
+  // `vazas` chegam VAZIOS. Cobrar o elemento não pode ter fechado essa porta — `[].every`
+  // é `true`, e esta asserção é o que prova que continua sendo.
+  const onze = JSON.parse(JSON.stringify(boa));
+  onze.mesa = []; onze.vazas = []; delete onze.vira; delete onze.manilha;
+  ok(mod.vistaDoFio(onze), 'a vista da mão de 11 foi recusada — o rigor novo fechou a porta que a v4.7 abriu');
+  console.log('  vaza torta não chega à mesa, e a mão de 11 continua passando');
+}
+
 console.log('\no gesto que o sistema interrompe');
 {
   // C5 · O `pointerup` é PROMETIDO e não garantido (item 6 da Fila 5): troca de aplicativo e

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ricardo Colombo</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    margin: 0; min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: #17120e; color: #f2e6d8;
+  }
+  main { max-width: 32rem; padding: 2rem; }
+  h1 { font-size: 1.5rem; margin: 0 0 .5rem; }
+  p { opacity: .78; }
+  a { color: #e8b96a; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Dominó de Bar</h1>
+  <p>Uma casa de jogos de boteco em 3D: dominó dupla-seis e truco paulista.
+     De 2 a 4 jogadores, gente e bot, na mesma tela ou pela internet.</p>
+  <p><a href="/domino-bar/">Jogar &rarr;</a></p>
+</main>
+<!--
+  ESTA PÁGINA EXISTE PARA O `.well-known/` PODER EXISTIR.
+
+  O TWA exige `assetlinks.json` na RAIZ do domínio, e a raiz de `ricardocolombo01.github.io`
+  é esta user page — o jogo mora em `/domino-bar/`, que é uma project page.
+
+  E o `.nojekyll` ao lado NÃO É OPCIONAL: sem ele o Jekyll ignora em silêncio toda pasta que
+  começa com ponto, o `.well-known/` some, e o sintoma é um 404 que parece erro de caminho.
+-->
+</body>
+</html>

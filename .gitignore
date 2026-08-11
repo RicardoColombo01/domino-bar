@@ -1,3 +1,15 @@
 node_modules/
 tests/.gerado/
 .build-check.mjs
+
+# Chave de assinatura do aplicativo. Ela é a identidade PERMANENTE do app: quem a tem
+# publica atualização em seu nome, e quem a perde não consegue mais atualizar o que já
+# está publicado. Nunca vai para o repositório, nem em branch de trabalho.
+*.keystore
+*.jks
+
+# O que o Bubblewrap gera. O que se versiona é o twa-manifest.json, que é a receita.
+twa/app/
+twa/*.apk
+twa/*.aab
+twa/.gradle/
