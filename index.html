@@ -4159,9 +4159,32 @@ function avisar(txt, ms = 2200) {
   avisoTimer = setTimeout(() => HUD.aviso.classList.remove('vendo'), ms);
 }
 
+// O NOME DE UMA CADEIRA, COM GUARDA DE FAIXA. `time` vem do `resultado` da vista, e a vista
+// do convidado vem inteira do fio: um índice torto fazia `vista.cadeiras[9].nome` estourar
+// DENTRO do desenho do fim de mão, e a tela do convidado parava sem uma palavra (C3 da
+// Fila 12, reproduzido nos dois jogos). 'Alguém' é o mesmo padrão que o `dizer` já usa para
+// a fala de uma cadeira que a vista não conhece — recusar em silêncio aqui é o certo, porque
+// quem recusa a vista inteira é o `vistaDoFio`, uma camada acima.
+const nomeDaCadeira = (vista, i) => {
+  const c = vista.cadeiras && vista.cadeiras[i];
+  return c && c.nome != null ? String(c.nome) : 'Alguém';
+};
+
+// DUAS FUNÇÕES E NÃO UMA, e a separação é o conserto do C1 e do C2 da Fila 12 pela raiz.
+//
+// `nomeDoTime` devolvia HTML **escapado** e o nome dela não dizia isso, então os dois
+// consumidores que não montam marcação erraram de jeitos opostos: o fim de mão do truco a
+// reescapava (`Zé &amp;amp; Cia`) e a tela de campeão a jogava em `textContent` (`Zé &amp;
+// Cia` na tela). Com a versão de TEXTO explícita, cada consumidor pede o que precisa e o
+// escape volta a ser responsabilidade de quem monta o HTML — que é a regra do resto da casa.
+function nomeDoTimeTexto(vista, time) {
+  if (!vista.duplas) return nomeDaCadeira(vista, time);
+  return `${nomeDaCadeira(vista, time)} e ${nomeDaCadeira(vista, time + 2)}`;
+}
+
 function nomeDoTime(vista, time) {
-  if (!vista.duplas) return escapar(vista.cadeiras[time].nome);
-  return `${escapar(vista.cadeiras[time].nome)} e ${escapar(vista.cadeiras[time + 2].nome)}`;
+  if (!vista.duplas) return escapar(nomeDaCadeira(vista, time));
+  return `${escapar(nomeDaCadeira(vista, time))} e ${escapar(nomeDaCadeira(vista, time + 2))}`;
 }
 
 // O nome em DUAS PARTES, para a tela decidir quanto dele cabe. Em faixa estreita o CSS
@@ -4544,9 +4567,11 @@ function mostrarFimDePartida(vista) {
     if (campeao === fora || p > vista.placar[campeao]) campeao = t;
   });
   const meuTime = JOGO.motor.time(vista, vista.cadeira);
-  el('campeao').textContent = nomeDoTime(vista, campeao);
+  // `textContent`, logo o nome vai em TEXTO — não na versão escapada. Esta linha mostrava
+  // `Zé &amp; Cia` na tela mais visível do jogo (C2 da Fila 12).
+  el('campeao').textContent = nomeDoTimeTexto(vista, campeao);
   el('campeaoTitulo').textContent = fora >= 0
-    ? (fora === meuTime ? 'Você saiu da mesa' : `${vista.cadeiras[vista.desistiu].nome} saiu da mesa`)
+    ? (fora === meuTime ? 'Você saiu da mesa' : `${nomeDaCadeira(vista, vista.desistiu)} saiu da mesa`)
     : (campeao === meuTime ? 'Você ganhou a partida' : 'Fim de partida');
   // A tela dizia quem ganhou e não de quanto. Mesmo template do placar do topo.
   el('placarFinal').innerHTML = vista.placar
@@ -4709,12 +4734,17 @@ function confirmacaoDoDomino(vista, m) {
 // subtotal do time, porque quem pontua é a dupla.
 function sobrouNaMao(vista) {
   const r = vista.resultado;
+  // `somas` pode não vir: a vista do convidado é do fio, e o `vistaDoFio` cobra que
+  // `resultado` EXISTA, não a forma dele — cobrar a forma ali seria a casa sabendo o
+  // formato de um jogo (C3 da Fila 12). Quem conhece a forma é este arquivo, e a lista
+  // vazia é degradação graciosa: o painel fica sem linhas em vez de a tela morrer.
+  const somas = Array.isArray(r.somas) ? r.somas : [];
   if (!vista.duplas) {
-    return r.somas
-      .map((s, i) => `<div><span>${escapar(vista.cadeiras[i].nome)}</span><b>${escapar(s)}</b></div>`).join('');
+    return somas
+      .map((s, i) => `<div><span>${escapar(nomeDaCadeira(vista, i))}</span><b>${escapar(s)}</b></div>`).join('');
   }
   return (r.somasPorTime || []).map((total, t) => {
-    const parcelas = r.somas.filter((_, i) => timeDe(vista, i) === t).map(escapar).join(' + ');
+    const parcelas = somas.filter((_, i) => timeDe(vista, i) === t).map(escapar).join(' + ');
     return `<div><span>${nomeDoTime(vista, t)}<i>${parcelas}</i></span><b>${escapar(total)}</b></div>`;
   }).join('');
 }
@@ -4730,7 +4760,9 @@ function fimDeMaoDoDomino(vista) {
     quem: r.time === null
       ? 'Empate na contagem — ninguém marca.'
       : `${nomeDoTime(vista, r.time)} ${fazem} ${r.pontos === 1 ? '1 ponto' : `${r.pontos} pontos`}` +
-        (bateu ? '' : ` · mão mais leve com ${vista.cadeiras[r.vencedor].nome}`),
+        // `nomeDaCadeira` e não `vista.cadeiras[…].nome`: no convidado esta vista vem do fio,
+        // e um `vencedor` torto estourava aqui dentro do desenho (C3 da Fila 12).
+        (bateu ? '' : ` · mão mais leve com ${nomeDaCadeira(vista, r.vencedor)}`),
     detalhe: sobrouNaMao(vista),
   };
 }
@@ -6116,7 +6148,24 @@ const vistaDoFio = v => !!v && typeof v === 'object' &&
   !!v.acoes && typeof v.acoes === 'object' &&
   Number.isInteger(v.vez) && v.vez >= 0 && v.vez < v.cadeiras.length &&
   Number.isInteger(v.cadeira) && v.cadeira >= 0 && v.cadeira < v.cadeiras.length &&
+  // O `resultado`, e ele é do CONTINENTE COMUM apesar de a forma ser de cada jogo: é a
+  // `fase` que decide qual tela desenhar, e as duas telas de fim o desreferenciam DIRETO
+  // (`const r = vista.resultado`). Sem esta linha, uma vista de fim de mão sem `resultado`
+  // passava e a tela do convidado MORRIA com TypeError, sem uma palavra e sem botão — o
+  // C3 da Fila 12, reproduzido nos dois jogos.
+  //
+  // É O IRMÃO ESQUECIDO PELA TERCEIRA VEZ: o `partidaGuardada` passou a cobrar `regras`
+  // "porque é o campo cuja falta dava tela preta" (v4.5), esta função foi consertada na
+  // v4.7 — e `resultado`, que é o mesmo defeito pela porta do fio, ficou fora das duas.
+  // A guarda de FAIXA de quem está dentro dele é do `nomeDaCadeira`, no HUD: aqui se
+  // confere que o continente existe, lá que o índice aponta para alguém.
+  (!ehFaseDeFim(v.fase) || (!!v.resultado && typeof v.resultado === 'object')) &&
   (!JOGO.motor.vistaValida || JOGO.motor.vistaValida(v));
+
+// As duas fases em que a tela de fim é desenhada, e portanto em que `resultado` é lido.
+// Escrito aqui e não em cada jogo porque `fase` é da MESA: os dois jogos usam estes dois
+// nomes, e é o `160-loop.js` (a casa) que escolhe a tela a partir deles.
+const ehFaseDeFim = fase => fase === 'fimDeMao' || fase === 'fim';
 
 function trocarDeNome(cadeira, nome) {
   if (typeof nome !== 'string') return false;
@@ -6429,9 +6478,23 @@ function conectarNaMesa(codigo) {
       if (m.t === 'vista' && vistaDoFio(m.v)) { esconderTelas(); ligarMurmuro(); atualizarVista(m.v); }
       // A outra ponta do `avisarCadeira`: o convidado finalmente ouve por que a jogada
       // dele não foi. Mesmo canal do erro local, para não haver dois jeitos de recusar.
+      // OS TRÊS TÊM TETO, e até a Fila 12 só o primeiro tinha. `log` e `chat` entravam
+      // inteiros no DOM do convidado: medido, uma mensagem de 4 MB vira uma linha de 4 MB, e
+      // o teto de 40 da conversa é em LINHAS — 40 × 100 KB são 4 MB vivos ao mesmo tempo.
+      //
+      // É o C4 da Fila 11 ESPELHADO. Lá era o convidado castigando o anfitrião pelo
+      // `{t:'nome'}`, e o conserto foi copiar os dois guardas que o `receberChat` já tinha
+      // dez linhas abaixo; aqui é o anfitrião castigando o convidado, e o guarda a copiar
+      // estava uma linha acima. *Quem é o irmão desta linha, e ele tem a mesma guarda?*
+      //
+      // `TAMANHO_FALA` serve às três: a fala é escrita por gente e 160 é a regra do chat; a
+      // narração é gerada pelo jogo, e a maior que os dois produzem tem ~90 caracteres com
+      // nomes no limite dos 14 (medido). Folga de 70, e nenhuma constante nova.
       if (m.t === 'erro') avisar(String(m.txt || '').slice(0, TAMANHO_FALA));
-      if (m.t === 'log') anotar(m.txt);
-      if (m.t === 'chat') dizer(vistaAtual, m.de, m.canal, m.txt, m.nome);
+      if (m.t === 'log') anotar(String(m.txt || '').slice(0, TAMANHO_FALA));
+      if (m.t === 'chat') dizer(vistaAtual, m.de, m.canal,
+        String(m.txt || '').slice(0, TAMANHO_FALA),
+        String(m.nome || '').slice(0, TAMANHO_NOME));
     });
     linkAnfitriao.on('close', () => {
       // Quem fechou foi você. Sem esta linha, sair de propósito ainda levava um "A mesa
@@ -8844,6 +8907,21 @@ const soltarMiraDoTruco = ev => {
 addEventListener('pointerup', soltarMiraDoTruco);
 addEventListener('pointercancel', soltarMiraDoTruco);
 
+// E AS DUAS PORTAS QUE O NAVEGADOR NÃO PROMETE. O item 6 da Fila 5 já escreveu a regra: o
+// `pointerup` é PROMETIDO e não garantido — dedo saindo pela beirada, troca de aplicativo,
+// gaveta de notificação, nenhum deles o manda. Sem estas linhas, tocar numa carta e sair
+// para outro aplicativo devolvia a carta ERGUIDA (C5 da Fila 12).
+//
+// O dominó tem isto desde a v1.6.0 e o truco nasceu sem — o `blur` tinha UM ouvinte no
+// projeto inteiro. Lá o `desistirDoGesto` também encerra o arrasto; aqui não há arrasto para
+// encerrar (são três cartas), então soltar a mira é tudo o que há a fazer.
+function desistirDoGestoNoTruco() {
+  if (!estaNaMesa(JOGOS.truco)) return;
+  largarMiraDoTruco();
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) desistirDoGestoNoTruco(); });
+addEventListener('blur', desistirDoGestoNoTruco);
+
 function alvoSobNoTruco() {
   raioDoTruco.setFromCamera(ponteiroDoTruco, camera);
 
@@ -9148,8 +9226,13 @@ function fimDeMaoDoTruco(vista) {
   const fazem = vista.duplas ? 'fazem' : 'faz';
   // As três vazas, com quem levou cada uma. É a leitura da mão inteira num relance, e é o que
   // a mesa de verdade mostra sozinha com as cartas empilhadas na frente de quem ganhou.
+  //
+  // `nomeDoTimeTexto` e não `nomeDoTime`: quem monta a marcação aqui é esta linha, então é
+  // ela que escapa. Com a versão de HTML o nome saía escapado DUAS vezes — um jogador
+  // chamado `Zé & Cia` virava `Zé &amp;amp; Cia` na tela (C1 da Fila 12). O irmão em dominó
+  // (`137-encaixes.js`) sempre interpolou sem reescapar; era esta metade que estava fora.
   const detalhe = (r.vazas || []).map((t, i) => {
-    const quem = t === null ? 'melou' : nomeDoTime(vista, t);
+    const quem = t === null ? 'melou' : nomeDoTimeTexto(vista, t);
     return `<div><span>${i + 1}ª vaza</span><b>${escapar(quem)}</b></div>`;
   }).join('') +
     (r.vira ? `<div><span>vira</span><b>${escapar(nomeDaCarta(r.vira))}</b></div>` : '');

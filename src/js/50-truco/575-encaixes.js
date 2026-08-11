@@ -142,8 +142,13 @@ function fimDeMaoDoTruco(vista) {
   const fazem = vista.duplas ? 'fazem' : 'faz';
   // As três vazas, com quem levou cada uma. É a leitura da mão inteira num relance, e é o que
   // a mesa de verdade mostra sozinha com as cartas empilhadas na frente de quem ganhou.
+  //
+  // `nomeDoTimeTexto` e não `nomeDoTime`: quem monta a marcação aqui é esta linha, então é
+  // ela que escapa. Com a versão de HTML o nome saía escapado DUAS vezes — um jogador
+  // chamado `Zé & Cia` virava `Zé &amp;amp; Cia` na tela (C1 da Fila 12). O irmão em dominó
+  // (`137-encaixes.js`) sempre interpolou sem reescapar; era esta metade que estava fora.
   const detalhe = (r.vazas || []).map((t, i) => {
-    const quem = t === null ? 'melou' : nomeDoTime(vista, t);
+    const quem = t === null ? 'melou' : nomeDoTimeTexto(vista, t);
     return `<div><span>${i + 1}ª vaza</span><b>${escapar(quem)}</b></div>`;
   }).join('') +
     (r.vira ? `<div><span>vira</span><b>${escapar(nomeDaCarta(r.vira))}</b></div>` : '');

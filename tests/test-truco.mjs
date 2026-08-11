@@ -5,7 +5,7 @@
 // `ORDEM_TRUCO` aprovaria qualquer ordem. Aqui elas estão em NOME de carta ("3 de paus"), que
 // é como um jogador falaria — se o teste e o código discordarem, quem estiver errado é
 // visível a olho nu.
-import { installStubs, seedRandom, buildModule, correrTimers, els } from './harness.mjs';
+import { installStubs, seedRandom, buildModule, correrTimers, els, frames, fire } from './harness.mjs';
 
 installStubs();
 seedRandom(11);
@@ -32,6 +32,9 @@ const mod = await import(buildModule([
   // Quem está ganhando a vaza e quem ganhou — os dois pedidos do Ricardo de 07/08.
   'notaDaVezNoTruco', 'narrarVaza', 'placarDeVazas', 'timeDaVistaNoTruco',
   'temPreviaDoTruco', 'dicaDoTrucoParaACasa', 'porQueNaoDaNoTruco', 'HUD',
+  // Fila 12: projetar a carta para NDC é o único jeito de mirar com o DEDO de verdade —
+  // e é o dedo, não o teclado, que o sistema interrompe.
+  'ponteiroDoTruco',
 ]));
 
 let falhas = 0, n = 0;
@@ -1014,15 +1017,23 @@ console.log('\na casa senta na mesa de truco');
     `adversário. Quem responde é \`node tests/test-telas.mjs 640x360 duplas\`, não esta suíte`);
   ok(meds.every(m => m.rot && m.val !== undefined && m.val !== null),
     'algum medidor veio sem rótulo ou sem valor — o #topo mostraria um painel em branco');
+  // PELO RÓTULO, NUNCA PELA POSIÇÃO. Estas três liam `meds[0]`, `meds[1]` e `meds[2]`, e
+  // `meds[1].val === 1` não conferia rótulo nenhum: no dia em que o jogo inserisse um painel
+  // antes, ela passaria a medir OUTRO medidor calada. Este arquivo já pagou exatamente isso
+  // quando o painel da vira saiu e o `[2]` virou outro painel — uma asserção reprovou com o
+  // jogo certo e a outra matou o processo. A lição foi aplicada em três pontos deste mesmo
+  // arquivo (`vazasDe`, e as duas de `Vale`) e esquecida aqui (C7 da Fila 12).
+  const med = rot => meds.find(m => m.rot === rot);
   // A MANILHA É A QUE NÃO PODE FALTAR: ela não se deduz da mesa, e sem ela o jogador não sabe
   // o que tem na mão. A VIRA saiu daqui em 07/08 — ela está desenhada no meio da mesa.
-  ok(meds[0].rot === 'Manilha' && mod.VALORES.includes(String(meds[0].val)),
-    `a manilha saiu como "${meds[0].val}", que não é um valor de carta`);
-  ok(meds[1].val === 1, `a mão vale ${meds[1].val} antes de qualquer aposta, e devia valer 1`);
+  ok(med('Manilha') && mod.VALORES.includes(String(med('Manilha').val)),
+    `a manilha saiu como "${(med('Manilha') || {}).val}", que não é um valor de carta`);
+  ok(med('Vale') && med('Vale').val === 1,
+    `a mão vale ${(med('Vale') || {}).val} antes de qualquer aposta, e devia valer 1`);
   // O PLACAR DE VAZAS começa em 0×0 e é do SEU ponto de vista — mesma convenção do placar da
   // partida. Ele existe porque ler a pilha na mesa é fazer a conta ao contrário.
-  ok(meds[2] && meds[2].rot === 'Vazas' && meds[2].val === '0×0',
-    `o placar de vazas começou em "${meds[2] && meds[2].val}", e antes da primeira vaza é 0×0`);
+  ok(med('Vazas') && med('Vazas').val === '0×0',
+    `o placar de vazas começou em "${(med('Vazas') || {}).val}", e antes da primeira vaza é 0×0`);
   // E A VIRA CONTINUA VISÍVEL, só que na MESA e não no painel — sem isto o conserto acima
   // teria escondido a única carta pública do baralho e ninguém notaria.
   ok(mod.naMesaDoTruco.has('vira'), 'a vira saiu do painel E não está desenhada na mesa');
@@ -1390,6 +1401,86 @@ console.log('\na dica e o porquê da recusa');
   const vOnze = Object.assign({}, mod.vistaAtual, { pedido: null, fase: 'onze' });
   ok(/11/.test(mod.porQueNaoDaNoTruco(vOnze)), 'na mão de 11 o jogo não explica o que falta');
   ok(mod.porQueNaoDaNoTruco(null).length > 0, 'sem vista, a recusa fica muda');
+}
+
+// ─── FILA 12 ────────────────────────────────────────────────────────────────
+console.log('\no nome no fim de mão sai escapado UMA vez');
+{
+  // C1 · `nomeDoTime` devolve HTML já escapado, e este encaixe o passava por `escapar()` de
+  // novo: um jogador `Zé & Cia` virava `Zé &amp;amp; Cia` na tela. O irmão em dominó sempre
+  // interpolou sem reescapar — era esta metade que estava fora.
+  //
+  // As entidades estão escritas À MÃO de propósito. Comparar com uma segunda chamada de
+  // `escapar` seria comparar a função com ela mesma e ficaria verde com o defeito de pé.
+  const vista = {
+    duplas: false, cadeira: 0, vez: 0, fase: 'fimDeMao',
+    cadeiras: [{ nome: 'Zé & Cia', tipo: 'voce' }, { nome: 'Bot', tipo: 'bot' }],
+    resultado: { motivo: 'vazas', time: 0, pontos: 3, vazas: [0, 0], vira: [0, 1] },
+  };
+  const f = mod.fimDeMaoDoTruco(vista);
+  ok(f.detalhe.includes('Zé &amp; Cia'),
+    `o nome no detalhe saiu ${JSON.stringify(String(f.detalhe).slice(0, 60))} — devia levar UM escape`);
+  ok(!f.detalhe.includes('&amp;amp;'),
+    'o detalhe do fim de mão escapou o nome DUAS vezes — o jogador vê a entidade crua');
+  // Guarda de montagem: sem ela, um `detalhe` vazio passaria na negativa acima de graça.
+  ok(f.detalhe.length > 0 && /vaza/.test(f.detalhe),
+    'montagem: o detalhe não trouxe as vazas, e as duas asserções acima não mediriam nada');
+  console.log('  Zé & Cia aparece como Zé & Cia, e não como Zé &amp; Cia');
+}
+
+console.log('\no gesto que o sistema interrompe');
+{
+  // C5 · O `pointerup` é PROMETIDO e não garantido (item 6 da Fila 5): troca de aplicativo e
+  // gaveta de notificação não o mandam. O dominó trata isso desde a v1.6.0 com
+  // `visibilitychange`/`blur`; o truco nasceu sem, e a carta ficava erguida.
+  //
+  // Mede-se pelo `apontada` da PONTE, que é o mesmo campo que o realce consome — e não pela
+  // existência do ouvinte, que provaria só que alguém chamou `addEventListener`.
+  mod.abrirJogo('truco');
+  mod.MESA.n = 2;
+  mod.MESA.cadeiras[0].tipo = 'voce'; mod.MESA.cadeiras[1].tipo = 'bot';
+  mod.comecarLocal();
+  frames(3);
+
+  // MEDE-SE O PONTEIRO, E NÃO O `apontada`. Duas descobertas obrigaram a isso, e as duas
+  // ficam escritas porque a próxima pessoa tentaria os mesmos dois caminhos:
+  //
+  // 1. PELO TECLADO NÃO SERVE. Com o cursor de teclado ativo, `atualizarPonteiroDoTruco`
+  //    repõe o realce a cada quadro — e isso está CERTO: quem joga de teclado não perde o
+  //    cursor por trocar de aplicativo. O que o sistema interrompe é o GESTO do dedo.
+  // 2. PELO DEDO NÃO DÁ EM NODE. O raycast não acha nada no harness — conferido projetando
+  //    a carta para NDC (valores dentro do quadro) e disparando `pointermove`: `apontada`
+  //    fica `null`. **Vale igual para o DOMINÓ**, logo é o dublê e não o jogo. Está anotado
+  //    como lacuna do harness na Fila 12; consertá-lo é trabalho de outra onda.
+  //
+  // O que sobra é o outro efeito de `largarMiraDoTruco`: ele joga a mira para fora do
+  // quadro (9, 9). Isso prova o que esta cena existe para provar — que o ouvinte está
+  // REGISTRADO e chama quem devia —, sem depender do raycast.
+  mod.ponteiroDoTruco.set(0, 0);
+  ok(mod.ponteiroDoTruco.x === 0, 'montagem: não consegui pôr a mira dentro do quadro');
+
+  document.hidden = true;
+  fire('visibilitychange', {});
+  document.hidden = false;
+  ok(mod.ponteiroDoTruco.x === 9 && mod.ponteiroDoTruco.y === 9,
+    `o truco voltou de outro aplicativo com a mira ainda na tela (${mod.ponteiroDoTruco.x}, ` +
+    `${mod.ponteiroDoTruco.y}) — falta o irmão do desistirDoGesto, e a carta fica ERGUIDA`);
+
+  // E o `blur`, que é a outra porta: aba perdendo o foco sem ficar escondida.
+  mod.ponteiroDoTruco.set(0, 0);
+  fire('blur', {});
+  ok(mod.ponteiroDoTruco.x === 9, 'o blur não solta a mira do truco');
+
+  // O CONTROLE: com o dominó na mesa, o ouvinte do truco não pode agir. Sem esta asserção,
+  // um handler sem `estaNaMesa` passaria nas duas de cima — e ouvinte de jogo agindo fora da
+  // sua mesa é o defeito que a v4.5 pagou com o toque na carta sendo comido pelo dominó.
+  mod.abrirJogo('domino');
+  mod.ponteiroDoTruco.set(0, 0);
+  fire('blur', {});
+  ok(mod.ponteiroDoTruco.x === 0,
+    'o ouvinte do truco mexeu na mira com o DOMINÓ na mesa — falta a guarda estaNaMesa');
+  mod.abrirJogo('truco');
+  console.log('  sair para outro aplicativo solta a mira, como no dominó — e só com o truco na mesa');
 }
 
 console.log(`\n${falhas ? falhas + ' falha(s)' : 'tudo certo'} — ${n} asserções`);

@@ -41,6 +41,21 @@ const soltarMiraDoTruco = ev => {
 addEventListener('pointerup', soltarMiraDoTruco);
 addEventListener('pointercancel', soltarMiraDoTruco);
 
+// E AS DUAS PORTAS QUE O NAVEGADOR NÃO PROMETE. O item 6 da Fila 5 já escreveu a regra: o
+// `pointerup` é PROMETIDO e não garantido — dedo saindo pela beirada, troca de aplicativo,
+// gaveta de notificação, nenhum deles o manda. Sem estas linhas, tocar numa carta e sair
+// para outro aplicativo devolvia a carta ERGUIDA (C5 da Fila 12).
+//
+// O dominó tem isto desde a v1.6.0 e o truco nasceu sem — o `blur` tinha UM ouvinte no
+// projeto inteiro. Lá o `desistirDoGesto` também encerra o arrasto; aqui não há arrasto para
+// encerrar (são três cartas), então soltar a mira é tudo o que há a fazer.
+function desistirDoGestoNoTruco() {
+  if (!estaNaMesa(JOGOS.truco)) return;
+  largarMiraDoTruco();
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) desistirDoGestoNoTruco(); });
+addEventListener('blur', desistirDoGestoNoTruco);
+
 function alvoSobNoTruco() {
   raioDoTruco.setFromCamera(ponteiroDoTruco, camera);
 

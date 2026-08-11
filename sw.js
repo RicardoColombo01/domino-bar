@@ -14,7 +14,7 @@
 // preso numa versão antiga para sempre, e nem limpar a aba resolve. Amarrando o nome ao
 // conteúdo, publicar uma correção JÁ é publicar um cache novo. Esquecer de bumpar deixa de
 // ser possível.
-const VERSAO = 'a72ce27eec71';
+const VERSAO = '27648ab61191';
 const CACHE = `dominobar-${VERSAO}`;
 
 // Os arquivos que são NOSSOS. O CSS e o JS não estão aqui porque não existem como arquivo:
@@ -34,9 +34,19 @@ self.addEventListener('install', e => {
 
 // Cache velho é lixo que ocupa cota, e cota cheia faz `guardar()` falhar calado — que é
 // exatamente o bug da cadeira errada, uma camada abaixo. Some tudo que não seja esta versão.
+//
+// SÓ O QUE É NOSSO, e o prefixo não é zelo. `CacheStorage` é escopado por ORIGEM, não pelo
+// scope do worker: `caches.keys()` devolve os caches de TODO projeto Pages de
+// `ricardocolombo01.github.io`, e o filtro antigo (`n !== CACHE`) apagava os dos vizinhos.
+// Medido: `userpage-v1` e `workbox-precache-outro` iam junto.
+//
+// Custava zero enquanto não houvesse vizinho — e a Fase 5 cria um, porque a user page que o
+// TWA exige nasce exatamente nessa origem. O sintoma apareceria no OUTRO projeto, esvaziado
+// toda vez que alguém abrisse o dominó, que é o pior lugar do mundo para procurar a causa.
+const NOSSO_CACHE = /^dominobar-/;
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()
-    .then(ns => Promise.all(ns.filter(n => n !== CACHE).map(n => caches.delete(n))))
+    .then(ns => Promise.all(ns.filter(n => NOSSO_CACHE.test(n) && n !== CACHE).map(n => caches.delete(n))))
     .then(() => self.clients.claim()));
 });
 
