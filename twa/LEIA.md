@@ -73,17 +73,73 @@ Guarde em dois lugares que não sejam esta máquina.
 Copie o valor (`AA:BB:CC:…`, 32 pares) para dentro de
 `twa/user-page/.well-known/assetlinks.json`, no lugar do `__SHA256__`, e publique a user page.
 
-### 3. Bubblewrap
+### 3. Bubblewrap — ⚑ O AMBIENTE JÁ ESTÁ MONTADO NESTA MÁQUINA
+
+**Você não precisa baixar nada.** Isto ficou pronto em 11/08/2026, e é o que costuma custar
+a tarde inteira:
+
+| | onde |
+|---|---|
+| `@bubblewrap/cli` | instalado global (`npm i -g`) |
+| JDK 17 | `~/.bubblewrap/jdk/jdk-17.0.11+9` — baixado pelo próprio Bubblewrap |
+| Android SDK | `~/android-sdk` — plataforma 34, build-tools 34.0.0, platform-tools |
+| licenças do SDK | **aceitas** |
+| `~/.bubblewrap/config.json` | já aponta para os dois |
+| `twa/twa-manifest.json` | escrito à mão, versionado, conferido pelo `npm run twa` |
+
+**Falta UM comando, e ele precisa de um terminal de verdade:**
 
 ```
-npm i -g @bubblewrap/cli
-bubblewrap init --manifest https://ricardocolombo01.github.io/domino-bar/manifest.webmanifest
+cd twa
 bubblewrap build
 ```
 
-Ele baixa um JDK 17 e o Android SDK na primeira vez (~1 GB) e faz perguntas — entre elas a
-keystore e a senha do passo 1. **Java 17 e 25 já estão nesta máquina** (`C:\Program Files\Java\`),
-então se ele oferecer usar um JDK existente, aponte o **17**.
+Ele vai perguntar se pode gerar o projeto Android (responda **Y**) e pedir a keystore e a
+senha do passo 1. No fim, o `.apk` sai em `twa/`.
+
+> **Por que eu não rodei isto por você:** o CLI do Bubblewrap **é interativo em todos os
+> caminhos que geram ou atualizam o projeto** — `doctor`, `init`, `update` e `build`. Sem um
+> terminal, ele estoura com `ERR_USE_AFTER_CLOSE: readline was closed` no instante em que
+> abre o primeiro prompt, e **canalizar respostas com `printf … |` não resolve**: ele não lê
+> de um cano, lê de um terminal. Foi até onde deu, que é tudo menos o prompt.
+
+#### As três armadilhas que já foram pagas — não repita
+
+1. **O JDK ele baixa sozinho; o Android SDK NÃO.** O `config.json` nasce com
+   `{"jdkPath":"", "androidSdkPath":""}`; ele preenche o primeiro na primeira execução e
+   **pergunta** pelo segundo. Já está preenchido.
+
+2. **O VALIDADOR DE SDK DO BUBBLEWRAP É ANTIGO, e a mensagem de erro não ajuda.** Ele recusa
+   com *"The provided androidSdk isn't correct"* qualquer pasta que não tenha `tools/` **ou**
+   `bin/` na raiz — e o layout moderno do SDK põe os binários em
+   `cmdline-tools/latest/bin/`. A raiz fica sem `bin`, e ele recusa um SDK perfeitamente bom.
+
+3. **E copiar só o `bin` troca um erro por outro:** ele passa a achar o `sdkmanager` e morre
+   com `ClassNotFoundException: com.android.sdklib.tool.sdkmanager.SdkManagerCli`, porque os
+   `.bat` procuram as classes num `lib/` irmão. **O par `bin` + `lib` tem de estar na raiz do
+   SDK**, e é assim que a pasta está hoje:
+
+   ```
+   ~/android-sdk/  bin  lib  build-tools  platforms  platform-tools  cmdline-tools  licenses
+   ```
+
+   (`bin` e `lib` são cópias de `cmdline-tools/latest/`; as originais continuam lá.)
+
+Se um dia precisar refazer do zero, foi assim:
+
+```
+curl -L -o cmdline.zip https://dl.google.com/android/repository/commandlinetools-win-11076708_latest.zip
+# descompacte em ~/android-sdk/cmdline-tools/, depois copie tudo para cmdline-tools/latest/
+yes | ~/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=~/android-sdk --licenses
+~/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=~/android-sdk \
+  "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+cp -r ~/android-sdk/cmdline-tools/latest/bin ~/android-sdk/bin
+cp -r ~/android-sdk/cmdline-tools/latest/lib ~/android-sdk/lib
+```
+
+**O `init` não é necessário** — ele existe para gerar o `twa-manifest.json` fazendo perguntas,
+e esse arquivo já está pronto e versionado. Mexer nele é mais rápido e deixa a decisão no git
+em vez de num prompt que ninguém revê.
 
 ### 4. A prova, e é a única que vale
 

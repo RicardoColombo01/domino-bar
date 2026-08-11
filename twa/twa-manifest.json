@@ -1,0 +1,53 @@
+{
+  "packageId": "io.github.ricardocolombo01.dominobar",
+  "host": "ricardocolombo01.github.io",
+  "name": "Dominó de Bar",
+  "launcherName": "Dominó de Bar",
+  "display": "standalone",
+  "themeColor": "#241a16",
+  "themeColorDark": "#241a16",
+  "navigationColor": "#241a16",
+  "navigationColorDark": "#241a16",
+  "navigationDividerColor": "#241a16",
+  "navigationDividerColorDark": "#241a16",
+  "backgroundColor": "#241a16",
+  "enableNotifications": false,
+  "startUrl": "/domino-bar/",
+  "iconUrl": "https://ricardocolombo01.github.io/domino-bar/icone-512.png",
+  "maskableIconUrl": "https://ricardocolombo01.github.io/domino-bar/icone-512.png",
+  "appVersionName": "4.10.0",
+  "appVersionCode": 41000,
+  "shortcuts": [
+    {
+      "name": "Dominó de Bar",
+      "shortName": "Dominó",
+      "url": "/domino-bar/?jogo=domino",
+      "chosenIconUrl": "https://ricardocolombo01.github.io/domino-bar/icone-192.png"
+    },
+    {
+      "name": "Truco Paulista",
+      "shortName": "Truco",
+      "url": "/domino-bar/?jogo=truco",
+      "chosenIconUrl": "https://ricardocolombo01.github.io/domino-bar/icone-192.png"
+    }
+  ],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://ricardocolombo01.github.io/domino-bar/manifest.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": { "enabled": false },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://ricardocolombo01.github.io/domino-bar/",
+  "minSdkVersion": 21,
+  "orientation": "any",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "appVersion": "4.10.0",
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "android"
+  }
+}

@@ -1080,18 +1080,28 @@ A FILA 13  ✔ FECHADA na mesma tarde ("procure erros novamente"). Três achados
            — `linha: [null]` passava e matava a tela. Sai na v4.10.0, com o
            preparo da Fase 5 junto.
 
-A FASE 5   ⚠ NÃO TERMINADA, e o bloqueio está MEDIDO e não suposto: a credencial
-           desta máquina é da conta Ricardo-Colombo-pixaflow, com admin:false, e
-           RicardoColombo01 é OUTRA conta. Criar `ricardocolombo01.github.io` exige
-           ser dono dela.
-           Pronto para copiar: `twa/user-page/` (com o .nojekyll, que o Jekyll
-           exige e que ninguém adivinha), `twa/LEIA.md` e `npm run twa`.
+A FASE 5   ⚠ NÃO TERMINADA, e os DOIS bloqueios estão MEDIDOS e não supostos:
+
+           1. A USER PAGE. As duas credenciais desta máquina (o `gh` e o helper do
+              git) são da conta Ricardo-Colombo-pixaflow, com admin:false neste
+              repositório, e RicardoColombo01 é OUTRA conta de usuário. Criar
+              `ricardocolombo01.github.io` exige ser dono dela.
+           2. O PROMPT DO BUBBLEWRAP. O CLI é interativo em todo caminho que gera
+              projeto, e sem terminal morre em ERR_USE_AFTER_CLOSE. Canalizar
+              resposta não resolve — ele lê de terminal, não de cano.
+
+           O QUE JÁ ESTÁ FEITO, e é o que costuma custar a tarde: o CLI instalado,
+           o JDK 17, o Android SDK (plataforma 34 + build-tools + LICENÇAS
+           ACEITAS), o config.json apontando para os dois, o twa-manifest.json
+           versionado, o twa/user-page/ pronto para copiar e o `npm run twa`.
            A keystore NÃO foi gerada de propósito — é a identidade permanente do
            app, e a senha e o backup são dele.
 
-AMANHÃ     o único item aberto é a FASE 5, e o primeiro passo dela cabe em cinco
-           minutos: criar o repositório e copiar `twa/user-page/`. Depois disso,
-           `npm run twa` diz o que falta a cada passo.
+AMANHÃ     a FASE 5 cabe em dois passos, os dois dele:
+             1. criar o repositório `ricardocolombo01.github.io` e copiar
+                `twa/user-page/` para lá  (~5 min)
+             2. `cd twa && bubblewrap build` num terminal de verdade
+           Entre um e outro, `npm run twa` diz o que falta.
            E a fonte mais barata deste projeto continua sendo JOGAR: o truco em
            duplas no CELULAR, com gente de verdade, é o que nenhuma suíte alcança.
 ```
@@ -4386,9 +4396,27 @@ atualizar o que já está publicado**. A senha é dele, o backup é dele, e nada
 por mim. O comando está escrito no `LEIA.md`, com o `keytool` do JDK 17 que já existe nesta
 máquina (`C:\Program Files\Java\jdk-17\bin`).
 
-**O Bubblewrap também não rodou:** ele é interativo (pergunta a keystore e a senha) e baixa
-~1 GB de JDK e Android SDK na primeira vez. Os dois passos que faltam dependem daquilo que só
-ele decide.
+**O AMBIENTE DO BUBBLEWRAP FICOU MONTADO** (11/08, à noite), e é o que costuma custar a tarde:
+o CLI instalado, o **JDK 17** que ele baixa sozinho, o **Android SDK** com plataforma 34,
+build-tools 34.0.0 e **as licenças aceitas**, o `config.json` apontando para os dois, e o
+`twa-manifest.json` escrito à mão e versionado (o `init` existe só para gerá-lo perguntando).
+
+**Falta UM comando, e ele exige um terminal de verdade:** `cd twa && bubblewrap build`.
+
+> **O CLI do Bubblewrap é interativo em TODOS os caminhos que geram ou atualizam o projeto**
+> — `doctor`, `init`, `update` e `build`. Sem terminal ele estoura com
+> `ERR_USE_AFTER_CLOSE: readline was closed` no primeiro prompt, e **canalizar respostas com
+> `printf … |` não resolve**: ele não lê de um cano, lê de um terminal. Foi até onde deu.
+
+**As duas armadilhas de SDK que já foram pagas, e a segunda ninguém adivinha:**
+
+1. **O validador de SDK do Bubblewrap é antigo.** Ele recusa com *"The provided androidSdk
+   isn't correct"* qualquer pasta sem `tools/` **ou** `bin/` na raiz — e o layout moderno põe
+   os binários em `cmdline-tools/latest/bin/`, deixando a raiz sem `bin`. Ele recusa um SDK
+   perfeitamente bom, e a mensagem manda procurar no lugar errado.
+2. **Copiar só o `bin` troca um erro por outro:** ele passa a achar o `sdkmanager` e morre com
+   `ClassNotFoundException: …SdkManagerCli`, porque os `.bat` procuram as classes num `lib/`
+   irmão. **O par `bin` + `lib` tem de estar na raiz do SDK.** É como a pasta está hoje.
 
 **E a última milha não é automatizável, por construção:** o único teste que PROVA o TWA é
 instalar o `.apk` e ver que **não há barra de URL** no topo. O Android decide isso em tempo de
