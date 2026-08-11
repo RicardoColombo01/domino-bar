@@ -28,6 +28,10 @@ npm run cartas    o baralho de 40 e a carta 3D, no terminal
 npm run truco     o truco inteiro: regras, motor, bot, layout, a mesa 3D, a barra de
                   apostas e UMA PARTIDA DO COMEÇO AO FIM pela casa (320 asserções)
 npm run app       build + manifest, ícones e o jogo abrindo COM A REDE DESLIGADA (~30 s)
+npm run twa       a FASE 5: confere o que dá para conferir sem celular — a user page, o
+                  .well-known/, o fingerprint, o package_name. NÃO reprova enquanto a user
+                  page não existir; ele diz o que falta. A última milha (abrir o APK e ver
+                  que não há barra de URL) nenhum script faz. Ver twa/LEIA.md
 npm run icones    regera icone-192.png e icone-512.png a partir de src/icone.svg
 npm run telas     build + o jogo em seis tamanhos de tela (retrato, paisagem, tablet, wide)
                   aceita escolher: node tests/test-telas.mjs 360x640,390x844 nomes,cheia
@@ -918,11 +922,11 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 
 | | |
 |---|---|
-| enviado | **v4.9.0** — conferido com `git ls-remote`, que é a régua de ENVIADO (o `git rev-list` compara com um ref em cache e já respondeu `0 0` com duas releases paradas) |
+| enviado | **v4.10.0** — conferido com `git ls-remote`, que é a régua de ENVIADO (o `git rev-list` compara com um ref em cache e já respondeu `0 0` com duas releases paradas) |
 | **PUBLICADO** | conferir com `curl`. **A v4.9 MUDA o bundle** — ao contrário da v4.8 —, então desta vez o `sw.js` servido TEM de mudar: ele é um resumo do `index.html`, e o novo é `27648ab61191` |
-| em curso | **nada** — a **Fila 12** (varredura de 11/08) foi aberta e FECHADA na mesma sessão: 7 achados, 7 consertos, 7 mutações. Saiu na **v4.9.0** |
+| em curso | **nada** — a **Fila 12** e a **Fila 13** foram abertas e fechadas em 11/08: 7 + 3 achados, todos consertados e conferidos por mutação. v4.9.0 e **v4.10.0** |
 | as anteriores | v4.7.0 (o truco online) · v4.6.0 (as cenas de truco no `telas`) · v4.5.0 (o corpo do truco) · v4.4.0 (bot + layout) · v4.3.0 (regras + motor) · v4.2.0 (`40-cartas/`) · v4.1.0 (a aba) · v4.0.0 (o contrato) |
-| Filas 5 a 12 | **todas fechadas** |
+| Filas 5 a 13 | **todas fechadas** |
 | o que vem | **a Fase 5** — o aplicativo: APK no GitHub Releases + Amazon Appstore. **É o único item aberto, e é conta e não código** — o pré-requisito de código que ela tinha (o C6, o service worker apagando cache de vizinho na mesma origem) saiu na v4.9.0 |
 
 ---
@@ -1070,9 +1074,24 @@ AS OITO SUÍTES VERDES contra este código, rodadas uma de cada vez em 11/08:
            telas nas DUAS metades, folga mínima 0.29 nas duas — o MESMO número da
            v4.6 e da v4.8, que é a régua de determinismo e não só de aprovação
 
-AMANHÃ     não há defeito conhecido em aberto. O que sobra é a FASE 5 (o APK), que
-           trava numa decisão de conta do Ricardo — e agora com um pré-requisito de
-           código a menos, porque o C6 saiu nesta onda.
+A FILA 13  ✔ FECHADA na mesma tarde ("procure erros novamente"). Três achados, e a
+           primeira pergunta foi a mais produtiva: E OS CONSERTOS DE ONTEM? Os
+           validadores da Fila 12 cobravam o CONTINENTE e deixavam o CONTEÚDO livre
+           — `linha: [null]` passava e matava a tela. Sai na v4.10.0, com o
+           preparo da Fase 5 junto.
+
+A FASE 5   ⚠ NÃO TERMINADA, e o bloqueio está MEDIDO e não suposto: a credencial
+           desta máquina é da conta Ricardo-Colombo-pixaflow, com admin:false, e
+           RicardoColombo01 é OUTRA conta. Criar `ricardocolombo01.github.io` exige
+           ser dono dela.
+           Pronto para copiar: `twa/user-page/` (com o .nojekyll, que o Jekyll
+           exige e que ninguém adivinha), `twa/LEIA.md` e `npm run twa`.
+           A keystore NÃO foi gerada de propósito — é a identidade permanente do
+           app, e a senha e o backup são dele.
+
+AMANHÃ     o único item aberto é a FASE 5, e o primeiro passo dela cabe em cinco
+           minutos: criar o repositório e copiar `twa/user-page/`. Depois disso,
+           `npm run twa` diz o que falta a cada passo.
            E a fonte mais barata deste projeto continua sendo JOGAR: o truco em
            duplas no CELULAR, com gente de verdade, é o que nenhuma suíte alcança.
 ```
@@ -4260,6 +4279,121 @@ falha, a legítima (o teto de 3 painéis, que existe porque o quarto não cabe e
   (o irmão dentro da suíte). **Seis filas seguidas com o mesmo padrão não é azar: é o formato
   deste código** — dois jogos, dois lados do fio, dois validadores, duas telas de fim. A
   pergunta *"quem é o irmão desta linha?"* devia ser um passo de revisão, não uma lição.
+
+---
+
+## Fila 13 — a varredura de 11/08/2026 (à tarde) ✔ fechada (v4.10.0)
+
+**Quarta varredura, feita no mesmo dia da terceira e por pedido do Ricardo** ("procure erros
+novamente"). A primeira pergunta foi a mais produtiva: **e os consertos de ontem?** Guarda
+nova é código novo, e código novo é onde o defeito novo mora.
+
+### O padrão: validar o CONTINENTE e deixar o CONTEÚDO livre
+
+Os três achados são um só defeito em três lugares. A Fila 12 fez os validadores cobrarem que
+os campos **existem e são arrays**; nenhum deles olha o que está DENTRO:
+
+```
+linha: [null]      → passa, e sincronizarTabuleiro estoura
+mao:   [null]      → passa, e sincronizarMao estoura
+pontas: 'xx'       → passa, e o HUD estoura
+vazas: [null]      → passa, e mata a MESA 3D, a DICA e o HUD (três superfícies)
+vazas: [{jogadas:'xx'}] → passa, e mata a mesa
+mesa:  [null]      → passa, e mata a mesa
+```
+
+**`|| []` PROTEGE CONTRA AUSENTE E NÃO CONTRA PRESENTE-COM-OUTRO-TIPO**, e essa distinção é a
+fila inteira: `(undefined || [])` é `[]`, mas `('xx' || [])` é `'xx'` — e `'xx'.map` estoura.
+O comentário do `vistaDoTrucoValida` afirmava que a mesa "já é defensiva em todo ponto de
+leitura", e ela é, **contra o campo ausente**. *A razão estava escrita, era plausível, e
+mesmo assim errada* — só a medição separa as duas.
+
+**O conserto cobra o ELEMENTO nos dois jogos, e não reabre a frouxidão deliberada da v4.7:**
+`[].every(…)` é `true`, então a mão de 11 — que tem `mesa` e `vazas` vazios — continua
+passando. Há asserção só para isso, porque é a porta que o rigor novo poderia fechar em
+silêncio.
+
+### E EU COMETI, DENTRO DO CONSERTO, O DEFEITO QUE A FILA 12 EXISTIA PARA CAÇAR
+
+`sobrouNaMao` ganhou `Array.isArray(r.somas)` na v4.9 — e o irmão `r.somasPorTime`, **uma
+linha abaixo, na mesma função**, ficou com `|| []`. Uma string ali mata a tela de fim de mão
+em duplas.
+
+Não há atenuante e o registro fica: a onda de ontem inteira era sobre *"quem é o irmão desta
+linha, e ele tem a mesma guarda?"*. **Escrever a regra não é aplicá-la.** O que a pegou foi
+varrer de novo um dia depois, o que é o argumento mais forte que este arquivo tem a favor de
+varredura periódica.
+
+**E a asserção do conserto nasceu FALTANDO:** a mutação `somasPorTime` → `|| []` sobreviveu,
+porque o caso **só existe em duplas** e toda a cena nova usava mesa de 2. A montagem é que não
+alcançava o ramo — a mesma família do `conn.open` e do helper que passava índice. É a
+**segunda mutação sobrevivente em duas ondas**, e as duas por montagem curta, não por asserção
+fraca.
+
+### Três mutações, e a terceira precisou de uma asserção nova
+
+| mutação | mortas |
+|---|---|
+| `vistaDoTrucoValida` volta a validar só o continente | **4** |
+| `vistaDoDominoValida` idem | **5** |
+| `somasPorTime` volta ao `\|\| []` | 0 → **1** depois da cena de duplas |
+
+### O verificador da Fase 5 quase nasceu quebrado — e o defeito era o EXIT CODE
+
+`tests/test-twa.mjs` usava `fetch`. No Node 24 em Windows isso imprime
+`Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)` **depois** do relatório, e aquilo
+**aborta o processo**: código de saída **127 com a suíte passando**. Uma suíte que sai 127
+sempre é uma suíte que reprova sempre — dentro do `npm` ela derrubaria tudo o que viesse
+depois.
+
+**Eu escrevi no comentário que "o código de saída está certo" e não medi.** Medindo os dois
+casos — passando e reprovando — deu **127 nos dois**. `https.get` não passa pelo dispatcher
+global e sai limpo: hoje é **0 passando, 1 reprovando**, conferido nos dois sentidos.
+
+É a terceira vez nestas duas ondas que uma afirmação minha não medida cai (as outras: o
+tamanho do `index.html` no plano, e a razão "a mesa já é defensiva"). **A regra da casa não
+tem exceção para quem a está escrevendo.**
+
+---
+
+## A FASE 5 — o que ficou pronto, e o que só o Ricardo pode fazer
+
+**Ela não foi terminada, e não é por falta de trabalho de código.** Fica registrado com a
+medição, porque este arquivo já afirmou "é conta e não código" sem prova:
+
+```
+gh auth status        → conta Ricardo-Colombo-pixaflow
+gh api repos/RicardoColombo01/domino-bar --jq .permissions
+                      → {"admin": false, "push": true, …}
+gh api users/RicardoColombo01 --jq .type   → "User"   ← é OUTRA conta
+curl ricardocolombo01.github.io/           → 404
+```
+
+Criar `ricardocolombo01.github.io` exige ser dono daquela conta. **Daqui não vai.**
+
+### O que a v4.10 entrega, pronto para copiar
+
+| | |
+|---|---|
+| `twa/LEIA.md` | o roteiro inteiro, com os comandos prontos e o **porquê** de cada armadilha |
+| `twa/user-page/` | a árvore pronta: `.nojekyll`, `index.html` e `.well-known/assetlinks.json` com `__SHA256__` no lugar do fingerprint |
+| `npm run twa` | confere o que dá para conferir sem celular — e **não reprova** enquanto a user page não existir, porque "ainda não foi feito" não é "foi feito errado" |
+| `.gitignore` | recusa `*.keystore` e `*.jks`, com asserção que reprova se uma aparecer na raiz |
+
+**A KEYSTORE NÃO FOI GERADA, e é decisão e não esquecimento.** Ela é a identidade permanente
+do aplicativo: quem a tem publica atualização em nome dele, e quem a perde **não consegue mais
+atualizar o que já está publicado**. A senha é dele, o backup é dele, e nada disso deve passar
+por mim. O comando está escrito no `LEIA.md`, com o `keytool` do JDK 17 que já existe nesta
+máquina (`C:\Program Files\Java\jdk-17\bin`).
+
+**O Bubblewrap também não rodou:** ele é interativo (pergunta a keystore e a senha) e baixa
+~1 GB de JDK e Android SDK na primeira vez. Os dois passos que faltam dependem daquilo que só
+ele decide.
+
+**E a última milha não é automatizável, por construção:** o único teste que PROVA o TWA é
+instalar o `.apk` e ver que **não há barra de URL** no topo. O Android decide isso em tempo de
+execução, buscando o `assetlinks.json` no domínio — nenhum script substitui, e o `npm run twa`
+diz isso na última linha em vez de fingir que cobre.
 
 ---
 
