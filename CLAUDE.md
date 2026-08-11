@@ -917,9 +917,9 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 
 | | |
 |---|---|
-| enviado | **v4.7.1** — `origin/main` = `main` = `ff7726b`, conferido com `git ls-remote` |
-| **PUBLICADO** | ✔ **em dia** — `sw.js` servido `a72ce27eec71` = o local; `index.html` no ar byte a byte igual |
-| em curso | **v4.8** — a cena `trucoduplas` no `test-online`: o truco de 4 cadeiras pelo fio |
+| enviado | **v4.8.0** — `origin/main` = `main` = `1b5732f`, conferido com `git ls-remote` |
+| **PUBLICADO** | ✔ **em dia** — `sw.js` servido `a72ce27eec71` = o local; `index.html` no ar byte a byte igual. A v4.8 **não muda o bundle**: é suíte e registro |
+| em curso | **nada** — a fila está vazia e as oito suítes estão verdes |
 | as anteriores | v4.7.0 (o truco online) · v4.6.0 (as cenas de truco no `telas`) · v4.5.0 (o corpo do truco) · v4.4.0 (bot + layout) · v4.3.0 (regras + motor) · v4.2.0 (`40-cartas/`) · v4.1.0 (a aba) · v4.0.0 (o contrato) |
 | Filas 5 a 11 | **todas fechadas** |
 | o que vem | **a Fase 5** — o aplicativo: APK no GitHub Releases + Amazon Appstore. **É o único item aberto, e é conta e não código** |
@@ -1054,30 +1054,28 @@ PUBLICADO    ✔ SIM — sw.js servido a72ce27eec71 = o local; index.html no ar 
              igual (496.052), e a rodada do Pages saiu `success` em 10/08 23:40 UTC
 worktree     NENHUM
 
-A v4.8   ✔ COMMITADA, MESCLADA em main e TAGUEADA `v4.8.0` — a branch foi apagada
-         ✗ NÃO ENVIADA — é AQUI que se começa amanhã, e é UM comando
+A v4.8   ✔ FECHADA E NO AR — commit, merge `--no-ff`, tag `v4.8.0`, branch apagada,
+         e ENVIADA: `git ls-remote` devolve 1b5732f nos dois lados, com a tag junto.
          a onda mexeu em DOIS arquivos e em NENHUMA linha de src/:
            tests/test-online.mjs   a cena `trucoduplas` + os helpers içados
            CLAUDE.md               este registro
+
+AMANHÃ    não há nada pendente de código. A fila está VAZIA e as oito suítes estão
+          verdes. O que sobra é a Fase 5 (o APK), que trava numa decisão de CONTA do
+          Ricardo — e a fonte mais barata deste projeto, que é JOGAR.
 ```
 
-> ### ➜ O PRIMEIRO COMANDO DE AMANHÃ
+> ### ⚠ ESTA RELEASE NÃO MUDA O QUE O JOGADOR VÊ, e isso desarma a régua de sempre
 >
-> ```
-> git ls-remote origin refs/heads/main   # o remoto  — hoje ainda ff7726b
-> git rev-parse main                     # o local   — já com a v4.8
-> git push origin main --tags
-> ```
+> Não houve `npm run build` dentro do merge, e é a única vez em que isso vale: a onda não
+> tocou `src/`. Quem provou foi o `npm run check` rodado **depois** do merge, não o
+> raciocínio.
 >
-> **NÃO houve `npm run build` dentro do merge, e é a única vez que isso vale:** a onda não
-> tocou `src/`, então o bundle não muda. Quem provou foi o `npm run check`, rodado depois do
-> merge — se um dia ele reclamar ali, o build entra e o `git add index.html` junto.
->
-> **E CUIDADO COM A RÉGUA AQUI**, porque esta release cai justamente na exceção: como `src/`
-> não mudou, o `sw.js` servido continua `a72ce27eec71` **de propósito** — ele é um resumo do
-> bundle, e bundle igual dá resumo igual. **Os dois baterem NÃO prova que o push chegou.**
-> Quem prova é o `git ls-remote`. É a armadilha do `e2f9a7a` (v4.5.2) de novo, e ela volta
-> toda vez que uma onda mexe só em `CLAUDE.md` e em testes.
+> A consequência é uma armadilha, e ela é a do `e2f9a7a` (v4.5.2) de volta: como `src/` não
+> mudou, **o `sw.js` servido continua `a72ce27eec71` de propósito** — ele é um resumo do
+> bundle, e bundle igual dá resumo igual. Então o `curl` diz "iguais" tanto antes quanto
+> depois do push, e **os dois baterem não prova que o envio chegou**. Aqui quem prova é o
+> `git ls-remote`. Vale toda vez que uma onda mexe só em registro e em testes.
 
 **O BLOQUEIO DE CREDENCIAL ACABOU.** As duas releases que este arquivo dava como paradas na
 máquina estão no ar; o 403 virou registro histórico, logo abaixo. Nada a fazer ali.
