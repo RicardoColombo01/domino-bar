@@ -4375,6 +4375,164 @@ tem exceção para quem a está escrevendo.**
 
 ---
 
+## Fila 14 — a visibilidade da carta, e as lições do dominó cobradas no truco
+
+Pedido do Ricardo em 11/08/2026, e ele traz uma pergunta que nenhuma varredura anterior fez:
+*"pense nos erros cometidos no jogo do dominó e veja se tem algum que acabou indo para o do
+truco"*. É a pergunta do IRMÃO virada para o TEMPO — não "o vizinho tem esta guarda?", mas
+**"o jogo novo herdou as lições que o velho pagou?"**.
+
+### A resposta, e ela é boa: o truco herdou quase tudo
+
+Conferido um a um contra as Filas 1 a 11:
+
+| lição que o dominó pagou | o truco |
+|---|---|
+| a assinatura da mão precisa da LARGURA, senão o leque não refaz no resize | ✔ tem |
+| a arrumação fica no CLIENTE, nunca no motor (a vista é a MESMA referência de `P.maos`) | ✔ tem, com o porquê escrito |
+| o cursor de teclado tem de ser clampado a cada quadro | ✔ idêntico |
+| `chegarPerto` para movimento reduzido | ✔ 12 usos |
+| som e vibração no toque | ✔ tem |
+| a receita de `pintar()` guardada, `fillRect` opaco, zero `Math.random` global | ✔ obedece |
+| todo ouvinte global guardado por `estaNaMesa` | ✔ (o que faltava era o gesto interrompido — C5 da Fila 12) |
+
+**Duas coisas que NÃO herdou, e as duas viraram conserto:** o gesto interrompido pelo sistema
+(C5, v4.9) e — agora — a proporção do desenho da carta.
+
+### O DESENHO DA CARTA SAÍA 42% ESTICADO, em todas as 40 células
+
+**Achado olhando a mesa renderizada, não lendo código.** A face é
+`PlaneGeometry(CARTA_L, CARTA_C)` = 0,62 × 0,88, e a UV joga a célula do atlas INTEIRA nela.
+A célula era **quadrada** (192 × 192). Resultado: tudo 42% mais alto do que devia — o losango
+de ouros virava um oval, o coração esticava, as letras ficavam esguias.
+
+**Por que nada pegava:** a única asserção que olhava o desenho amostra a **cor** no centro da
+célula, e cor não se deforma. É o *"está desenhado" ≠ "está desenhado CERTO"* que este arquivo
+já registra com o furo de um pixel no naipe de paus — a mesma família, um grau acima, porque
+**todas as células sofriam igual e não havia com o que comparar**.
+
+Hoje `CEL_CARTA_A = round(CEL_CARTA × CARTA_C / CARTA_L)` = 273, e há asserção cobrando que a
+razão da célula bate com a da carta (mutação: volta a 1.000 contra 1.419, e ela cai).
+
+### O CANTO GANHOU NAIPE, e isso é regra de truco e não enfeite
+
+Medido no Chrome, com a carta projetada em NDC:
+
+```
+retrato 390×844   carta 138×111 px de tela   valor no canto 27.6 px   as cartas SE SOBREPÕEM
+retrato 360×640   carta 103×83               valor 20.6               SE SOBREPÕEM
+paisagem 844×390  carta  79×66               valor 15.8
+```
+
+**Em retrato as cartas da mão se sobrepõem, e da carta coberta só sobra a faixa do canto** —
+onde havia só o valor. E no truco o naipe DECIDE: entre duas manilhas quem ganha é
+ouros < espadas < copas < paus, e as quatro se dividem em **duas cores só**. Ver a carta e não
+saber o naipe é ver metade da carta.
+
+O valor também subiu de 0,20 para 0,23 da célula: em paisagem ele tinha 15,8 px de tela, e
+três pontos ali são ~3 px lá — a diferença entre ler um "Q" e adivinhá-lo.
+
+Há asserção para o naipe do canto (mutação: apaga o naipe, 40 células viram "papel", 4
+asserções caem).
+
+### A troca de jogo — pedida, medida, e já estava coberta
+
+*"testar a troca de cada jogo, para não bugar"*. Medido: ida e volta três vezes com partida
+montada em cada um não vaza malha nem mão, e a trava de mesa ocupada **já tem asserção no
+Chrome** (`test-lembrar`), incluindo o motivo escrito no botão.
+
+**Duas correções de diagnóstico minhas, as duas por medir o caminho errado:**
+
+1. A primeira sonda chamou `abrirJogo()` **direto** e concluiu *"‼ TROCOU COM MESA OCUPADA"*.
+   Falso: a trava é `b.disabled` na ABA, repintada por `mostrarTela`, e `abrirJogo` direto não
+   é caminho de jogador nenhum. O próprio arquivo já registra que a guarda mora ali de
+   propósito (*"guarda que só é repintada quando o estado não pode acontecer é código morto"*).
+2. A mesma sonda forçou `P.fase = 'fim'` sem `resultado` e estourou. Também falso: medido em
+   **400 fases de fim**, o motor SEMPRE põe `resultado` ao entrar nelas. Era estado que o jogo
+   não produz — a armadilha que este arquivo já nomeia.
+
+### O que a Fila 14 deixa como lacuna registrada
+
+**O `test-textura` nunca rodou com o TRUCO na mesa.** Ele monta dominó (`j.MESA.modo =
+'classico'`) e o ciclo E3 — as duas perdas juntas, que é o único caso que produz o sintoma —
+mede as texturas do grafo, onde só há peça. O atlas de cartas é lido **por nome**, pela ponte,
+e só para conferir o desenho; **ninguém nunca perguntou se a carta sobrevive a sair do
+aplicativo e voltar**. A proteção existe (a carta usa `pintar()`), e é exatamente o tipo de
+coisa que a Fila 9 chama de *código que existe e nunca rodou*.
+
+E o comentário daquele bloco ainda diz *"a pasta das cartas ainda não tem jogo que a consuma"*
+— verdade em 06/08, falsa desde a v4.5.
+
+---
+
+### ⚑ IDEIAS — pedidas pelo Ricardo em 11/08/2026, com custo e valor
+
+**Nenhuma foi implementada.** Estão aqui porque a regra da casa é que ideia entra na FILA, e
+porque escolher escopo é dele. Ordenadas por *valor ÷ custo*, e cada uma diz **por que**.
+
+#### As três que eu faria primeiro
+
+**1 · REALÇAR AS MANILHAS NA SUA MÃO** (truco · custo pequeno · valor grande)
+O painel diz `MANILHA 6` e o jogador tem de olhar as três cartas e descobrir sozinho quais
+são 6. **O jogo já sabe** — `vista.manilha` está na visão e `forcaDaCarta` já ordena. Um anel
+ou um brilho na carta manilha é a mesma técnica do `ganhandoAVaza` que a v4.6 já construiu,
+reaproveitada. O comentário do próprio código diz a razão sem perceber: *"quem não joga truco
+todo dia não sabe derivar a manilha da vira"*. **É a maior distância entre o que o jogo sabe e
+o que o jogador vê.**
+
+**2 · A VIRA ESTÁ ILEGÍVEL NA MESA** (truco · custo pequeno · valor médio)
+Na foto de 390×844 a vira central aparece deitada, rasa e pequena: dá para distinguir o naipe
+e **não o valor**. Ela é a única carta pública do baralho. Erguê-la um pouco, ou aproximá-la da
+câmera, resolve. O painel `MANILHA` cobre a informação derivada, mas a vira em si é o que a
+mesa de verdade mostra.
+
+**3 · COMPARTILHAR O CÓDIGO DA SALA** (casa · custo pequeno · valor real no online)
+`navigator.share` com o código, ou copiar num toque. Está na lista de *"poderia ser feito"*
+desde a Fila 5 e o caso comum é exatamente esse: mandar o código pelo WhatsApp. Hoje o código
+está visível e `user-select: all` resolve o mouse; **no dedo, copiar de um `<div>` é sofrível.**
+
+#### As que valem, com ressalva
+
+**4 · NAIPES EM QUATRO CORES, como opção** (truco · custo médio · **decisão dele**)
+Ouros e copas são **exatamente** a mesma cor (`#c0392b`), espadas e paus também. É o padrão de
+qualquer baralho — e no truco a ordem das manilhas é por naipe, então a cor não separa o que
+decide a mão. O pôquer online resolveu isso com baralho de quatro cores. **É regra de casa e
+não de programador**, como o melou e a cruzada valerem 4: mexe na cara do jogo.
+
+**5 · ESTATÍSTICAS LOCAIS** (casa · custo pequeno · valor médio)
+Partidas, vitórias e derrotas por jogo. O dado já passa por `publicar()`; falta só somar e
+guardar. Cuidado registrado: **é estado novo no `localStorage`**, e isso contamina as suítes de
+navegador — cada cena vai precisar dizer o que quer, como o `semGuardado()` já faz.
+
+**6 · DESFAZER A ÚLTIMA JOGADA no hotseat** (os dois · custo médio · valor médio)
+Só em mesa local: `P` é dado puro, então guardar o estado anterior é uma cópia. **Não pode
+existir online nem contra bot** — ali seria trapaça, e a fronteira do invariante 3 não protege
+contra o próprio jogador voltando o tempo.
+
+**7 · UMA PRIMEIRA PARTIDA GUIADA** (casa · custo médio · valor grande para quem chega)
+O jogo tem dica, tem painel de contagem e tem regras escritas — e nenhum caminho que ensine na
+ordem. Um "jogar a primeira mão comigo" reaproveitaria a dica inteira.
+
+#### As que NÃO recomendo agora, e por quê
+
+- **`beforeunload` no meio de partida online** — barato, e **incômodo por natureza**. Continua
+  precisando de decisão dele, não de programador. Está na fila desde a Fila 5.
+- **Fazer o 3D DESVIAR dos painéis** — o mais caro do arquivo, e a gaveta e as faixas já
+  resolveram o problema real.
+- **Envido / flor no truco** — decidido em 05/08: Truco Paulista sem os dois. Reabrir isso é
+  mudar o jogo, não melhorá-lo.
+- **O 21 como próximo jogo** — ele tem BANCA, e banca não é uma cadeira como as outras (fura o
+  invariante 2). O pife é o próximo barato; o 21 é o que mexe no modelo de cadeira.
+
+#### E a que o arquivo repete há três filas
+
+**JOGAR.** As Filas 5, 7 e 10 saíram de jogo de verdade no celular, e o pedido de *"quem está
+ganhando a vaza"* também. **O truco em duplas, com quatro pessoas de verdade, nunca aconteceu**
+— só bots dentro de suítes e quatro abas dentro do `test-online`. Meia hora disso vale mais que
+qualquer item desta lista, e o histórico deste arquivo diz isso em três filas diferentes.
+
+---
+
 ## A FASE 5 — ⏸ EM ESPERA (decisão do Ricardo, 11/08/2026)
 
 > **Não é dívida, é pausa.** Ele decidiu adiar até terminar outro projeto (o *gutenberg*) e,

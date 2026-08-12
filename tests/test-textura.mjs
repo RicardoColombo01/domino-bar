@@ -197,21 +197,28 @@ const AJUDA = `
     if (!t) return { erro: 'não achei o atlas de cartas' };
     const im = t.canvas;
     const cols = 10, lins = 4;
-    const cel = im.width / cols;
-    if (im.height !== cel * lins) return { erro: 'atlas ' + im.width + 'x' + im.height + ' não fecha ' + cols + 'x' + lins };
+    const celL = im.width / cols, celA = im.height / lins;
     const cx = im.getContext('2d');
-    const celulas = [];
+    const celulas = [], cantos = [];
     for (let n = 0; n < lins; n++) {
-      const linha = [];
+      const linha = [], cantoLinha = [];
       for (let v = 0; v < cols; v++) {
-        // O centro do naipe grande — 0.52 da célula, que é onde o desenho o põe.
-        const d = cx.getImageData(Math.round((v + 0.5) * cel), Math.round((n + 0.52) * cel), 1, 1).data;
-        const claro = d[0] > 200 && d[1] > 200 && d[2] > 200;
-        linha.push(claro ? 'papel' : (d[0] - d[2] > 60 ? 'vermelho' : 'preto'));
+        const familia = (fx, fy) => {
+          const d = cx.getImageData(Math.round((v + fx) * celL), Math.round((n + fy) * celA), 1, 1).data;
+          const claro = d[0] > 200 && d[1] > 200 && d[2] > 200;
+          return claro ? 'papel' : (d[0] - d[2] > 60 ? 'vermelho' : 'preto');
+        };
+        // O centro do naipe grande — 0.53 da célula, que é onde o desenho o põe.
+        linha.push(familia(0.5, 0.53));
+        // E O NAIPE PEQUENO DO CANTO, que é o que sobra quando as cartas se sobrepõem na
+        // mão (medido: em retrato 390 e 360 elas se sobrepõem). Sem esta amostra, apagar o
+        // naipe do canto passaria despercebido — e no truco é ele que separa duas manilhas.
+        cantoLinha.push(familia(0.155, 0.195));
       }
       celulas.push(linha);
+      cantos.push(cantoLinha);
     }
-    return { celulas, cel, largura: im.width, altura: im.height };
+    return { celulas, cantos, celL, celA, largura: im.width, altura: im.height };
   };
 
   const atlasDeVerdade = () => {
@@ -378,8 +385,32 @@ if (!cartas.erro) {
     ok(erradas === 0,
       `a linha ${n} do atlas tinha de ser ${FAMILIA[n]} (é o naipe ${n}) e ${erradas} célula(s) não são: ${linha.join()}`);
   });
-  console.log(`    ${cartas.largura}×${cartas.altura} em 40 células de ${cartas.cel}: ` +
+
+  // A CÉLULA TEM DE TER A PROPORÇÃO DA CARTA, e esta é a asserção que não existia.
+  // A face é `PlaneGeometry(CARTA_L, CARTA_C)` e a UV joga a célula INTEIRA nela: se a
+  // célula for quadrada e a carta não, tudo sai esticado. Era o caso — 192×192 numa carta
+  // 0.62×0.88, ou seja **42% mais alto do que devia**, em todas as 40 células ao mesmo
+  // tempo. Nenhuma asserção via, porque a única que olhava o desenho amostrava a COR do
+  // centro, e cor não se deforma. É "está desenhado" ≠ "está desenhado CERTO" outra vez.
+  const med = await pagina.evaluate(naPagina('window.__cartas.medidas'));
+  const razaoCel = cartas.altura / cartas.largura * 10 / 4;      // altura/largura de UMA célula
+  const razaoCarta = med.CARTA_C / med.CARTA_L;
+  ok(Math.abs(razaoCel - razaoCarta) < 0.02,
+    `a célula do atlas é ${razaoCel.toFixed(3)} de alta por larga e a carta é ${razaoCarta.toFixed(3)}: ` +
+    `o desenho sai esticado ${((razaoCarta / razaoCel - 1) * 100).toFixed(0)}%`);
+
+  // E O NAIPE DO CANTO, que é o que sobra quando as cartas se sobrepõem na mão.
+  const cantosVazios = cartas.cantos.flat().filter(x => x === 'papel').length;
+  ok(cantosVazios === 0, `${cantosVazios} célula(s) não desenham naipe no canto — e o canto é o que se vê num leque`);
+  cartas.cantos.forEach((linha, n) => {
+    const erradas = linha.filter(x => x !== FAMILIA[n]).length;
+    ok(erradas === 0, `o canto da linha ${n} devia ser ${FAMILIA[n]} e ${erradas} não são: ${linha.join()}`);
+  });
+
+  console.log(`    ${cartas.largura}×${cartas.altura} em 40 células de ${cartas.celL}×${cartas.celA} ` +
+    `(razão ${razaoCel.toFixed(2)}, carta ${razaoCarta.toFixed(2)}): ` +
     cartas.celulas.map((l, i) => `${i}=${l[0]}`).join(' '));
+  console.log(`    naipe no canto em todas as 40 células`);
 }
 
 // A UV, que é quem escolhe a célula. O atlas pode estar perfeito e a peça mostrar os
