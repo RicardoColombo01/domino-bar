@@ -32,6 +32,11 @@ const mod = await import(buildModule([
   // Quem está ganhando a vaza e quem ganhou — os dois pedidos do Ricardo de 07/08.
   'notaDaVezNoTruco', 'narrarVaza', 'placarDeVazas', 'timeDaVistaNoTruco',
   'temPreviaDoTruco', 'dicaDoTrucoParaACasa', 'porQueNaoDaNoTruco', 'HUD',
+  // Fila 15 · A1: o realce das manilhas na sua mão. `ehManilha` é a pergunta da REGRA, e o
+  // teste faz a mesma que o jogo faz — escrever `carta[0] === manilha` aqui seria a suíte
+  // conferindo a tabela contra ela mesma. A geometria é como se pergunta pelo anel de fora
+  // da sua mão, e o grupo dos outros é onde ele não pode aparecer.
+  'ehManilha', 'geomManilhaNoTruco', 'grupoOutrosDoTruco',
   // Fila 12: projetar a carta para NDC é o único jeito de mirar com o DEDO de verdade —
   // e é o dedo, não o teclado, que o sistema interrompe.
   'ponteiroDoTruco',
@@ -1058,6 +1063,84 @@ console.log('\na casa senta na mesa de truco');
 
   ok(mod.naMaoDoTruco.length === 3, `a sua mão tem ${mod.naMaoDoTruco.length} cartas em 3D`);
   ok(mod.grupoMaoDoTruco.children.length === 3, 'as cartas da mão não entraram na cena');
+
+  // ─── as MANILHAS realçadas na sua mão ─────────────────────────────────────
+  // O painel diz `MANILHA 5` e o jogador tem de descobrir sozinho quais das três cartas são
+  // 5. A informação existia na visão desde a v4.3 e a tela não a mostrava.
+  //
+  // A MÃO É ARMADA, e sem isso a asserção seria verde por trivialidade: numa mão sorteada
+  // pode não haver manilha nenhuma, e aí "as marcadas são exatamente as manilhas" compara
+  // dois conjuntos VAZIOS e passa com o realce apagado. É a família do `conn.open` e do
+  // helper que passava índice — montagem que não alcança o estado interessante —, e o remédio
+  // é o de sempre: exigir que a montagem CONSEGUIU antes de medir.
+  //
+  // AS DUAS MÃOS E A MESA são postas à mão, não só a minha: sobrescrever uma só deixaria a
+  // carta que o bot já jogou viva em dois lugares, e `chaveCarta` é a chave de
+  // `naMesaDoTruco` — duas cartas iguais na mesa é um estado que o jogo não produz, e medir
+  // dentro dele mede outra coisa.
+  //
+  // A vira é o 4 de ouros, então a manilha é o 5 — a SEGUINTE na escada, que começa no 4.
+  // Pelo `c('4', 'ouros')` e não por índice, que é a convenção desta suíte: `[3, 0]` é índice
+  // de índice, e um dígito trocado ali passa despercebido.
+  mod.P.vira = c('4', 'ouros');              // → manilha: o 5
+  mod.P.manilha = mod.manilhaDaVira(mod.P.vira);
+  mod.P.mesa = [];
+  mod.P.maos[0] = [c('5', 'paus'), c('4', 'espadas'), c('3', 'copas')];   // ← uma MANILHA
+  mod.P.maos[1] = [c('A', 'ouros'), c('2', 'espadas'), c('7', 'copas')];
+  mod.P.vez = 0;
+  mod.publicar();
+
+  const manilhasNaMao = mod.naMaoDoTruco.filter(m => mod.ehManilha(m.carta, mod.P.manilha));
+  const comunsNaMao = mod.naMaoDoTruco.filter(m => !mod.ehManilha(m.carta, mod.P.manilha));
+  // A GUARDA DE MONTAGEM, e ela vem ANTES de qualquer medida: sem uma de cada, o que vier
+  // abaixo não distingue realce nenhum de realce certo.
+  ok(manilhasNaMao.length === 1 && comunsNaMao.length === 2,
+    `a montagem falhou: ${manilhasNaMao.length} manilha(s) e ${comunsNaMao.length} comum(ns) ` +
+    'na mão, e o caso interessante precisa de uma e duas');
+
+  ok(!!manilhasNaMao[0].marca, 'a manilha da sua mão não ganhou marca nenhuma');
+  ok(comunsNaMao.every(m => !m.marca),
+    `${comunsNaMao.filter(m => m.marca).length} carta(s) comum(ns) foram marcadas como manilha`);
+  // FILHA DA CARTA — é o que a faz acompanhar o leque quando a mão é arrumada ou a tela muda
+  // de largura. Pendurada no grupo da mão, ela ficaria parada enquanto a carta desliza.
+  //
+  // O `|| {}` NÃO É PARANOIA, e ele entrou depois de a mutação cobrar: escrito
+  // `marca.parent`, esta linha LANÇA quando a marca não existe — e aí a mutação que apaga o
+  // realce mata o PROCESSO em vez de reprovar, a suíte trunca, e a conferência sub-relata
+  // (uma reprovação onde havia duas). Foi exatamente o que aconteceu na primeira rodada.
+  // Em suíte que vai ser mutada, toda asserção tem de sobreviver ao objeto ausente.
+  ok((manilhasNaMao[0].marca || {}).parent === manilhasNaMao[0].obj,
+    'a marca da manilha não foi pendurada na carta, então ela não acompanharia o movimento');
+
+  // O INVARIANTE 3, e é por isto que esta asserção existe: `grupoOutrosDoTruco` é VERSO, e um
+  // anel ali diria ao adversário que ele tem manilha. Vazamento por decoração é vazamento
+  // igual — a fronteira não é só o que `visaoDe` devolve, é também o que a tela desenha com o
+  // que ela devolveu.
+  let marcadasFora = 0;
+  mod.grupoOutrosDoTruco.traverse(o => {
+    if (o.geometry === mod.geomManilhaNoTruco) marcadasFora++;
+  });
+  ok(marcadasFora === 0,
+    `${marcadasFora} carta(s) da mão de um adversário ganharam a marca de manilha`);
+
+  // MÃO NOVA, MANILHA NOVA, e a marca TROCA DE DONA. Isto não é redundante com o de cima: o
+  // realce vive no laço que roda em TODA publicação, e não dentro do `if` da assinatura da
+  // mão — que aqui nem dispararia, porque as cartas são as mesmas. Escrito de outro jeito, o
+  // anel ficaria preso na carta da mão anterior até alguém reordenar o leque.
+  //
+  // A vira passa a ser o 2 de ouros, e a seguinte dele na escada é o 3.
+  mod.P.vira = c('2', 'ouros');
+  mod.P.manilha = mod.manilhaDaVira(mod.P.vira);
+  mod.publicar();
+  const aDe5 = mod.naMaoDoTruco.find(m => mod.mesmaCarta(m.carta, c('5', 'paus')));
+  const aDe3 = mod.naMaoDoTruco.find(m => mod.mesmaCarta(m.carta, c('3', 'copas')));
+  ok(aDe5 && !aDe5.marca, 'o 5 de paus continuou marcado depois de deixar de ser manilha');
+  ok(aDe3 && !!aDe3.marca, 'o 3 de copas virou manilha e não ganhou marca');
+
+  // E volta ao estado de onde o resto da seção parte: mesa vazia, sua vez, três cartas.
+  mod.P.vira = c('4', 'ouros');
+  mod.P.manilha = mod.manilhaDaVira(mod.P.vira);
+  mod.publicar();
 
   // ─── escolher → ver → confirmar ───────────────────────────────────────────
   // O caminho do toque, inteiro. A vez é forçada porque o que se mede aqui é o CAMINHO, e não
