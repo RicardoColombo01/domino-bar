@@ -48,6 +48,21 @@ function manilhaDaVira(vira) {
   return ORDEM_TRUCO[(postoDaCarta(vira) + 1) % ORDEM_TRUCO.length];
 }
 
+// "Esta carta é manilha nesta mão?" — UMA definição, e ela mora aqui porque é regra.
+//
+// Ela nasceu para a TELA (o realce das manilhas na sua mão, em `550-mesa.js`), e mesmo assim
+// não nasceu lá: a mesa teria de escrever `carta[0] === manilha` ou `forca >= 100`, e aí a
+// mesma pergunta teria duas respostas escritas em arquivos diferentes. É o padrão que este
+// projeto já pagou três vezes — o `28 - 7 * MESA.n` do menu, as duas cópias da regra da
+// revanche, e o `'bot:' + nivel` montado à mão nas duas pontas do `<select>`.
+//
+// A GUARDA DE NULO É PARA A MÃO DE 11, que não tem vira e portanto não tem manilha:
+// `vista.manilha` chega `null` (ou some no fio, virando `undefined`). Sem ela o resultado
+// seria o mesmo por acidente — `carta[0]` é sempre um índice válido —, e acidente não é
+// guarda: bastaria alguém passar a chamar isto com um valor que se compare mal.
+const ehManilha = (carta, manilha) =>
+  manilha !== null && manilha !== undefined && carta[0] === manilha;
+
 // A força comparável de uma carta nesta mão. Duas faixas que não se encostam:
 //
 //   0 … 9      as cartas comuns, na escada do truco
@@ -57,7 +72,7 @@ function manilhaDaVira(vira) {
 // carta comum. Comparar por faixa seria a mesma coisa com um `if` a mais e um lugar a mais
 // para errar.
 function forcaDaCarta(carta, manilha) {
-  if (carta[0] === manilha) return 100 + FORCA_NAIPE[naipeDaCarta(carta).id];
+  if (ehManilha(carta, manilha)) return 100 + FORCA_NAIPE[naipeDaCarta(carta).id];
   return postoDaCarta(carta);
 }
 

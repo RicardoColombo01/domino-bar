@@ -709,6 +709,41 @@ console.log('\no select de cadeira mostra o que está valendo');
 // "Comprar do monte" e "Passar a vez" estavam escritos no `src/pagina.html`, e um
 // `classList.toggle('oculta', …)` invertido não derrubava suíte nenhuma. Agora a barra é
 // DADO — uma lista de botões que o jogo devolve —, e dado se confere.
+// Os medidores do `#topo` não tinham UMA asserção — nem antes desta troca. O que existia era
+// o `test-telas` medindo se eles cabem, que é outra pergunta: cabe é geometria, DIZ A VERDADE
+// é conteúdo. O irmão em truco tem as dele desde a v4.5.
+console.log('\no topo diz o peso da sua mão');
+{
+  // A SOMA É ESCRITA À MÃO, e é de propósito. Chamar `somaMao` aqui conferiria a tabela
+  // contra ela mesma — a lição do atlas de pintas, que ganhou asserção só quando ela parou
+  // de ler `PINTAS` do próprio jogo. Se a conta abaixo estiver errada, é para reprovar.
+  const mao = [[6, 6], [3, 4], [0, 1]];      // 12 + 7 + 1
+  const meds = mod.JOGO.hud.medidores({ pontas: [3, 5], monte: 4, maoNum: 2, mao });
+
+  // PELO RÓTULO, NUNCA PELA POSIÇÃO — o C7 da Fila 12. Índice cravado numa lista que o jogo
+  // DECLARA muda de assunto sem avisar, e foi exatamente o que aconteceu aqui: o painel que
+  // era `[2]` deixou de ser o número da mão e passou a ser o peso.
+  const med = rot => meds.find(m => m.rot === rot);
+  ok(med('Peso') && med('Peso').val === 20,
+    `o peso saiu ${(med('Peso') || {}).val} para uma mão que soma 20`);
+
+  // TRÊS, E O TETO É MEDIDO: o quarto painel foi tentado no truco e, em paisagem 640×360,
+  // empurrou o `#topo` por cima da mão de um adversário. É a mesma faixa e o mesmo risco, e
+  // quem responde é `node tests/test-telas.mjs 640x360`, não esta suíte — que não tem tela.
+  ok(meds.length <= 3, `o dominó pediu ${meds.length} medidores, e o QUARTO já foi medido ` +
+    'quebrando o #topo em paisagem 640×360');
+  ok(meds.every(m => m.rot && m.val !== undefined && m.val !== null),
+    'algum medidor veio sem rótulo ou sem valor — o #topo mostraria um painel em branco');
+
+  // MÃO VAZIA É `—`, NÃO ZERO, e as duas coisas são diferentes: a tela de passe do hotseat
+  // manda `mao: []` justamente para ESCONDER a mão, e um zero ali diria "você não tem peso
+  // nenhum" na única hora em que a tela existe para não dizer nada.
+  const escondida = mod.JOGO.hud.medidores({ pontas: null, monte: 0, maoNum: 2, mao: [] });
+  const pesoEscondido = escondida.find(m => m.rot === 'Peso');
+  ok(pesoEscondido && pesoEscondido.val === '—',
+    `com a mão escondida o peso saiu "${(pesoEscondido || {}).val}", e devia ser um travessão`);
+}
+
 console.log('\na barra de ações oferece o que o motor aceita');
 {
   const rotulos = (comprar, passar, jogadas) =>

@@ -22,10 +22,34 @@
 // ─── os medidores do #topo ───────────────────────────────────────────────────
 // Eram três `<div class="painel dado">` escritos no HTML da casa. As pontas com um `—`
 // quando a mesa está vazia porque "nenhuma" não é zero: zero é uma ponta de valor zero.
+//
+// O PESO ENTROU NO LUGAR DO NÚMERO DA MÃO, e a troca é a mesma que o truco fez em 07/08
+// quando a vira saiu para o placar de vazas entrar. O critério é o mesmo: dos três, o número
+// da mão é o único que não decide jogada nenhuma — e ele não se perde, continua na tela de
+// fim de partida e no botão de retomar.
+//
+// POR QUE TROCAR EM VEZ DE ACRESCENTAR: o quarto painel já foi tentado e MEDIDO quebrando.
+// No truco ele passava em retrato e, em paisagem 640×360, empurrava o `#topo` por cima da
+// mão de um adversário — é a mesma faixa, dividida com os três botões à esquerda e o
+// `#jogadores` à direita, e o mesmo risco. Quem responde é `node tests/test-telas.mjs
+// 640x360`, não a leitura.
+//
+// E POR QUE O PESO VALE O LUGAR: na tranca ganha a mão mais leve, e sem este número o
+// jogador soma as pintas de cabeça bem na hora de decidir se vale trancar. É a mesma família
+// do painel de contagem — informação que o motor já tem e que a tela não mostrava.
+//
+// `somaMao` vem de `020-baralho.js` e não é reescrita aqui: aritmética de baralho fora do
+// motor apodrece, e este projeto pagou isso com o `28 - 7 * MESA.n` escrito à mão no menu,
+// que foi a primeira linha a quebrar quando os modos entraram.
+//
+// MÃO VAZIA MOSTRA `—`, NÃO ZERO, pelo mesmo motivo das pontas logo acima: na tela de passe
+// do hotseat a vista chega com `mao: []` de propósito, e um zero ali seria uma mão sem peso
+// em vez de uma mão que não está à mostra. São coisas diferentes, e a tela não pode confundi-las
+// justamente no momento em que ela existe para esconder.
 const medidoresDoDomino = vista => [
   { rot: 'Pontas', val: vista.pontas ? vista.pontas.join('  ·  ') : '—' },
   { rot: 'Monte', val: vista.monte },
-  { rot: 'Mão', val: vista.maoNum },
+  { rot: 'Peso', val: vista.mao && vista.mao.length ? somaMao(vista.mao) : '—' },
 ];
 
 // ─── a barra de ações ────────────────────────────────────────────────────────

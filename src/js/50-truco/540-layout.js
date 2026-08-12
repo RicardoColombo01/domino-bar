@@ -30,6 +30,39 @@ const RAIO_DA_VAZA = CARTA_C * 0.78;
 // ninguém.
 const VIRA_ROT = Math.PI / 2;
 
+// ─── a vira fica EM CIMA DO BARALHO ──────────────────────────────────────────
+// Relato do Ricardo, olhando a mesa: dá para ver o naipe da vira e NÃO o valor. Ela é a
+// única carta pública do baralho, e o painel do `#topo` mostra o DERIVADO (a manilha), não
+// ela.
+//
+// E A MEDIÇÃO ACHOU MAIS DO QUE O RELATO DIZIA. O comentário logo acima afirmava que pôr as
+// cartas "em volta dela, e não por cima" é o que a mantém visível — e a conta desmente:
+//
+//   vira deitada     x −0.440 a 0.440   z −0.310 a 0.310
+//   a carta que VOCÊ joga    x −0.310 a 0.310   z  0.246 a 1.126
+//   sobreposição             x  0.620           z  0.064
+//
+// As duas positivas quer dizer que elas se cobrem — e, pior, no MESMO plano, porque toda
+// carta na mesa descansa em `y = CARTA_E/2`. Duas superfícies coplanares disputando o mesmo
+// pixel é z-fighting, e ele pisca conforme a câmera respira. A razão estava escrita, era
+// plausível, e estava errada; é a mesma espécie de afirmação não medida que a v4.7 pagou
+// com o truco online "herdando de graça".
+//
+// Erguer a vira resolve as duas coisas com um gesto só, e é o gesto da mesa de verdade: o
+// baralho fica no meio e a vira DEITADA EM CIMA DELE, atravessada. Ela sai do plano das
+// cartas jogadas (some o z-fighting), fica mais perto da câmera (logo maior em tela) e ganha
+// sombra própria, que é o que a descola do tampo.
+//
+// SETE CARTAS, e o número é de leitura e não de contagem: sobram 33 no baralho de uma mesa
+// de 2, e desenhá-las viraria uma torre de 1.15 no meio da mesa. Sete é o que o olho lê como
+// "um baralho" — a mesma escolha que o monte do dominó faz.
+const CARTAS_NO_TOCO = 7;
+// A vira DESCANSA no topo do toco, e a conta é a de empilhar: a carta `k` do toco tem o
+// centro em `CARTA_E/2 + k·CARTA_E`, então a face de cima da última fica exatamente em
+// `CARTAS_NO_TOCO · CARTA_E`. Como a animação põe o centro da carta em `alvo.y + CARTA_E/2`,
+// este número é o `alvo.y` da vira — ela pousa colada, sem folga e sem afundar.
+const ALTURA_DA_VIRA = CARTAS_NO_TOCO * CARTA_E;
+
 // A cadeira `i` vista de quem senta em `eu`, numa mesa de `n`. É a MESMA conta do dominó
 // (`anguloDaCadeira`), e ela mora lá porque é da mesa e não do jogo — quem senta à sua
 // frente está à sua frente em qualquer jogo. Aqui só se usa.

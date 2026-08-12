@@ -39,6 +39,34 @@ let escalaAlvoDoTruco = 1;
 const naMesaDoTruco = new Map();
 const CHAVE_DA_VIRA = 'vira';
 
+// ─── o toco do baralho, embaixo da vira ──────────────────────────────────────
+// MOBÍLIA, e por isso NÃO entra em `naMesaDoTruco`: aquele mapa é de cartas reconciliadas
+// por chave, e o toco não é carta nenhuma — é o resto do baralho, que ninguém joga. Montado
+// UMA vez e guardado, porque ele nunca muda: reconstruí-lo a cada publicação seria churn
+// puro, que é a mesma razão de a marca de "está ganhando" nascer na reconciliação.
+//
+// ELE ENTRA E SAI DO GRUPO em vez de ligar e desligar o `visible`, e a diferença é de
+// medição: o `Box3.setFromObject` do `test-telas` percorre a árvore e engorda a caixa com o
+// que encontra, visível ou não. Um toco escondido continuaria contando — e a mesa passaria a
+// medir, na mão de 11, um baralho que não está lá.
+//
+// O TOCO FICA A 0° E A VIRA A 90°, atravessada em cima dele. Não é enfeite: é o que faz a
+// cruz que se lê de relance como "baralho com a vira virada", e é o que separa as duas em
+// tela sem precisar de legenda. Em x/z a cruz cabe em 0.44 do centro, contra os 1.126 de
+// `caixaDaMesaDoTruco` — ou seja, o toco NÃO muda a caixa da mesa, e não há teto novo a
+// conferir.
+const tocoDoBaralho = new THREE.Group();
+for (let k = 0; k < CARTAS_NO_TOCO; k++) {
+  const v = criarVersoDeCarta();
+  v.position.y = CARTA_E / 2 + k * CARTA_E;
+  // Cada carta um tico torta, e o giro é DERIVADO do índice e não sorteado: `Math.random`
+  // aqui rodaria na carga e deslocaria o embaralho semeado das suítes de tela — a armadilha
+  // que a receita do `pintar()` e o `performance.now()` já pagaram. Um baralho perfeitamente
+  // alinhado parece um bloco de madeira; este parece um baralho.
+  v.rotation.y = ((k % 3) - 1) * 0.014;
+  tocoDoBaralho.add(v);
+}
+
 // ─── a sua mão ───────────────────────────────────────────────────────────────
 // Três cartas, e por isso não há leque em fileiras nem `porFileira`: o problema que aquilo
 // resolve — catorze peças numa tela de 360px — não existe aqui.
@@ -164,6 +192,37 @@ function sincronizarMaoDoTruco(vista) {
     const mat = m.obj.userData.corpo.material;
     mat.color.setHex(m.jogavel ? 0xf6f1e4 : 0xcfc7b6);
     mat.emissive.setHex(m.jogavel ? 0x2a1f08 : 0x000000);
+
+    // A MANILHA GANHA ANEL, e ele é PENDURADO AQUI e não na animação — mesma razão que a
+    // marca de "está ganhando" registra: quem é manilha só muda quando a mão muda, e a
+    // animação roda sessenta vezes por segundo. Criar e destruir um Mesh por quadro é churn
+    // puro.
+    //
+    // A PERGUNTA É DA REGRA (`ehManilha`, em 510-regras.js), e ela é a MESMA que decide quem
+    // ganha a vaza. Comparar aqui por conta própria daria duas respostas para a mesma
+    // pergunta — e a tela realçando uma carta que o motor não considera manilha é pior que
+    // realce nenhum: seria o jogo mentindo com confiança.
+    //
+    // SÓ A SUA MÃO, e isto é o invariante 3 e não zelo: `grupoOutrosDoTruco` é verso, e um
+    // anel ali contaria ao adversário que ele tem manilha. Vazamento por decoração é
+    // vazamento igual — e por isso há asserção cobrando que ninguém lá ganhe marca.
+    m.manilha = ehManilha(m.carta, vista.manilha);
+    if (m.manilha && !m.marca) {
+      m.marca = new THREE.Mesh(geomManilhaNoTruco, matManilhaNoTruco);
+      // O `-PI/2` é o mesmo da marca da mesa e deita a moldura no plano da CARTA, não no do
+      // mundo: como ela é FILHA do objeto dela, herda o tombo do leque e continua paralela à
+      // face por mais que a mão se incline. Pendurada no `grupoMaoDoTruco` em vez de na carta,
+      // ela ficaria deitada no chão enquanto a carta está de pé para você.
+      m.marca.rotation.x = -Math.PI / 2;
+      // ATRÁS da carta, que é o que faz dela uma moldura: a carta é opaca e cobre o miolo, e
+      // o que sobra à vista é exatamente a margem — uma borda de espessura uniforme. Um plano
+      // À FRENTE apagaria a carta, e no MESMO plano seria z-fighting.
+      m.marca.position.y = -CARTA_E / 2 - 0.004;
+      m.obj.add(m.marca);
+    } else if (!m.manilha && m.marca) {
+      m.obj.remove(m.marca);
+      m.marca = null;
+    }
   }
   if (escolhidaNoTruco !== null && !naMaoDoTrucoPorChave(escolhidaNoTruco)) escolhidaNoTruco = null;
 }
@@ -265,9 +324,17 @@ function sincronizarMesaDoTruco(vista) {
 
   // A VIRA. Ela é a única carta pública do baralho e é o que diz qual é a manilha — sem ela
   // desenhada, o jogador não tem como saber, e o jogo fica ilegível.
+  //
+  // EM CIMA DO TOCO (`ALTURA_DA_VIRA`), e o porquê está medido em `540-layout.js`: no tampo
+  // ela dividia o plano com as cartas jogadas, que a cobrem em 0.064 × 0.62. O toco entra e
+  // sai COM ela — a mão de 11 não tem vira, e um baralho sozinho no meio da mesa seria
+  // mobília prometendo uma carta que não existe.
   if (vista.vira) {
     alvos.set(CHAVE_DA_VIRA,
-      { carta: vista.vira, x: 0, z: 0, rotY: VIRA_ROT, baixo: false, y: 0 });
+      { carta: vista.vira, x: 0, z: 0, rotY: VIRA_ROT, baixo: false, y: ALTURA_DA_VIRA });
+    if (!tocoDoBaralho.parent) grupoMesaDoTruco.add(tocoDoBaralho);
+  } else if (tocoDoBaralho.parent) {
+    grupoMesaDoTruco.remove(tocoDoBaralho);
   }
 
   // As cartas da vaza em curso, cada uma na direção de quem a jogou.
@@ -304,6 +371,29 @@ function sincronizarMesaDoTruco(vista) {
 
   for (const [k, alvo] of alvos) {
     let reg = naMesaDoTruco.get(k);
+    // A CHAVE PODE MENTIR SOBRE A CARTA, e uma delas mente: `CHAVE_DA_VIRA` é FIXA enquanto
+    // toda outra carta é chaveada por `chaveCarta`. A reconciliação só cria objeto quando a
+    // chave FALTA — então, com a chave constante, o valor por trás dela podia mudar para
+    // sempre sem ninguém notar.
+    //
+    // O QUE ISSO CAUSAVA: `novaMaoDoTruco` sorteia uma vira nova a cada mão, e a mesa
+    // continuava mostrando a da PRIMEIRA — pelo resto da partida. O painel `MANILHA` mostrava
+    // a manilha certa e a carta na mesa mostrava outra coisa: os dois se contradiziam, e quem
+    // tentasse derivar a manilha da vira desenhada derivava errado.
+    //
+    // Por que nenhuma suíte pegou: a asserção era `naMesaDoTruco.has('vira')` — "a vira está
+    // desenhada" —, que é o "tem tinta em algum lugar" que aprova qualquer borrão. Ela nunca
+    // perguntou QUAL carta. E o defeito atravessa `novaMao`, que é a fronteira que caso
+    // escrito à mão não cruza (o `donoDaAposta` da v4.5 foi o mesmo).
+    //
+    // A guarda é GERAL de propósito, e não um `if` para a vira: ela restabelece o invariante
+    // que o resto do arquivo já supõe — **o objeto guardado numa chave mostra a carta que o
+    // alvo daquela chave pede**. Um terceiro jogo com outra chave fixa herda isto de graça.
+    if (reg && !mesmaCarta(reg.obj.userData.carta, alvo.carta)) {
+      grupoMesaDoTruco.remove(reg.obj);
+      naMesaDoTruco.delete(k);
+      reg = null;
+    }
     if (!reg) {
       const obj = criarCarta(alvo.carta, false);
       // Nasce no alto e torta: é a queda que dá o "toc" na mesa.
@@ -403,6 +493,50 @@ const RAIO_GANHANDO = Math.hypot(CARTA_L, CARTA_C) / 2;
 const geomGanhandoNoTruco = new THREE.RingGeometry(RAIO_GANHANDO, RAIO_GANHANDO * 1.21, 30);
 const ALTURA_GANHANDO = 0.085;
 
+// ─── a marca de MANILHA, na SUA mão ──────────────────────────────────────────
+// O painel do `#topo` diz `MANILHA 6` e o jogador olha as três cartas para descobrir quais
+// são 6. O comentário do `575-encaixes.js` já dizia a razão sem perceber: "quem não joga
+// truco todo dia não sabe derivar a manilha da vira". O jogo SABE — `vista.manilha` viaja na
+// visão desde a v4.3 — e a tela não mostrava.
+//
+// O CANAL TEM DE SER PRÓPRIO, e isto não é gosto: `mat.color`/`mat.emissive` já carregam
+// jogável × não-jogável (ver `sincronizarMaoDoTruco`), e no truco, NA SUA VEZ, todas as
+// cartas são jogáveis — então mais brilho não distinguiria nada dentro da mão. É a diferença
+// entre este realce e o do dominó, onde acender a peça jogável já separa.
+//
+// O DESENHO É O DA MARCA DE "ESTÁ GANHANDO", de propósito: anel MAIS altura. A altura é a
+// redundância não-cromática, pelo motivo escrito lá em cima — cor sozinha não é informação
+// acessível, e o realce tem de sobreviver a quem não distingue âmbar de verde.
+//
+// A COR É A DO PAINEL (`--ambar`, #f0c274, que é a cor de todo `.dado b` do HUD) e não o
+// verde de "está ganhando". As duas marcas nunca dividem a mesma carta — uma vive na mesa e a
+// outra na sua mão —, mas duas coisas diferentes não podem ter a mesma cor, e aqui a cor
+// AMARRA: o número no painel e o anel na carta são a mesma informação, dita duas vezes.
+//
+// É UMA MOLDURA E NÃO UM ANEL, e a primeira versão foi anel — **descoberto olhando a foto**,
+// que é o que nenhuma asserção deste projeto sabe perguntar. Um anel circular em volta de uma
+// carta RETANGULAR é largo demais para um leque:
+//
+//   diâmetro externo do anel   1.249      (2 · meia-diagonal · 1.16)
+//   espaçamento entre cartas   0.707      (CARTA_L · FOLGA_DO_LEQUE_TRUCO)
+//
+// Ele invadia a vizinha em 0.542 — **77% mais largo que o espaço disponível** —, e com duas
+// manilhas na mão os dois anéis se cruzavam no meio. Na MESA o anel funciona porque lá as
+// cartas estão a 0.97 uma da outra e cada uma tem o seu quadrante; na mão elas se encostam de
+// propósito. **A mesma marca não serve aos dois lugares, e a geometria diz por quê.**
+//
+// A MARGEM É DERIVADA E NÃO ESCOLHIDA: a folga do leque deixa `CARTA_L · 0.14` de ar entre
+// duas cartas, ou seja `0.07` de cada lado. A moldura fica com METADE disso e deixa a outra
+// metade de ar — assim duas molduras vizinhas **não podem** se tocar por construção, e não
+// por um número que hoje calha de caber. Se alguém apertar o leque um dia, isto aperta junto.
+const MARGEM_MANILHA = CARTA_L * (FOLGA_DO_LEQUE_TRUCO - 1) / 4;
+const matManilhaNoTruco = new THREE.MeshBasicMaterial({
+  color: 0xf0c274, transparent: true, opacity: 0.85,
+});
+const geomManilhaNoTruco = new THREE.PlaneGeometry(
+  CARTA_L + 2 * MARGEM_MANILHA, CARTA_C + 2 * MARGEM_MANILHA);
+const ALTURA_MANILHA = 0.11;
+
 function mostrarPreviaDoTruco(vista) {
   esconderPreviaDoTruco();
   const m = escolhidaNoTruco === null ? null : naMaoDoTrucoPorChave(escolhidaNoTruco);
@@ -453,8 +587,14 @@ function animarTrucoNaMesa(dt, apontadaAgora) {
   for (const m of naMaoDoTruco) {
     const sobe = chaveCarta(m.carta) === escolhidaNoTruco ? 0.42
       : (m === sobEssa && m.jogavel ? 0.2 : 0);
+    // A MANILHA FICA UM DEGRAU ACIMA DAS OUTRAS, e o termo é separado do `sobe` de propósito:
+    // aquele é GESTO (o ponteiro em cima, a carta escolhida) e alimenta também o z, o tombo e
+    // a escala; este é ESTADO da mão, e mexer no tombo por causa dele faria a carta parecer
+    // levantada pelo dedo de ninguém. Somam-se: uma manilha apontada sobe as duas coisas, que
+    // é o certo — as duas informações continuam legíveis juntas.
+    const realce = m.manilha ? ALTURA_MANILHA : 0;
     m.obj.position.x = chegarPerto(m.obj.position.x, m.xBase, 10, dt);
-    m.obj.position.y = chegarPerto(m.obj.position.y, m.yBase + sobe, 14, dt);
+    m.obj.position.y = chegarPerto(m.obj.position.y, m.yBase + realce + sobe, 14, dt);
     m.obj.position.z = chegarPerto(m.obj.position.z, m.zBase - sobe * 0.35, 14, dt);
     m.obj.rotation.x = chegarPerto(m.obj.rotation.x, m.tombo + sobe * 0.22, 14, dt);
     m.obj.rotation.y = chegarPerto(m.obj.rotation.y, m.giro, 14, dt);
