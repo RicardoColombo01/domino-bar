@@ -927,7 +927,7 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 | em curso | **nada** — a **Fila 12** e a **Fila 13** foram abertas e fechadas em 11/08: 7 + 3 achados, todos consertados e conferidos por mutação. v4.9.0 e **v4.10.0** |
 | as anteriores | v4.7.0 (o truco online) · v4.6.0 (as cenas de truco no `telas`) · v4.5.0 (o corpo do truco) · v4.4.0 (bot + layout) · v4.3.0 (regras + motor) · v4.2.0 (`40-cartas/`) · v4.1.0 (a aba) · v4.0.0 (o contrato) |
 | Filas 5 a 13 | **todas fechadas** |
-| o que vem | **a Fase 5** — o aplicativo: APK no GitHub Releases + Amazon Appstore. **É o único item aberto, e é conta e não código** — o pré-requisito de código que ela tinha (o C6, o service worker apagando cache de vizinho na mesma origem) saiu na v4.9.0 |
+| o que vem | **nada de código.** A **Fase 5** (o APK) está **⏸ em espera por decisão do Ricardo** até ele trocar a conta do GitHub desta máquina — o ambiente já está montado e destrava sozinho. O que sobra é **JOGAR** |
 
 ---
 
@@ -1097,13 +1097,22 @@ A FASE 5   ⚠ NÃO TERMINADA, e os DOIS bloqueios estão MEDIDOS e não suposto
            A keystore NÃO foi gerada de propósito — é a identidade permanente do
            app, e a senha e o backup são dele.
 
-AMANHÃ     a FASE 5 cabe em dois passos, os dois dele:
-             1. criar o repositório `ricardocolombo01.github.io` e copiar
-                `twa/user-page/` para lá  (~5 min)
-             2. `cd twa && bubblewrap build` num terminal de verdade
-           Entre um e outro, `npm run twa` diz o que falta.
-           E a fonte mais barata deste projeto continua sendo JOGAR: o truco em
-           duplas no CELULAR, com gente de verdade, é o que nenhuma suíte alcança.
+⏸ A FASE 5 ESTÁ EM ESPERA POR DECISÃO DO RICARDO (11/08/2026), e não por
+           esquecimento — a distinção importa, porque este arquivo trata item
+           parado como dívida e este não é.
+           Palavras dele: "no momento esqueça essa parte, mais para frente
+           quando eu acabar o outro projeto do gutenberg, irei trocar a conta
+           do GH para que você possa fazer".
+           Ou seja: o bloqueio 1 (a user page) sai do caminho quando ele trocar
+           a credencial desta máquina, e aí a Fase 5 volta a ser MINHA — não
+           dele. Nada a fazer até lá, e nada a refazer: o ambiente do Bubblewrap
+           fica montado, e `npm run twa` continua sendo a régua.
+
+AMANHÃ     NÃO HÁ ITEM DE CÓDIGO ABERTO. A fila está vazia, as Filas 5 a 13
+           estão fechadas e a Fase 5 está pausada por escolha.
+           A fonte mais barata deste projeto continua sendo JOGAR: o truco em
+           duplas no CELULAR, com gente de verdade, é o que nenhuma suíte
+           alcança — e é o que este arquivo aponta há três filas.
 ```
 
 > ### ⚠ ESTA RELEASE NÃO MUDA O QUE O JOGADOR VÊ, e isso desarma a régua de sempre
@@ -4366,7 +4375,17 @@ tem exceção para quem a está escrevendo.**
 
 ---
 
-## A FASE 5 — o que ficou pronto, e o que só o Ricardo pode fazer
+## A FASE 5 — ⏸ EM ESPERA (decisão do Ricardo, 11/08/2026)
+
+> **Não é dívida, é pausa.** Ele decidiu adiar até terminar outro projeto (o *gutenberg*) e,
+> então, **trocar a conta do GitHub desta máquina** — o que derruba o bloqueio 1 e devolve a
+> fase inteira para o meu lado. Até lá não há nada a fazer aqui, e **nada a refazer**: o
+> ambiente do Bubblewrap continua montado e o `npm run twa` continua sendo a régua.
+>
+> **Ao retomar, comece rodando `npm run twa`** — ele diz em que degrau a fase está sem
+> depender de ninguém lembrar.
+
+### O que ficou pronto, e o que dependia da conta
 
 **Ela não foi terminada, e não é por falta de trabalho de código.** Fica registrado com a
 medição, porque este arquivo já afirmou "é conta e não código" sem prova:
