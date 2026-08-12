@@ -4715,10 +4715,34 @@ function desenharContagem(vista) {
 // ─── os medidores do #topo ───────────────────────────────────────────────────
 // Eram três `<div class="painel dado">` escritos no HTML da casa. As pontas com um `—`
 // quando a mesa está vazia porque "nenhuma" não é zero: zero é uma ponta de valor zero.
+//
+// O PESO ENTROU NO LUGAR DO NÚMERO DA MÃO, e a troca é a mesma que o truco fez em 07/08
+// quando a vira saiu para o placar de vazas entrar. O critério é o mesmo: dos três, o número
+// da mão é o único que não decide jogada nenhuma — e ele não se perde, continua na tela de
+// fim de partida e no botão de retomar.
+//
+// POR QUE TROCAR EM VEZ DE ACRESCENTAR: o quarto painel já foi tentado e MEDIDO quebrando.
+// No truco ele passava em retrato e, em paisagem 640×360, empurrava o `#topo` por cima da
+// mão de um adversário — é a mesma faixa, dividida com os três botões à esquerda e o
+// `#jogadores` à direita, e o mesmo risco. Quem responde é `node tests/test-telas.mjs
+// 640x360`, não a leitura.
+//
+// E POR QUE O PESO VALE O LUGAR: na tranca ganha a mão mais leve, e sem este número o
+// jogador soma as pintas de cabeça bem na hora de decidir se vale trancar. É a mesma família
+// do painel de contagem — informação que o motor já tem e que a tela não mostrava.
+//
+// `somaMao` vem de `020-baralho.js` e não é reescrita aqui: aritmética de baralho fora do
+// motor apodrece, e este projeto pagou isso com o `28 - 7 * MESA.n` escrito à mão no menu,
+// que foi a primeira linha a quebrar quando os modos entraram.
+//
+// MÃO VAZIA MOSTRA `—`, NÃO ZERO, pelo mesmo motivo das pontas logo acima: na tela de passe
+// do hotseat a vista chega com `mao: []` de propósito, e um zero ali seria uma mão sem peso
+// em vez de uma mão que não está à mostra. São coisas diferentes, e a tela não pode confundi-las
+// justamente no momento em que ela existe para esconder.
 const medidoresDoDomino = vista => [
   { rot: 'Pontas', val: vista.pontas ? vista.pontas.join('  ·  ') : '—' },
   { rot: 'Monte', val: vista.monte },
-  { rot: 'Mão', val: vista.maoNum },
+  { rot: 'Peso', val: vista.mao && vista.mao.length ? somaMao(vista.mao) : '—' },
 ];
 
 // ─── a barra de ações ────────────────────────────────────────────────────────
@@ -8389,6 +8413,39 @@ const RAIO_DA_VAZA = CARTA_C * 0.78;
 // ninguém.
 const VIRA_ROT = Math.PI / 2;
 
+// ─── a vira fica EM CIMA DO BARALHO ──────────────────────────────────────────
+// Relato do Ricardo, olhando a mesa: dá para ver o naipe da vira e NÃO o valor. Ela é a
+// única carta pública do baralho, e o painel do `#topo` mostra o DERIVADO (a manilha), não
+// ela.
+//
+// E A MEDIÇÃO ACHOU MAIS DO QUE O RELATO DIZIA. O comentário logo acima afirmava que pôr as
+// cartas "em volta dela, e não por cima" é o que a mantém visível — e a conta desmente:
+//
+//   vira deitada     x −0.440 a 0.440   z −0.310 a 0.310
+//   a carta que VOCÊ joga    x −0.310 a 0.310   z  0.246 a 1.126
+//   sobreposição             x  0.620           z  0.064
+//
+// As duas positivas quer dizer que elas se cobrem — e, pior, no MESMO plano, porque toda
+// carta na mesa descansa em `y = CARTA_E/2`. Duas superfícies coplanares disputando o mesmo
+// pixel é z-fighting, e ele pisca conforme a câmera respira. A razão estava escrita, era
+// plausível, e estava errada; é a mesma espécie de afirmação não medida que a v4.7 pagou
+// com o truco online "herdando de graça".
+//
+// Erguer a vira resolve as duas coisas com um gesto só, e é o gesto da mesa de verdade: o
+// baralho fica no meio e a vira DEITADA EM CIMA DELE, atravessada. Ela sai do plano das
+// cartas jogadas (some o z-fighting), fica mais perto da câmera (logo maior em tela) e ganha
+// sombra própria, que é o que a descola do tampo.
+//
+// SETE CARTAS, e o número é de leitura e não de contagem: sobram 33 no baralho de uma mesa
+// de 2, e desenhá-las viraria uma torre de 1.15 no meio da mesa. Sete é o que o olho lê como
+// "um baralho" — a mesma escolha que o monte do dominó faz.
+const CARTAS_NO_TOCO = 7;
+// A vira DESCANSA no topo do toco, e a conta é a de empilhar: a carta `k` do toco tem o
+// centro em `CARTA_E/2 + k·CARTA_E`, então a face de cima da última fica exatamente em
+// `CARTAS_NO_TOCO · CARTA_E`. Como a animação põe o centro da carta em `alvo.y + CARTA_E/2`,
+// este número é o `alvo.y` da vira — ela pousa colada, sem folga e sem afundar.
+const ALTURA_DA_VIRA = CARTAS_NO_TOCO * CARTA_E;
+
 // A cadeira `i` vista de quem senta em `eu`, numa mesa de `n`. É a MESMA conta do dominó
 // (`anguloDaCadeira`), e ela mora lá porque é da mesa e não do jogo — quem senta à sua
 // frente está à sua frente em qualquer jogo. Aqui só se usa.
@@ -8504,6 +8561,34 @@ let escalaAlvoDoTruco = 1;
 // chave da carta → { obj, alvo }. `alvo` traz posição, giro e se ela está virada para baixo.
 const naMesaDoTruco = new Map();
 const CHAVE_DA_VIRA = 'vira';
+
+// ─── o toco do baralho, embaixo da vira ──────────────────────────────────────
+// MOBÍLIA, e por isso NÃO entra em `naMesaDoTruco`: aquele mapa é de cartas reconciliadas
+// por chave, e o toco não é carta nenhuma — é o resto do baralho, que ninguém joga. Montado
+// UMA vez e guardado, porque ele nunca muda: reconstruí-lo a cada publicação seria churn
+// puro, que é a mesma razão de a marca de "está ganhando" nascer na reconciliação.
+//
+// ELE ENTRA E SAI DO GRUPO em vez de ligar e desligar o `visible`, e a diferença é de
+// medição: o `Box3.setFromObject` do `test-telas` percorre a árvore e engorda a caixa com o
+// que encontra, visível ou não. Um toco escondido continuaria contando — e a mesa passaria a
+// medir, na mão de 11, um baralho que não está lá.
+//
+// O TOCO FICA A 0° E A VIRA A 90°, atravessada em cima dele. Não é enfeite: é o que faz a
+// cruz que se lê de relance como "baralho com a vira virada", e é o que separa as duas em
+// tela sem precisar de legenda. Em x/z a cruz cabe em 0.44 do centro, contra os 1.126 de
+// `caixaDaMesaDoTruco` — ou seja, o toco NÃO muda a caixa da mesa, e não há teto novo a
+// conferir.
+const tocoDoBaralho = new THREE.Group();
+for (let k = 0; k < CARTAS_NO_TOCO; k++) {
+  const v = criarVersoDeCarta();
+  v.position.y = CARTA_E / 2 + k * CARTA_E;
+  // Cada carta um tico torta, e o giro é DERIVADO do índice e não sorteado: `Math.random`
+  // aqui rodaria na carga e deslocaria o embaralho semeado das suítes de tela — a armadilha
+  // que a receita do `pintar()` e o `performance.now()` já pagaram. Um baralho perfeitamente
+  // alinhado parece um bloco de madeira; este parece um baralho.
+  v.rotation.y = ((k % 3) - 1) * 0.014;
+  tocoDoBaralho.add(v);
+}
 
 // ─── a sua mão ───────────────────────────────────────────────────────────────
 // Três cartas, e por isso não há leque em fileiras nem `porFileira`: o problema que aquilo
@@ -8763,9 +8848,17 @@ function sincronizarMesaDoTruco(vista) {
 
   // A VIRA. Ela é a única carta pública do baralho e é o que diz qual é a manilha — sem ela
   // desenhada, o jogador não tem como saber, e o jogo fica ilegível.
+  //
+  // EM CIMA DO TOCO (`ALTURA_DA_VIRA`), e o porquê está medido em `540-layout.js`: no tampo
+  // ela dividia o plano com as cartas jogadas, que a cobrem em 0.064 × 0.62. O toco entra e
+  // sai COM ela — a mão de 11 não tem vira, e um baralho sozinho no meio da mesa seria
+  // mobília prometendo uma carta que não existe.
   if (vista.vira) {
     alvos.set(CHAVE_DA_VIRA,
-      { carta: vista.vira, x: 0, z: 0, rotY: VIRA_ROT, baixo: false, y: 0 });
+      { carta: vista.vira, x: 0, z: 0, rotY: VIRA_ROT, baixo: false, y: ALTURA_DA_VIRA });
+    if (!tocoDoBaralho.parent) grupoMesaDoTruco.add(tocoDoBaralho);
+  } else if (tocoDoBaralho.parent) {
+    grupoMesaDoTruco.remove(tocoDoBaralho);
   }
 
   // As cartas da vaza em curso, cada uma na direção de quem a jogou.

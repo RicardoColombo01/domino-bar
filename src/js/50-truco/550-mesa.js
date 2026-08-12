@@ -39,6 +39,34 @@ let escalaAlvoDoTruco = 1;
 const naMesaDoTruco = new Map();
 const CHAVE_DA_VIRA = 'vira';
 
+// ─── o toco do baralho, embaixo da vira ──────────────────────────────────────
+// MOBÍLIA, e por isso NÃO entra em `naMesaDoTruco`: aquele mapa é de cartas reconciliadas
+// por chave, e o toco não é carta nenhuma — é o resto do baralho, que ninguém joga. Montado
+// UMA vez e guardado, porque ele nunca muda: reconstruí-lo a cada publicação seria churn
+// puro, que é a mesma razão de a marca de "está ganhando" nascer na reconciliação.
+//
+// ELE ENTRA E SAI DO GRUPO em vez de ligar e desligar o `visible`, e a diferença é de
+// medição: o `Box3.setFromObject` do `test-telas` percorre a árvore e engorda a caixa com o
+// que encontra, visível ou não. Um toco escondido continuaria contando — e a mesa passaria a
+// medir, na mão de 11, um baralho que não está lá.
+//
+// O TOCO FICA A 0° E A VIRA A 90°, atravessada em cima dele. Não é enfeite: é o que faz a
+// cruz que se lê de relance como "baralho com a vira virada", e é o que separa as duas em
+// tela sem precisar de legenda. Em x/z a cruz cabe em 0.44 do centro, contra os 1.126 de
+// `caixaDaMesaDoTruco` — ou seja, o toco NÃO muda a caixa da mesa, e não há teto novo a
+// conferir.
+const tocoDoBaralho = new THREE.Group();
+for (let k = 0; k < CARTAS_NO_TOCO; k++) {
+  const v = criarVersoDeCarta();
+  v.position.y = CARTA_E / 2 + k * CARTA_E;
+  // Cada carta um tico torta, e o giro é DERIVADO do índice e não sorteado: `Math.random`
+  // aqui rodaria na carga e deslocaria o embaralho semeado das suítes de tela — a armadilha
+  // que a receita do `pintar()` e o `performance.now()` já pagaram. Um baralho perfeitamente
+  // alinhado parece um bloco de madeira; este parece um baralho.
+  v.rotation.y = ((k % 3) - 1) * 0.014;
+  tocoDoBaralho.add(v);
+}
+
 // ─── a sua mão ───────────────────────────────────────────────────────────────
 // Três cartas, e por isso não há leque em fileiras nem `porFileira`: o problema que aquilo
 // resolve — catorze peças numa tela de 360px — não existe aqui.
@@ -297,9 +325,17 @@ function sincronizarMesaDoTruco(vista) {
 
   // A VIRA. Ela é a única carta pública do baralho e é o que diz qual é a manilha — sem ela
   // desenhada, o jogador não tem como saber, e o jogo fica ilegível.
+  //
+  // EM CIMA DO TOCO (`ALTURA_DA_VIRA`), e o porquê está medido em `540-layout.js`: no tampo
+  // ela dividia o plano com as cartas jogadas, que a cobrem em 0.064 × 0.62. O toco entra e
+  // sai COM ela — a mão de 11 não tem vira, e um baralho sozinho no meio da mesa seria
+  // mobília prometendo uma carta que não existe.
   if (vista.vira) {
     alvos.set(CHAVE_DA_VIRA,
-      { carta: vista.vira, x: 0, z: 0, rotY: VIRA_ROT, baixo: false, y: 0 });
+      { carta: vista.vira, x: 0, z: 0, rotY: VIRA_ROT, baixo: false, y: ALTURA_DA_VIRA });
+    if (!tocoDoBaralho.parent) grupoMesaDoTruco.add(tocoDoBaralho);
+  } else if (tocoDoBaralho.parent) {
+    grupoMesaDoTruco.remove(tocoDoBaralho);
   }
 
   // As cartas da vaza em curso, cada uma na direção de quem a jogou.

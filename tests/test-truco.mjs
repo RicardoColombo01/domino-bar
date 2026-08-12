@@ -37,6 +37,10 @@ const mod = await import(buildModule([
   // conferindo a tabela contra ela mesma. A geometria é como se pergunta pelo anel de fora
   // da sua mão, e o grupo dos outros é onde ele não pode aparecer.
   'ehManilha', 'geomManilhaNoTruco', 'grupoOutrosDoTruco',
+  // Fila 15 · A2: a vira erguida sobre o toco. `tocoDoBaralho` é MOBÍLIA e não entra em
+  // `naMesaDoTruco`, então só a cena responde por ele; `CARTA_E` é a régua de "subiu o
+  // bastante" — menos que uma espessura de carta e as duas continuam se tocando.
+  'tocoDoBaralho', 'CARTAS_NO_TOCO', 'ALTURA_DA_VIRA', 'CARTA_E', 'grupoMesaDoTruco',
   // Fila 12: projetar a carta para NDC é o único jeito de mirar com o DEDO de verdade —
   // e é o dedo, não o teclado, que o sistema interrompe.
   'ponteiroDoTruco',
@@ -1060,6 +1064,42 @@ console.log('\na casa senta na mesa de truco');
   // A VIRA PRECISA ESTAR DESENHADA. Ela é a única carta pública do baralho, e sem ela na mesa
   // o jogador não tem como saber qual é a manilha — o jogo fica ilegível.
   ok(mod.naMesaDoTruco.has('vira'), 'a vira não foi desenhada na mesa');
+
+  // ─── a vira EM CIMA DO TOCO ───────────────────────────────────────────────
+  // Ela subiu porque no tampo dividia o plano com as cartas jogadas — sobreposição medida de
+  // 0.064 × 0.62, e coplanares, que é z-fighting. A conta está em `540-layout.js`; aqui se
+  // cobra o resultado.
+  const viraNaMesa = mod.naMesaDoTruco.get('vira');
+  ok(((viraNaMesa || {}).alvo || {}).y > 0,
+    `a vira ficou em y = ${((viraNaMesa || {}).alvo || {}).y}, no mesmo plano das cartas jogadas`);
+  // E ELA SAI DO PLANO DE VERDADE, não por um fio: a carta jogada tem meia espessura, então
+  // qualquer altura menor que `CARTA_E` deixaria as duas se tocando. Esta asserção é a que
+  // separa "subiu" de "subiu o bastante".
+  ok(((viraNaMesa || {}).alvo || {}).y >= mod.CARTA_E,
+    'a vira subiu menos que a espessura de uma carta — continua encostando na jogada');
+
+  // O TOCO EXISTE, e ele é MOBÍLIA: não entra em `naMesaDoTruco` (aquele mapa é de cartas
+  // reconciliadas por chave), então quem responde por ele é a cena.
+  const tocoNaCena = () => mod.grupoMesaDoTruco.children.includes(mod.tocoDoBaralho);
+  ok(tocoNaCena(), 'a vira está na mesa e o baralho embaixo dela não');
+  ok(mod.tocoDoBaralho.children.length === mod.CARTAS_NO_TOCO,
+    `o toco tem ${mod.tocoDoBaralho.children.length} cartas e devia ter ${mod.CARTAS_NO_TOCO}`);
+
+  // E ELE SOME COM A VIRA. A mão de 11 não tem vira, e um baralho sozinho no meio da mesa
+  // seria mobília prometendo uma carta que não existe — a espécie de defeito que o
+  // `refletirMesaNosBotoes` existe para impedir: o jogo certo e a tela mentindo.
+  //
+  // ENTRA E SAI DO GRUPO em vez de ligar o `visible`, e é isto que esta linha protege: o
+  // `Box3.setFromObject` do `test-telas` percorre a árvore e engorda a caixa com o que
+  // encontra, VISÍVEL OU NÃO. Escondido em vez de removido, o toco continuaria medindo.
+  const viraGuardada = mod.P.vira;
+  mod.P.vira = null;
+  mod.publicar();
+  ok(!tocoNaCena(), 'sem vira, o toco do baralho ficou na mesa sozinho');
+  ok(!mod.naMesaDoTruco.has('vira'), 'a vira sumiu da vista e continuou desenhada');
+  mod.P.vira = viraGuardada;
+  mod.publicar();
+  ok(tocoNaCena() && mod.naMesaDoTruco.has('vira'), 'a vira voltou e o toco não');
 
   ok(mod.naMaoDoTruco.length === 3, `a sua mão tem ${mod.naMaoDoTruco.length} cartas em 3D`);
   ok(mod.grupoMaoDoTruco.children.length === 3, 'as cartas da mão não entraram na cena');
