@@ -8,10 +8,11 @@ gente e bot, na mesma tela ou pela internet. No ar em
 Sem framework, sem bundler, e **dois binários** — os ícones do aplicativo, exigidos pelo
 manifest: madeira, pintas, cartas e sons continuam gerados em canvas e WebAudio na hora.
 Three.js e PeerJS vêm de CDN, e o **service worker os guarda**, então depois de uma partida o
-jogo abre sem internet. **9.768 linhas** no total (`src/js` + `src/pagina.html` +
-`src/css/estilo.css` + `src/sw.js`), conferido em 11/08/2026 — este número **envelhece**, e
-envelheceu duas vezes: ficou dizendo 2.100 por três releases seguidas, e a medição de 10/08
-(9.648) já estava velha no dia seguinte. **Rode a conta, não leia o número daqui.**
+jogo abre sem internet. **10.098 linhas** no total (`src/js` + `src/pagina.html` +
+`src/css/estilo.css` + `src/sw.js`), conferido em 12/08/2026 — este número **envelhece**, e já
+envelheceu três vezes: ficou dizendo 2.100 por três releases seguidas, a medição de 10/08
+(9.648) estava velha no dia seguinte, e a de 11/08 (9.768) durou um dia.
+**Rode a conta, não leia o número daqui.**
 
 **Conte com `node`, não com o PowerShell.** `Measure-Object -Line` **não conta linha em
 branco** e devolve ~450 a menos; a discordância entre as duas réguas já custou uma
@@ -524,6 +525,11 @@ por mutação nas quatro direções, inclusive as duas de falso positivo.
   o abridor DEPOIS do giro. Antes de consertar o jogo, pergunte se o teste olhou na hora certa
   e pelo caminho certo — é a mesma disciplina de "medir antes de consertar", virada para
   dentro.
+- **Asserção que desreferencia campo opcional trunca a suíte sob MUTAÇÃO — e ela REINCIDIU na
+  Onda A, dentro do conserto que a cita.** `manilhasNaMao[0].marca.parent` é seguro no caminho
+  feliz e explode quando a mutação apaga o realce: a conferência reportou **uma** reprovação
+  onde havia três, e por um momento pareceu que a asserção não cobria o ramo. Verde, ela era
+  indistinguível de correta — só a mutação a expôs. `(x || {}).campo`, sempre.
 - **Asserção que desreferencia campo opcional trunca a suíte sob MUTAÇÃO.** `P.resultado.motivo`
   é seguro no caminho feliz e explode quando a mutação faz a mão não fechar — e aí a
   conferência sub-relata, exatamente como o arquivo já registrava. O conserto é barato
@@ -733,6 +739,17 @@ por mutação nas quatro direções, inclusive as duas de falso positivo.
   comando tocou.** Conferido em 10/08: depois de cinco mutações o `git status` acusou
   `index.html` e `sw.js` sujos, e o `npm run check` reprovou — o conserto é `npm run build`, e
   a prova de que a fonte voltou inteira é o `sw.js` recuperar o MESMO resumo de antes.
+- **PONTO CEGO DECLARADO É PONTO CEGO ONDE O DEFEITO MORA — e este estava escrito no código
+  há uma release.** O `590-registro.js` diz de frente que `folgaEntre` *"só compara ENTRE
+  grupos, nunca dentro de um, então esta suíte nunca perguntará se a pilha de uma dupla
+  encavalou a vira"*. A vira e a carta que você joga são irmãs dentro de `grupoMesaDoTruco`,
+  se cobriam em **0.064 × 0.62** e — pior — no MESMO plano (`y = CARTA_E/2`), que é
+  z-fighting. **A suíte estava certa em dizer verde; a pergunta é que não alcançava ali.** É a
+  mesma família de *"o `test-acoplamento` dizia zero e estava certo"*, num meio novo. Corolário
+  prático: quando um comentário do projeto declara uma lacuna de medição, **aquilo é uma lista
+  de lugares para olhar à mão**, não uma ressalva burocrática. E o segundo corolário é que a
+  afirmação ao lado (*"pôr as cartas em volta dela, e não por cima"*) era exatamente do tipo
+  que a v4.7 já tinha punido: **razão escrita, plausível, e não medida**.
 - **A régua de ENVIADO é o remoto CONSULTADO, e `git rev-list` não é ela.** Este arquivo já
   cobrava *commitado ≠ enviado ≠ publicado* e mandava usar
   `git rev-list --left-right --count origin/main...main` para os dois últimos degraus. **Ele
@@ -918,16 +935,17 @@ campo acha o que está escrito certo e mesmo assim não funciona.
 **Leia isto primeiro ao retomar.** É o estado real do trabalho, o que ele produziu, o que
 fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numerados mais abaixo.
 
-#### ESTADO EM UMA OLHADA (10/08/2026)
+#### ESTADO EM UMA OLHADA (12/08/2026)
 
 | | |
 |---|---|
-| enviado | **v4.10.0** — conferido com `git ls-remote`, que é a régua de ENVIADO (o `git rev-list` compara com um ref em cache e já respondeu `0 0` com duas releases paradas) |
-| **PUBLICADO** | conferir com `curl`. **A v4.9 MUDA o bundle** — ao contrário da v4.8 —, então desta vez o `sw.js` servido TEM de mudar: ele é um resumo do `index.html`, e o novo é `27648ab61191` |
-| em curso | **nada** — as Filas 12, 13 e 14 foram abertas e fechadas em 11/08 (7 + 3 + 2 achados, todos com mutação). A **Fila 15** é plano, não trabalho em curso |
-| as anteriores | v4.7.0 (o truco online) · v4.6.0 (as cenas de truco no `telas`) · v4.5.0 (o corpo do truco) · v4.4.0 (bot + layout) · v4.3.0 (regras + motor) · v4.2.0 (`40-cartas/`) · v4.1.0 (a aba) · v4.0.0 (o contrato) |
-| Filas 5 a 14 | **todas fechadas** · a **Fila 15 é o PLANO DE AMANHÃ**, em ondas |
-| o que vem | **nada de código.** A **Fase 5** (o APK) está **⏸ em espera por decisão do Ricardo** até ele trocar a conta do GitHub desta máquina — o ambiente já está montado e destrava sozinho. O que sobra é **JOGAR** |
+| commitado | **v4.12.0** — a **ONDA A** da Fila 15: as manilhas realçadas, a vira em cima do baralho, o peso da mão no topo do dominó |
+| enviado | conferir com **`git ls-remote origin refs/heads/main`**, que é a régua de ENVIADO. O `git rev-list` compara com um ref em cache e já respondeu `0 0` com duas releases paradas |
+| **PUBLICADO** | conferir com `curl`. **A v4.12 MUDA o bundle** (mexe em `src/js/`), então o `sw.js` servido TEM de mudar — ele é um resumo do `index.html` |
+| em curso | **nada.** As Filas 12, 13 e 14 fecharam em 11/08; a **Onda A** da Fila 15 fechou em 12/08 |
+| as anteriores | v4.11.0 (a carta 42% esticada) · v4.10.0 (Fila 13 + o pacote da Fase 5) · v4.9.0 (a Fila 12) · v4.8.0 (o truco em duplas online) · v4.7.0 (o truco online) · v4.5.0 (o corpo do truco) |
+| Filas 5 a 14 | **todas fechadas** · da **Fila 15** sai a Onda A; sobram **B, C, D e E** |
+| o que vem | as ondas **B** (o online: compartilhar o código, avisar da vez, o `beforeunload`), **D** (a dívida: o `test-textura` com truco na mesa) e **E** (temas de baralho). A **Fase 5** segue **⏸ em espera por decisão sua**. E **JOGAR** continua sendo o mais barato |
 
 ---
 
@@ -1047,7 +1065,7 @@ que as suítes rodaram inteiras com o site no ar três releases atrás.
 
 ---
 
-#### ONDE PAROU — sessão de 11/08/2026 (a varredura da Fila 12)
+#### ONDE PAROU — sessões de 11 e 12/08/2026 (as varreduras, e a Onda A)
 
 **LEIA ISTO PRIMEIRO.** É o ponto exato de retomada, e é o ÚNICO — este arquivo já registrou
 que ponteiro de retomada é o item que mais apodrece aqui, e por isso não pode haver dois.
@@ -1108,18 +1126,39 @@ A FASE 5   ⚠ NÃO TERMINADA, e os DOIS bloqueios estão MEDIDOS e não suposto
            dele. Nada a fazer até lá, e nada a refazer: o ambiente do Bubblewrap
            fica montado, e `npm run twa` continua sendo a régua.
 
-AMANHÃ     ➜ A FILA 15 É O PLANO. Ela está escrita em ONDAS, na ordem, com o
-           custo de cada uma e a armadilha já medida de cada uma.
-           Comece pela ONDA A — "o que o jogo SABE e o jogador NÃO VÊ". Se o
-           dia render pouco, ela sozinha muda o jogo mais que o resto somado,
-           e o primeiro item é realçar as MANILHAS na sua mão: o painel diz
-           `MANILHA 6` e o jogador tem de descobrir sozinho quais cartas são 6.
+A ONDA A  ✔ FEITA em 12/08, e saiu na v4.12.0 — três commits, um por item,
+           cada um com asserção e CADA ASSERÇÃO CONFERIDA POR MUTAÇÃO (sete no
+           total, todas nascidas verdes porque o conserto veio antes).
+           A1 as manilhas realçadas na sua mão · A2 a vira em cima do toco de
+           baralho · A3 o peso da mão no #topo do dominó, no lugar do número
+           da mão. As duas decisões de casa foram do Ricardo, no plano.
+
+           E DUAS COISAS QUE A MEDIÇÃO ACHOU E O PLANO NÃO PREVIA:
+           · a vira e a carta que você joga estavam NO MESMO PLANO e se
+             cobriam (0.064 × 0.62) — z-fighting, e o comentário do
+             540-layout afirmava o contrário. O A2 deixou de ser cosmético.
+           · os medidores do DOMINÓ nunca tiveram uma asserção, nem antes da
+             troca. O test-telas media se eles CABEM; ninguém media se eles
+             dizem a verdade. O irmão em truco tem as dele desde a v4.5.
+
+AMANHÃ     ➜ SOBRAM AS ONDAS B, C, D e E da Fila 15, escritas em ordem, com o
+           custo e a armadilha já medida de cada uma.
+           A mais barata com valor real é a ONDA B (o online): compartilhar o
+           código da sala, avisar que é a sua vez com a aba no fundo, e o
+           `beforeunload` que ele já aprovou (B4).
+           A ONDA D é DÍVIDA e não ideia: o `test-textura` nunca rodou com o
+           TRUCO na mesa, então ninguém nunca perguntou se a CARTA sobrevive a
+           sair do aplicativo e voltar — que é o defeito que custou a Fila 7
+           inteira. A proteção existe; a prova não.
            AS TRÊS DECISÕES JÁ ESTÃO RESPONDIDAS (11/08): temas de baralho com
            inventário (ideia dele, é a ONDA E), avisar antes de sair no online
            (o B4), e o PIFE como próximo jogo. Nada trava.
            E a fonte mais barata deste projeto continua sendo JOGAR: o truco em
            duplas no CELULAR, com gente de verdade, é o que nenhuma suíte
-           alcança — e é o que este arquivo aponta há três filas.
+           alcança — e é o que este arquivo aponta há três filas. Agora com
+           duas coisas novas para olhar que foto nenhuma responde: se o anel
+           âmbar da manilha se distingue do anel verde de "está ganhando", e
+           se a vira erguida ainda parece parte da mesa.
 ```
 
 > ### ⚠ ESTA RELEASE NÃO MUDA O QUE O JOGADOR VÊ, e isso desarma a régua de sempre
@@ -4484,41 +4523,94 @@ que cada uma toca e o que ela custa. As três decisões que travam alguma coisa 
 > (ou mutação depois), e **uma onda por branch com tag**. Nenhuma destas é urgente; se o dia
 > render pouco, **a Onda A sozinha já muda o jogo mais que o resto somado**.
 
-#### ONDA A — o que o jogo SABE e o jogador NÃO VÊ  ·  ~meio dia · o melhor retorno
+#### ONDA A — o que o jogo SABE e o jogador NÃO VÊ  ✔ FEITA (v4.12.0, 12/08/2026)
 
 Esta onda tem um tema só, e ele é o critério: **o motor já calculou a informação, e a tela não
 a mostra.** É a fonte de melhoria mais barata que existe aqui, porque não há regra nova a
 inventar nem dado novo a criar.
 
-**A1 · Realçar as MANILHAS na sua mão** (truco · `550-mesa.js` + `520-partida.js`)
+**AS TRÊS SAÍRAM, e a do meio deixou de ser cosmética no meio do caminho** — ver "o que a
+medição achou", logo abaixo do item 2.
+
+**A1 · Realçar as MANILHAS na sua mão** ✔ (truco · `550-mesa.js` + `510-regras.js`)
 O painel diz `MANILHA 6` e o jogador olha as três cartas para descobrir quais são 6. O jogo
 já sabe: `vista.manilha` está na visão e `forcaDaCarta` já ordena tudo.
-- **Reaproveita o que existe:** o realce de `ganhandoAVaza` da v4.6 (anel no tampo + carta
-  erguida) é exatamente a mesma técnica.
-- **Cuidado medido:** no truco **todas** as cartas são jogáveis na sua vez, então o par
-  `color`/`emissive` que hoje separa jogável de não-jogável **não distingue nada dentro da
-  mão** — o realce da manilha precisa de um canal PRÓPRIO (anel, borda, altura), não de mais
-  brilho.
-- **Não pode vazar:** só a SUA mão. A do adversário é verso, e o realce ali seria o
-  invariante 3 quebrado por decoração.
-- Asserção: a carta realçada é a de maior `forcaDaCarta`, e nenhuma carta de outra cadeira
-  ganha realce.
 
-**A2 · A VIRA legível no centro da mesa** (truco · `540-layout.js` / `550-mesa.js`)
+**Feito:** anel âmbar pendurado na carta **mais** um degrau de altura (`ALTURA_MANILHA`), no
+laço da reconciliação e nunca na animação.
+
+- **O canal PRÓPRIO era obrigatório, e estava medido antes de começar:** `color`/`emissive` já
+  separa jogável de não-jogável, e no truco, na sua vez, **todas** são jogáveis. Mais brilho
+  não distinguiria nada dentro da mão. É a diferença entre este realce e o do dominó.
+- **A cor é a do PAINEL** (`--ambar`), não o verde de `ganhandoAVaza`. As duas marcas nunca
+  dividem a mesma carta (mesa × mão), e a cor **amarra**: o número no `#topo` e o anel na carta
+  são a mesma informação, dita duas vezes.
+- **`ehManilha` nasceu para a TELA e mora na REGRA** (`510-regras.js`), com `forcaDaCarta`
+  passando a usá-la. Escrita na mesa, a mesma pergunta teria duas respostas em arquivos
+  diferentes — e a tela realçando o que o motor não considera manilha é pior que realce nenhum.
+- **Três mutações**, cada uma matando a sua: realce apagado (**3**), marca pendurada no grupo
+  em vez da carta (**2**), todas as cartas marcadas (**2**).
+
+> **E A PRIMEIRA MUTAÇÃO COBROU UMA ASSERÇÃO MINHA.** `manilhasNaMao[0].marca.parent`
+> desreferencia um campo que a mutação torna nulo: ela **matava o processo** e a suíte
+> sub-relatava — **uma** reprovação onde havia três. É a armadilha que este arquivo já
+> registra (*"em suíte que vai ser mutada, toda asserção tem de sobreviver ao objeto
+> ausente"*), cometida dentro do conserto que a cita. Verde, ela era indistinguível de correta.
+
+**A2 · A VIRA legível no centro da mesa** ✔ (truco · `540-layout.js` / `550-mesa.js`)
 Na foto de 390×844 ela aparece deitada e rasa: dá para ver o naipe e **não o valor**. É a única
 carta pública do baralho, e o painel `MANILHA` mostra o derivado, não ela.
-- Erguer um pouco, aproximar da câmera, ou dar-lhe escala própria.
-- **Cuidado:** ela vive na área que a Fila 7 e a v4.6 disputaram (mesa × assento). Qualquer
-  mexida ali passa pelo `test-telas`, e a folga mínima **0.29** é a régua — se cair, é
-  regressão.
 
-**A3 · O PESO DA SUA MÃO no dominó** (dominó · `137-encaixes.js`)
-Na tranca ganha a mão mais leve, e o jogador soma na cabeça. `vista.mao` já está lá; é um
-medidor a mais no `#topo`.
-- **⚠ Cuidado caro e medido:** o `#topo` **já estourou** por um painel a mais — foi o 4º
-  medidor do truco, em paisagem 640×360, empurrando o topo por cima da mão de um adversário.
-  Ou este número entra **no lugar de outro**, ou entra fora do `#topo`. `node
-  tests/test-telas.mjs 640x360` é quem responde, e responde antes de commitar.
+**Feito:** ela subiu para cima de um **toco de baralho** de sete cartas e continua deitada,
+atravessada — o gesto da mesa de verdade. Decisão do Ricardo entre erguer, escalar e inclinar.
+
+> **A MEDIÇÃO ACHOU MAIS DO QUE O RELATO DIZIA, e um defeito que ninguém tinha visto.** O
+> comentário do `540-layout.js` afirmava que pôr as cartas *"em volta dela, e não por cima"* é
+> o que a mantém visível. A conta desmente:
+>
+> ```
+> vira deitada              x −0.440 a 0.440   z −0.310 a 0.310
+> a carta que VOCÊ joga     x −0.310 a 0.310   z  0.246 a 1.126
+> sobreposição              x  0.620           z  0.064
+> ```
+>
+> As duas positivas quer dizer que se cobrem — e **no mesmo plano**, porque toda carta na mesa
+> descansa em `y = CARTA_E/2`. Duas superfícies coplanares disputando o pixel é **z-fighting**,
+> que pisca conforme a câmera respira. **A razão estava escrita, era plausível, e estava
+> errada** — a mesma espécie de afirmação não medida que a v4.7 pagou com o truco online
+> "herdando de graça". Erguer a vira deixou de ser cosmético e virou conserto.
+
+- **A folga do `test-telas` NÃO se mexeu, e isso foi medido e não suposto:** `truco duplas` em
+  390×844 dá **1.16 com e sem o A2**, na mesma cena, rodada nos dois estados. Era o esperado (o
+  Y é ignorado na folga e o x/z não mudou), mas "esperado" não é medido.
+- **⚠ O `0.29` que este arquivo registrava como régua de determinismo ENVELHECEU.** A rodada de
+  hoje dá **0.33**, e o mínimo vem de uma cena de **dominó** (`mesa cheia`, retrato 390×844),
+  não de `truco duplas`. O 0.33 é o mesmo número da v4.5; o 0.29 é da v4.6/v4.8. **O número
+  oscila entre releases e não serve como régua sem dizer de QUAL cena ele vem** — o que serve é
+  o controle: rodar a mesma cena nos dois estados, que é o que se fez.
+
+**A3 · O PESO DA SUA MÃO no dominó** ✔ (dominó · `137-encaixes.js`)
+Na tranca ganha a mão mais leve, e o jogador soma na cabeça. `vista.mao` já está lá.
+
+**Feito:** `Pontas · Monte · Mão` virou `Pontas · Monte · **Peso**`. Escolha do Ricardo entre
+trocar, pôr na gaveta de contagem, ou tentar o quarto medindo.
+
+- **TROCAR e não acrescentar**, pelo motivo medido: o quarto painel já foi tentado no truco e
+  empurrou o `#topo` por cima da mão de um adversário em paisagem 640×360. Mesma faixa, mesmo
+  risco. O que saiu foi o **número da mão**, que é o único dos três que não decide jogada
+  nenhuma — e ele não se perde (continua na tela de fim e no botão de retomar).
+- **`somaMao` já existia** (`020-baralho.js`) e não foi reescrita: *aritmética de baralho fora
+  do motor apodrece*.
+- **Mão vazia mostra `—`, não zero.** A tela de passe do hotseat manda `mao: []` para
+  ESCONDER a mão, e um zero ali diria "você não tem peso nenhum" na única hora em que a tela
+  existe para não dizer nada.
+- **OS MEDIDORES DO DOMINÓ NÃO TINHAM UMA ASSERÇÃO — nem antes da troca.** O que existia era o
+  `test-telas` medindo se eles CABEM, que é outra pergunta: cabe é geometria, *diz a verdade* é
+  conteúdo. O irmão em truco tem as dele desde a v4.5. Mais um caso de "guarda aplicada num
+  lado e esquecida no vizinho", agora entre suítes.
+- **O irmão do fio JÁ tinha a guarda**, e isso foi conferido em vez de suposto:
+  `vistaDoDominoValida` cobra `mao.every(jogadaDoFioDoDomino)` desde a Fila 13, então `somaMao`
+  nunca recebe lixo do convidado. Nada novo a escrever ali.
 
 #### ONDA B — o online, que é onde o jogo tem gente esperando  ·  ~meio dia
 
