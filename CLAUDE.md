@@ -8,11 +8,11 @@ gente e bot, na mesma tela ou pela internet. No ar em
 Sem framework, sem bundler, e **dois binários** — os ícones do aplicativo, exigidos pelo
 manifest: madeira, pintas, cartas e sons continuam gerados em canvas e WebAudio na hora.
 Three.js e PeerJS vêm de CDN, e o **service worker os guarda**, então depois de uma partida o
-jogo abre sem internet. **10.098 linhas** no total (`src/js` + `src/pagina.html` +
+jogo abre sem internet. **10.135 linhas** no total (`src/js` + `src/pagina.html` +
 `src/css/estilo.css` + `src/sw.js`), conferido em 12/08/2026 — este número **envelhece**, e já
-envelheceu três vezes: ficou dizendo 2.100 por três releases seguidas, a medição de 10/08
-(9.648) estava velha no dia seguinte, e a de 11/08 (9.768) durou um dia.
-**Rode a conta, não leia o número daqui.**
+envelheceu quatro vezes: ficou dizendo 2.100 por três releases seguidas, a medição de 10/08
+(9.648) estava velha no dia seguinte, a de 11/08 (9.768) durou um dia, e a primeira de 12/08
+(10.098) não durou a própria sessão. **Rode a conta, não leia o número daqui.**
 
 **Conte com `node`, não com o PowerShell.** `Measure-Object -Line` **não conta linha em
 branco** e devolve ~450 a menos; a discordância entre as duas réguas já custou uma
@@ -954,8 +954,8 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 | | |
 |---|---|
 | commitado | **v4.12.0** — a **ONDA A** da Fila 15: as manilhas realçadas, a vira em cima do baralho, o peso da mão no topo do dominó |
-| enviado | conferir com **`git ls-remote origin refs/heads/main`**, que é a régua de ENVIADO. O `git rev-list` compara com um ref em cache e já respondeu `0 0` com duas releases paradas |
-| **PUBLICADO** | conferir com `curl`. **A v4.12 MUDA o bundle** (mexe em `src/js/`), então o `sw.js` servido TEM de mudar — ele é um resumo do `index.html` |
+| **enviado** | **NÃO.** Medido em 12/08 com `git ls-remote`: o remoto está em `c96b866` (v4.11.2) e o local em `0703fa2`. **A v4.12 está parada na máquina** — ver "AMANHÃ", que começa por aqui |
+| **PUBLICADO** | não, pela mesma razão. **A v4.12 MUDA o bundle** (mexe em `src/js/`), então o `sw.js` servido TEM de mudar quando ela subir: o local é **`84ad320c54f7`**, e o servido hoje ainda é o `df4e87d66f6b` da v4.11 |
 | em curso | **nada.** As Filas 12, 13 e 14 fecharam em 11/08; a **Onda A** da Fila 15 fechou em 12/08 |
 | as anteriores | v4.11.0 (a carta 42% esticada) · v4.10.0 (Fila 13 + o pacote da Fase 5) · v4.9.0 (a Fila 12) · v4.8.0 (o truco em duplas online) · v4.7.0 (o truco online) · v4.5.0 (o corpo do truco) |
 | Filas 5 a 14 | **todas fechadas** · da **Fila 15** sai a Onda A; sobram **B, C, D e E** |
@@ -1155,7 +1155,42 @@ A ONDA A  ✔ FEITA em 12/08, e saiu na v4.12.0 — três commits, um por item,
              troca. O test-telas media se eles CABEM; ninguém media se eles
              dizem a verdade. O irmão em truco tem as dele desde a v4.5.
 
-AMANHÃ     ➜ SOBRAM AS ONDAS B, C, D e E da Fila 15, escritas em ordem, com o
+⚠ AMANHÃ COMEÇA POR AQUI, E NÃO POR CÓDIGO ────────────────────────────────
+
+PASSO 0    ➜ ENVIAR A v4.12. Ela está COMMITADA E TAGUEADA E NÃO ENVIADA —
+           medido, não suposto: `git ls-remote` diz `c96b866` (v4.11.2) e o
+           local é `0703fa2`. É o degrau do meio do "commitado ≠ enviado ≠
+           publicado", e é o que custou UM DIA INTEIRO a este projeto em
+           31/07, quando o Ricardo testou o github.io e viu os mesmos
+           defeitos porque nada tinha saído da máquina.
+
+             git push origin main --tags
+
+           O envio é liberação DELE, e é por isso que ele não foi feito na
+           sessão em que a onda nasceu.
+
+PASSO 1    ➜ CONFERIR QUE PUBLICOU, e só o conteúdo servido responde:
+
+             curl -s https://ricardocolombo01.github.io/domino-bar/sw.js | grep VERSAO
+             grep VERSAO sw.js
+
+           O local é `84ad320c54f7`. Enquanto o servido for o `df4e87d66f6b`
+           da v4.11, o que está no ar NÃO tem a Onda A. Aqui os dois TÊM de
+           divergir antes e bater depois — ao contrário da v4.11.1/v4.11.2,
+           que eram registro e não mexiam no bundle.
+
+PASSO 2    ➜ JOGAR, e há duas perguntas concretas que só o olho responde e
+           que a foto de 900px NÃO respondeu:
+           · a moldura da manilha se lê no CELULAR, com o dedo em cima e a
+             tela ao sol? Ela é fina de propósito — a margem é derivada da
+             folga do leque para não encostar na carta vizinha.
+           · a vira erguida ainda parece parte da mesa num retrato de 360px?
+             Na foto de 900 ela está ótima; em 360 a carta tem um terço disso.
+           Se qualquer das duas falhar, o conserto é de UM número:
+           `MARGEM_MANILHA` e `CARTAS_NO_TOCO`, os dois em `550-mesa.js`/
+           `540-layout.js`, e os dois com o porquê escrito ao lado.
+
+DEPOIS     ➜ SOBRAM AS ONDAS B, C, D e E da Fila 15, escritas em ordem, com o
            custo e a armadilha já medida de cada uma.
            A mais barata com valor real é a ONDA B (o online): compartilhar o
            código da sala, avisar que é a sua vez com a aba no fundo, e o
@@ -2046,10 +2081,21 @@ mapa sintoma → arquivo (§3), o inventário completo das mudanças (§3b), com
 
 ### 1. ONDE TESTAR — e este é o item que já custou UM DIA a este projeto
 
-> **O SITE ESTÁ EM DIA — conferido em 10/08/2026.** O `sw.js` servido é `a72ce27eec71`, igual
-> ao local, e o `index.html` no ar é **byte a byte** o mesmo (496.052). A v4.6 e a v4.7 estão
-> no ar, com as duas coisas que você pediu jogando: **quem está ganhando a vaza** e **quem
-> ganhou**. Pode testar direto no `github.io`.
+> ### ⚠ EM 12/08/2026 O SITE **NÃO** ESTÁ EM DIA — a v4.12 está parada na máquina
+>
+> Medido com `git ls-remote`: o remoto está em `c96b866` (v4.11.2) e o local em `0703fa2`.
+> **A Onda A não está no ar** — nem as manilhas realçadas, nem a vira erguida, nem o peso no
+> topo do dominó, nem os dois consertos que a foto achou.
+>
+> **Enquanto não houver `git push origin main --tags`, teste LOCAL:** duplo-clique no
+> `index.html` para tudo menos o online, ou `npm run servir` para o online também. É a versão
+> nova, e é onde ela sempre está primeiro.
+>
+> **Depois do push**, o `sw.js` servido tem de virar `84ad320c54f7`. Se ele ainda disser
+> `df4e87d66f6b`, o que está no ar é a v4.11 e qualquer relato sobre a Onda A é sobre código
+> que não existe lá.
+>
+> *(O texto abaixo é de 10/08 e vale como MÉTODO, não como estado: naquele dia os dois batiam.)*
 >
 > **Confira antes de relatar mesmo assim**, sempre — a fila do Pages já ficou travada por um
 > dia inteiro, e este projeto já perdeu um dia por causa disso:
