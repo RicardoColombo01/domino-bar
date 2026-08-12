@@ -1114,8 +1114,9 @@ AMANHÃ     ➜ A FILA 15 É O PLANO. Ela está escrita em ONDAS, na ordem, com 
            dia render pouco, ela sozinha muda o jogo mais que o resto somado,
            e o primeiro item é realçar as MANILHAS na sua mão: o painel diz
            `MANILHA 6` e o jogador tem de descobrir sozinho quais cartas são 6.
-           TRÊS DECISÕES estão marcadas ⚠ lá — respondê-las antes de começar
-           economiza a sessão inteira.
+           AS TRÊS DECISÕES JÁ ESTÃO RESPONDIDAS (11/08): temas de baralho com
+           inventário (ideia dele, é a ONDA E), avisar antes de sair no online
+           (o B4), e o PIFE como próximo jogo. Nada trava.
            E a fonte mais barata deste projeto continua sendo JOGAR: o truco em
            duplas no CELULAR, com gente de verdade, é o que nenhuma suíte
            alcança — e é o que este arquivo aponta há três filas.
@@ -4562,25 +4563,69 @@ das cartas ainda não tem jogo que a consuma"*. Era verdade em 06/08.
 **D3 · Limpar `tests/.gerado/`** — 50 arquivos, 45 deles detritos de ondas fechadas. Está no
 `.gitignore`, então é desordem local e não sujeira versionada.
 
-#### ⚠ AS TRÊS DECISÕES QUE TRAVAM ALGUMA COISA
+#### ✔ AS TRÊS DECISÕES, RESPONDIDAS PELO RICARDO (11/08/2026)
 
-**D-a · Naipes em QUATRO CORES, como opção?**
-Ouros e copas são **exatamente** a mesma cor (`#c0392b`); espadas e paus também. É o padrão de
-qualquer baralho — e no truco a ordem das manilhas é POR NAIPE, então a cor não separa o que
-decide a mão. O pôquer online resolveu com baralho de quatro cores.
-**É regra de casa e não de programador**, como o melou e a cruzada valerem 4: muda a cara do
-jogo. Se a resposta for sim, ela é **irmã da A1** e sai na mesma onda.
+**D-a · Cores dos naipes → ele devolveu uma ideia MAIOR, e melhor: TEMAS DE BARALHO.**
+Palavras dele: *"tem como realizar baralho de temas diferentes, aí deixa um inventário para
+cada pessoa escolher que tema irá jogar"*. Ver a **Onda E**, logo abaixo — o desenho ficou
+próprio porque a ideia é maior que uma opção de menu.
 
-**D-b · `beforeunload` no meio de partida online?**
-Sair conta como derrota e um F5 acidental gasta o prazo de 30 s sem aviso. Barato — e
-`beforeunload` é incômodo por natureza. Está na fila desde a Fila 5 esperando esta resposta.
+**D-b · `beforeunload` no meio de partida online → SIM, avisar.** Vira o item **B4**. Estava na
+lista de "poderia ser feito" desde a Fila 5 esperando exatamente esta resposta.
 
-**D-c · Qual o PRÓXIMO JOGO?**
-O plano diz pife e depois 21. O **pife** é barato: herda o baralho de 40, a carta 3D, os cinco
-encaixes de HUD (que o truco teve de inventar) e o online inteiro. O **21 tem BANCA**, e banca
-não é uma cadeira como as outras — ela joga por regra fixa e não por escolha, o que fura o
-invariante 2. É o único dos três que mexe no modelo de cadeira, e por isso **não** deveria ser
-o próximo apesar de parecer o mais simples.
+**D-c · O próximo jogo é o PIFE.** Confirma o plano da v4: ele herda o baralho de 40, a carta
+3D, os cinco encaixes de HUD (que o truco teve de INVENTAR) e o online inteiro. O 21 fica para
+depois com o aviso escrito — **ele tem BANCA, e banca não é uma cadeira como as outras**: joga
+por regra fixa e não por escolha, o que fura o invariante 2. É o único dos três que mexe no
+modelo de cadeira, e por isso não é o próximo apesar de parecer o mais simples.
+
+**B4 · Avisar antes de sair no meio de partida online** (casa · `160-loop.js`)
+`beforeunload` só quando `modo !== 'local'` e há partida viva — **nunca fora disso**, senão
+vira o aviso que todo mundo aprende a ignorar. Cuidado: o navegador não deixa escolher o texto
+(mostra a frase padrão dele), então quem precisa explicar o que está em jogo é a tela, ANTES.
+
+#### ONDA E — TEMAS DE BARALHO (ideia do Ricardo) · ~um dia · e ela é mais barata do que parece
+
+**A infraestrutura já existe inteira, e por acidente feliz.** A Fila 7 obrigou toda textura a
+guardar a própria RECEITA para poder ser repintada quando o Android descarta o bitmap
+(`pintar()` devolve `{nome, canvas, textura, repintar}`). **Trocar de tema é chamar `repintar`
+com outras cores** — o mecanismo que existe para sobreviver ao sistema operacional serve, sem
+uma linha nova, para trocar a cara do baralho.
+
+**Onde mora:** em `40-cartas/`, que é **biblioteca** e não jogo. Isso não é detalhe de
+organização — é o que faz o tema valer para o truco, para o **pife** e para o 21 de uma vez, e
+o `test-acoplamento` cobra que a biblioteca não alcance nome de jogo nenhum.
+
+**O que um tema define:** a cor do papel, as quatro cores de naipe, o desenho do verso e,
+talvez, a fonte do valor. Uma tabela por tema, do mesmo feitio de `MODOS` e `NIVEIS`.
+
+Os cinco que eu proporia, e cada um resolve um problema de verdade:
+
+| tema | para quê |
+|---|---|
+| **Clássico** | o de hoje: papel creme, duas cores. Continua sendo o padrão |
+| **Quatro cores** | ouros, espadas, copas e paus com cores distintas. **No truco a ordem das manilhas é POR NAIPE**, então aqui a cor passa a mostrar o que decide a mão — é a D-a original, virando um tema em vez de uma opção solta |
+| **Alto contraste** | papel branco, naipes muito escuros, valor grande. **Acessibilidade de verdade**, e irmão do `--fraco: .58` que a Fila 8 mediu |
+| **Boteco** | papel gasto, tinta desbotada — a identidade da casa |
+| **Noturno** | carta escura de naipes claros, para jogar no escuro sem a tela queimar |
+
+**As quatro armadilhas, todas já pagas neste repositório:**
+
+1. **A receita não pode consumir `Math.random` global** (Fila 7). Um tema "gasto" pede textura
+   ruidosa, e é exatamente onde a tentação bate: as suítes de tela semeiam aquele gerador
+   dentro da página, e mil sorteios ali deslocam a sequência inteira. Gerador próprio, semeado.
+2. **A repintura tem de dar a MESMA carta** com o mesmo tema — o `test-textura` já compara
+   repintura contra repintura, e um tema que sorteia sem semente quebra aquela asserção.
+3. **A preferência guardada é ENTRADA DE FORA**: `Object.hasOwn(TEMAS, guardado)`, nunca
+   `TEMAS[guardado] ?`. O buraco do protótipo já deu tela preta permanente uma vez.
+4. **A asserção do atlas amostra COR** para saber o naipe da linha. Com tema trocável, ela
+   passa a depender do tema ativo — ou ela força o Clássico, ou ela lê a cor do tema. **Isto
+   precisa ser decidido ao escrever, não descoberto quando a suíte ficar vermelha.**
+
+**E o irmão que a ideia abre:** o mesmo inventário serve para a **peça de dominó**
+(`080-peca3d.js` tem o atlas de pintas pela mesma técnica). Vale desenhar o inventário
+pensando nos dois desde o começo — mas **entregar o baralho primeiro**, porque é onde o pedido
+nasceu e onde o pife herda.
 
 #### O que NÃO recomendo, e por quê
 
@@ -4588,6 +4633,8 @@ o próximo apesar de parecer o mais simples.
   resolveram o problema real.
 - **Envido / flor no truco** — decidido em 05/08: Truco Paulista sem os dois. Reabrir é mudar o
   jogo, não melhorá-lo.
+- **O 21 antes do pife** — decidido em 11/08: o pife é o próximo. O 21 tem BANCA, e banca fura
+  o invariante 2 (ela joga por regra fixa e não por escolha).
 - **Tema/cor da mesa configurável** — o boteco é a identidade do jogo, e a luz quente é o que
   faz o marfim da peça funcionar. Mexer ali é refazer o balanço de cor inteiro por gosto.
 
