@@ -1069,6 +1069,39 @@ console.log('\na casa senta na mesa de truco');
   // Ela subiu porque no tampo dividia o plano com as cartas jogadas — sobreposição medida de
   // 0.064 × 0.62, e coplanares, que é z-fighting. A conta está em `540-layout.js`; aqui se
   // cobra o resultado.
+  // ─── E É A VIRA DESTA MÃO, não a de alguma mão ────────────────────────────
+  // A asserção que existia era `naMesaDoTruco.has('vira')` — "a vira está desenhada" —, e ela
+  // é o "tem tinta em algum lugar" que este arquivo diz aprovar qualquer borrão. Ela nunca
+  // perguntou QUAL carta, e por baixo dela morava um defeito:
+  //
+  // `CHAVE_DA_VIRA` é FIXA enquanto toda outra carta é chaveada por `chaveCarta`, e a
+  // reconciliação só cria objeto quando a chave FALTA. Então `novaMaoDoTruco` sorteava uma
+  // vira nova a cada mão e a mesa continuava mostrando a da PRIMEIRA — pelo resto da partida,
+  // com o painel `MANILHA` dizendo a manilha certa e a carta na mesa dizendo outra coisa.
+  //
+  // ATRAVESSA `novaMao`, que é a fronteira que caso escrito à mão não cruza: é o mesmo lugar
+  // onde o `donoDaAposta` da v4.5 se escondeu, e lá quem achou foi a partida inteira jogada
+  // pela casa. Aqui quem achou foi uma FOTO.
+  const cartaDesenhadaDaVira = () => {
+    const r = mod.naMesaDoTruco.get('vira');
+    return r ? r.obj.userData.carta : null;
+  };
+  ok(mod.mesmaCarta(cartaDesenhadaDaVira() || [], mod.P.vira),
+    `a mesa desenha ${mod.nomeDaCarta(cartaDesenhadaDaVira() || [0, 0])} e a vira é ` +
+    `${mod.nomeDaCarta(mod.P.vira)}`);
+
+  // MÃO NOVA, VIRA NOVA — e é aqui que ela caía. Com teto, e cobrando que a montagem
+  // conseguiu trocar a carta: se o sorteio devolver a mesma vira, esta asserção passaria por
+  // trivialidade em vez de por conserto.
+  const viraDaMao1 = mod.P.vira;
+  for (let t = 0; t < 12 && mod.mesmaCarta(mod.P.vira, viraDaMao1); t++) mod.novaMaoDoTruco(mod.P);
+  ok(!mod.mesmaCarta(mod.P.vira, viraDaMao1),
+    'não consegui sortear uma vira diferente para conferir que a mesa acompanha');
+  mod.publicar();
+  ok(mod.mesmaCarta(cartaDesenhadaDaVira() || [], mod.P.vira),
+    `mão nova: a mesa ficou com ${mod.nomeDaCarta(cartaDesenhadaDaVira() || [0, 0])} e a vira ` +
+    `agora é ${mod.nomeDaCarta(mod.P.vira)}`);
+
   const viraNaMesa = mod.naMesaDoTruco.get('vira');
   ok(((viraNaMesa || {}).alvo || {}).y > 0,
     `a vira ficou em y = ${((viraNaMesa || {}).alvo || {}).y}, no mesmo plano das cartas jogadas`);

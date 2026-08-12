@@ -209,15 +209,14 @@ function sincronizarMaoDoTruco(vista) {
     m.manilha = ehManilha(m.carta, vista.manilha);
     if (m.manilha && !m.marca) {
       m.marca = new THREE.Mesh(geomManilhaNoTruco, matManilhaNoTruco);
-      // O `-PI/2` é o mesmo da marca da mesa e deita o anel no plano da CARTA, não no do
-      // mundo: como ele é FILHO do objeto dela, herda o tombo do leque e continua paralelo à
-      // face por mais que a mão se incline. Pendurar no `grupoMaoDoTruco` em vez de na carta
-      // deixaria o anel deitado no chão enquanto a carta está de pé para você.
+      // O `-PI/2` é o mesmo da marca da mesa e deita a moldura no plano da CARTA, não no do
+      // mundo: como ela é FILHA do objeto dela, herda o tombo do leque e continua paralela à
+      // face por mais que a mão se incline. Pendurada no `grupoMaoDoTruco` em vez de na carta,
+      // ela ficaria deitada no chão enquanto a carta está de pé para você.
       m.marca.rotation.x = -Math.PI / 2;
-      // Atrás da carta, e o anel INTEIRO sobra pelas bordas: o raio interno é a meia-diagonal
-      // (0.538), que é a distância do centro ao CANTO — ou seja, ele começa exatamente onde a
-      // carta acaba. É a mesma conta que faz o anel de "está ganhando" aparecer nos cantos em
-      // vez de só nas laterais, e aqui ela também garante que não há z-fighting com a face.
+      // ATRÁS da carta, que é o que faz dela uma moldura: a carta é opaca e cobre o miolo, e
+      // o que sobra à vista é exatamente a margem — uma borda de espessura uniforme. Um plano
+      // À FRENTE apagaria a carta, e no MESMO plano seria z-fighting.
       m.marca.position.y = -CARTA_E / 2 - 0.004;
       m.obj.add(m.marca);
     } else if (!m.manilha && m.marca) {
@@ -372,6 +371,29 @@ function sincronizarMesaDoTruco(vista) {
 
   for (const [k, alvo] of alvos) {
     let reg = naMesaDoTruco.get(k);
+    // A CHAVE PODE MENTIR SOBRE A CARTA, e uma delas mente: `CHAVE_DA_VIRA` é FIXA enquanto
+    // toda outra carta é chaveada por `chaveCarta`. A reconciliação só cria objeto quando a
+    // chave FALTA — então, com a chave constante, o valor por trás dela podia mudar para
+    // sempre sem ninguém notar.
+    //
+    // O QUE ISSO CAUSAVA: `novaMaoDoTruco` sorteia uma vira nova a cada mão, e a mesa
+    // continuava mostrando a da PRIMEIRA — pelo resto da partida. O painel `MANILHA` mostrava
+    // a manilha certa e a carta na mesa mostrava outra coisa: os dois se contradiziam, e quem
+    // tentasse derivar a manilha da vira desenhada derivava errado.
+    //
+    // Por que nenhuma suíte pegou: a asserção era `naMesaDoTruco.has('vira')` — "a vira está
+    // desenhada" —, que é o "tem tinta em algum lugar" que aprova qualquer borrão. Ela nunca
+    // perguntou QUAL carta. E o defeito atravessa `novaMao`, que é a fronteira que caso
+    // escrito à mão não cruza (o `donoDaAposta` da v4.5 foi o mesmo).
+    //
+    // A guarda é GERAL de propósito, e não um `if` para a vira: ela restabelece o invariante
+    // que o resto do arquivo já supõe — **o objeto guardado numa chave mostra a carta que o
+    // alvo daquela chave pede**. Um terceiro jogo com outra chave fixa herda isto de graça.
+    if (reg && !mesmaCarta(reg.obj.userData.carta, alvo.carta)) {
+      grupoMesaDoTruco.remove(reg.obj);
+      naMesaDoTruco.delete(k);
+      reg = null;
+    }
     if (!reg) {
       const obj = criarCarta(alvo.carta, false);
       // Nasce no alto e torta: é a queda que dá o "toc" na mesa.
@@ -491,13 +513,28 @@ const ALTURA_GANHANDO = 0.085;
 // outra na sua mão —, mas duas coisas diferentes não podem ter a mesma cor, e aqui a cor
 // AMARRA: o número no painel e o anel na carta são a mesma informação, dita duas vezes.
 //
-// O ANEL É MAIS ESTREITO que o de ganhando (1.16 contra 1.21) porque as cartas da mão ficam
-// lado a lado com `FOLGA_DO_LEQUE_TRUCO` de sobra: um anel largo demais encosta na vizinha e
-// vira borrão. Na mesa elas estão a 0.97 uma da outra e há espaço.
+// É UMA MOLDURA E NÃO UM ANEL, e a primeira versão foi anel — **descoberto olhando a foto**,
+// que é o que nenhuma asserção deste projeto sabe perguntar. Um anel circular em volta de uma
+// carta RETANGULAR é largo demais para um leque:
+//
+//   diâmetro externo do anel   1.249      (2 · meia-diagonal · 1.16)
+//   espaçamento entre cartas   0.707      (CARTA_L · FOLGA_DO_LEQUE_TRUCO)
+//
+// Ele invadia a vizinha em 0.542 — **77% mais largo que o espaço disponível** —, e com duas
+// manilhas na mão os dois anéis se cruzavam no meio. Na MESA o anel funciona porque lá as
+// cartas estão a 0.97 uma da outra e cada uma tem o seu quadrante; na mão elas se encostam de
+// propósito. **A mesma marca não serve aos dois lugares, e a geometria diz por quê.**
+//
+// A MARGEM É DERIVADA E NÃO ESCOLHIDA: a folga do leque deixa `CARTA_L · 0.14` de ar entre
+// duas cartas, ou seja `0.07` de cada lado. A moldura fica com METADE disso e deixa a outra
+// metade de ar — assim duas molduras vizinhas **não podem** se tocar por construção, e não
+// por um número que hoje calha de caber. Se alguém apertar o leque um dia, isto aperta junto.
+const MARGEM_MANILHA = CARTA_L * (FOLGA_DO_LEQUE_TRUCO - 1) / 4;
 const matManilhaNoTruco = new THREE.MeshBasicMaterial({
-  color: 0xf0c274, transparent: true, opacity: 0.7,
+  color: 0xf0c274, transparent: true, opacity: 0.85,
 });
-const geomManilhaNoTruco = new THREE.RingGeometry(RAIO_GANHANDO, RAIO_GANHANDO * 1.16, 30);
+const geomManilhaNoTruco = new THREE.PlaneGeometry(
+  CARTA_L + 2 * MARGEM_MANILHA, CARTA_C + 2 * MARGEM_MANILHA);
 const ALTURA_MANILHA = 0.11;
 
 function mostrarPreviaDoTruco(vista) {
