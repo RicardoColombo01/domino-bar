@@ -2828,9 +2828,19 @@ const CARTA_C = 0.88;      // comprimento, em Z — a carta nasce DEITADA e de f
 const CARTA_E = 0.035;
 
 // 192 e não 256: são 40 células contra as 7 do dominó, e a peça chega mais perto da câmera
-// que uma carta na mesa jamais chega. 1920×768 é uma textura confortável em qualquer
-// aparelho que rode este jogo, e a carta continua nítida quando ocupa meia tela.
+// que uma carta na mesa jamais chega. A carta continua nítida quando ocupa meia tela.
 const CEL_CARTA = 192;
+
+// A CÉLULA TEM A PROPORÇÃO DA CARTA, e não é detalhe — foi um defeito de verdade, achado
+// olhando a mesa renderizada em 11/08. A célula era QUADRADA (192×192) e a face é
+// `PlaneGeometry(0.62, 0.88)`: a UV esticava o quadrado no retângulo e **tudo saía 42% mais
+// alto do que devia**. Os naipes ficavam alongados, o losango de ouros virava um oval e as
+// letras esguias — e como TODAS as células sofriam igual, não havia com o que comparar.
+//
+// Nenhuma asserção pegava: a suíte de textura amostra a COR no centro da célula, e cor não
+// se deforma. É a família do "está desenhado" ≠ "está desenhado CERTO" que este arquivo já
+// registra com o furo de um pixel no naipe de paus.
+const CEL_CARTA_A = Math.round(CEL_CARTA * (CARTA_C / CARTA_L));   // 272
 const COLS_CARTA = VALORES.length;      // 10
 const LINS_CARTA = NAIPES.length;       // 4
 
@@ -2893,14 +2903,14 @@ function naipeNoCanvas(c, id, x, y, r) {
 // começa com um `fillRect` OPACO (é o que faz a sonda de alfa distinguir "apagado" de
 // "desenhado") e NÃO consome `Math.random` global (as suítes de tela semeiam aquele gerador
 // dentro da própria página, e mil sorteios aqui deslocariam a sequência inteira).
-const texCartas = pintar('cartas', CEL_CARTA * COLS_CARTA, CEL_CARTA * LINS_CARTA, (c, w, h) => {
+const texCartas = pintar('cartas', CEL_CARTA * COLS_CARTA, CEL_CARTA_A * LINS_CARTA, (c, w, h) => {
   // O fundo de TODA a textura primeiro, e opaco. Sem isto a sonda de alfa não funciona.
   c.fillStyle = PAPEL;
   c.fillRect(0, 0, w, h);
 
   for (let n = 0; n < LINS_CARTA; n++) {
     for (let v = 0; v < COLS_CARTA; v++) {
-      const ox = v * CEL_CARTA, oy = n * CEL_CARTA;
+      const ox = v * CEL_CARTA, oy = n * CEL_CARTA_A;
       const naipe = NAIPES[n];
       c.fillStyle = naipe.cor;
       c.strokeStyle = naipe.cor;
@@ -2909,27 +2919,44 @@ const texCartas = pintar('cartas', CEL_CARTA * COLS_CARTA, CEL_CARTA * LINS_CART
       // ficam encostadas na mesa, do mesmo jeito que a FOLGA da peça de dominó faz.
       c.globalAlpha = 0.22;
       c.lineWidth = CEL_CARTA * 0.018;
-      c.strokeRect(ox + CEL_CARTA * 0.06, oy + CEL_CARTA * 0.06,
-        CEL_CARTA * 0.88, CEL_CARTA * 0.88);
+      c.strokeRect(ox + CEL_CARTA * 0.06, oy + CEL_CARTA_A * 0.05,
+        CEL_CARTA * 0.88, CEL_CARTA_A * 0.90);
       c.globalAlpha = 1;
 
       // O NAIPE GRANDE, no meio. É o que se lê de longe, e é o que a suíte de textura
       // amostra para saber que a célula é do naipe certo.
-      naipeNoCanvas(c, naipe.id, ox + CEL_CARTA * 0.5, oy + CEL_CARTA * 0.52, CEL_CARTA * 0.24);
+      naipeNoCanvas(c, naipe.id, ox + CEL_CARTA * 0.5, oy + CEL_CARTA_A * 0.53, CEL_CARTA * 0.30);
 
-      // O VALOR nos dois cantos, o de baixo de cabeça para baixo — que é o que deixa a carta
-      // ser lida com ela virada, e é como toda carta do mundo é impressa. Aqui é texto e não
-      // caminho porque dígito e letra latina existem em qualquer fonte; naipe, não.
-      c.font = `bold ${Math.round(CEL_CARTA * 0.20)}px Georgia, "Times New Roman", serif`;
-      c.textAlign = 'center';
-      c.textBaseline = 'middle';
+      // O CANTO: valor E naipe, nas duas pontas, o de baixo de cabeça para baixo — que é o
+      // que deixa a carta ser lida virada, e é como toda carta do mundo é impressa. O valor é
+      // texto e não caminho porque dígito e letra latina existem em qualquer fonte; naipe,
+      // não (num Android velho um `♠` que a fonte não tenha vira tofu).
+      //
+      // O NAIPE PEQUENO ENTROU AQUI PORQUE O CANTO É O QUE SOBRA. Medido em 11/08: em retrato
+      // as três cartas da mão SE SOBREPÕEM (390px e 360px), e da carta coberta só se vê a
+      // faixa do canto — o naipe grande do meio fica escondido debaixo da vizinha. Sem naipe
+      // no canto, a informação some justamente na tela onde o jogo mais é jogado.
+      //
+      // E NO TRUCO ISSO DECIDE A MÃO, não é enfeite: entre duas manilhas quem ganha é o naipe
+      // (ouros < espadas < copas < paus), e as quatro se dividem em DUAS cores só. Ver a
+      // carta e não saber o naipe é ver metade da carta.
       const rot = VALORES[v];
-      c.fillText(rot, ox + CEL_CARTA * 0.17, oy + CEL_CARTA * 0.17);
-      c.save();
-      c.translate(ox + CEL_CARTA * 0.83, oy + CEL_CARTA * 0.83);
-      c.rotate(Math.PI);
-      c.fillText(rot, 0, 0);
-      c.restore();
+      const cantoDe = (px, py, virado) => {
+        c.save();
+        c.translate(ox + CEL_CARTA * px, oy + CEL_CARTA_A * py);
+        if (virado) c.rotate(Math.PI);
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        // 0.23 e não 0.20: em paisagem a carta inteira tem 79px de tela, e o valor ficava com
+        // 15.8px. Três pontos a mais aqui são ~3px lá, que é a diferença entre ler um "Q" e
+        // adivinhá-lo.
+        c.font = `bold ${Math.round(CEL_CARTA * 0.23)}px Georgia, "Times New Roman", serif`;
+        c.fillText(rot, 0, -CEL_CARTA_A * 0.045);
+        naipeNoCanvas(c, naipe.id, 0, CEL_CARTA_A * 0.070, CEL_CARTA * 0.090);
+        c.restore();
+      };
+      cantoDe(0.155, 0.125, false);
+      cantoDe(0.845, 0.875, true);
     }
   }
 });
@@ -3055,7 +3082,7 @@ function criarFantasmaDeCarta(carta) {
 // jogos, e o teste dela não pode depender de qual está na mesa.
 window.__cartas = {
   criarCarta, criarVersoDeCarta, criarFantasmaDeCarta, faceDaCarta,
-  medidas: { CARTA_L, CARTA_C, CARTA_E, CEL_CARTA, COLS_CARTA, LINS_CARTA },
+  medidas: { CARTA_L, CARTA_C, CARTA_E, CEL_CARTA, CEL_CARTA_A, COLS_CARTA, LINS_CARTA },
 };
 
 /* ····· 30-domino/090-tabuleiro.js ····· */
