@@ -536,6 +536,20 @@ por mutação nas quatro direções, inclusive as duas de falso positivo.
   (`(P.resultado || {}).motivo`) e a regra é: **em suíte que vai ser mutada, toda asserção tem
   de sobreviver ao objeto ausente.** Duas mutações desta sessão só mostraram o número certo
   depois disso.
+- **CHAVE FIXA NUM MAPA DE RECONCILIAÇÃO MENTE SOBRE O QUE ELA GUARDA.** A mesa do truco
+  chaveia toda carta por `chaveCarta`, menos a vira, que tinha a chave constante `'vira'`. A
+  reconciliação só cria objeto quando a chave **falta** — então o valor por trás de uma chave
+  constante pode mudar para sempre sem ninguém notar, e mudava: `novaMaoDoTruco` sorteia vira
+  nova a cada mão e a mesa mostrava a da PRIMEIRA pelo resto da partida, contradizendo o painel
+  `MANILHA` ao lado. **A asserção que existia era `has('vira')`** — "tem alguma coisa ali" —, e
+  é o mesmo defeito de pergunta do atlas de pintas. Ao reconciliar por chave, a pergunta é:
+  *esta chave DETERMINA o conteúdo, ou só o nomeia?*
+- **A MESMA MARCA NÃO SERVE A DOIS LUGARES, e quem decide é o espaçamento.** O anel de "está
+  ganhando" funciona na MESA (cartas a 0.97 uma da outra) e é **77% largo demais** na MÃO, onde
+  o leque as encosta de propósito (0.707 de espaçamento contra 1.249 de anel). Dois anéis
+  vizinhos se cruzavam. Reaproveitar um realce que já existe é barato e certo; reaproveitar a
+  GEOMETRIA dele sem refazer a conta do espaço é como ele vira borrão. E o conserto melhorou o
+  conjunto: marcas diferentes em FORMA se distinguem melhor que marcas diferentes só em cor.
 - **"Está desenhado" não é "está desenhado CERTO", e a diferença some no antialiasing.** O
   naipe de paus nasceu com as três folhas se tocando exatamente no centro — um furo de um
   pixel bem no meio da figura. A olho não aparece; quem viu foi a asserção do atlas
@@ -2072,6 +2086,8 @@ primeiro":
 |---|---|
 | ~~a mesa do truco no CELULAR~~ | ✔ **coberta desde a v4.6** — três cenas × seis telas, e elas acharam dois defeitos de geometria antes de qualquer mão humana. O que a foto NÃO responde continua sendo cor, legibilidade e tempo de animação |
 | **quem está ganhando a vaza** | a marca é um anel verde no tampo mais a carta erguida. Medida em posição e em "é a carta certa", **nunca vista por ninguém** — se ela não aparecer, ou aparecer na carta errada, é o primeiro relato que interessa |
+| **as MANILHAS na sua mão** (v4.12) | moldura âmbar mais um degrau de altura. **Vista em foto pela primeira vez em 12/08**, e a foto já consertou uma coisa: o anel redondo original invadia a carta vizinha em 77% do espaço do leque. O que a foto NÃO responde é se a moldura fina se lê **no celular, com o dedo em cima e a tela ao sol** |
+| **a vira em cima do baralho** (v4.12) | ela subiu para sair do plano das cartas jogadas, que a cobriam. A foto mostra o 4 de ouros legível — mas **a foto é de 900px**; num retrato de 360 a carta tem um terço disso |
 | **a carta virando de barriga para baixo** | a vaza recolhida DESLIZA para a pilha girando 180° em Z. Nunca foi vista por ninguém — só medida como posição |
 | **a barra de apostas** | Pedir truco · Aceitar · Aumentar · Correr. A suíte confere que os botões EXISTEM e que a intenção chega; ninguém clicou neles com o dedo |
 | **a mão de 11** | dois botões e uma fase própria. Testada em Node, nunca na tela |
@@ -2092,6 +2108,11 @@ alguém olhar os números.
 | ninguém anuncia quem ganhou a vaza | `fecharVaza` devolve `r.vaza`, e `narrarVaza` (575) escreve a frase. Ela sai na CONVERSA, junto das jogadas |
 | o placar `Vazas` mente | `placarDeVazas` (575) — ele é do SEU ponto de vista, e vaza melada não conta para ninguém |
 | sumiu o painel da Vira do topo | **é de propósito** (07/08): ele saiu para o `Vazas` caber em paisagem. A vira está desenhada no meio da mesa, em tamanho de carta |
+| a moldura da manilha não aparece, ou aparece na carta errada | `ehManilha` (`510-regras.js`) → a marca em `sincronizarMaoDoTruco` (`550-mesa.js`). São DOIS canais: a moldura âmbar e a ALTURA — diga qual dos dois falhou, porque eles falham por motivos diferentes |
+| a moldura da manilha encosta na carta vizinha | `MARGEM_MANILHA` (`550-mesa.js`), que é derivada de `FOLGA_DO_LEQUE_TRUCO`. Se alguém apertar o leque, ela aperta junto — mas o leque também encolhe em tela estreita |
+| **a vira na mesa não é a vira da mão** | era defeito e foi consertado na v4.12 (chave fixa que não acompanhava a carta). Se voltar, é a guarda de `mesmaCarta` no laço de `sincronizarMesaDoTruco` — e vale conferir o painel `MANILHA` ao lado: os dois discordando é a assinatura exata |
+| o baralho no meio da mesa sem vira em cima | `tocoDoBaralho` entra e sai COM a vira. Na mão de 11 não há vira e o toco tem de sumir junto |
+| o topo do dominó diz "Peso" e o número parece errado | `medidoresDoDomino` (`137-encaixes.js`) usa `somaMao`. Mão escondida (tela de passe) mostra `—`, e isso é de propósito |
 | a barra de confirmar cobre a mão | em retrato ela publica a altura em `--alt-confirmar` (130-hud) e o `#acoes` se apoia nela; em paisagem ela foi para a coluna direita. Ver os números no comentário do CSS |
 | o topo mostra "Pontas · Monte · Mão" no truco | `JOGO.hud.medidores` — `575-encaixes.js` e `desenharMedidores` (130-hud) |
 | botão do jogo errado, ou botão que não faz nada | `desenharBarra` (130-hud) — ele RELIGA o `onclick` a cada publicação, de propósito |
@@ -4556,6 +4577,46 @@ laço da reconciliação e nunca na animação.
 > sub-relatava — **uma** reprovação onde havia três. É a armadilha que este arquivo já
 > registra (*"em suíte que vai ser mutada, toda asserção tem de sobreviver ao objeto
 > ausente"*), cometida dentro do conserto que a cita. Verde, ela era indistinguível de correta.
+
+> ### ⚑ E A FOTO ACHOU DUAS COISAS QUE AS 385 ASSERÇÕES NÃO ACHARIAM
+>
+> A onda estava commitada e verde quando tirei quatro fotos para OLHAR — o que este arquivo
+> repete há três filas e que eu quase pulei por a suíte estar verde.
+>
+> **1. O ANEL DA MANILHA ERA GRANDE DEMAIS PARA UM LEQUE, e a geometria diz por quê:**
+>
+> ```
+> diâmetro externo do anel   1.249      (2 · meia-diagonal · 1.16)
+> espaçamento entre cartas   0.707      (CARTA_L · FOLGA_DO_LEQUE_TRUCO)
+> invade a vizinha em        0.542      → 77% mais largo que o espaço
+> ```
+>
+> Com duas manilhas na mão os anéis se cruzavam no meio. **Na MESA o mesmo anel funciona** —
+> lá as cartas estão a 0.97 uma da outra e cada uma tem o seu quadrante; na mão elas se
+> encostam de propósito. **A mesma marca não serve aos dois lugares.** Virou uma MOLDURA
+> retangular, com a margem derivada da folga do leque (metade do ar de cada lado), de modo que
+> duas vizinhas não podem se tocar **por construção**. De brinde, as duas marcas passaram a se
+> distinguir por **forma** e não só por cor — anel redondo na mesa, moldura na mão.
+>
+> **2. A VIRA DESENHADA NUNCA MUDAVA — defeito ANTERIOR a esta onda, e ele durava a partida
+> inteira.** `CHAVE_DA_VIRA` é FIXA (`'vira'`) enquanto toda outra carta é chaveada por
+> `chaveCarta`, e a reconciliação só cria objeto quando a chave **falta**. `novaMaoDoTruco`
+> sorteia vira nova a cada mão e a mesa continuava mostrando a da PRIMEIRA: o painel `MANILHA`
+> dizia a manilha certa e a carta na mesa dizia outra coisa. **Quem tentasse derivar a manilha
+> da vira desenhada derivava errado.**
+>
+> Por que nenhuma suíte via: a asserção era `naMesaDoTruco.has('vira')` — *"a vira está
+> desenhada"* —, que é o **"tem tinta em algum lugar"** que este arquivo diz aprovar qualquer
+> borrão. Ela nunca perguntou QUAL carta. E o defeito atravessa `novaMao`, a fronteira que
+> caso escrito à mão não cruza — o mesmo esconderijo do `donoDaAposta` na v4.5.
+>
+> A guarda nova é **geral** e não um `if` para a vira: ela restabelece o invariante que o resto
+> do arquivo já supunha — *o objeto guardado numa chave mostra a carta que o alvo daquela
+> chave pede*. Um terceiro jogo com outra chave fixa herda isso de graça.
+>
+> **A lição de método é a mais forte da onda:** a suíte verde media tudo o que alguém tinha
+> pensado em perguntar, e as duas coisas que ela não perguntava custaram **uma foto**. Tirar
+> quatro fotos custou dez minutos.
 
 **A2 · A VIRA legível no centro da mesa** ✔ (truco · `540-layout.js` / `550-mesa.js`)
 Na foto de 390×844 ela aparece deitada e rasa: dá para ver o naipe e **não o valor**. É a única
