@@ -924,9 +924,9 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 |---|---|
 | enviado | **v4.10.0** — conferido com `git ls-remote`, que é a régua de ENVIADO (o `git rev-list` compara com um ref em cache e já respondeu `0 0` com duas releases paradas) |
 | **PUBLICADO** | conferir com `curl`. **A v4.9 MUDA o bundle** — ao contrário da v4.8 —, então desta vez o `sw.js` servido TEM de mudar: ele é um resumo do `index.html`, e o novo é `27648ab61191` |
-| em curso | **nada** — a **Fila 12** e a **Fila 13** foram abertas e fechadas em 11/08: 7 + 3 achados, todos consertados e conferidos por mutação. v4.9.0 e **v4.10.0** |
+| em curso | **nada** — as Filas 12, 13 e 14 foram abertas e fechadas em 11/08 (7 + 3 + 2 achados, todos com mutação). A **Fila 15** é plano, não trabalho em curso |
 | as anteriores | v4.7.0 (o truco online) · v4.6.0 (as cenas de truco no `telas`) · v4.5.0 (o corpo do truco) · v4.4.0 (bot + layout) · v4.3.0 (regras + motor) · v4.2.0 (`40-cartas/`) · v4.1.0 (a aba) · v4.0.0 (o contrato) |
-| Filas 5 a 13 | **todas fechadas** |
+| Filas 5 a 14 | **todas fechadas** · a **Fila 15 é o PLANO DE AMANHÃ**, em ondas |
 | o que vem | **nada de código.** A **Fase 5** (o APK) está **⏸ em espera por decisão do Ricardo** até ele trocar a conta do GitHub desta máquina — o ambiente já está montado e destrava sozinho. O que sobra é **JOGAR** |
 
 ---
@@ -1108,9 +1108,15 @@ A FASE 5   ⚠ NÃO TERMINADA, e os DOIS bloqueios estão MEDIDOS e não suposto
            dele. Nada a fazer até lá, e nada a refazer: o ambiente do Bubblewrap
            fica montado, e `npm run twa` continua sendo a régua.
 
-AMANHÃ     NÃO HÁ ITEM DE CÓDIGO ABERTO. A fila está vazia, as Filas 5 a 13
-           estão fechadas e a Fase 5 está pausada por escolha.
-           A fonte mais barata deste projeto continua sendo JOGAR: o truco em
+AMANHÃ     ➜ A FILA 15 É O PLANO. Ela está escrita em ONDAS, na ordem, com o
+           custo de cada uma e a armadilha já medida de cada uma.
+           Comece pela ONDA A — "o que o jogo SABE e o jogador NÃO VÊ". Se o
+           dia render pouco, ela sozinha muda o jogo mais que o resto somado,
+           e o primeiro item é realçar as MANILHAS na sua mão: o painel diz
+           `MANILHA 6` e o jogador tem de descobrir sozinho quais cartas são 6.
+           TRÊS DECISÕES estão marcadas ⚠ lá — respondê-las antes de começar
+           economiza a sessão inteira.
+           E a fonte mais barata deste projeto continua sendo JOGAR: o truco em
            duplas no CELULAR, com gente de verdade, é o que nenhuma suíte
            alcança — e é o que este arquivo aponta há três filas.
 ```
@@ -4465,10 +4471,134 @@ E o comentário daquele bloco ainda diz *"a pasta das cartas ainda não tem jogo
 
 ---
 
-### ⚑ IDEIAS — pedidas pelo Ricardo em 11/08/2026, com custo e valor
+### ⚑ FILA 15 — O PLANO DE AMANHÃ (pedido do Ricardo, 11/08/2026)
 
-**Nenhuma foi implementada.** Estão aqui porque a regra da casa é que ideia entra na FILA, e
-porque escolher escopo é dele. Ordenadas por *valor ÷ custo*, e cada uma diz **por que**.
+**"Anota essa ideia, e mais ideias, para que amanhã possa ser feito essas melhorias."**
+
+Nada aqui foi implementado. Está escrito como **plano executável**: em ondas, na ordem, com o
+que cada uma toca e o que ela custa. As três decisões que travam alguma coisa estão marcadas
+**⚠ DECISÃO** — respondê-las antes economiza a sessão inteira.
+
+> **A REGRA DA CASA VALE PARA TODAS:** medir antes de consertar, asserção antes do conserto
+> (ou mutação depois), e **uma onda por branch com tag**. Nenhuma destas é urgente; se o dia
+> render pouco, **a Onda A sozinha já muda o jogo mais que o resto somado**.
+
+#### ONDA A — o que o jogo SABE e o jogador NÃO VÊ  ·  ~meio dia · o melhor retorno
+
+Esta onda tem um tema só, e ele é o critério: **o motor já calculou a informação, e a tela não
+a mostra.** É a fonte de melhoria mais barata que existe aqui, porque não há regra nova a
+inventar nem dado novo a criar.
+
+**A1 · Realçar as MANILHAS na sua mão** (truco · `550-mesa.js` + `520-partida.js`)
+O painel diz `MANILHA 6` e o jogador olha as três cartas para descobrir quais são 6. O jogo
+já sabe: `vista.manilha` está na visão e `forcaDaCarta` já ordena tudo.
+- **Reaproveita o que existe:** o realce de `ganhandoAVaza` da v4.6 (anel no tampo + carta
+  erguida) é exatamente a mesma técnica.
+- **Cuidado medido:** no truco **todas** as cartas são jogáveis na sua vez, então o par
+  `color`/`emissive` que hoje separa jogável de não-jogável **não distingue nada dentro da
+  mão** — o realce da manilha precisa de um canal PRÓPRIO (anel, borda, altura), não de mais
+  brilho.
+- **Não pode vazar:** só a SUA mão. A do adversário é verso, e o realce ali seria o
+  invariante 3 quebrado por decoração.
+- Asserção: a carta realçada é a de maior `forcaDaCarta`, e nenhuma carta de outra cadeira
+  ganha realce.
+
+**A2 · A VIRA legível no centro da mesa** (truco · `540-layout.js` / `550-mesa.js`)
+Na foto de 390×844 ela aparece deitada e rasa: dá para ver o naipe e **não o valor**. É a única
+carta pública do baralho, e o painel `MANILHA` mostra o derivado, não ela.
+- Erguer um pouco, aproximar da câmera, ou dar-lhe escala própria.
+- **Cuidado:** ela vive na área que a Fila 7 e a v4.6 disputaram (mesa × assento). Qualquer
+  mexida ali passa pelo `test-telas`, e a folga mínima **0.29** é a régua — se cair, é
+  regressão.
+
+**A3 · O PESO DA SUA MÃO no dominó** (dominó · `137-encaixes.js`)
+Na tranca ganha a mão mais leve, e o jogador soma na cabeça. `vista.mao` já está lá; é um
+medidor a mais no `#topo`.
+- **⚠ Cuidado caro e medido:** o `#topo` **já estourou** por um painel a mais — foi o 4º
+  medidor do truco, em paisagem 640×360, empurrando o topo por cima da mão de um adversário.
+  Ou este número entra **no lugar de outro**, ou entra fora do `#topo`. `node
+  tests/test-telas.mjs 640x360` é quem responde, e responde antes de commitar.
+
+#### ONDA B — o online, que é onde o jogo tem gente esperando  ·  ~meio dia
+
+**B1 · Compartilhar o código da sala** (casa · `130-hud.js`)
+`navigator.share` no celular, cópia num toque no resto. O caso comum é mandar pelo WhatsApp, e
+hoje copiar de um `<div>` no dedo é sofrível. Está na lista de "poderia ser feito" desde a
+Fila 5 — é a mais antiga desta fila.
+
+**B2 · Avisar que é a SUA VEZ com a aba no fundo** (casa · `160-loop.js`)
+Numa mesa online o jogador vai para outro aplicativo e volta sem saber se a vez chegou.
+- O barato e sem permissão: **piscar o `document.title`** e tocar um som curto.
+- O caro: `Notification`, que pede permissão e some no iOS.
+- **Armadilha já paga:** `requestAnimationFrame` PARA em aba de fundo — qualquer relógio disso
+  vai em `setTimeout`, como o do bot.
+
+**B3 · Reabrir o chat pelo teclado** (casa) — pequeno, e fecha o ciclo do item de acessibilidade
+da Fila 8: dá para jogar sem apontador e **não** dá para conversar.
+
+#### ONDA C — quem chega pela primeira vez  ·  ~um dia
+
+**C1 · Estatísticas locais** (casa) — partidas, vitórias e derrotas por jogo. O dado já passa
+por `publicar()`. **Armadilha registrada:** é estado novo no `localStorage`, e isso contamina
+as suítes de navegador — cada cena vai precisar dizer o que quer, como o `semGuardado()` faz.
+
+**C2 · A primeira mão guiada** (casa + jogo) — o jogo tem dica, painel e regras escritas, e
+nenhum caminho que ensine na ordem. Reaproveita a dica inteira.
+
+**C3 · Desfazer a última jogada no HOTSEAT** (os dois) — `P` é dado puro, então é uma cópia.
+**Só em mesa local**: online ou contra bot seria trapaça, e a fronteira do invariante 3 não
+protege contra o próprio jogador voltando o tempo.
+
+#### ONDA D — a dívida técnica que já tem nome  ·  ~meio dia
+
+**D1 · O `test-textura` com o TRUCO na mesa** — a lacuna que a Fila 14 achou e não fechou.
+Ninguém nunca perguntou se a CARTA sobrevive a sair do aplicativo e voltar, que é o defeito que
+custou a Fila 7 inteira. A proteção existe; a prova não. **É a única desta fila que é dívida e
+não ideia.**
+
+**D2 · Apagar o comentário que envelheceu** — o bloco do atlas de cartas ainda diz *"a pasta
+das cartas ainda não tem jogo que a consuma"*. Era verdade em 06/08.
+
+**D3 · Limpar `tests/.gerado/`** — 50 arquivos, 45 deles detritos de ondas fechadas. Está no
+`.gitignore`, então é desordem local e não sujeira versionada.
+
+#### ⚠ AS TRÊS DECISÕES QUE TRAVAM ALGUMA COISA
+
+**D-a · Naipes em QUATRO CORES, como opção?**
+Ouros e copas são **exatamente** a mesma cor (`#c0392b`); espadas e paus também. É o padrão de
+qualquer baralho — e no truco a ordem das manilhas é POR NAIPE, então a cor não separa o que
+decide a mão. O pôquer online resolveu com baralho de quatro cores.
+**É regra de casa e não de programador**, como o melou e a cruzada valerem 4: muda a cara do
+jogo. Se a resposta for sim, ela é **irmã da A1** e sai na mesma onda.
+
+**D-b · `beforeunload` no meio de partida online?**
+Sair conta como derrota e um F5 acidental gasta o prazo de 30 s sem aviso. Barato — e
+`beforeunload` é incômodo por natureza. Está na fila desde a Fila 5 esperando esta resposta.
+
+**D-c · Qual o PRÓXIMO JOGO?**
+O plano diz pife e depois 21. O **pife** é barato: herda o baralho de 40, a carta 3D, os cinco
+encaixes de HUD (que o truco teve de inventar) e o online inteiro. O **21 tem BANCA**, e banca
+não é uma cadeira como as outras — ela joga por regra fixa e não por escolha, o que fura o
+invariante 2. É o único dos três que mexe no modelo de cadeira, e por isso **não** deveria ser
+o próximo apesar de parecer o mais simples.
+
+#### O que NÃO recomendo, e por quê
+
+- **Fazer o 3D DESVIAR dos painéis** — o mais caro do arquivo, e a gaveta e as faixas já
+  resolveram o problema real.
+- **Envido / flor no truco** — decidido em 05/08: Truco Paulista sem os dois. Reabrir é mudar o
+  jogo, não melhorá-lo.
+- **Tema/cor da mesa configurável** — o boteco é a identidade do jogo, e a luz quente é o que
+  faz o marfim da peça funcionar. Mexer ali é refazer o balanço de cor inteiro por gosto.
+
+#### E a que este arquivo repete há três filas
+
+**JOGAR.** As Filas 5, 7 e 10 saíram de jogo de verdade no celular, e o pedido de *"quem está
+ganhando a vaza"* também. **O truco em duplas, com quatro pessoas de verdade, nunca aconteceu**
+— só bots dentro de suítes e quatro abas dentro do `test-online`. Meia hora disso vale mais que
+qualquer item desta lista, e o histórico deste arquivo diz isso em três filas diferentes.
+
+<details><summary>a versão curta desta lista, de antes de virar plano</summary>
 
 #### As três que eu faria primeiro
 
@@ -4526,10 +4656,9 @@ ordem. Um "jogar a primeira mão comigo" reaproveitaria a dica inteira.
 
 #### E a que o arquivo repete há três filas
 
-**JOGAR.** As Filas 5, 7 e 10 saíram de jogo de verdade no celular, e o pedido de *"quem está
-ganhando a vaza"* também. **O truco em duplas, com quatro pessoas de verdade, nunca aconteceu**
-— só bots dentro de suítes e quatro abas dentro do `test-online`. Meia hora disso vale mais que
-qualquer item desta lista, e o histórico deste arquivo diz isso em três filas diferentes.
+**JOGAR.** As Filas 5, 7 e 10 saíram de jogo de verdade no celular.
+
+</details>
 
 ---
 
