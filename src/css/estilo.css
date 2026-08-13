@@ -91,7 +91,12 @@ html, body {
    SELECIONAR o código da sala, que é metade do motivo de mostrá-lo. Exceção pontual, como
    a que o #conversa já tem. `all` seleciona o código inteiro num toque, igual ao
    #onlineCodigo do saguão. */
-#salaPainel { pointer-events: auto; }
+/* E ele é um <button> desde a Onda B (o painel inteiro compartilha o código). `font`, `color`
+   e `text-align` herdados NÃO são cosmética: sem eles o navegador impõe a própria folha —
+   `font: 400 13.33px Arial`, texto centrado — e o painel muda de tamanho no #topo, que é a
+   faixa mais apertada do jogo. Há asserção no test-telas exatamente para esta linha. */
+#salaPainel { pointer-events: auto; font: inherit; color: inherit; text-align: inherit;
+  cursor: pointer; }
 #salaVal { user-select: all; -webkit-user-select: all; letter-spacing: .08em; }
 
 #placar { display: flex; align-items: center; gap: 11px; }

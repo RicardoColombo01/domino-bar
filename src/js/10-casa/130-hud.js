@@ -590,7 +590,18 @@ function mostrarFimDePartida(vista) {
 function pintarSala(codigo) {
   HUD.salaPainel.classList.toggle('oculta', !codigo);
   HUD.sala.textContent = codigo || '—';
+  // O PAINEL É UM BOTÃO desde a Onda B, e um botão precisa DIZER o que faz: sem isto o leitor
+  // de tela anuncia "botão Mesa XJCR" e ninguém descobre que dá para tocar ali. O `title` é
+  // para o mouse, o `aria-label` é para quem não vê a tela — os dois, porque nenhum dos dois
+  // cobre o outro.
+  HUD.salaPainel.title = codigo ? 'Compartilhar o convite desta mesa' : '';
+  HUD.salaPainel.setAttribute('aria-label',
+    codigo ? `Mesa ${codigo} — compartilhar o convite` : '');
 }
+
+// O corpo mora em `146-convite.js`, que é concatenado DEPOIS deste arquivo: `compartilharSala`
+// é uma `function` içada e este `onclick` só roda no toque, muito depois de tudo existir.
+HUD.salaPainel.onclick = () => { tocarClique(); compartilharSala(); };
 
 // Quem desligou o som desligou por um motivo — trabalho, gente dormindo, ou simplesmente
 // não gostar. Perguntar de novo a cada visita é o jogo não escutar.

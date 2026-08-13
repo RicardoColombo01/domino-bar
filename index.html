@@ -117,7 +117,12 @@ html, body {
    SELECIONAR o código da sala, que é metade do motivo de mostrá-lo. Exceção pontual, como
    a que o #conversa já tem. `all` seleciona o código inteiro num toque, igual ao
    #onlineCodigo do saguão. */
-#salaPainel { pointer-events: auto; }
+/* E ele é um <button> desde a Onda B (o painel inteiro compartilha o código). `font`, `color`
+   e `text-align` herdados NÃO são cosmética: sem eles o navegador impõe a própria folha —
+   `font: 400 13.33px Arial`, texto centrado — e o painel muda de tamanho no #topo, que é a
+   faixa mais apertada do jogo. Há asserção no test-telas exatamente para esta linha. */
+#salaPainel { pointer-events: auto; font: inherit; color: inherit; text-align: inherit;
+  cursor: pointer; }
 #salaVal { user-select: all; -webkit-user-select: all; letter-spacing: .08em; }
 
 #placar { display: flex; align-items: center; gap: 11px; }
@@ -821,7 +826,13 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
   <!-- Só na mesa online. O código sempre foi feito para ser compartilhado — o alfabeto
        exclui I, O, 0 e 1 justamente porque ele é para ditar em voz alta —, e antes ele
        desaparecia da tela no instante em que a partida começava. -->
-  <div class="painel dado oculta" id="salaPainel"><span class="rot">Mesa</span><b id="salaVal">—</b></div>
+  <!-- O PAINEL INTEIRO É O BOTÃO DE COMPARTILHAR, e não um botão a mais ao lado: o #topo já
+       transbordou uma vez em 360px (item 8 da Fila 5) e o quarto medidor do truco empurrou o
+       HUD por cima da mão de um adversário em paisagem. O painel virando alvo custa ZERO em
+       largura, ganha teclado e rótulo de graça, e o `test-telas` continua medindo as mesmas
+       caixas. O preço é uma linha de CSS — `font: inherit` — sem a qual o <button> traz a
+       fonte do navegador e o painel muda de tamanho. -->
+  <button class="painel dado oculta" id="salaPainel"><span class="rot">Mesa</span><b id="salaVal">—</b></button>
 </div>
 
 <div id="jogadores"></div>
@@ -1025,6 +1036,10 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
     <h2 id="onlineTitulo">Mesa aberta</h2>
     <p class="sub" id="onlineSub">Passe este código para quem vai jogar.</p>
     <div class="codigo" id="onlineCodigo">····</div>
+    <!-- O instante em que a pessoa está literalmente procurando como mandar o código: a mesa
+         está aberta e ela espera a turma chegar. Nasce oculto porque só o anfitrião tem
+         código para mandar — e só depois de ele existir de verdade, não enquanto é "····". -->
+    <button class="btn peq oculta" id="btConvidar">Compartilhar o convite</button>
     <!-- QUEM É VOCÊ, e não só em que mesa você entra. Sem este campo o convidado herdava,
          calado, o nome do slot 0 do menu LOCAL dele — que era "Você" para todo mundo, e por
          isso o placar de uma mesa de dois dizia "Você × Você". Ninguém sabia que precisava
@@ -4651,7 +4666,18 @@ function mostrarFimDePartida(vista) {
 function pintarSala(codigo) {
   HUD.salaPainel.classList.toggle('oculta', !codigo);
   HUD.sala.textContent = codigo || '—';
+  // O PAINEL É UM BOTÃO desde a Onda B, e um botão precisa DIZER o que faz: sem isto o leitor
+  // de tela anuncia "botão Mesa XJCR" e ninguém descobre que dá para tocar ali. O `title` é
+  // para o mouse, o `aria-label` é para quem não vê a tela — os dois, porque nenhum dos dois
+  // cobre o outro.
+  HUD.salaPainel.title = codigo ? 'Compartilhar o convite desta mesa' : '';
+  HUD.salaPainel.setAttribute('aria-label',
+    codigo ? `Mesa ${codigo} — compartilhar o convite` : '');
 }
+
+// O corpo mora em `146-convite.js`, que é concatenado DEPOIS deste arquivo: `compartilharSala`
+// é uma `function` içada e este `onclick` só roda no toque, muito depois de tudo existir.
+HUD.salaPainel.onclick = () => { tocarClique(); compartilharSala(); };
 
 // Quem desligou o som desligou por um motivo — trabalho, gente dormindo, ou simplesmente
 // não gostar. Perguntar de novo a cada visita é o jogo não escutar.
@@ -5399,21 +5425,29 @@ function jogoEscolhido() {
   return jogoPadrao();
 }
 
-// A barra de endereço passa a dizer a verdade — e é o que torna a escolha COMPARTILHÁVEL,
-// que é a metade do motivo de a URL existir neste mecanismo.
-//
-// O padrão SAI da URL em vez de entrar: o endereço limpo tem de continuar sendo o endereço
-// do jogo de sempre, senão todo link que alguém já mandou passa a parecer incompleto.
-//
-// `replaceState` e não `pushState`: trocar de aba não é navegar, e com `pushState` o botão
-// Voltar do celular passaria a desfazer cliques de aba em vez de sair do jogo.
-function urlDoJogo(id) {
+// A BARRA DE ENDEREÇO TEM MAIS DE UM ASSUNTO desde a Onda B — o jogo que está na mesa e o
+// convite que trouxe alguém —, e os dois precisam do mesmo cuidado: mexer só no que é seu
+// (senão um apaga o parâmetro do outro) e aguentar o `file://`, onde o `replaceState` pode
+// recusar. Duas cópias disso é exatamente como duas metades passam a discordar.
+function reescreverBusca(mexer) {
   const p = new URLSearchParams(location.search);
-  if (id === jogoPadrao()) p.delete('jogo'); else p.set('jogo', id);
+  mexer(p);
   const busca = p.toString();
   // `file://` é o jeito como este jogo abre por duplo-clique, e ali o `replaceState` pode
   // recusar — não é motivo para o menu não montar.
   try { history.replaceState(null, '', location.pathname + (busca ? '?' + busca : '')); } catch (e) { void e; }
+}
+
+// A barra de endereço passa a dizer a verdade — e é o que torna a escolha COMPARTILHÁVEL,
+// que é a metade do motivo de a URL existir neste mecanismo.
+//
+// O padrão SAI da URL em vez de entrar: o endereço limpo tem de continuar sendo o endereço do
+// jogo de sempre, senão todo link que alguém já mandou passa a parecer incompleto.
+//
+// `replaceState` e não `pushState`: trocar de aba não é navegar, e com `pushState` o botão
+// Voltar do celular passaria a desfazer cliques de aba em vez de sair do jogo.
+function urlDoJogo(id) {
+  reescreverBusca(p => { if (id === jogoPadrao()) p.delete('jogo'); else p.set('jogo', id); });
 }
 
 // ─── a faixa ─────────────────────────────────────────────────────────────────
@@ -5586,6 +5620,7 @@ const SAGUAO = {
   entrada: el('onlineEntrada'), nome: el('onlineNome'), lista: el('onlineLista'),
   erro: el('onlineErro'), entrar: el('btConectar'), comecar: el('btIniciarOnline'),
   cancelar: el('btCancelarOnline'), voltar: el('btVoltarMesa'),
+  convidar: el('btConvidar'),
 };
 
 // O canal de recado da tela. Nome antigo de propósito: são quinze chamadas em `150-rede.js`
@@ -5608,6 +5643,10 @@ function saguaoDeAnfitriao(titulo, sub, codigo) {
   SAGUAO.nome.classList.add('oculta');       // quem abre a mesa nomeia as cadeiras no menu
   SAGUAO.entrar.classList.add('oculta');
   SAGUAO.comecar.classList.remove('oculta');
+  // O convite só existe com um código de VERDADE. `abrirMesaOnline` mostra "····" enquanto o
+  // peer não abriu, e compartilhar aquilo seria mandar convite para uma mesa que ainda não tem
+  // endereço — a mesma família do botão aceso que promete o que o motor recusa.
+  mostrarConvidar(!!codigo && codigo !== '····');
 }
 
 function saguaoDeConvidado(nomePadrao, codigoPadrao) {
@@ -5629,6 +5668,7 @@ function saguaoDeConvidado(nomePadrao, codigoPadrao) {
   SAGUAO.entrar.classList.remove('oculta');
   SAGUAO.comecar.classList.add('oculta');
   SAGUAO.lista.innerHTML = '';
+  mostrarConvidar(false);            // quem ENTRA numa mesa não tem convite a mandar
 }
 
 function saguaoDeQueda() {
@@ -5637,7 +5677,18 @@ function saguaoDeQueda() {
   SAGUAO.sub.textContent = 'Tentando voltar — o anfitrião pode estar recarregando.';
 }
 
-const saguaoCodigo = codigo => { SAGUAO.codigo.textContent = codigo; };
+const saguaoCodigo = codigo => {
+  SAGUAO.codigo.textContent = codigo;
+  mostrarConvidar(codigo && codigo !== '····');
+};
+
+// O BOTÃO DE CONVIDAR, e o clique dele. O corpo mora em `146-convite.js` porque as DUAS
+// superfícies o usam — esta e o painel do topo, durante a partida —, e a mesma regra escrita
+// em dois lugares é como as duas metades passam a discordar.
+function mostrarConvidar(mostrar) {
+  SAGUAO.convidar.classList.toggle('oculta', !mostrar);
+}
+SAGUAO.convidar.onclick = () => { tocarClique(); compartilharSala(); };
 
 // ─── quem já chegou ──────────────────────────────────────────────────────────
 // Recebe o que CADA cadeira é e devolve a lista pintada. A rede monta os estados porque só
@@ -5722,6 +5773,107 @@ SAGUAO.voltar.onclick = () => {
   entrarNumaMesa();                       // prepara a tela; ela já pré-preenche o campo
   conectarNaMesa(g.codigo);
 };
+
+/* ····· 10-casa/146-convite.js ····· */
+//
+// O código de quatro letras existe desde a v1.6.0 e o caso de uso real sempre foi o mesmo:
+// mandar pelo WhatsApp. Até aqui isso era `user-select: all` — que resolve o mouse e é
+// sofrível no dedo, justamente no aparelho em que a conversa está aberta ao lado.
+//
+// SÃO TRÊS PORTAS EM CASCATA, e a última é o que já existia:
+//
+//   navigator.share       o celular — a folha de compartilhar do sistema, com o WhatsApp nela
+//   navigator.clipboard   o computador — copia e avisa
+//   a seleção             o resto — seleciona o código para o Ctrl+C
+//
+// A terceira não é decoração: em `file://` (o duplo-clique, que é meio motivo de este jogo
+// existir) `navigator.clipboard` simplesmente não existe, porque não é contexto seguro.
+//
+// DEVOLVE QUAL PORTA CORREU, e isso não é enfeite de teste: sem o retorno, "o botão fez
+// alguma coisa" é a asserção de "tem tinta em algum lugar" que este projeto já condena — a
+// mesma que aprovava o naipe de paus com um furo no meio.
+
+// O MESMO validador do `salaGuardada`, e de propósito: um código que vem pela URL é entrada
+// de fora igual ao que vem do armazenamento, e este arquivo já pagou caro por ter a guarda
+// num lugar e não no vizinho. Se um dia o alfabeto mudar, os dois têm de mudar juntos.
+const CODIGO_DO_CONVITE = /^[A-Z0-9]{3,8}$/;
+
+// O LINK só existe onde há endereço de verdade. Em `file://` o `location.origin` é a STRING
+// "null", e o convite sairia com `null/index.html?sala=XJCR` colado na conversa de alguém —
+// é o mesmo defeito do `String(undefined)` que já batizou uma cadeira de "undefined".
+//
+// E O `jogo=` É OBRIGATÓRIO: sem ele quem recebe abre na preferência DELE e leva um "essa
+// mesa é de outro jogo" na cara — o mecanismo de recusa da v4.7 funcionando perfeitamente
+// contra o próprio convite.
+function linkDaMesa(codigo) {
+  if (location.protocol.indexOf('http') !== 0) return '';
+  const p = new URLSearchParams(location.search);
+  p.set('jogo', JOGO_ID);
+  p.set('sala', codigo);
+  return location.origin + location.pathname + '?' + p.toString();
+}
+
+// O nome do jogo sai do CONTRATO (`JOGO.nome`), nunca escrito à mão: a casa não sabe o nome
+// de jogo nenhum, e o `test-acoplamento` cobra isso inclusive em texto.
+function conviteDaMesa(codigo) {
+  const link = linkDaMesa(codigo);
+  return `${JOGO.nome} — a mesa é ${codigo}` + (link ? `\n${link}` : '');
+}
+
+function selecionarOCodigo() {
+  try { getSelection().selectAllChildren(HUD.sala); } catch (e) { void e; }
+  avisar('Selecionei o código — copie com Ctrl+C.');
+  return 'selecao';
+}
+
+function compartilharSala() {
+  const codigo = codigoDaSala;
+  if (!codigo) return '';                    // sem mesa aberta não há convite a mandar
+  const txt = conviteDaMesa(codigo);
+  if (navigator.share) {
+    // CANCELAR NÃO É FALHAR. A folha do sistema rejeita com `AbortError` quando a pessoa
+    // desiste, e cair para a cópia aqui copiaria pelas costas de quem acabou de fechar — e
+    // ainda diria "copiado". É a família do `catch` tranquilizador que engole o defeito de
+    // verdade, ao contrário: aqui o silêncio é a resposta certa.
+    navigator.share({ title: JOGO.nome, text: txt }).catch(() => {});
+    return 'share';
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(() => avisar('Convite copiado.'), () => selecionarOCodigo());
+    return 'copia';
+  }
+  return selecionarOCodigo();
+}
+
+// ─── o outro lado: quem CHEGA pelo link ──────────────────────────────────────
+// `?sala=XJCR` PRÉ-PREENCHE o campo do saguão, e não conecta sozinho. Três razões, em ordem
+// de peso: conectar na carga criaria um `Peer` antes de qualquer gesto, num caminho que roda
+// em toda suíte de navegador; a pessoa ainda não disse quem é, e o nome é justamente o que
+// impede o placar de dizer "Você × Você"; e o `conectarNaMesa` tem uma máquina de estados
+// própria que hoje só é alcançada por clique — um segundo dono dela na carga é a espécie de
+// coisa que a Fila 11 inteira passou consertando.
+//
+// Um toque a mais custa um toque. O outro caminho custa uma classe de defeitos.
+function salaDaURL() {
+  const bruto = new URLSearchParams(location.search).get('sala');
+  if (typeof bruto !== 'string') return '';
+  const codigo = bruto.trim().toUpperCase();
+  return CODIGO_DO_CONVITE.test(codigo) ? codigo : '';
+}
+
+// LIDO UMA VEZ NA CARGA e guardado, porque a URL é limpa logo em seguida: sem a limpeza, um
+// F5 reabriria o saguão para sempre, e quem pergunta pelo código (a escada do saguão, em
+// `entrarNumaMesa`) roda depois disso.
+const salaDoConvite = salaDaURL();
+
+// Chamado pelo arranque. Devolve se havia convite — é o que torna afirmável "abriu o saguão"
+// contra "não fez nada", sem inventar um segundo estado só para o teste.
+function entrarPeloConvite() {
+  if (!salaDoConvite) return false;
+  reescreverBusca(p => p.delete('sala'));
+  entrarNumaMesa();
+  return true;
+}
 
 /* ····· 10-casa/150-rede.js ····· */
 //
@@ -6445,7 +6597,10 @@ function entrarNumaMesa() {
   if (!temPeerJS()) { avisar('A biblioteca de rede não carregou — sem internet, só dá para jogar local.'); return; }
   encerrarRede();
   const guardada = salaGuardada();
-  saguaoDeConvidado(MESA.cadeiras[0].nome, guardada ? guardada.codigo : '');
+  // A ESCADA DO CÓDIGO, e ela é a mesma do `?jogo=`: a URL é o que estão te pedindo AGORA,
+  // o guardado é onde você esteve. Quem chega por um link de convite não devia ter de
+  // digitar as quatro letras que já vieram no endereço.
+  saguaoDeConvidado(MESA.cadeiras[0].nome, salaDoConvite || (guardada ? guardada.codigo : ''));
   // Destrava o botão: a tentativa anterior pode ter deixado 'Entrando…' ou 'Na mesa'.
   // Aqui e não no `encerrarRede`, que roda em pontos do carregamento onde `conectando`
   // ainda estaria na zona morta — e `typeof` sobre `let` na zona morta LANÇA.
@@ -8595,7 +8750,26 @@ function jogadaDoBotNoTruco(P, cadeira) {
 // O raio em que as cartas da vaza caem, a partir do centro. Sai do tamanho da carta, e não
 // de um número escolhido a olho: é o mesmo argumento do espaçamento da mão no dominó — um
 // número fixo menor que a carta faz uma cobrir a outra.
-const RAIO_DA_VAZA = CARTA_C * 0.78;
+//
+// ⚠ E ELE ERA PEQUENO DEMAIS — defeito de campo, relatado com foto em 13/08/2026 ("todo
+// bugado"). A conta, que ninguém tinha feito:
+//
+//   a sua carta ocupa      x ∈ [−0.31, 0.31]   z ∈ [R − 0.44, R + 0.44]
+//   a do vizinho (a 90°)   x ∈ [R − 0.44, R + 0.44]   z ∈ [−0.31, 0.31]
+//   elas se cobrem em      0.75 − R,  nos DOIS eixos
+//   a vira, deitada        x ∈ [−0.44, 0.44]   z ∈ [−0.31, 0.31]  →  o MESMO 0.75 − R
+//
+// Com `0.78` o raio era 0.686, e sobravam **0.064 de sobreposição** com o vizinho e com a
+// vira. Medido na mesa de verdade, já escalado: 0.57 × 0.84 entre duas cartas vizinhas.
+// `0.75 / CARTA_C` = 0.852 é o ponto em que elas apenas se encostam; `0.92` dá a folga que
+// separa de fato — e é a mesma disciplina do "sete pixels de folga não são um conserto, são
+// sorte".
+//
+// POR QUE NENHUMA SUÍTE VIA, e isto estava escrito no `590-registro.js` há uma release: o
+// `folgaEntre` do `test-telas` **só compara ENTRE grupos, nunca dentro de um** — a vira e as
+// cartas jogadas são irmãs dentro de `grupoMesaDoTruco`. Ponto cego declarado é ponto cego
+// onde o defeito mora, e agora há asserção no `test-truco`, que é puro e instantâneo.
+const RAIO_DA_VAZA = CARTA_C * 0.92;
 
 // Onde a vira fica: no centro, deitada de lado. Deitada porque assim ela não se confunde
 // com carta jogada nenhuma — a mesa inteira está de pé para alguém, e ela não está para
@@ -10131,7 +10305,12 @@ function arrancar() {
   //    refazer o leque.
   enquadrar();
 
-  // 4. E O LOOP.
+  // 4. O CONVITE, se a URL trouxe um. Depois do jogo escolhido (o link diz qual é) e antes do
+  //    loop, porque ele só abre uma TELA — não conecta, não cria peer, não age sozinho: o
+  //    clique em "Entrar" continua sendo da pessoa.
+  entrarPeloConvite();
+
+  // 5. E O LOOP.
   requestAnimationFrame(quadro);
 }
 

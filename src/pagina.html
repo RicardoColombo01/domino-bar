@@ -39,7 +39,13 @@ __ESTILO__
   <!-- Só na mesa online. O código sempre foi feito para ser compartilhado — o alfabeto
        exclui I, O, 0 e 1 justamente porque ele é para ditar em voz alta —, e antes ele
        desaparecia da tela no instante em que a partida começava. -->
-  <div class="painel dado oculta" id="salaPainel"><span class="rot">Mesa</span><b id="salaVal">—</b></div>
+  <!-- O PAINEL INTEIRO É O BOTÃO DE COMPARTILHAR, e não um botão a mais ao lado: o #topo já
+       transbordou uma vez em 360px (item 8 da Fila 5) e o quarto medidor do truco empurrou o
+       HUD por cima da mão de um adversário em paisagem. O painel virando alvo custa ZERO em
+       largura, ganha teclado e rótulo de graça, e o `test-telas` continua medindo as mesmas
+       caixas. O preço é uma linha de CSS — `font: inherit` — sem a qual o <button> traz a
+       fonte do navegador e o painel muda de tamanho. -->
+  <button class="painel dado oculta" id="salaPainel"><span class="rot">Mesa</span><b id="salaVal">—</b></button>
 </div>
 
 <div id="jogadores"></div>
@@ -243,6 +249,10 @@ __ESTILO__
     <h2 id="onlineTitulo">Mesa aberta</h2>
     <p class="sub" id="onlineSub">Passe este código para quem vai jogar.</p>
     <div class="codigo" id="onlineCodigo">····</div>
+    <!-- O instante em que a pessoa está literalmente procurando como mandar o código: a mesa
+         está aberta e ela espera a turma chegar. Nasce oculto porque só o anfitrião tem
+         código para mandar — e só depois de ele existir de verdade, não enquanto é "····". -->
+    <button class="btn peq oculta" id="btConvidar">Compartilhar o convite</button>
     <!-- QUEM É VOCÊ, e não só em que mesa você entra. Sem este campo o convidado herdava,
          calado, o nome do slot 0 do menu LOCAL dele — que era "Você" para todo mundo, e por
          isso o placar de uma mesa de dois dizia "Você × Você". Ninguém sabia que precisava

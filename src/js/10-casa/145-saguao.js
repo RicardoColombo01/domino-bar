@@ -22,6 +22,7 @@ const SAGUAO = {
   entrada: el('onlineEntrada'), nome: el('onlineNome'), lista: el('onlineLista'),
   erro: el('onlineErro'), entrar: el('btConectar'), comecar: el('btIniciarOnline'),
   cancelar: el('btCancelarOnline'), voltar: el('btVoltarMesa'),
+  convidar: el('btConvidar'),
 };
 
 // O canal de recado da tela. Nome antigo de propósito: são quinze chamadas em `150-rede.js`
@@ -44,6 +45,10 @@ function saguaoDeAnfitriao(titulo, sub, codigo) {
   SAGUAO.nome.classList.add('oculta');       // quem abre a mesa nomeia as cadeiras no menu
   SAGUAO.entrar.classList.add('oculta');
   SAGUAO.comecar.classList.remove('oculta');
+  // O convite só existe com um código de VERDADE. `abrirMesaOnline` mostra "····" enquanto o
+  // peer não abriu, e compartilhar aquilo seria mandar convite para uma mesa que ainda não tem
+  // endereço — a mesma família do botão aceso que promete o que o motor recusa.
+  mostrarConvidar(!!codigo && codigo !== '····');
 }
 
 function saguaoDeConvidado(nomePadrao, codigoPadrao) {
@@ -65,6 +70,7 @@ function saguaoDeConvidado(nomePadrao, codigoPadrao) {
   SAGUAO.entrar.classList.remove('oculta');
   SAGUAO.comecar.classList.add('oculta');
   SAGUAO.lista.innerHTML = '';
+  mostrarConvidar(false);            // quem ENTRA numa mesa não tem convite a mandar
 }
 
 function saguaoDeQueda() {
@@ -73,7 +79,18 @@ function saguaoDeQueda() {
   SAGUAO.sub.textContent = 'Tentando voltar — o anfitrião pode estar recarregando.';
 }
 
-const saguaoCodigo = codigo => { SAGUAO.codigo.textContent = codigo; };
+const saguaoCodigo = codigo => {
+  SAGUAO.codigo.textContent = codigo;
+  mostrarConvidar(codigo && codigo !== '····');
+};
+
+// O BOTÃO DE CONVIDAR, e o clique dele. O corpo mora em `146-convite.js` porque as DUAS
+// superfícies o usam — esta e o painel do topo, durante a partida —, e a mesma regra escrita
+// em dois lugares é como as duas metades passam a discordar.
+function mostrarConvidar(mostrar) {
+  SAGUAO.convidar.classList.toggle('oculta', !mostrar);
+}
+SAGUAO.convidar.onclick = () => { tocarClique(); compartilharSala(); };
 
 // ─── quem já chegou ──────────────────────────────────────────────────────────
 // Recebe o que CADA cadeira é e devolve a lista pintada. A rede monta os estados porque só

@@ -6,7 +6,10 @@ import { installStubs, seedRandom, buildModule, frames, correrTimers, els, fire,
   // O chamado da vez (Onda B): o título GRAVA o que se escreve nele, e a aba se esconde e
   // volta pelos dois helpers — que trocam `hidden` e `visibilityState` JUNTOS e disparam o
   // evento, na ordem do navegador de verdade.
-  titulos, esconderAba, mostrarAba } from './harness.mjs';
+  titulos, esconderAba, mostrarAba,
+  // O convite: `semCompartilhar` tira as portas de cima para os recuos ficarem alcancaveis,
+  // e `selecionados` grava o que o terceiro recuo mandou selecionar.
+  semCompartilhar, selecionados } from './harness.mjs';
 
 installStubs();
 seedRandom(99);
@@ -89,6 +92,9 @@ const mod = await import(buildModule([
   // `sairDaPartida` é a porta de saída do jogo, e o aviso de fechar a aba tem de calar
   // depois dela — sem chamá-la, "não avisa quem já saiu" não é afirmável.
   'sairDaPartida',
+  // O convite (Onda B). `usarCodigo` e a unica porta de escrita do codigo da sala, e e por
+  // ela que a cena monta uma mesa com endereco sem levantar rede nenhuma.
+  'compartilharSala', 'conviteDaMesa', 'linkDaMesa', 'salaDaURL', 'usarCodigo', 'pintarSala',
 ], undefined, path.join(import.meta.dirname, '.gerado', 'built-jogo.mjs')));
 
 let falhas = 0;
@@ -2615,6 +2621,102 @@ console.log('\no chamado da vez, com a aba no fundo');
   mostrarAba();
 
   console.log('  a vez virando no fundo chama pelos dois canais, a aba à vista não, e o chamado para sozinho');
+}
+
+// ─── o convite: como alguém vem parar na sua mesa ────────────────────────────
+// As três portas são medidas UMA A UMA, e cada uma só é alcançável tirando as de cima — por
+// isso o dublê do `navigator` sabe se apagar. Dublê que responde sempre a mesma coisa deixa
+// dois destes ramos sem uma linha de teste, que é a oitava lição da série.
+console.log('\no convite da mesa');
+{
+  mod.encerrarRede(); mod.voltarSozinho(''); mod.pararDeConectar('');
+  mostrarAba();
+  mod.usarCodigo('XJCR');
+
+  // 1 · O CELULAR: a folha de compartilhar do sistema.
+  navigator.compartilhados.length = 0;
+  navigator.copiados.length = 0;
+  navigator.aborta = false;
+  ok(mod.compartilharSala() === 'share', 'com `navigator.share` o convite não foi pela folha do sistema');
+  const mandado = (navigator.compartilhados[0] || {}).text || '';
+  ok(mandado.includes('XJCR'), `o convite saiu sem o código: ${JSON.stringify(mandado)}`);
+  ok(mandado.includes(mod.JOGO.nome),
+    'o convite não diz de que jogo é a mesa — quem recebe abre no jogo dele e é recusado');
+
+  // 2 · CANCELAR NÃO É FALHAR. A folha rejeita com AbortError quando a pessoa desiste, e cair
+  // para a cópia aqui copiaria pelas costas de quem acabou de fechar — dizendo "copiado".
+  navigator.aborta = true;
+  navigator.copiados.length = 0;
+  mod.compartilharSala();
+  await Promise.resolve(); await Promise.resolve();
+  ok(navigator.copiados.length === 0,
+    'o jogador cancelou a folha de compartilhar e o jogo copiou o convite assim mesmo');
+  navigator.aborta = false;
+
+  // 3 · O COMPUTADOR: sem folha do sistema, copia.
+  let repor = semCompartilhar({ share: true, clipboard: false });
+  navigator.copiados.length = 0;
+  ok(mod.compartilharSala() === 'copia', 'sem `share`, o convite não caiu para a área de transferência');
+  ok((navigator.copiados[0] || '').includes('XJCR'),
+    `o que foi copiado não tem o código: ${JSON.stringify(navigator.copiados[0])}`);
+  repor();
+
+  // 4 · O RECUO DO RECUO, que é o único que existe em `file://` — lá `navigator.clipboard` não
+  // existe, porque não é contexto seguro. Sem ele, quem abre o jogo por duplo-clique fica sem
+  // nenhuma forma de mandar o código.
+  repor = semCompartilhar({ share: true, clipboard: true });
+  selecionados.length = 0;
+  ok(mod.compartilharSala() === 'selecao', 'sem as duas portas, o convite não caiu para a seleção');
+  ok(selecionados[0] === els.get('salaVal'),
+    'a seleção não caiu no código da mesa — não há o que copiar com Ctrl+C');
+  repor();
+
+  // 5 · SEM MESA ABERTA não há convite. O painel some junto, mas a função é chamada por duas
+  // superfícies e não pode depender de nenhuma delas estar escondida.
+  navigator.compartilhados.length = 0;
+  mod.usarCodigo('');
+  ok(mod.compartilharSala() === '', 'sem mesa aberta o jogo tentou compartilhar alguma coisa');
+  ok(navigator.compartilhados.length === 0, 'sem mesa aberta, alguma coisa foi mandada');
+  mod.usarCodigo('XJCR');
+
+  // 6 · O LINK. Em `file://` o `location.origin` é a STRING "null", e um endereço montado ali
+  // sairia como `null/index.html?sala=XJCR` colado na conversa de alguém.
+  ok(mod.linkDaMesa('XJCR') === '', `em file:// o convite montou um link: ${mod.linkDaMesa('XJCR')}`);
+  const soTexto = mod.conviteDaMesa('XJCR');
+  ok(!/null|undefined/.test(soTexto), `o convite em file:// tem lixo: ${JSON.stringify(soTexto)}`);
+
+  location.protocol = 'https:';
+  location.origin = 'https://ricardocolombo01.github.io';
+  location.pathname = '/domino-bar/';
+  const link = mod.linkDaMesa('XJCR');
+  ok(link.includes('sala=XJCR'), `o link não leva a sala: ${link}`);
+  // O `jogo=` é obrigatório: sem ele quem recebe abre na preferência DELE e leva um "essa mesa
+  // é de outro jogo" — o mecanismo de recusa da v4.7 funcionando contra o próprio convite.
+  ok(link.includes('jogo=' + mod.JOGO_ID), `o link não diz o jogo: ${link}`);
+  ok(link.startsWith('https://ricardocolombo01.github.io/domino-bar/'), `o link saiu torto: ${link}`);
+  location.protocol = 'file:'; location.origin = 'null'; location.pathname = '/index.html';
+
+  // 7 · O CÓDIGO QUE VEM PELA URL é entrada de fora, e passa pelo MESMO validador do
+  // `salaGuardada` — a pergunta do irmão, respondida antes de custar alguma coisa.
+  const tentar = valor => { location.search = '?sala=' + valor; return mod.salaDaURL(); };
+  ok(tentar('XJCR') === 'XJCR', 'um código válido na URL foi recusado');
+  ok(tentar('xjcr') === 'XJCR', 'o código da URL não foi normalizado para maiúsculas');
+  ok(tentar('%3Cimg%20src%3Dx%3E') === '', 'um código-ataque na URL passou pelo validador');
+  ok(tentar('constructor') === '', '`constructor` na URL passou pelo validador');
+  ok(tentar('A'.repeat(40)) === '', 'um código de 40 letras passou pelo validador');
+  ok(tentar('') === '', 'um `?sala=` vazio virou código');
+  location.search = '';
+
+  // 8 · O PAINEL VIROU BOTÃO, e botão precisa dizer o que faz: sem rótulo, o leitor de tela
+  // anuncia "botão Mesa XJCR" e ninguém descobre que dá para tocar ali.
+  mod.pintarSala('XJCR');
+  ok(/XJCR/.test(els.get('salaPainel').getAttribute('aria-label') || ''),
+    'o painel da mesa virou botão e não diz o que faz para quem não vê a tela');
+  mod.pintarSala('');
+  ok(!els.get('salaPainel').getAttribute('aria-label'),
+    'sem mesa, o painel continuou anunciando um convite');
+
+  console.log('  as três portas em cascata, o link só onde ele presta, e o código da URL validado');
 }
 
 console.log(falhas ? `\n${falhas} falha(s)` : '\ntudo certo');

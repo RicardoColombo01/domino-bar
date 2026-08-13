@@ -29,7 +29,12 @@ function arrancar() {
   //    refazer o leque.
   enquadrar();
 
-  // 4. E O LOOP.
+  // 4. O CONVITE, se a URL trouxe um. Depois do jogo escolhido (o link diz qual é) e antes do
+  //    loop, porque ele só abre uma TELA — não conecta, não cria peer, não age sozinho: o
+  //    clique em "Entrar" continua sendo da pessoa.
+  entrarPeloConvite();
+
+  // 5. E O LOOP.
   requestAnimationFrame(quadro);
 }
 

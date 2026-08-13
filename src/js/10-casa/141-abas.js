@@ -40,21 +40,29 @@ function jogoEscolhido() {
   return jogoPadrao();
 }
 
-// A barra de endereço passa a dizer a verdade — e é o que torna a escolha COMPARTILHÁVEL,
-// que é a metade do motivo de a URL existir neste mecanismo.
-//
-// O padrão SAI da URL em vez de entrar: o endereço limpo tem de continuar sendo o endereço
-// do jogo de sempre, senão todo link que alguém já mandou passa a parecer incompleto.
-//
-// `replaceState` e não `pushState`: trocar de aba não é navegar, e com `pushState` o botão
-// Voltar do celular passaria a desfazer cliques de aba em vez de sair do jogo.
-function urlDoJogo(id) {
+// A BARRA DE ENDEREÇO TEM MAIS DE UM ASSUNTO desde a Onda B — o jogo que está na mesa e o
+// convite que trouxe alguém —, e os dois precisam do mesmo cuidado: mexer só no que é seu
+// (senão um apaga o parâmetro do outro) e aguentar o `file://`, onde o `replaceState` pode
+// recusar. Duas cópias disso é exatamente como duas metades passam a discordar.
+function reescreverBusca(mexer) {
   const p = new URLSearchParams(location.search);
-  if (id === jogoPadrao()) p.delete('jogo'); else p.set('jogo', id);
+  mexer(p);
   const busca = p.toString();
   // `file://` é o jeito como este jogo abre por duplo-clique, e ali o `replaceState` pode
   // recusar — não é motivo para o menu não montar.
   try { history.replaceState(null, '', location.pathname + (busca ? '?' + busca : '')); } catch (e) { void e; }
+}
+
+// A barra de endereço passa a dizer a verdade — e é o que torna a escolha COMPARTILHÁVEL,
+// que é a metade do motivo de a URL existir neste mecanismo.
+//
+// O padrão SAI da URL em vez de entrar: o endereço limpo tem de continuar sendo o endereço do
+// jogo de sempre, senão todo link que alguém já mandou passa a parecer incompleto.
+//
+// `replaceState` e não `pushState`: trocar de aba não é navegar, e com `pushState` o botão
+// Voltar do celular passaria a desfazer cliques de aba em vez de sair do jogo.
+function urlDoJogo(id) {
+  reescreverBusca(p => { if (id === jogoPadrao()) p.delete('jogo'); else p.set('jogo', id); });
 }
 
 // ─── a faixa ─────────────────────────────────────────────────────────────────

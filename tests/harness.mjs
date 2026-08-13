@@ -361,7 +361,10 @@ export function installStubs() {
     selectAllChildren(el) { selecionados.push(el); },
     removeAllRanges() {},
   });
-  global.location = { protocol: 'file:', href: '', search: '', pathname: '/index.html' };
+  // `origin` é a string "null" em `file://` — é o navegador que responde isso, não um
+  // descuido do dublê, e é justamente o ramo SEM link do convite: um endereço montado ali
+  // sairia como `null/index.html?sala=XJCR` colado na conversa de alguém.
+  global.location = { protocol: 'file:', href: '', search: '', pathname: '/index.html', origin: 'null' };
   global.history = {
     trocas: [],
     replaceState(estado, titulo, url) { this.trocas.push(url); global.location.search = String(url).replace(/^[^?]*/, ''); },
