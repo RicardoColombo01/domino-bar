@@ -7,6 +7,11 @@ import { pathToFileURL } from 'url';
 
 export const els = new Map();
 export const listeners = new Map();
+// Tudo o que foi escrito em `document.title`, na ordem. Ver o acessor em `installStubs`.
+export const titulos = [];
+// O que o jogo mandou selecionar — o terceiro recuo do convite, quando não há nem folha de
+// compartilhar nem área de transferência.
+export const selecionados = [];
 export const rafQueue = [];
 export const timers = new Map();
 let proxTimer = 0;
@@ -138,11 +143,7 @@ export function installStubs() {
     querySelector: () => null,
     body: makeEl('body', 'body'),
     addEventListener: (t, fn) => global.addEventListener(t, fn),
-    // O TÍTULO DA ABA, com o valor de verdade do `pagina.html`. O `buildModule` extrai só o
-    // `<script type="module">`, então nada do HTML chega aqui sozinho — e sem este campo a
-    // asserção "voltar para a aba restaura o título original" partiria de `undefined` e não
-    // teria contra o que comparar. Ela ficaria verde comparando nada com nada.
-    title: 'Dominó de Bar · 2 a 4 jogadores',
+    // O TÍTULO é instalado logo abaixo, como acessor: ele precisa GRAVAR as escritas.
     // A ABA ESTÁ NO FUNDO? Os dois campos andam JUNTOS de propósito. Hoje duas suítes escrevem
     // `document.hidden = true` na mão (o gesto interrompido pelo sistema, em test-jogo e
     // test-truco) e nada mantém o `visibilityState` coerente com ele — um jogo que passasse a
@@ -152,6 +153,25 @@ export function installStubs() {
     // Quem está com o foco. Começa nulo, e só `el.focus()` escreve aqui.
     activeElement: null,
   };
+  // O TÍTULO DA ABA, com o valor de verdade do `pagina.html` — o `buildModule` extrai só o
+  // `<script type="module">`, então nada do HTML chega aqui sozinho, e sem isto a asserção
+  // "voltar para a aba restaura o título original" partiria de `undefined` e ficaria verde
+  // comparando nada com nada.
+  //
+  // E ele é ACESSOR porque precisa GRAVAR: a regra do `aria-live` — só escrever quando muda —
+  // vale para o título, que também é lido em voz alta na troca de aba, e sem o rastro não há
+  // como afirmar "não reescreveu o mesmo título N vezes". Mesma razão do `history.trocas`.
+  //
+  // ISTO TEM UM SEGUNDO DONO, e é bom saber antes: `test-app.mjs:238` usa `document.title` como
+  // RÉGUA da versão publicada (`/^v2 /`). Um aviso de vez que esqueça de restaurar o título
+  // deixa aquela suíte vermelha com uma mensagem que fala de service worker — longe da causa.
+  titulos.length = 0;
+  let tituloAtual = 'Dominó de Bar · 2 a 4 jogadores';
+  Object.defineProperty(global.document, 'title', {
+    get: () => tituloAtual,
+    set: v => { tituloAtual = String(v); titulos.push(tituloAtual); },
+    configurable: true,
+  });
   global.window = global;
   global.innerWidth = 1600;
   global.innerHeight = 900;
@@ -305,14 +325,32 @@ export function installStubs() {
   //
   // `vibrate` entra junto: ele é usado pelos dois jogos desde a v1.2 e vivia neste limbo — o
   // jogo o guarda com `navigator.vibrate &&`, então o ramo ligado nunca rodou em Node.
+  // `aborta` é o usuário FECHANDO a folha de compartilhar sem mandar nada. O navegador rejeita
+  // com `AbortError`, e isso NÃO é falha: um jogo que caísse para a cópia ali copiaria pelas
+  // costas e diria "copiado" a quem acabou de desistir. Sem poder simular a rejeição, essa
+  // regra não tem asserção — e ela é justamente a que a leitura do código não pega.
   Object.defineProperty(globalThis, 'navigator', {
     value: {
-      compartilhados: [], copiados: [], vibrou: [],
-      share(dados) { this.compartilhados.push(dados); return Promise.resolve(); },
+      compartilhados: [], copiados: [], vibrou: [], aborta: false,
+      share(dados) {
+        this.compartilhados.push(dados);
+        if (!this.aborta) return Promise.resolve();
+        const e = new Error('Share canceled');
+        e.name = 'AbortError';
+        return Promise.reject(e);
+      },
       clipboard: { writeText(txt) { globalThis.navigator.copiados.push(String(txt)); return Promise.resolve(); } },
       vibrate(ms) { this.vibrou.push(ms); return true; },
     },
     configurable: true, writable: true,
+  });
+  // A SELEÇÃO, que é o recuo do recuo do convite: sem folha de compartilhar e sem área de
+  // transferência (é o caso do `file://`), o jogo seleciona o código para o Ctrl+C. Grava, como
+  // todo o resto — um `selectAllChildren` sem rastro deixa aquele ramo inalcançável do Node.
+  selecionados.length = 0;
+  global.getSelection = () => ({
+    selectAllChildren(el) { selecionados.push(el); },
+    removeAllRanges() {},
   });
   global.location = { protocol: 'file:', href: '', search: '', pathname: '/index.html' };
   global.history = {
