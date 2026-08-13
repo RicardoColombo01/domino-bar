@@ -954,8 +954,8 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 | | |
 |---|---|
 | commitado | **v4.12.0** — a **ONDA A** da Fila 15: as manilhas realçadas, a vira em cima do baralho, o peso da mão no topo do dominó |
-| **enviado** | **NÃO.** Medido em 12/08 com `git ls-remote`: o remoto está em `c96b866` (v4.11.2) e o local em `0703fa2`. **A v4.12 está parada na máquina** — ver "AMANHÃ", que começa por aqui |
-| **PUBLICADO** | não, pela mesma razão. **A v4.12 MUDA o bundle** (mexe em `src/js/`), então o `sw.js` servido TEM de mudar quando ela subir: o local é **`84ad320c54f7`**, e o servido hoje ainda é o `df4e87d66f6b` da v4.11 |
+| **enviado** | ✔ **sim**, 12/08 — `git ls-remote` responde `c8efa38`, igual ao local, com as tags `v4.12.0` e `v4.12.1` |
+| **PUBLICADO** | ✔ **sim** — `sw.js` servido `84ad320c54f7` = local, e o `index.html` no ar é **byte a byte** o mesmo (544.501). Conferido também pelo CONTEÚDO: `tocoDoBaralho`, `ehManilha`, `MARGEM_MANILHA`, `ALTURA_DA_VIRA` e `rot: 'Peso'` estão no bundle servido |
 | em curso | **nada.** As Filas 12, 13 e 14 fecharam em 11/08; a **Onda A** da Fila 15 fechou em 12/08 |
 | as anteriores | v4.11.0 (a carta 42% esticada) · v4.10.0 (Fila 13 + o pacote da Fase 5) · v4.9.0 (a Fila 12) · v4.8.0 (o truco em duplas online) · v4.7.0 (o truco online) · v4.5.0 (o corpo do truco) |
 | Filas 5 a 14 | **todas fechadas** · da **Fila 15** sai a Onda A; sobram **B, C, D e E** |
@@ -1155,32 +1155,27 @@ A ONDA A  ✔ FEITA em 12/08, e saiu na v4.12.0 — três commits, um por item,
              troca. O test-telas media se eles CABEM; ninguém media se eles
              dizem a verdade. O irmão em truco tem as dele desde a v4.5.
 
-⚠ AMANHÃ COMEÇA POR AQUI, E NÃO POR CÓDIGO ────────────────────────────────
+⚑ AMANHÃ COMEÇA AQUI ──────────────────────────────────────────────────────
 
-PASSO 0    ➜ ENVIAR A v4.12. Ela está COMMITADA E TAGUEADA E NÃO ENVIADA —
-           medido, não suposto: `git ls-remote` diz `c96b866` (v4.11.2) e o
-           local é `0703fa2`. É o degrau do meio do "commitado ≠ enviado ≠
-           publicado", e é o que custou UM DIA INTEIRO a este projeto em
-           31/07, quando o Ricardo testou o github.io e viu os mesmos
-           defeitos porque nada tinha saído da máquina.
+✔ ENVIADO E PUBLICADO em 12/08, e conferido pelas TRÊS réguas, não por uma:
 
-             git push origin main --tags
+    git rev-parse main                    c8efa38
+    git ls-remote origin refs/heads/main  c8efa38   ← o servidor, consultado
+    sw.js local = servido                 84ad320c54f7
+    index.html servido vs local           IDÊNTICOS byte a byte (544.501)
 
-           O envio é liberação DELE, e é por isso que ele não foi feito na
-           sessão em que a onda nasceu.
+  E pelo CONTEÚDO, que é mais forte que o resumo: o bundle no ar tem
+  `tocoDoBaralho` (5×), `ehManilha` (4×), `MARGEM_MANILHA`, `ALTURA_DA_VIRA`
+  e `rot: 'Peso'`. A Onda A está no ar.
 
-PASSO 1    ➜ CONFERIR QUE PUBLICOU, e só o conteúdo servido responde:
+  O Pages levou ~30 s: a primeira consulta ainda deu o `df4e87d66f6b` da
+  v4.11 e a segunda já deu o novo. **Uma consulta só não decide** — se a
+  primeira discordar, espere e pergunte de novo antes de concluir qualquer
+  coisa.
 
-             curl -s https://ricardocolombo01.github.io/domino-bar/sw.js | grep VERSAO
-             grep VERSAO sw.js
-
-           O local é `84ad320c54f7`. Enquanto o servido for o `df4e87d66f6b`
-           da v4.11, o que está no ar NÃO tem a Onda A. Aqui os dois TÊM de
-           divergir antes e bater depois — ao contrário da v4.11.1/v4.11.2,
-           que eram registro e não mexiam no bundle.
-
-PASSO 2    ➜ JOGAR, e há duas perguntas concretas que só o olho responde e
-           que a foto de 900px NÃO respondeu:
+➜ PASSO 1  JOGAR. Não há código pendente e não há defeito conhecido em
+           aberto. Há duas perguntas concretas que só o olho responde e que
+           a foto de 900px NÃO respondeu:
            · a moldura da manilha se lê no CELULAR, com o dedo em cima e a
              tela ao sol? Ela é fina de propósito — a margem é derivada da
              folga do leque para não encostar na carta vizinha.
@@ -1190,8 +1185,31 @@ PASSO 2    ➜ JOGAR, e há duas perguntas concretas que só o olho responde e
            `MARGEM_MANILHA` e `CARTAS_NO_TOCO`, os dois em `550-mesa.js`/
            `540-layout.js`, e os dois com o porquê escrito ao lado.
 
-DEPOIS     ➜ SOBRAM AS ONDAS B, C, D e E da Fila 15, escritas em ordem, com o
-           custo e a armadilha já medida de cada uma.
+           E o truco em DUPLAS, com quatro pessoas de verdade no celular,
+           continua sem ter acontecido nenhuma vez — só bots em suítes e
+           quatro abas no `test-online`. É o que este arquivo aponta há
+           quatro filas como a fonte mais barata que o projeto tem.
+
+➜ PASSO 2  SE FOR ESCREVER CÓDIGO, a ordem recomendada das ondas que sobram:
+
+           ONDA B (o online) — a de melhor retorno. Compartilhar o código da
+             sala (`navigator.share`), avisar que é a sua vez com a aba no
+             fundo, o `beforeunload` que ele já aprovou (B4), e o chat pelo
+             teclado. Cuidado já escrito: `requestAnimationFrame` PARA em aba
+             de fundo — relógio disso vai em `setTimeout`, como o do bot.
+
+           ONDA D (a dívida) — e ela é a única da fila que é DÍVIDA e não
+             ideia: o `test-textura` nunca rodou com o TRUCO na mesa, então
+             ninguém nunca perguntou se a CARTA sobrevive a sair do
+             aplicativo e voltar. É o defeito que custou a Fila 7 inteira, e
+             a proteção existe sem a prova. Barata, e fecha um buraco real.
+
+           ONDA E (temas de baralho, ideia dele) e ONDA C (estatísticas, a
+             primeira mão guiada, desfazer no hotseat) vêm depois.
+
+           As três decisões que travavam alguma coisa já estão respondidas
+           desde 11/08, e o PIFE é o próximo jogo quando houver apetite para
+           uma onda grande.
            A mais barata com valor real é a ONDA B (o online): compartilhar o
            código da sala, avisar que é a sua vez com a aba no fundo, e o
            `beforeunload` que ele já aprovou (B4).
@@ -2081,21 +2099,19 @@ mapa sintoma → arquivo (§3), o inventário completo das mudanças (§3b), com
 
 ### 1. ONDE TESTAR — e este é o item que já custou UM DIA a este projeto
 
-> ### ⚠ EM 12/08/2026 O SITE **NÃO** ESTÁ EM DIA — a v4.12 está parada na máquina
+> ### ✔ O SITE ESTÁ EM DIA — conferido em 12/08/2026, com a v4.12 no ar
 >
-> Medido com `git ls-remote`: o remoto está em `c96b866` (v4.11.2) e o local em `0703fa2`.
-> **A Onda A não está no ar** — nem as manilhas realçadas, nem a vira erguida, nem o peso no
-> topo do dominó, nem os dois consertos que a foto achou.
+> `sw.js` servido `84ad320c54f7`, igual ao local, e o `index.html` no ar é **byte a byte** o
+> mesmo (544.501). **Pode testar direto no `github.io`**, e é onde a Onda A está: as manilhas
+> realçadas na sua mão, a vira erguida sobre o baralho, e o peso da sua mão no topo do dominó.
 >
-> **Enquanto não houver `git push origin main --tags`, teste LOCAL:** duplo-clique no
-> `index.html` para tudo menos o online, ou `npm run servir` para o online também. É a versão
-> nova, e é onde ela sempre está primeiro.
+> **Confira antes de relatar mesmo assim.** O Pages levou ~30 s desta vez, e a PRIMEIRA
+> consulta ainda devolveu o `sw.js` da v4.11 — uma consulta só não decide:
 >
-> **Depois do push**, o `sw.js` servido tem de virar `84ad320c54f7`. Se ele ainda disser
-> `df4e87d66f6b`, o que está no ar é a v4.11 e qualquer relato sobre a Onda A é sobre código
-> que não existe lá.
->
-> *(O texto abaixo é de 10/08 e vale como MÉTODO, não como estado: naquele dia os dois batiam.)*
+> ```
+> curl -s https://ricardocolombo01.github.io/domino-bar/sw.js | grep VERSAO
+> grep VERSAO sw.js      # o local
+> ```
 >
 > **Confira antes de relatar mesmo assim**, sempre — a fila do Pages já ficou travada por um
 > dia inteiro, e este projeto já perdeu um dia por causa disso:
