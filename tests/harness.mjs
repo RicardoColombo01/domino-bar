@@ -35,9 +35,34 @@ export function preferir(consulta, ligada = true) {
   else preferencias.delete(consulta);
 }
 
-function makeEl(id) {
+// QUAL É A TAG DE CADA ELEMENTO, lida do próprio HTML do jogo.
+//
+// É a DÉCIMA TERCEIRA vez que este dublê fica para trás, e a mais silenciosa da série: nenhum
+// elemento jamais teve `tagName`, então a guarda `digitando(ev)` de `160-loop.js` — que existe
+// para o atalho de teclado não disparar enquanto alguém escreve no chat — lia `undefined` e
+// NUNCA bloqueava. Todo teste de atalho em Node passava medindo um mundo em que aquela guarda
+// não existe, que é a definição de verde por trivialidade.
+//
+// Sai do HTML e não de uma lista escrita aqui, pela razão de sempre: lista de ids à mão apodrece
+// calada no dia em que alguém acrescenta um campo — e apodrece na direção ruim, deixando o teste
+// verde. Sem o arquivo, o mapa fica vazio e tudo se comporta como antes.
+let tagsPorId = null;
+function tagDe(id) {
+  if (!tagsPorId) {
+    tagsPorId = new Map();
+    try {
+      const html = fs.readFileSync(JOGO_HTML, 'utf8');
+      for (const [, tag, alvo] of html.matchAll(/<(input|select|textarea)\b[^>]*\bid="([^"]+)"/gi))
+        tagsPorId.set(alvo, tag.toUpperCase());
+    } catch (e) { void e; }
+  }
+  return tagsPorId.get(id) || 'DIV';
+}
+
+function makeEl(id, tag) {
   const e = {
-    id, textContent: '', innerHTML: '', className: '', value: '', title: '', offsetWidth: 1,
+    id, tagName: String(tag || tagDe(id)).toUpperCase(),
+    textContent: '', innerHTML: '', className: '', value: '', title: '', offsetWidth: 1,
     // O `style` GRAVA as propriedades customizadas, e é a DÉCIMA SEGUNDA vez que o dublê fica
     // para trás do jogo. Ele era `{}` puro, e no dia em que a barra de confirmar passou a
     // publicar a própria altura (`style.setProperty('--alt-confirmar', …)`, em 130-hud.js) a
@@ -76,7 +101,17 @@ function makeEl(id) {
     scrollTop: 0, scrollHeight: 0,
     appendChild(ch) { e.children.push(ch); return ch; },
     removeChild(ch) { const i = e.children.indexOf(ch); if (i >= 0) e.children.splice(i, 1); return ch; },
-    addEventListener() {}, removeEventListener() {}, remove() {}, focus() {}, select() {},
+    addEventListener() {}, removeEventListener() {}, remove() {}, select() {},
+    // O FOCO GRAVA, em vez de ser um no-op. Mesma razão do `style.setProperty` e do
+    // `history.trocas`: um `focus()` sem rastro torna inescrevível a asserção "o atalho abriu a
+    // conversa E pôs o cursor no campo" — e sem essa metade o atalho abre uma caixa em que
+    // ninguém consegue escrever, que é meia funcionalidade com cara de inteira.
+    //
+    // O `blur` NEM EXISTIA, e o jogo o chama desde a Fila 8 (`HUD.texto.blur()`, no Escape do
+    // campo de conversa): qualquer teste que disparasse aquele Escape estouraria com
+    // "blur is not a function" apontando para o teste em vez de para o dublê.
+    focus() { if (global.document) global.document.activeElement = e; },
+    blur() { if (global.document && global.document.activeElement === e) global.document.activeElement = null; },
     querySelectorAll: () => [], querySelector: () => null,
   };
   return e;
@@ -97,12 +132,25 @@ function makeCanvas() {
 
 export function installStubs() {
   global.document = {
-    createElement: tag => (tag === 'canvas' ? makeCanvas() : makeEl(tag)),
+    createElement: tag => (tag === 'canvas' ? makeCanvas() : makeEl(tag, tag)),
     getElementById: id => { if (!els.has(id)) els.set(id, makeEl(id)); return els.get(id); },
     querySelectorAll: () => [],
     querySelector: () => null,
-    body: makeEl('body'),
+    body: makeEl('body', 'body'),
     addEventListener: (t, fn) => global.addEventListener(t, fn),
+    // O TÍTULO DA ABA, com o valor de verdade do `pagina.html`. O `buildModule` extrai só o
+    // `<script type="module">`, então nada do HTML chega aqui sozinho — e sem este campo a
+    // asserção "voltar para a aba restaura o título original" partiria de `undefined` e não
+    // teria contra o que comparar. Ela ficaria verde comparando nada com nada.
+    title: 'Dominó de Bar · 2 a 4 jogadores',
+    // A ABA ESTÁ NO FUNDO? Os dois campos andam JUNTOS de propósito. Hoje duas suítes escrevem
+    // `document.hidden = true` na mão (o gesto interrompido pelo sistema, em test-jogo e
+    // test-truco) e nada mantém o `visibilityState` coerente com ele — um jogo que passasse a
+    // ler o segundo veria "visible" com a aba escondida. Quem troca os dois é `esconderAba()`.
+    hidden: false,
+    visibilityState: 'visible',
+    // Quem está com o foco. Começa nulo, e só `el.focus()` escreve aqui.
+    activeElement: null,
   };
   global.window = global;
   global.innerWidth = 1600;
@@ -244,6 +292,28 @@ export function installStubs() {
   // E ele GRAVA, como o `Peer` passou a gravar os ouvintes: um `replaceState` que não deixa
   // rastro faz a asserção "a URL passou a dizer qual jogo está na mesa" ser inescrevível. O
   // teste enche `location.search` antes de carregar e lê `history.trocas` depois.
+  // O NAVIGATOR, e ele é a DÉCIMA QUARTA vez — com uma armadilha que nenhuma das treze
+  // anteriores teve: `global.navigator = {…}` LANÇA neste Node. O `navigator` do Node 24 é um
+  // getter sem setter, e o harness roda em ESM (modo estrito), onde atribuir a um getter é
+  // TypeError em vez de silêncio. Só `defineProperty` entra por cima.
+  //
+  // Ele GRAVA o que foi compartilhado e o que foi copiado, pela razão de sempre: sem rastro, a
+  // asserção "o convite levou o código e o link" não existe. E as duas portas são REMOVÍVEIS
+  // (`semCompartilhar()`), porque o jogo tem três caminhos em cascata — share, clipboard,
+  // seleção à mão — e um dublê que responde sempre a mesma coisa deixa dois deles inalcançáveis.
+  // É literalmente a oitava lição desta lista, aplicada antes de custar alguma coisa.
+  //
+  // `vibrate` entra junto: ele é usado pelos dois jogos desde a v1.2 e vivia neste limbo — o
+  // jogo o guarda com `navigator.vibrate &&`, então o ramo ligado nunca rodou em Node.
+  Object.defineProperty(globalThis, 'navigator', {
+    value: {
+      compartilhados: [], copiados: [], vibrou: [],
+      share(dados) { this.compartilhados.push(dados); return Promise.resolve(); },
+      clipboard: { writeText(txt) { globalThis.navigator.copiados.push(String(txt)); return Promise.resolve(); } },
+      vibrate(ms) { this.vibrou.push(ms); return true; },
+    },
+    configurable: true, writable: true,
+  });
   global.location = { protocol: 'file:', href: '', search: '', pathname: '/index.html' };
   global.history = {
     trocas: [],
@@ -274,6 +344,38 @@ export function fire(type, ev = {}) {
   ev.preventDefault ??= () => { ev.defaultPrevented = true; };
   ev.stopPropagation ??= () => {};
   for (const fn of listeners.get(type) || []) fn(ev);
+}
+
+// TROCAR DE APLICATIVO, e voltar. Os dois campos que o navegador mantém juntos são trocados
+// juntos aqui, e o evento sai depois — que é a ordem do navegador de verdade: quando o
+// `visibilitychange` chega, `document.hidden` JÁ vale o valor novo. Um teste que dispare o evento
+// antes de trocar o campo mede o estado anterior e passa pelo motivo errado.
+export function esconderAba() {
+  global.document.hidden = true;
+  global.document.visibilityState = 'hidden';
+  fire('visibilitychange');
+}
+
+export function mostrarAba() {
+  global.document.hidden = false;
+  global.document.visibilityState = 'visible';
+  fire('visibilitychange');
+}
+
+// AS DUAS PORTAS DO CONVITE, tiradas de cena. O jogo tenta `share`, cai para `clipboard` e cai
+// para a seleção à mão; sem poder remover as de cima, os dois ramos de baixo são inalcançáveis —
+// e ramo inalcançável é ramo que ninguém prova.
+//
+// DEVOLVE A FUNÇÃO QUE REPÕE, e isso não é conveniência: `installStubs()` roda UMA vez por suíte,
+// então um `delete` sem volta contamina todos os blocos seguintes — que é a lição de "cena que
+// mexe em estado compartilhado tem de devolver como encontrou", já paga três vezes aqui (o
+// localStorage das telas, o MESA do online, o P do harness).
+export function semCompartilhar({ share = true, clipboard = true } = {}) {
+  const n = globalThis.navigator;
+  const guardados = { share: n.share, clipboard: n.clipboard };
+  if (share) delete n.share;
+  if (clipboard) delete n.clipboard;
+  return () => { n.share = guardados.share; n.clipboard = guardados.clipboard; };
 }
 
 // O navegador passa o instante do quadro para o callback do requestAnimationFrame.
