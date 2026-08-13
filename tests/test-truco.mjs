@@ -879,15 +879,59 @@ console.log('\nonde cada carta cai na mesa');
   const raios = [0, 1, 2, 3].map(i => dist(mod.postaDaVaza(i, 0, 4)));
   ok(Math.max(...raios) - Math.min(...raios) < 1e-9, `os raios não batem: ${raios.map(r => r.toFixed(3))}`);
 
-  // NADA SE SOBREPÕE: duas cartas quaisquer ficam a mais de uma largura de carta uma da
-  // outra. É a mesma pergunta que o espaçamento da mão do dominó responde, e o número sai
-  // do TAMANHO DA CARTA — nunca de um valor escolhido a olho.
+  // NADA SE SOBREPÕE — e agora isto é medido com as CAIXAS, não com a distância entre os
+  // centros. A asserção que morava aqui comparava `hypot(dx, dz) > CARTA_L` e o comentário
+  // dela dizia "nada se sobrepõe"; ela não media isso. A carta é 0.62 × 0.88, então duas
+  // vizinhas giradas a 90° podem estar a 0.97 uma da outra — passando folgado no `> 0.62` —
+  // e mesmo assim se cobrirem em 0.06 nos dois eixos. Foi por esse buraco que passou o
+  // defeito de campo de 13/08/2026, relatado com foto: as cartas da vaza encavaladas no meio
+  // da mesa, e a vira coberta por elas.
+  //
+  // A VIRA ENTRA NA CONTA, e é a metade que faltava: ela é irmã das cartas jogadas dentro de
+  // `grupoMesaDoTruco`, e o `folgaEntre` do `test-telas` **só compara ENTRE grupos** — o
+  // ponto cego estava declarado no `590-registro.js` desde a v4.7. Ponto cego declarado é
+  // ponto cego onde o defeito mora.
+  //
+  // As caixas alinham com os eixos porque todo ângulo de cadeira é múltiplo de 90°.
+  const caixaDaPosta = (x, z, rotY) => {
+    const deLado = Math.abs(Math.cos(rotY)) < 0.5;
+    const larg = (deLado ? mod.CARTA_C : mod.CARTA_L) / 2;
+    const prof = (deLado ? mod.CARTA_L : mod.CARTA_C) / 2;
+    return { x0: x - larg, x1: x + larg, z0: z - prof, z1: z + prof };
+  };
+  const invade = (A, B) => Math.min(
+    Math.min(A.x1, B.x1) - Math.max(A.x0, B.x0),
+    Math.min(A.z1, B.z1) - Math.max(A.z0, B.z0));
+
+  // ENTRE AS CARTAS JOGADAS a exigência é ZERO, e o motivo é o PLANO: todas descansam em
+  // `y = CARTA_E/2`, então sobreposição ali é carta em cima de carta — o que a foto mostrou.
   for (const n2 of [2, 4]) {
-    const postas = [];
-    for (let i = 0; i < n2; i++) postas.push(mod.postaDaVaza(i, 0, n2));
-    for (let i = 0; i < n2; i++) for (let k = i + 1; k < n2; k++) {
-      const d = Math.hypot(postas[i].x - postas[k].x, postas[i].z - postas[k].z);
-      ok(d > mod.CARTA_L, `mesa de ${n2}: as cartas ${i} e ${k} ficaram a ${d.toFixed(2)}, e a carta tem ${mod.CARTA_L}`);
+    const cartas = [];
+    for (let i = 0; i < n2; i++) {
+      const p = mod.postaDaVaza(i, 0, n2);
+      cartas.push({ quem: `a carta da cadeira ${i}`, c: caixaDaPosta(p.x, p.z, p.rotY) });
+    }
+    for (let i = 0; i < cartas.length; i++) for (let k = i + 1; k < cartas.length; k++) {
+      const sobra = invade(cartas[i].c, cartas[k].c);
+      ok(sobra <= 0,
+        `mesa de ${n2}: ${cartas[i].quem} e ${cartas[k].quem} se cobrem em ${sobra.toFixed(3)} ` +
+        `— elas estão no MESMO plano, e o raio da vaza precisa de ao menos 0.75`);
+    }
+
+    // COM A VIRA a régua é outra, e a diferença é de ALTURA, não de gosto: ela vive erguida
+    // sobre o toco de baralho desde a Onda A (`ALTURA_DA_VIRA`), num plano acima de tudo. Uma
+    // carta passando por baixo dela é uma carta apoiada perto de um monte — legível. O que
+    // não pode é ela sumir: a sobreposição tem de deixar a MAIOR PARTE dela à vista, senão
+    // volta o defeito que a v4.7 pagou (a vira ilegível, e o jogador sem saber a manilha).
+    const vira = caixaDaPosta(0, 0, Math.PI / 2);
+    ok(mod.ALTURA_DA_VIRA > mod.CARTA_E,
+      'a vira não está mais erguida — sem isso, a tolerância abaixo vira licença para z-fighting');
+    for (let i = 0; i < n2; i++) {
+      const p = mod.postaDaVaza(i, 0, n2);
+      const sobra = invade(vira, caixaDaPosta(p.x, p.z, p.rotY));
+      ok(sobra < mod.CARTA_L / 2,
+        `mesa de ${n2}: a carta da cadeira ${i} cobre ${sobra.toFixed(3)} da vira, que tem ` +
+        `${mod.CARTA_L} de lado — ela precisa continuar legível para a manilha ser derivável`);
     }
   }
 

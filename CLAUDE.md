@@ -4842,6 +4842,56 @@ Os cinco que eu proporia, e cada um resolve um problema de verdade:
 pensando nos dois desde o começo — mas **entregar o baralho primeiro**, porque é onde o pedido
 nasceu e onde o pife herda.
 
+#### ONDA F — AS DUAS REGRAS DE TRUCO QUE FALTAM (pedido dele, 13/08/2026)
+
+**Anotadas para fazer, não feitas.** Palavras dele, na íntegra, porque regra de casa não se
+parafraseia:
+
+> *"Esconder Carta: Também denominado 'carta coberta ou encoberta', é quando o jogador joga a
+> carta que acabou de virar na mesa, passando a não valer mais nada. Não se pode encobrir a
+> carta se estiver na primeira rodada de cada mão."*
+>
+> *"Mão de Ferro: Acontece quando ambas as duplas alcançam os 11 pontos em uma mesma partida.
+> Neste caso, os jogadores recebem as cartas viradas para baixo 'cobertas' e devem jogar com as
+> cartas para baixo. A dupla que vencer a mão, vencerá a partida."*
+
+**As duas são REGRA e não tela**, então nascem em `50-truco/510-regras.js` e `520-partida.js`,
+com o layout e a mesa acompanhando depois. E as duas mexem no que o motor já tem, o que as
+torna mais arriscadas do que parecem — a v4.5 registra que **defeito de regra que atravessa
+duas mãos não existe para caso escrito à mão**, e foi a partida inteira jogada pela casa que
+achou os dois defeitos daquela release. Ela é a suíte que tem de crescer aqui.
+
+**F1 · ESCONDER A CARTA.** Uma jogada nova, e ela é a primeira do truco que **não tem força**:
+a carta vai para a mesa de barriga para baixo e não disputa a vaza. O que a implementação vai
+ter de responder, e nenhuma leitura de código responde:
+
+| | |
+|---|---|
+| a proibição na 1ª vaza | ele já disse: **não pode**. Vale para toda mão, inclusive depois de truco |
+| e se TODOS esconderem? | a vaza empata (não há carta com força), e aí cai na regra do melou que já existe |
+| o que a tela mostra | o verso já existe (`criarVersoDeCarta`), e a mesa já sabe virar carta de barriga para baixo ao recolher a vaza — é a mesma geometria |
+| como se ESCOLHE esconder | é uma segunda intenção sobre a mesma carta. A barra de ações já é gerada pelo jogo (`JOGO.hud.barra`), então cabe sem tocar na casa |
+| o bot | `530-bot.js` precisa saber quando vale a pena — esconder é jogar uma carta forte fora para guardá-la, e isso muda a conta de `escolherCarta` |
+
+**F2 · MÃO DE FERRO.** Ela é irmã da **mão de 11**, que já existe (`fase` própria, dois botões,
+`visaoDoTruco` mudando de forma) — e é por isso que ela é mais barata do que parece **e** mais
+perigosa: o validador `vistaDoTrucoValida` é frouxo de propósito porque *"a forma da vista muda
+com a fase"*, e uma fase nova entra por essa porta. As perguntas em aberto:
+
+| | |
+|---|---|
+| **quanto vale a mão?** | ele não disse. Na maioria das casas ela decide a PARTIDA inteira, e é o que a frase dele sugere ("vencerá a partida") — mas isso é escolha, como o melou foi |
+| dá para trucar na mão de ferro? | na maioria das casas **não** — a mão já vale tudo |
+| e numa mesa de DOIS? | "ambas as duplas" é linguagem de mesa de 4. Numa de 2 o gatilho é 11×11 igual, e a regra deve valer — mas quem decide é ele |
+| a sua própria mão | você **não vê as suas cartas**. Isso fura a suposição mais antiga da tela do truco (`vista.mao` são as cartas que você enxerga), e é o ponto onde a `visaoDe` precisa de cuidado: esconder da TELA é fácil, esconder da VISTA é o que impede alguém de espiar pelo console |
+
+**⚠ E ESTA É A ARMADILHA QUE VALE ESCREVER ANTES:** a mão de ferro é o primeiro estado do
+projeto em que **a sua própria mão é segredo para você**. O invariante 3 diz que `visaoDe` é a
+fronteira, e ele sempre foi usado para esconder a mão dos OUTROS. Mandar as suas cartas na
+vista e só não desenhá-las seria a fronteira valendo para todo mundo menos para o caso novo —
+e há teste conferindo que nenhuma peça da mão alheia chega ao convidado, que é exatamente o
+molde da asserção que falta aqui.
+
 #### O que NÃO recomendo, e por quê
 
 - **Fazer o 3D DESVIAR dos painéis** — o mais caro do arquivo, e a gaveta e as faixas já
