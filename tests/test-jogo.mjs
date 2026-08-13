@@ -82,6 +82,9 @@ const mod = await import(buildModule([
   // A conversa pelo teclado (Onda B). `conversarPeloTeclado` é o corpo da tecla `c`, e
   // `alternarConversa` é como a cena monta o estado sem depender de a tecla ter funcionado.
   'conversarPeloTeclado', 'alternarConversa',
+  // `sairDaPartida` é a porta de saída do jogo, e o aviso de fechar a aba tem de calar
+  // depois dela — sem chamá-la, "não avisa quem já saiu" não é afirmável.
+  'sairDaPartida',
 ], undefined, path.join(import.meta.dirname, '.gerado', 'built-jogo.mjs')));
 
 let falhas = 0;
@@ -2398,6 +2401,86 @@ console.log('\na conversa pelo teclado');
   ok(mod.escolhida === null, 'Escape com a conversa fechada deixou de cancelar a escolha');
 
   console.log('  `c` abre e foca, a guarda de campo segura, e o Escape desce um degrau por vez');
+}
+
+// ─── avisar antes de fechar a aba no meio de uma mesa online ─────────────────
+// O que se mede é `defaultPrevented`, e não um `returnValue` cerimonial: é o
+// `preventDefault()` que faz o navegador perguntar. O dublê marca a bandeira sozinho desde
+// que o `fire` existe — comparar contra um campo que o próprio teste semeou seria a
+// armadilha do "comparado contra um dublê vazio".
+const fecharAAba = () => { const ev = {}; fire('beforeunload', ev); return ev; };
+
+console.log('\navisar antes de fechar a aba no meio de uma mesa online');
+{
+  // 1 · MESA LOCAL. Um aviso que aparece toda vez é o aviso que todo mundo aprende a
+  // ignorar, e aí ele não protege nem o caso que importa.
+  mod.encerrarRede(); mod.voltarSozinho(''); mod.pararDeConectar('');
+  mod.MESA.modo = 'classico'; mod.MESA.n = 2;
+  mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[1].nivel = 'normal';
+  mod.comecarLocal();
+  ok(mod.P && mod.P.fase !== 'fim', 'montagem: sem partida viva, a asserção passaria de graça');
+  ok(!fecharAAba().defaultPrevented,
+    'numa mesa LOCAL o jogo pediu confirmação para fechar a aba — não há ninguém esperando');
+
+  // 2 · ANFITRIÃO com a mesa de pé. `montarMesaOnline` deixa uma cadeira online ocupada.
+  const { conn } = montarMesaOnline();
+  ok(mod.modo === 'anfitriao' && mod.P && mod.P.fase !== 'fim',
+    'montagem: o anfitrião não ficou com partida viva');
+  const evAnfitriao = fecharAAba();
+  ok(evAnfitriao.defaultPrevented,
+    'o anfitrião fechou a aba no meio da partida e o jogo não perguntou nada');
+  ok(evAnfitriao.returnValue === '', 'faltou o canal legado do beforeunload (`returnValue`)');
+
+  // 3 · PARTIDA ACABADA: não há o que interromper.
+  mod.P.fase = 'fim';
+  ok(!fecharAAba().defaultPrevented, 'com a partida acabada o jogo ainda pediu confirmação');
+
+  // 4 · DEPOIS DE SAIR PELA PORTA DO JOGO. Nenhuma flag foi inventada para isto: quem
+  // responde é o estado, que `sairDaPartida` já deixa zerado.
+  mod.comecarLocal();
+  ok(fecharAAba().defaultPrevented, 'montagem: a revanche não devolveu a mesa ao ar');
+  mod.sairDaPartida();
+  ok(!fecharAAba().defaultPrevented,
+    'quem acabou de clicar em "Sair" foi avisado de novo ao fechar a aba');
+  conn.close();
+  mod.encerrarRede();
+
+  // 5 · O SAGUÃO. Modo anfitrião e nenhuma partida: a mesa ainda não começou, e sair dali
+  // não custa nada a ninguém.
+  mod.abrirMesaOnline();
+  ok(mod.modo === 'anfitriao', 'montagem: o saguão não entrou em modo anfitrião');
+  ok(!fecharAAba().defaultPrevented, 'no saguão, antes de começar, o jogo já pedia confirmação');
+  mod.encerrarRede();
+
+  // 6 · O CONVIDADO, e esta é a asserção que paga o item. Ele NUNCA tem `P` — um
+  // `beforeunload` escrito só com a partida (o jeito óbvio de escrever) não existiria
+  // justamente para quem mais precisa dele: quem fecha a aba e deixa a mesa dos outros
+  // parada os 30 s do ESPERA_VOLTA.
+  // A vista é montada ANTES, de uma partida de verdade, e passa por JSON como passaria pelo
+  // fio. Depois `sairDaPartida()` zera tudo — é assim que o convidado fica sem `P`, que é o
+  // estado que esta cena existe para medir.
+  mod.comecarLocal();
+  const vistaDoConvidado = JSON.parse(JSON.stringify(mod.visaoDe(mod.P, 1)));
+  mod.sairDaPartida();
+
+  mod.encerrarRede(); mod.voltarSozinho(''); mod.pararDeConectar('');
+  mod.conectarNaMesa('BBBB');
+  Peer.ultimo.disparar('open');
+  const link = mod.linkAnfitriao;
+  ok(link && link.ouvintes.has('data'), 'montagem: o despachante do convidado não foi instalado');
+  ok(mod.modo === 'convidado' && !mod.P, 'montagem: o convidado tinha de estar sem partida na memória');
+  ok(!fecharAAba().defaultPrevented, 'o convidado ainda no saguão foi avisado sem estar em partida');
+
+  // A vista chega pelo fio, e é ela que diz que há uma mesa viva do outro lado.
+  link.disparar('data', { t: 'vista', v: vistaDoConvidado });
+  ok(mod.vistaAtual && mod.vistaAtual.fase !== 'fim',
+    'montagem: a vista não chegou ao convidado — a asserção seguinte passaria de graça');
+  ok(fecharAAba().defaultPrevented,
+    'o CONVIDADO fechou a aba no meio da partida e o jogo não perguntou nada — ' +
+    'ele não tem `P`, e é por isso que o predicado precisa das duas metades');
+  mod.encerrarRede();
+
+  console.log('  o aviso existe nos dois papéis do online, e em nenhum outro lugar');
 }
 
 console.log(falhas ? `\n${falhas} falha(s)` : '\ntudo certo');

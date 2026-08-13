@@ -7072,6 +7072,45 @@ function sairDaPartida() {
   mostrarTela('telaMenu');
 }
 
+// HÁ GENTE DO OUTRO LADO ESPERANDO POR VOCÊ? A pergunta tem DUAS respostas, e é essa a
+// armadilha deste item: o anfitrião tem a partida na memória, o convidado NUNCA tem `P` —
+// para ele quem responde é a vista. Escrito só com `P`, que é o jeito óbvio de escrever, o
+// aviso não existiria justamente para quem mais precisa dele: o convidado que fecha a aba e
+// deixa a mesa dos outros parada os 30 s do `ESPERA_VOLTA`.
+//
+// É a mesma assimetria que o `btSair` já respeita (`:127` esconde o botão pela VISTA) e que o
+// `partidaGuardada` aprendeu do jeito caro.
+const mesaOnlineViva = () =>
+  (modo === 'anfitriao' && !!P && P.fase !== 'fim') ||
+  (modo === 'convidado' && !!vistaAtual && vistaAtual.fase !== 'fim');
+
+// AVISAR ANTES DE FECHAR A ABA NO MEIO DE UMA MESA ONLINE. Decisão do Ricardo em 11/08 — o
+// item estava na fila desde a Fila 5 esperando exatamente esta resposta, porque `beforeunload`
+// é incômodo por natureza e isso é escolha de casa, não de programador.
+//
+// SÓ NO ONLINE, e nunca fora dele. Um aviso que aparece toda vez é o aviso que todo mundo
+// aprende a ignorar — e aí ele não protege nem o caso que importa. Numa mesa local não há
+// ninguém esperando, e a partida volta pelo "Continuar a partida de antes".
+//
+// A GUARDA VAI NO DISPARO, e o ouvinte é registrado uma vez só. É o padrão que a Fila 11
+// escreveu com sangue (três `setTimeout` sem guarda no disparo custaram uma fila inteira), e
+// aqui ele ainda evita um segundo lugar onde a mesma regra estaria escrita. Registrar e
+// desregistrar conforme a partida seria mais elegante e intestável: o harness não apaga
+// ouvinte de janela, e um desregistro sem prova é um ramo verde que nunca rodou.
+//
+// E ELE NÃO DISPARA QUANDO O JOGO SAI DE PROPÓSITO, sem flag nenhuma: pelas portas do jogo
+// (`sairDaPartida`, `largarAMesa`) o estado JÁ é outro quando a página some — `P` é nulo,
+// `vistaAtual` é nulo, `modo` voltou a 'local'. Quem responde é o estado, e não uma marca que
+// alguém teria de lembrar de pôr. A faixa de abas também não navega: ela usa `replaceState`.
+//
+// O texto é do NAVEGADOR — nenhum deles deixa escolher a frase há anos. Quem explica o preço
+// é a tela de sair, que já diz "a mesa continua sem você, e esta partida conta como derrota".
+addEventListener('beforeunload', ev => {
+  if (!mesaOnlineViva()) return;
+  ev.preventDefault();
+  ev.returnValue = '';                  // o canal legado, que alguns navegadores ainda exigem
+});
+
 // ─── voltar para a mesma partida ─────────────────────────────────────────────
 // Fechar a aba sem querer, recarregar, o celular matar a página para poupar memória, um
 // erro de script: nenhum desses é motivo para perder uma partida de doze mãos. A partida
