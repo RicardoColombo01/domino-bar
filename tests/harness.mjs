@@ -224,21 +224,30 @@ export function installStubs() {
     set: () => true,
     apply: () => nada(),
   });
+  // E ELE CONTA OS OSCILADORES. O `CLAUDE.md` registra desde a Fila 11 que `120-audio.js` não
+  // tem NENHUMA asserção de que um som sai — o dublê era um objeto-nulo, então `nota()` e
+  // `estalo()` rodavam inteiros e ninguém perguntava o que saiu. Um contador não mede som (não
+  // há som nenhum aqui), mas mede a DECISÃO de tocar, que é o que o jogo escolhe: "avisou com
+  // a aba à vista" e "avisou com o som desligado" passam a ser afirmáveis.
   global.AudioContext = class {
     constructor() {
       this.state = 'running';
       this.sampleRate = 44100;
       this.currentTime = 0;
       this.destination = nada();
+      this.osciladores = 0;
+      this.ruidos = 0;
+      AudioContext.ultimo = this;
     }
     suspend() { this.state = 'suspended'; return Promise.resolve(); }
     resume() { this.state = 'running'; return Promise.resolve(); }
     createBuffer(_canais, n) { return { getChannelData: () => new Float32Array(n) }; }
-    createBufferSource() { return nada(); }
+    createBufferSource() { this.ruidos++; return nada(); }
     createGain() { return nada(); }
     createBiquadFilter() { return nada(); }
-    createOscillator() { return nada(); }
+    createOscillator() { this.osciladores++; return nada(); }
   };
+  global.AudioContext.ultimo = null;
   global.Image = class {};
   // Peer que ABRE E NÃO FALA. Não serve para testar rede — o test-online.mjs faz isso no
   // Chrome, com duas abas e uma mesa de verdade. Serve para o jogo poder ENTRAR em modo

@@ -2,7 +2,11 @@
 // ao fim. Só o `import` já vale como teste — ele constrói a cena Three.js de verdade,
 // e geometria inválida ou variável indefinida estoura aqui em vez de virar tela preta.
 import path from 'path';
-import { installStubs, seedRandom, buildModule, frames, correrTimers, els, fire, preferir } from './harness.mjs';
+import { installStubs, seedRandom, buildModule, frames, correrTimers, els, fire, preferir,
+  // O chamado da vez (Onda B): o título GRAVA o que se escreve nele, e a aba se esconde e
+  // volta pelos dois helpers — que trocam `hidden` e `visibilityState` JUNTOS e disparam o
+  // evento, na ordem do navegador de verdade.
+  titulos, esconderAba, mostrarAba } from './harness.mjs';
 
 installStubs();
 seedRandom(99);
@@ -2481,6 +2485,136 @@ console.log('\navisar antes de fechar a aba no meio de uma mesa online');
   mod.encerrarRede();
 
   console.log('  o aviso existe nos dois papéis do online, e em nenhum outro lugar');
+}
+
+// ─── o chamado da vez, com a aba no fundo ────────────────────────────────────
+// Só é escrevível desde hoje: o dublê não tinha `document.title`, `hidden` nem
+// `visibilityState`. E há um SEGUNDO DONO do título — `test-app.mjs` o usa como régua da
+// versão publicada —, então uma restauração esquecida aqui reprova LÁ, com uma mensagem que
+// fala de service worker. As mutações deste bloco rodam contra `npm test` E `npm run app`.
+//
+// A BORDA É FORJADA COM VISTAS, e não jogando: aplicar a jogada do bot para virar a vez traz
+// junto o som DA JOGADA, e aí "o chamado tocou?" mede o baque da peça caindo. Alternar duas
+// vistas — a mesma partida, o campo `vez` trocado — isola exatamente a transição, que é a
+// única coisa que este arquivo decide.
+console.log('\no chamado da vez, com a aba no fundo');
+{
+  mod.encerrarRede(); mod.voltarSozinho(''); mod.pararDeConectar('');
+  mostrarAba();
+  mod.MESA.modo = 'classico'; mod.MESA.n = 2;
+  mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[1].nivel = 'normal';
+  mod.comecarLocal();
+
+  // Duas vistas da MESMA partida: uma em que a vez é sua, outra em que não é.
+  const base = mod.visaoDe(mod.P, 0);
+  ok(base && base.fase === 'mao', 'montagem: a partida não está em curso');
+  const minhaVez = Object.assign({}, base, { vez: 0, cadeira: 0 });
+  const vezDoOutro = Object.assign({}, base, { vez: 1, cadeira: 0 });
+
+  // Quantos osciladores o jogo já pediu. O `ac` nasce no primeiro som (o embaralho), então
+  // aqui ele existe há muito tempo — mede-se a DIFERENÇA, nunca o total.
+  const somAgora = () => (mod.ac ? mod.ac.osciladores : -1);
+  ok(somAgora() >= 0, 'montagem: sem AudioContext, a asserção do som mediria -1');
+
+  // 1 · ABA À VISTA: a tela JÁ diz de quem é a vez, e piscar seria ruído. É também a
+  // asserção que protege a régua do `test-app`.
+  mod.atualizarVista(vezDoOutro);
+  titulos.length = 0;
+  const somAntes = somAgora();
+  mod.atualizarVista(minhaVez);
+  ok(titulos.length === 0,
+    `com a aba À VISTA o jogo mexeu no título ${titulos.length} vez(es) — ${JSON.stringify(titulos)}`);
+  // E NEM TOCOU NADA. Esta é a metade que o título não prova: com só uma das duas guardas de
+  // `document.hidden` removida, a irmã ainda impede o pisca — mas o SOM já saiu, e um "ó" do
+  // nada com a mesa na frente do jogador é pior que aviso nenhum. Duas camadas que falham de
+  // jeitos diferentes precisam de uma asserção cada.
+  //
+  // O contador de osciladores nasceu aqui e fecha de quebra uma lacuna que o CLAUDE.md
+  // registra desde a Fila 11: `120-audio.js` nunca teve asserção de que um som SAI.
+  ok(somAgora() === somAntes,
+    `com a aba À VISTA o chamado tocou ${somAgora() - somAntes} som(ns)`);
+
+  // 2 · ABA NO FUNDO e a vez virando: aí sim, e pelos DOIS canais.
+  mod.atualizarVista(vezDoOutro);
+  esconderAba();
+  mod.atualizarVista(vezDoOutro);       // a borda começa aqui: ainda NÃO é a sua vez
+  titulos.length = 0;
+  const somAntesDoFundo = somAgora();
+  mod.atualizarVista(minhaVez);
+  ok(/Sua vez/.test(document.title),
+    `a vez virou com a aba no fundo e o título continuou ${JSON.stringify(document.title)}`);
+  ok(somAgora() > somAntesDoFundo, 'a vez virou com a aba no fundo e nenhum som saiu');
+
+  // O PISCA VIVE EM setTimeout, e é isso que o faz existir em aba de fundo — o rAF PARA ali,
+  // que é a armadilha nº 1 desta casa. `correrTimers` drena a fila do harness; se o pisca
+  // fosse por quadro, nada aqui aconteceria.
+  const antesDoTique = document.title;
+  correrTimers();
+  ok(document.title !== antesDoTique, 'o título não alternou — o pisca não está no setTimeout');
+  correrTimers();
+  ok(/Sua vez/.test(document.title), 'o pisca parou depois de um tique só');
+
+  // 3 · NADA DE METRÔNOMO: a vista chega dezenas de vezes por jogada, e a vez continuando sua
+  // não é novidade nenhuma. Sem a borda, cada publicação recomeçaria o chamado.
+  const somAntesDaRepeticao = somAgora();
+  mod.atualizarVista(minhaVez);
+  mod.atualizarVista(minhaVez);
+  ok(somAgora() === somAntesDaRepeticao,
+    `a vez continuou sua e o chamado tocou mais ${somAgora() - somAntesDaRepeticao} vez(es)`);
+
+  // 4 · A VOLTA restaura o título EXATO. O valor é escrito à mão com o motivo ao lado: o
+  // harness não carrega o HTML (o `buildModule` extrai só o `<script type="module">`), então
+  // comparar com uma constante do dublê seria comparar o dublê com ele mesmo. Se o `<title>`
+  // do `pagina.html` mudar, esta linha reprova — e é isso que se quer, porque o `test-app`
+  // depende do mesmo texto.
+  mostrarAba();
+  ok(document.title === 'Dominó de Bar · 2 a 4 jogadores',
+    `voltar para a aba deixou o título em ${JSON.stringify(document.title)}`);
+
+  // 5 · E não reescreve o que já está certo — a regra do aria-live, aplicada ao título, que
+  // também é lido em voz alta na troca de aba.
+  titulos.length = 0;
+  mostrarAba();
+  mod.atualizarVista(minhaVez);
+  ok(titulos.length === 0, `o jogo reescreveu o título ${titulos.length} vez(es) sem nada ter mudado`);
+
+  // 5b · VOCÊ VOLTOU, VIU QUE É A SUA VEZ, E SAIU DE NOVO. Não é novidade nenhuma, e chamar
+  // aqui seria perseguir quem já sabe. É a asserção que separa a BORDA do estado: neste ponto
+  // o chamado está parado (a volta o parou) e a vez continua sua, então quem decide sozinho é
+  // `vezEraMinha`. Sem ela, trocar a borda pelo estado passaria despercebido — as outras
+  // asserções são seguradas pela guarda `chamando`, que é a camada irmã.
+  const somAntesDeSairDeNovo = somAgora();
+  titulos.length = 0;
+  esconderAba();
+  mod.atualizarVista(minhaVez);
+  ok(somAgora() === somAntesDeSairDeNovo,
+    'sair da aba com a vez JÁ sua fez o jogo chamar de novo — isso é perseguir quem já sabe');
+  ok(titulos.length === 0,
+    `sair da aba com a vez já sua mexeu no título: ${JSON.stringify(titulos)}`);
+  mostrarAba();
+
+  // 6 · A TERCEIRA PORTA DE SAÍDA: o tique reconfere sozinho. É o caso do `{t:'expulso'}` — o
+  // jogador volta ao menu SEM passar por `atualizarVista`, com a aba escondida, e sem esta
+  // guarda o título piscaria para sempre apontando para uma mesa que não existe mais.
+  mod.atualizarVista(vezDoOutro);
+  esconderAba();
+  mod.atualizarVista(vezDoOutro);
+  mod.atualizarVista(minhaVez);
+  ok(/Sua vez/.test(document.title), 'montagem: o chamado não começou, e a porta de saída não seria exercitada');
+  mod.sairDaPartida();                  // some a partida, sem ninguém avisar o chamado
+  // TRÊS DRENAGENS, e não uma. O tique ALTERNA o título, então uma única drenagem pode calhar
+  // de devolver o original e a asserção passaria com o pisca vivo — foi exatamente isso na
+  // primeira rodada, e a mutação que apaga a reconferência SOBREVIVEU. O que se afirma não é
+  // "o título está certo agora", é "ele PAROU", e parada só se mede em mais de um instante.
+  let piscouDepois = false;
+  for (let i = 0; i < 3; i++) { correrTimers(); if (/Sua vez/.test(document.title)) piscouDepois = true; }
+  ok(!piscouDepois,
+    'a partida acabou e o chamado continuou piscando — o tique não reconferiu o que o armou');
+  ok(document.title === 'Dominó de Bar · 2 a 4 jogadores',
+    `a partida acabou e o título ficou em ${JSON.stringify(document.title)}`);
+  mostrarAba();
+
+  console.log('  a vez virando no fundo chama pelos dois canais, a aba à vista não, e o chamado para sozinho');
 }
 
 console.log(falhas ? `\n${falhas} falha(s)` : '\ntudo certo');

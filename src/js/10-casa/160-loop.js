@@ -100,6 +100,10 @@ function publicar() {
 
 function atualizarVista(v) {
   vistaAtual = v;
+  // A MESA ESTÁ ESPERANDO POR VOCÊ E VOCÊ NÃO ESTÁ OLHANDO? Aqui, e não em `publicar`, porque
+  // é esta linha acima que instala a vista — e é dela que `podeAgirAgora()` tira a resposta.
+  // Quem decide se algo acontece é a BORDA da vez, lá dentro (165-chamado.js).
+  chamarPelaVez();
   // UM VERBO, e não os quatro `sincronizar*` de antes. O dominó tem tabuleiro, mão, mãos
   // dos outros e monte; o truco tem três vazas e nenhum monte. O que a casa precisa dizer é
   // "ponha a mesa de acordo com esta vista" — como, é problema de quem conhece o jogo.
