@@ -432,6 +432,29 @@ function alternarConversa(abrir) {
   atualizarCortina();
 }
 
+// A CONVERSA PELO TECLADO, e ela fecha o ciclo que a Fila 8 deixou pela metade: desde a
+// v1.9.0 dá para JOGAR sem apontador — setas, números, Enter — e não dava para CONVERSAR,
+// que é a metade social de uma mesa online.
+//
+// Ela não faz o que o botão não faz: com o botão oculto (mesa local e sem uma linha de log,
+// ou seja, não há com quem falar) a tecla não inventa uma caixa vazia. É a mesma disciplina
+// do `refletirMesaNosBotoes` — o que a tela oferece e o que o jogo aceita têm de ser a
+// mesma coisa, senão é o jogo emudecendo.
+//
+// E O FOCO É METADE DO ITEM. Abrir a caixa sem pôr o cursor nela entrega um campo em que a
+// tecla seguinte volta a ser atalho de jogo: quem apertasse `c` e depois escrevesse "cadê
+// todo mundo" arrumaria a mão no `a` e pediria dica no `d`. Só quando há campo — ele só
+// existe online (`atualizarConversa`).
+//
+// Devolve se abriu, e isso é para a asserção: sem o retorno, "a tecla não abriu nada" e "a
+// tecla abriu e ninguém viu" são indistinguíveis de fora.
+function conversarPeloTeclado() {
+  if (HUD.abrirConversa.classList.contains('oculta')) return false;
+  alternarConversa(true);
+  if (!HUD.escrever.classList.contains('oculta')) HUD.texto.focus();
+  return true;
+}
+
 // ─── a gaveta do celular ─────────────────────────────────────────────────────
 // Numa tela de 360px a conversa tem 268px fixos: ela e a mão não cabem lado a lado. Não é
 // margem mal ajustada — os dois não cabem, e encolher a mesa até caber deixaria o

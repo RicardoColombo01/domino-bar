@@ -73,12 +73,18 @@ Dá para jogar a partida inteira pelo teclado:
 | `←` `→` | passeia pela mão — a peça sob o cursor levanta |
 | `1` … `9` | pula direto para a n-ésima peça e a escolhe |
 | `Enter` / espaço | escolhe a peça sob o cursor; de novo, confirma a jogada |
-| `Esc` | desfaz a escolha |
+| `Esc` | fecha a conversa se ela estiver aberta; senão, desfaz a escolha |
 | `A` · `D` | arrumar a mão · pedir dica |
+| `C` | abre a conversa da mesa, com o cursor já no campo |
 
 As duas portas existem porque o número para no `9` e o **Duelo dá catorze peças na mão**:
 sem as setas, cinco peças ficariam inalcançáveis. Escolher uma peça leva o foco ao botão
 de confirmar, então jogar é `3` `Enter`.
+
+O `C` fecha um ciclo que faltava: dava para **jogar** sem apontador e não dava para
+**conversar**, que é a metade social de uma mesa online. E o `Esc` desce um degrau por vez —
+fecha o que está por cima antes de mexer no que está por baixo —, porque com a gaveta aberta
+no celular, cancelar uma peça que ninguém consegue ver é um comando perdido.
 
 O placar, de quem é a vez, os avisos de erro e a conversa da mesa são **regiões vivas**
 (`aria-live`), então um leitor de tela narra a partida sozinho. Todo texto do HUD passa no

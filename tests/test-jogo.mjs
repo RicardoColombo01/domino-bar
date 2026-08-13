@@ -79,6 +79,9 @@ const mod = await import(buildModule([
   // `linkAnfitriao.on('data')` mora dentro de dois callbacks aninhados do PeerJS. Com o
   // dublê gravando ouvintes dá para dirigi-lo, e é onde entra a vista que vem de fora.
   'linkAnfitriao',
+  // A conversa pelo teclado (Onda B). `conversarPeloTeclado` é o corpo da tecla `c`, e
+  // `alternarConversa` é como a cena monta o estado sem depender de a tecla ter funcionado.
+  'conversarPeloTeclado', 'alternarConversa',
 ], undefined, path.join(import.meta.dirname, '.gerado', 'built-jogo.mjs')));
 
 let falhas = 0;
@@ -2303,6 +2306,98 @@ console.log('\no que o convidado recebe tem teto');
     'a narração de tamanho normal foi cortada — o teto está apertado demais');
   mod.encerrarRede();
   console.log('  narração e fala que chegam pelo fio têm o mesmo teto do aviso ao lado');
+}
+
+// ─── a conversa pelo teclado ─────────────────────────────────────────────────
+// A Fila 8 deixou o ciclo pela metade: dá para JOGAR sem apontador e não dava para
+// CONVERSAR. Estas asserções nascem VERDES (o conserto veio antes), então nenhuma prova
+// nada sozinha — a prova é a mutação, e cada uma tem a sua anotada no CLAUDE.md.
+//
+// E ELAS SÓ SÃO ESCREVÍVEIS DESDE HOJE: o dublê não dava `tagName` a elemento nenhum, então
+// a guarda `digitando(ev)` nunca bloqueou em Node e a asserção C-2 seria verde por
+// trivialidade — ela passaria com a guarda APAGADA.
+console.log('\na conversa pelo teclado');
+{
+  mod.encerrarRede();
+  mod.MESA.modo = 'classico'; mod.MESA.n = 2;
+  mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[1].nivel = 'normal';
+  mod.comecarLocal();
+
+  const conversa = els.get('conversa');
+  const campo = els.get('conversaTexto');
+  const botao = els.get('btConversa');
+  const aberta = () => conversa._cls.has('aberta');
+
+  // MESA LOCAL E SEM LOG: não há com quem falar, e a tecla não pode inventar uma caixa
+  // vazia. O botão oculto é a régua — a tecla não faz o que o botão não faz.
+  mod.limparConversa();
+  botao._cls.add('oculta');
+  fire('keydown', { key: 'c' });
+  ok(!aberta(), 'com o botão da conversa oculto, `c` abriu a caixa mesmo assim');
+
+  // ONLINE: o botão aparece, o campo de escrever aparece, e aí a tecla vale.
+  botao._cls.delete('oculta');
+  els.get('conversaEscrever')._cls.delete('oculta');
+  global.document.activeElement = null;
+  fire('keydown', { key: 'c' });
+  ok(aberta(), '`c` não abriu a conversa');
+  // O FOCO É METADE DO ITEM: abrir a caixa sem o cursor dentro entrega um campo em que a
+  // tecla seguinte volta a ser atalho de jogo — escrever "cadê todo mundo" arrumaria a mão.
+  ok(global.document.activeElement === campo,
+    'a conversa abriu e o cursor não foi para o campo — a tecla seguinte volta a ser atalho');
+
+  // A GUARDA `digitando`, medida a partir da conversa FECHADA — e a ordem não é detalhe.
+  // Escrita com a conversa ABERTA, ela não podia falhar: `alternarConversa(true)` é
+  // idempotente, então a tecla passando pela guarda deixaria a caixa aberta do mesmo jeito e
+  // a asserção concordaria com os dois mundos. Foi assim que a mutação do `SELECT`
+  // sobreviveu na primeira rodada — asserção que não pode reprovar é decoração com cara de
+  // cobertura, e este arquivo já registrou isso na Fila 10.
+  //
+  // O alvo é o campo DE VERDADE, não um objeto fabricado: é o elemento que o jogo usa, e o
+  // `tagName` dele sai do HTML do próprio jogo.
+  ok(campo.tagName === 'INPUT', 'montagem: o dublê não deu tagName ao campo — a guarda não seria exercitada');
+  mod.alternarConversa(false);
+  fire('keydown', { key: 'c', target: campo });
+  ok(!aberta(), 'escrever `c` DENTRO do campo abriu a conversa — a guarda de digitação não segurou');
+
+  // O `<select>` do menu é o terceiro nome do mesmo defeito: com um deles focado, as setas
+  // escolhem o adversário e `a`, `d` e `c` disparavam por baixo.
+  mod.montarCadeiras();
+  mod.alternarConversa(false);
+  fire('keydown', { key: 'c', target: { tagName: 'SELECT' } });
+  ok(!aberta(), 'com um <select> focado, `c` mexeu na conversa');
+
+  // E a tecla CONTINUA funcionando fora de campo — sem esta, uma guarda que barrasse tudo
+  // passaria nas duas de cima.
+  fire('keydown', { key: 'c' });
+  ok(aberta(), 'fora de um campo, `c` deixou de abrir a conversa');
+
+  // A ESCADA DO ESCAPE, degrau por degrau. A peça levantada é o degrau de baixo, e ela
+  // precisa existir de verdade: sem ela as duas asserções seguintes passariam por
+  // trivialidade — `escolhida` já seria nulo antes do Escape. Por isso a montagem anda a
+  // mesa até a sua vez em vez de chutar um índice.
+  for (let i = 0; i < 60 && mod.escolhida === null; i++) {
+    const v = mod.vistaAtual;
+    if (v && v.fase === 'mao' && v.vez === v.cadeira && v.acoes.jogadas.length) {
+      const j = mod.naMao.findIndex(m => m.jogavel);
+      if (j >= 0) { mod.selecionarPeca(j); break; }
+    }
+    if (!mod.P || mod.P.fase !== 'mao') { mod.comecarLocal(); continue; }
+    mod.aplicarIntencao(mod.P.vez, mod.jogadaDoBot(mod.P, mod.P.vez));
+  }
+  ok(mod.escolhida !== null, 'montagem: nenhuma peça levantada — o degrau de baixo não seria exercitado');
+  fire('keydown', { key: 'Escape' });
+  ok(!aberta(), 'Escape com a conversa aberta não fechou a conversa');
+  // E NÃO cancelou a peça: fechar o que está por cima não pode mexer no que está por baixo.
+  ok(mod.escolhida !== null,
+    'Escape fechou a conversa E cancelou a peça — dois degraus de uma vez');
+
+  // Com a conversa fechada, o Escape volta a ser o de sempre. Sem esta, o ramo novo poderia
+  // engolir o antigo para sempre e a suíte concordaria.
+  fire('keydown', { key: 'Escape' });
+  ok(mod.escolhida === null, 'Escape com a conversa fechada deixou de cancelar a escolha');
+
+  console.log('  `c` abre e foca, a guarda de campo segura, e o Escape desce um degrau por vez');
 }
 
 console.log(falhas ? `\n${falhas} falha(s)` : '\ntudo certo');

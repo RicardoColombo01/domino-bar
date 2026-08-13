@@ -456,11 +456,24 @@ HUD.abrirConversa.onclick = () => alternarConversa();
 // alvo do evento: com um campo na tela, escrever "vamos" chamava arrumarMao() a cada
 // 'a' digitado e Esc largava a peça levantada. (Já valia para o código da mesa, que tem
 // letras — só não aparecia porque ali não há mão desenhada.)
-const digitando = ev => /^(INPUT|TEXTAREA)$/.test((ev.target || {}).tagName || '');
+// `SELECT` entrou junto: o menu gera um `<select>` por cadeira (`montarCadeiras`), e com um
+// deles focado as setas escolhem o adversário enquanto `a`, `d` e `c` disparam por baixo. Era
+// o mesmo defeito com um terceiro nome — e só ficou escrevível como asserção quando o dublê
+// passou a dar `tagName` aos elementos, o que ele nunca fez em treze versões.
+const digitando = ev => /^(INPUT|TEXTAREA|SELECT)$/.test((ev.target || {}).tagName || '');
 
+// A ESCADA DO ESCAPE, de fora para dentro — a mesma ordem que a cortina já pratica num toque:
+// fecha o que está POR CIMA antes de mexer no que está por baixo. Com a gaveta aberta no
+// celular, cancelar uma peça que ninguém consegue ver é um comando perdido, e o jogador
+// aperta Esc de novo achando que a tecla não funciona.
+//
+// O terceiro degrau — foco dentro do campo — nem chega aqui: `digitando(ev)` devolve verdade
+// e quem trata é o `onkeydown` do próprio campo, que só tira o foco e deixa a conversa aberta.
 addEventListener('keydown', ev => {
   if (digitando(ev)) return;
-  if (ev.key === 'Escape') JOGO.toque.cancelar();
+  if (ev.key !== 'Escape') return;
+  if (conversaAberta) { alternarConversa(false); return; }
+  JOGO.toque.cancelar();
 });
 
 // Os dois `onclick` que moravam aqui — comprar e passar — foram embora com os botões: quem
@@ -500,6 +513,9 @@ addEventListener('keydown', ev => {
   if (digitando(ev)) return;
   if (ev.key === 'a' || ev.key === 'A') JOGO.mesa.arrumar();
   if (ev.key === 'd' || ev.key === 'D') pedirDica();
+  // `c` de conversa. Entra NESTE ouvinte e não num segundo: a guarda `digitando` já está
+  // aqui, e um segundo dono do mesmo evento é como duas metades passam a discordar.
+  if (ev.key === 'c' || ev.key === 'C') conversarPeloTeclado();
 });
 
 // ─── loop ────────────────────────────────────────────────────────────────────
