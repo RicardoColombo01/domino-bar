@@ -14,7 +14,8 @@ const mod = await import(buildModule([
   'ORDEM_TRUCO', 'manilhaDaVira', 'forcaDaCarta', 'compararCartas', 'postoDaCarta',
   'vencedorDaVaza', 'donoDaMao', 'VALORES_DA_APOSTA', 'proximaAposta', 'NOME_DA_APOSTA',
   'MODOS_TRUCO', 'MODO_PADRAO_TRUCO',
-  'novaPartidaDoTruco', 'novaMaoDoTruco', 'acoesDoTruco', 'jogarCarta', 'visaoDoTruco',
+  'novaPartidaDoTruco', 'novaMaoDoTruco', 'acoesDoTruco', 'jogarCarta', 'jogarPorPosicao',
+  'visaoDoTruco',
   'trucar', 'aceitarTruco', 'correrDoTruco', 'decidirOnze', 'abandonarOTruco', 'timeNoTruco',
   'NIVEIS_TRUCO', 'poderDaCarta', 'poderDaMao', 'escolherCarta', 'querTrucar',
   'responderAposta', 'avaliarAposta', 'informacaoDoTruco', 'jogadaDoBotNoTruco', 'dicaDoTruco',
@@ -539,14 +540,148 @@ console.log('\na mão de 11');
   mod.decidirOnze(Q, Q.vez, true);
   ok(Q.fase === 'mao' && Q.aposta === 3, `jogar a mão de 11 devia valer 3, vale ${Q.aposta} na fase '${Q.fase}'`);
 
-  // OS DOIS EM 11: ninguém decide nada e a mão vale 1. Sem este ramo a mesa travaria numa
-  // fase que espera a decisão de dois times ao mesmo tempo.
+  // OS DOIS EM 11: é a MÃO DE FERRO (regra do Ricardo, 13-14/08/2026). Esta asserção JÁ
+  // CRAVOU o comportamento antigo ("mão normal valendo 1") e mudou de significado de
+  // propósito na Onda F — a fase continua 'mao' (ferro é flag, não fase, para o HUD e a
+  // rede não mudarem), mas agora com a marca ligada e a mão de 11 solitária desligada.
   const R = mod.novaPartidaDoTruco(mesa(2));
   R.placar = [11, 11];
   mod.novaMaoDoTruco(R);
-  ok(R.fase === 'mao' && R.aposta === 1,
-    `com os dois em 11 a mão devia ser normal, veio fase '${R.fase}' valendo ${R.aposta}`);
-  console.log('  entregou → 1 ao outro · jogou → vale 3 · os dois em 11 → mão normal');
+  ok(R.fase === 'mao' && R.aposta === 1 && R.ferro === true && R.decideOnze === null,
+    `com os dois em 11 devia nascer a mão de ferro, veio fase '${R.fase}' ferro ${R.ferro}`);
+  // E A FLAG NÃO ATRAVESSA MÃOS — a lição do donoDaAposta: um placar que sai do 11×11
+  // (impossível no jogo real, possível num P editado) tem de desligar o ferro.
+  R.placar = [11, 5];
+  mod.novaMaoDoTruco(R);
+  ok(R.ferro === false, 'o ferro sobreviveu a uma mão que não é 11×11');
+  console.log('  entregou → 1 ao outro · jogou → vale 3 · os dois em 11 → mão de ferro');
+}
+
+console.log('\na mão de ferro');
+{
+  // O gatilho é `alvo-1` dos dois lados, NUNCA o literal 11 — com alvo 6 a "mão de 11" é a
+  // mão de 5, e o ferro herda a mesma relatividade.
+  const A6 = mod.novaPartidaDoTruco(mesa(2), { alvo: 6 });
+  A6.placar = [5, 5];
+  mod.novaMaoDoTruco(A6);
+  ok(A6.ferro === true, 'com alvo 6, o 5×5 devia disparar a mão de ferro');
+
+  // E vale na mesa de 4 igual — o gatilho é o PLACAR, não as cadeiras.
+  const A4 = mod.novaPartidaDoTruco(mesa(4));
+  A4.placar = [11, 11];
+  mod.novaMaoDoTruco(A4);
+  ok(A4.ferro === true, 'a mesa de 4 devia ter mão de ferro no 11×11');
+
+  const P = mod.novaPartidaDoTruco(mesa(2));
+  P.placar = [11, 11];
+  mod.novaMaoDoTruco(P);
+
+  // AS AÇÕES DO FERRO: posições em vez de cartas, e NADA de truco — a guarda é real, na
+  // fonte das ações, e `trucar()` responde por ela.
+  const a = mod.acoesDoTruco(P, P.vez);
+  ok(a.cartas.length === 0, 'no ferro as cartas não podem ser oferecidas por valor');
+  ok(a.posicoes === 3, `deviam ser 3 posições, vieram ${a.posicoes}`);
+  ok(a.trucar === null && a.esconder === false, 'o ferro devia desligar truco e esconder');
+  ok(mod.trucar(P, P.vez).erro, 'deu para trucar na mão de ferro');
+
+  // O ORÁCULO: jogar POR CARTA é recusado mesmo com a carta CERTA — se o acerto jogasse e o
+  // erro recusasse, um convidado sondaria a própria mão por palpites pelo fio.
+  const certa = P.maos[P.vez][0];
+  const rOraculo = mod.JOGOS.truco.motor.aplicar(P, P.vez, { acao: 'jogar', carta: certa });
+  ok(!!(rOraculo || {}).erro, 'o palpite com a carta certa devia ser recusado no ferro');
+  ok(P.mesa.length === 0, 'o palpite recusado não podia ter posto carta na mesa');
+
+  // Posições tortas recusadas SEM lançar — posição é entrada de fora (fio, bot, tela).
+  for (const t of [-1, 3, 1.5, 'x', null, undefined, {}]) {
+    let deu = null, r = null;
+    try { r = mod.jogarPorPosicao(P, P.vez, t); } catch (e) { deu = e.message; }
+    ok(!deu, `jogarPorPosicao com ${JSON.stringify(t)} estourou: ${deu}`);
+    ok(!!(r || {}).erro, `jogarPorPosicao com ${JSON.stringify(t)} devia ser recusada`);
+  }
+  // E esconder às cegas é recusa FALADA.
+  const rEsc = mod.JOGOS.truco.motor.aplicar(P, P.vez, { acao: 'jogar', posicao: 0, escondida: true });
+  ok(!!(rEsc || {}).erro && /aberta/.test((rEsc || {}).erro),
+    `esconder no ferro devia ser recusado dizendo por quê: ${(rEsc || {}).erro}`);
+
+  // A JOGADA VÁLIDA: a carta da posição cai ABERTA, com o valor à vista de todos.
+  const daPosicao = P.maos[P.vez][1];
+  const rJoga = mod.jogarPorPosicao(P, P.vez, 1);
+  ok(!(rJoga || {}).erro && mod.mesmaCarta((rJoga || {}).carta, daPosicao),
+    'jogar por posição não devolveu a carta que estava lá');
+  ok(P.mesa.length === 1 && !P.mesa[0].escondida && Array.isArray(P.mesa[0].carta),
+    'a carta do ferro devia cair aberta na mesa');
+
+  // O INVARIANTE 3, ESTENDIDO — a armadilha central da fila: no ferro NENHUMA carta de
+  // `P.maos` aparece no JSON da vista de NENHUMA cadeira, nem as da própria. As mãos são
+  // ARMADAS com cartas que nenhum outro campo da visão produz (a lição do [0,0]) — e a mesa
+  // é esvaziada antes, porque a carta jogada acima veio do SORTEIO e poderia calhar de ser
+  // uma das armadas: colisão de sorteio é exatamente como o falso positivo ficou latente.
+  P.mesa = []; P.vazas = [];
+  P.maos = [
+    [c('K', 'espadas'), c('J', 'espadas')],
+    [c('K', 'copas'), c('J', 'copas'), c('7', 'copas')],
+  ];
+  for (const cad of [0, 1]) {
+    const v = mod.visaoDoTruco(P, cad);
+    ok(v.ferro === true, `a vista da cadeira ${cad} devia dizer ferro`);
+    ok(Array.isArray(v.mao) && v.mao.length === 0,
+      `no ferro a vista da cadeira ${cad} devia vir com a mão VAZIA`);
+    const tx = JSON.stringify(v);
+    const vazou = [];
+    for (const carta of P.maos.flat()) {
+      if (tx.includes(JSON.stringify(carta))) vazou.push(mod.nomeDaCarta(carta));
+    }
+    ok(vazou.length === 0, `carta(s) na vista da cadeira ${cad} durante o ferro: ${vazou.join(', ')}`);
+    // E o leque cego tem de ter de onde nascer: a CONTAGEM continua viajando.
+    ok(JSON.stringify(v.naMao) === JSON.stringify([2, 3]), `a contagem sumiu: ${JSON.stringify(v.naMao)}`);
+  }
+
+  // MELOU TUDO NO FERRO: a mão morre, ninguém marca, e a PRÓXIMA ainda nasce de ferro —
+  // o placar não andou. Mãos ARMADAS porque só ranks iguais empatam as três vazas.
+  const M = mod.novaPartidaDoTruco(mesa(2));
+  M.placar = [11, 11];
+  mod.novaMaoDoTruco(M);
+  M.maos = [
+    [c('4', 'ouros'), c('5', 'ouros'), c('6', 'ouros')],
+    [c('4', 'copas'), c('5', 'copas'), c('6', 'copas')],
+  ];
+  M.vira = c('Q', 'paus'); M.manilha = mod.manilhaDaVira(M.vira);
+  for (let g = 0; g < 6 && M.fase === 'mao'; g++) mod.jogarPorPosicao(M, M.vez, 0);
+  ok(M.fase === 'fimDeMao' && ((M.resultado || {}).motivo) === 'melou'
+    && M.placar.join() === '11,11',
+  `melar tudo no ferro devia matar a mão sem mexer no placar: ${JSON.stringify(M.resultado)}`);
+  mod.novaMaoDoTruco(M);
+  ok(M.ferro === true, 'depois da mão morta o ferro devia voltar — o placar continua 11×11');
+
+  // O FERRO DECIDE A PARTIDA: quem faz a mão cruza o alvo, exatamente. A caminhada aguenta
+  // a mão morta (cena montada por moeda é intermitente — o sorteio pode empatar vazas).
+  const F = mod.novaPartidaDoTruco(mesa(2));
+  F.placar = [11, 11];
+  mod.novaMaoDoTruco(F);
+  for (let g = 0; g < 60 && F.fase !== 'fim'; g++) {
+    if (F.fase === 'fimDeMao') { mod.novaMaoDoTruco(F); continue; }
+    const r = mod.jogarPorPosicao(F, F.vez, 0);
+    ok(!(r || {}).erro, `a caminhada do ferro travou: ${(r || {}).erro}`);
+  }
+  ok(F.fase === 'fim', `a mão de ferro devia decidir a partida, ficou na fase '${F.fase}'`);
+  ok(((F.resultado || {}).ferro) === true, 'o resultado não carrega a marca do ferro');
+  ok(F.placar.some(v => v === 12) && F.placar.some(v => v === 11),
+    `o placar devia fechar em 12 × 11, veio ${F.placar.join(' × ')}`);
+
+  // A PARTIDA COM FERRO SOBREVIVE AO JSON — e à retomada.
+  const volta = JSON.parse(JSON.stringify(P));
+  ok(mod.JOGOS.truco.motor.partidaValida(volta), 'a partida em mão de ferro devia passar no validador');
+  ok(volta.ferro === true, 'a marca do ferro não sobreviveu ao JSON');
+
+  // A VISTA TRAVADA DO HOTSEAT desliga o ferro — sem isto a tela de passe desenharia o
+  // leque cego do jogador anterior. Aqui a omissão NÃO é segura por construção (ao
+  // contrário das ações, que são literal novo): o `ferro` da vista original passaria por
+  // cima pelo Object.assign.
+  const vt = mod.semAMaoNoTruco(mod.visaoDoTruco(P, 0));
+  ok(vt.ferro === false && vt.acoes.posicoes === 0,
+    `a vista travada devia desligar o ferro: ferro ${vt.ferro}, posicoes ${vt.acoes.posicoes}`);
+
+  console.log('  alvo-1 dos dois lados dispara · sem truco · oráculo recusado · decide a partida');
 }
 
 console.log('\na fronteira de segurança');
@@ -827,6 +962,9 @@ console.log('\nmil mãos bot×bot, sem estourar e sem travar');
         continue;
       }
       if (a.trucar && guarda % 11 === 0) { mod.trucar(P, P.vez); continue; }
+      // A MÃO DE FERRO entra na varredura pelo caminho dela — sem esta linha, chegar ao
+      // 11×11 contaria como mesa presa, que é exatamente o falso alarme que ela caça.
+      if (a.posicoes) { mod.jogarPorPosicao(P, P.vez, guarda % a.posicoes); lances++; continue; }
       if (!a.cartas.length) { presa++; break; }        // mesa parada: é o que se caça
       // De vez em quando ESCONDE — só quando o motor oferece, que é como a varredura prova
       // que a jogada nova não abre estado de onde não se sai (nem vaza pelo caminho comum).
@@ -1004,7 +1142,11 @@ console.log('\no difícil ganha do fácil');
       if (P.fase === 'fimDeMao') { mod.novaMaoDoTruco(P); continue; }
       const i = mod.jogadaDoBotNoTruco(P, P.vez);
       if (!i) { travadas++; break; }
-      if (i.acao === 'jogar') mod.jogarCarta(P, P.vez, i.carta);
+      // As DUAS formas de jogar: por posição (mão de ferro) e por carta — levando o
+      // `escondida` junto. A primeira versão deste despachante o engolia, e a "força
+      // idêntica" do bot que esconde era artefato: o esconder nunca chegava ao motor daqui.
+      if (i.acao === 'jogar' && i.posicao !== undefined) mod.jogarPorPosicao(P, P.vez, i.posicao);
+      else if (i.acao === 'jogar') mod.jogarCarta(P, P.vez, i.carta, i.escondida);
       else if (i.acao === 'trucar' || i.acao === 'aumentar') mod.trucar(P, P.vez);
       else if (i.acao === 'aceitar') mod.aceitarTruco(P, P.vez);
       else if (i.acao === 'correr') mod.correrDoTruco(P, P.vez);
@@ -1677,6 +1819,37 @@ console.log('\numa partida de truco do começo ao fim');
   ok(mod.P.fase === 'fim', `a partida não acabou em ${lances} lances (fase ${mod.P.fase})`);
   ok(mod.P.placar.some(v => v >= 12), `ninguém chegou a 12: ${mod.P.placar.join(' × ')}`);
   console.log(`  ${lances} lances · ${mod.P.maoNum} mãos · placar ${mod.P.placar.join(' × ')}`);
+
+  // E DE NOVO, COMEÇANDO NO 11×11: a mão de ferro atravessada PELA CASA — o bot sorteia a
+  // posição, `aplicarIntencao` despacha, `publicar` desenha. É o caminho que nenhum caso de
+  // motor puro percorre, e é onde uma fase sem ação despachável viraria mesa parada.
+  mod.comecarLocal();
+  mod.P.placar = [11, 11];
+  mod.novaMaoDoTruco(mod.P);
+  mod.publicar();
+  ok(mod.P.ferro === true, 'a partida da casa não nasceu de ferro no 11×11');
+  let lancesFerro = 0, parouFerro = null;
+  while (mod.P.fase !== 'fim' && lancesFerro < 200) {
+    lancesFerro++;
+    if (mod.P.fase === 'fimDeMao') { mod.novaMaoDoTruco(mod.P); mod.publicar(); continue; }
+    const vez = mod.P.vez;
+    const acao = mod.jogadaDoBotNoTruco(mod.P, vez);
+    if (!acao) { parouFerro = `cadeira ${vez} sem ação na fase ${mod.P.fase}`; break; }
+    // `aplicarIntencao` não devolve nada — quem acusa recusa é o RETRATO, como no laço de
+    // cima: mesa que não andou é mesa parada, e o aviso do HUD diz o porquê.
+    const foto = () => `${mod.P.maoNum}/${mod.P.vez}/${mod.P.mesa.length}/${mod.P.fase}/${mod.P.placar}`;
+    const antesFerro = foto();
+    mod.aplicarIntencao(vez, acao);
+    correrTimers();
+    if (antesFerro === foto()) {
+      parouFerro = `a mesa não andou com ${JSON.stringify(acao)} · aviso "${mod.HUD.aviso.textContent}"`;
+      break;
+    }
+  }
+  ok(!parouFerro, `a mão de ferro parou pela casa — ${parouFerro}`);
+  ok(mod.P.fase === 'fim' && mod.P.placar.some(v => v >= 12),
+    `a mão de ferro pela casa não decidiu a partida: fase ${mod.P.fase}, ${mod.P.placar.join(' × ')}`);
+  console.log(`  e a mão de ferro pela casa: ${lancesFerro} lances · ${mod.P.placar.join(' × ')}`);
 }
 
 // ─── o HUD aguenta as quatro maneiras de a mão acabar ────────────────────────

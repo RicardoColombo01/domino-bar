@@ -276,6 +276,11 @@ function jogadaDoBotNoTruco(P, cadeira) {
     return { acao: responderAposta(mao, info, P.pedido) };
   }
 
+  // A MÃO DE FERRO: cego por definição. O bot NÃO lê `P.maos[cadeira]` aqui — sortear a
+  // posição é tudo o que uma pessoa na mesma cadeira também poderia fazer, e qualquer coisa
+  // além disso seria o único lugar do arquivo em que ele sabe mais do que a vista mostra.
+  if (a.posicoes) return { acao: 'jogar', posicao: Math.floor(Math.random() * a.posicoes) };
+
   if (!a.cartas.length) return null;                  // não é a vez, ou não há o que fazer
 
   // PEDIR VEM ANTES DE JOGAR, porque é a ordem da mesa: você truca e só então põe a carta.

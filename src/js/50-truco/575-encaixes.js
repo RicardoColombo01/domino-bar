@@ -178,7 +178,13 @@ function fimDeMaoDoTruco(vista) {
 // nenhuma delas se chama `jogadas`.
 const semAMaoNoTruco = v => Object.assign({}, v, {
   mao: [],
-  acoes: { cartas: [], trucar: null, aceitar: false, correr: false, onze: false, esconder: false },
+  // `ferro` desligado na vista travada: sem isto a tela de passe do hotseat desenharia o
+  // leque cego do jogador ANTERIOR — inofensivo (são versos), mas mentiria "esta mesa é sua".
+  ferro: false,
+  acoes: {
+    cartas: [], trucar: null, aceitar: false, correr: false, onze: false, esconder: false,
+    posicoes: 0,
+  },
 });
 
 // ─── a abertura da mão ───────────────────────────────────────────────────────
@@ -243,6 +249,21 @@ function aplicarNoTruco(P, cadeira, i) {
   const nome = P.cadeiras[cadeira].nome;
 
   if (i.acao === 'jogar') {
+    // NA MÃO DE FERRO joga-se por POSIÇÃO, e a rota é decidida pelo ESTADO além da intenção:
+    // com `P.ferro`, até um `{acao:'jogar', carta}` com a carta CERTA cai aqui e é recusado
+    // por não trazer posição — recusa UNIFORME, que não conta ao convidado se ele acertou o
+    // palpite (o oráculo). E esconder às cegas é recusa falada: a carta do ferro cai aberta
+    // por necessidade lógica, senão toda vaza melaria e o 11×11 não teria saída.
+    if (P.ferro || i.posicao !== undefined) {
+      if (i.escondida) return { erro: 'na mão de ferro a carta cai aberta' };
+      const r = jogarPorPosicao(P, cadeira, i.posicao);
+      if (r.erro) return r;
+      return {
+        ok: true,
+        narracao: [`${nome} jogou ${nomeDaCarta(r.carta)} sem ver`]
+          .concat(narrarVaza(P, r.vaza)).concat(fimDoTruco(P, r)),
+      };
+    }
     const esc = !!i.escondida;
     const r = jogarCarta(P, cadeira, i.carta, esc);
     if (r.erro) return r;
