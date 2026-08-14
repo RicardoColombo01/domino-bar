@@ -57,6 +57,18 @@
 // Repare que ela e a guarda 4 são as duas metades do mesmo fato: o bundle é gerado, então ou
 // ele entra no meio do caminho (guarda 5) ou sobra sujo no fim (guarda 4).
 //
+// ─── guarda 6 · O QUE ESTE SCRIPT NÃO CONSEGUE GARANTIR ──────────────────────
+// **Se o PROCESSO for morto de fora, o `finally` não roda e a mutação FICA NO CÓDIGO.** É a
+// sexta forma de esta conferência mentir e a pior de todas: as outras cinco mentem no
+// RELATÓRIO, e esta contamina a FONTE. Aconteceu em 13/08/2026 — um comando estourou um prazo
+// de 10 minutos, o processo levou SIGTERM, e a linha mutada de `150-rede.js` ficou lá. O
+// `npm test` seguinte passou, porque aquela mutação era compatível com as asserções que
+// restavam, e quem acusou foi um `git diff`.
+//
+// Não há conserto do lado de dentro: um processo morto não executa mais nada. O que existe é
+// disciplina, e ela é a mesma da guarda 4 — **depois de mutar, olhe o `git status`.** Se o
+// arquivo estiver sujo, o que está nele é código que ninguém escreveu.
+
 // ─── e uma coisa que NÃO é defeito do mutador ────────────────────────────────
 // Quando o conserto tem DUAS camadas, mutar UMA delas sai verde — a irmã segura o caso. Isso
 // é o desenho, não asserção fraca. A prova honesta é mutar o PAR. Quem mexer numa camada e
