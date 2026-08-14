@@ -1698,6 +1698,60 @@ console.log('\nesconder a carta, na tela');
   console.log('  2 botões com o dado certo · verso sem face · nasce virada · desliza para a pilha');
 }
 
+// ─── a mão de ferro, na tela cega ────────────────────────────────────────────
+console.log('\na mão de ferro, na tela cega');
+{
+  mod.comecarLocal();
+  mod.P.placar = [11, 11];
+  mod.novaMaoDoTruco(mod.P);
+  mod.P.vez = 0;
+  mod.publicar();
+  ok((mod.vistaAtual || {}).ferro === true, 'a vista da casa não diz ferro');
+
+  // O LEQUE CEGO: três objetos, e NENHUMA face na cena inteira da mão — cada verso é corpo
+  // mais costas (2 malhas). 9 malhas seriam três cartas de verdade viradas, que é o
+  // vazamento a um F12 de distância; 6 é a fronteira desenhada.
+  ok(mod.naMaoDoTruco.length === 3, `o leque cego devia ter 3 versos, tem ${mod.naMaoDoTruco.length}`);
+  let malhas = 0;
+  mod.grupoMaoDoTruco.traverse(o => { if (o.isMesh) malhas++; });
+  ok(malhas === 6, `o leque cego devia ter 6 malhas (corpo+costas ×3), tem ${malhas}`);
+  ok(mod.naMaoDoTruco.every(m => (m.obj.userData || {}).carta === null),
+    'um verso do leque cego carrega identidade de carta');
+  ok(mod.naMaoDoTruco.every(m => m.jogavel), 'na sua vez do ferro os versos deviam estar acesos');
+  ok(mod.naMaoDoTruco.every(m => !m.marca), 'um verso ganhou marca de manilha no ferro');
+
+  // ARRUMAR E DICA SOMEM — cada irmão cobrado um a um: ordenar o que você não vê seria
+  // vazamento por ordenação, e a dica diria em voz alta o que nem você sabe.
+  ok(mod.HUD.arrumar.classList.contains('oculta'), 'o botão Arrumar ficou vivo no ferro');
+  ok(mod.HUD.dica.classList.contains('oculta'), 'o botão Dica ficou vivo no ferro');
+  ok(mod.dicaDoTruco(mod.vistaAtual) === null, 'a dica devia devolver nada no ferro');
+
+  // A CONFIRMAÇÃO ANÔNIMA: um botão, e o título não soletra carta nenhuma.
+  const confF = mod.confirmacaoDoTruco(mod.vistaAtual, mod.naMaoDoTruco[0]);
+  ok(confF.botoes.length === 1 && /coberta/i.test(confF.titulo),
+    `a confirmação do ferro devia ser anônima e única: ${JSON.stringify(confF)}`);
+
+  // O CAMINHO INTEIRO PELO TOQUE: escolher o verso, confirmar, e a carta cai ABERTA na mesa
+  // — por posição, nunca pelo índice da tela. `podeAgirAgora` tem de valer (fase é 'mao').
+  ok(mod.podeAgirAgora(), 'podeAgirAgora devia valer na mão de ferro');
+  const cartaDaPosicao = mod.P.maos[0][1];
+  mod.selecionarCarta(1);
+  ok(mod.temPreviaDoTruco(), 'escolher o verso não abriu a prévia anônima');
+  mod.confirmarNoTruco();
+  ok(mod.P.maos[0].length === 2, 'confirmar no ferro não tirou carta da mão');
+  ok(mod.P.mesa.length === 1 && !mod.P.mesa[0].escondida
+    && mod.mesmaCarta(mod.P.mesa[0].carta, cartaDaPosicao),
+  'a carta do ferro devia cair ABERTA e ser a da posição escolhida');
+  // E a mesa 3D mostra a carta REAL, pela chave dela — o segredo era da mão, não da mesa.
+  ok(mod.naMesaDoTruco.has(mod.chaveCarta(cartaDaPosicao)),
+    'a carta jogada às cegas não apareceu aberta na mesa 3D');
+
+  // A VISTA TRAVADA (hotseat) não desenha o leque cego do jogador anterior.
+  mod.JOGO.mesa.sincronizar(mod.semAMaoNoTruco(mod.vistaAtual));
+  ok(mod.naMaoDoTruco.length === 0, 'a tela de passe mostrou o leque cego de outra pessoa');
+  console.log('  3 versos, 6 malhas, zero faces · joga por posição e cai aberta · passe limpo');
+}
+
 // ─── a barra de apostas ──────────────────────────────────────────────────────
 // O encaixe que a Fase 1 deixou de fora de propósito, porque sem o truco escrito a forma dele
 // seria chute. O que se cobra dela é o que ela promete: os botões que existem são exatamente

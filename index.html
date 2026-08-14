@@ -3055,16 +3055,24 @@ function criarCarta(carta, proprio) {
   return g;
 }
 
-// Carta de costas: o que se vê da mão dos outros. Só o corpo e o verso, e nenhuma face —
-// é a fronteira de segurança na forma que dá para conferir com o olho.
-function criarVersoDeCarta() {
+// Carta de costas: o que se vê da mão dos outros — e, na mão de ferro do truco, da SUA. Só
+// o corpo e o verso, e nenhuma face — é a fronteira de segurança na forma que dá para
+// conferir com o olho.
+//
+// `proprio` clona o material pelo MESMO motivo do `criarCarta`: o leque tinge o corpo da
+// carta apontada, e sem o clone `matPapel` é uma instância só — acender um verso acenderia
+// as quarenta cartas e todos os versos da mesa. E `userData.corpo` entra porque o leque
+// desreferencia `m.obj.userData.corpo` em dois pontos; um verso sem ele era um leque cego
+// que lançava na primeira sincronização.
+function criarVersoDeCarta(proprio) {
   const g = new THREE.Group();
-  const corpo = new THREE.Mesh(geomCorpoCarta, matPapel);
+  const corpo = new THREE.Mesh(geomCorpoCarta, proprio ? matPapel.clone() : matPapel);
   corpo.castShadow = true;
   const costas = new THREE.Mesh(new THREE.PlaneGeometry(CARTA_L, CARTA_C), matVersoCarta);
   costas.rotation.x = -Math.PI / 2;
   costas.position.y = CARTA_E / 2 + 0.003;
   g.add(corpo, costas);
+  g.userData = { carta: null, corpo };
   return g;
 }
 
@@ -3083,10 +3091,15 @@ function criarFantasmaDeCarta(carta) {
   const g = new THREE.Group();
   const corpo = new THREE.Mesh(geomCorpoCarta, matPreviaCarta);
   corpo.position.y = CARTA_E / 2;
-  const face = new THREE.Mesh(faceDaCarta(carta[0], carta[1]), matPreviaFaceCarta);
-  face.rotation.x = -Math.PI / 2;
-  face.position.y = CARTA_E + 0.004;
-  g.add(corpo, face);
+  // `carta === null` é o fantasma ANÔNIMO — a prévia da mão de ferro, que não pode soletrar
+  // o que nem o próprio jogador sabe. Mesma convenção do `criarCarta`.
+  if (carta) {
+    const face = new THREE.Mesh(faceDaCarta(carta[0], carta[1]), matPreviaFaceCarta);
+    face.rotation.x = -Math.PI / 2;
+    face.position.y = CARTA_E + 0.004;
+    g.add(face);
+  }
+  g.add(corpo);
   return g;
 }
 
@@ -9119,15 +9132,25 @@ const esquecerArrumacaoDoTruco = () => { ordemDaMaoDoTruco.clear(); maoDaOrdemNo
 const larguraDaMaoDoTruco = () =>
   Math.max(2.4, Math.min(6.4, larguraVisivelEm(MAO_TRUCO_Y, MAO_TRUCO_Z) - 0.45));
 
+// O QUE O LEQUE DESENHA. Na mão de ferro a vista chega com `mao` VAZIA de propósito —
+// nenhuma carta sua trafega, nem para você (invariante 3, estendido à própria mão) — e o
+// leque nasce da CONTAGEM, com cartas SINTÉTICAS `['f', i]`: elas passam por `chaveCarta`
+// ('f:0'), pela assinatura e pela arrumação sem caso especial, `ehManilha('f', …)` nunca
+// marca por construção, e o `i` é a POSIÇÃO que a intenção manda ao motor.
+const cartasDoLequeDoTruco = vista => (vista.ferro
+  ? Array.from({ length: vista.naMao[vista.cadeira] || 0 }, (_, i) => ['f', i])
+  : vista.mao);
+
 function reconciliarMaoDoTruco(vista) {
+  const cartas = cartasDoLequeDoTruco(vista);
   // Vista travada (a tela de passe do hotseat) chega com `mao: []` e ainda com a cadeira do
   // jogador ANTERIOR — gravar a ordem aqui apagaria a arrumação dele.
-  if (!vista.mao.length) {
+  if (!cartas.length) {
     naMaoDoTruco.forEach(m => grupoMaoDoTruco.remove(m.obj));
     naMaoDoTruco.length = 0;
     return;
   }
-  const querem = new Set(vista.mao.map(chaveCarta));
+  const querem = new Set(cartas.map(chaveCarta));
   for (let i = naMaoDoTruco.length - 1; i >= 0; i--) {
     if (!querem.has(chaveCarta(naMaoDoTruco[i].carta))) {
       grupoMaoDoTruco.remove(naMaoDoTruco[i].obj);
@@ -9135,9 +9158,11 @@ function reconciliarMaoDoTruco(vista) {
     }
   }
   const tem = new Set(naMaoDoTruco.map(m => chaveCarta(m.carta)));
-  for (const carta of vista.mao) {
+  for (const carta of cartas) {
     if (tem.has(chaveCarta(carta))) continue;
-    const obj = criarCarta(carta, true);
+    // O verso no lugar da carta é a fronteira DESENHADA: no ferro não existe face na cena,
+    // nem a sua — a um F12 de distância só há versos.
+    const obj = vista.ferro ? criarVersoDeCarta(true) : criarCarta(carta, true);
     // Carta na mão está NA SUA MÃO: se projetar sombra, vira um borrão no tampo atrás.
     obj.userData.corpo.castShadow = false;
     grupoMaoDoTruco.add(obj);
@@ -9201,8 +9226,8 @@ function arrumarMaoDoTruco() {
 function sincronizarMaoDoTruco(vista) {
   // A assinatura é de CONJUNTO (chaves ordenadas) mais a largura, e nunca da ordem: sensível
   // à ordem, ela entraria em laço com a arrumação — reordena, reconstrói, perde a seleção.
-  const assinatura = vista.mao.map(chaveCarta).sort().join(',') + '#' + vista.cadeira +
-    '#' + larguraDaMaoDoTruco().toFixed(2);
+  const assinatura = cartasDoLequeDoTruco(vista).map(chaveCarta).sort().join(',')
+    + '#' + vista.cadeira + '#' + larguraDaMaoDoTruco().toFixed(2);
   // Mão nova apaga a arrumação: as cartas são outras, e a de antes não quer dizer nada.
   if (vista.maoNum !== maoDaOrdemNoTruco) { esquecerArrumacaoDoTruco(); maoDaOrdemNoTruco = vista.maoNum; }
   if (assinatura !== assinaturaDaMaoDoTruco) {
@@ -9212,10 +9237,11 @@ function sincronizarMaoDoTruco(vista) {
   }
 
   // Quais dá para jogar agora vem da MESMA função que valida a jogada de verdade
-  // (`acoesDoTruco`), então a tela nunca acende uma carta que o motor recusaria.
+  // (`acoesDoTruco`), então a tela nunca acende uma carta que o motor recusaria — e no
+  // ferro a fonte é a MESMA: `posicoes` só é maior que zero na sua vez.
   const podem = new Set((vista.acoes.cartas || []).map(chaveCarta));
   for (const m of naMaoDoTruco) {
-    m.jogavel = podem.has(chaveCarta(m.carta));
+    m.jogavel = vista.ferro ? vista.acoes.posicoes > 0 : podem.has(chaveCarta(m.carta));
     // Apagar a carta que não serve não pode custar a LEITURA dela: você ainda precisa ver o
     // naipe para planejar a mão. Escurece de leve e tira o brilho, só isso.
     const mat = m.obj.userData.corpo.material;
@@ -9590,7 +9616,8 @@ function mostrarPreviaDoTruco(vista) {
   const brilho = new THREE.Mesh(geomBrilhoDoTruco, matBrilhoDoTruco);
   brilho.rotation.x = -Math.PI / 2;
   brilho.position.y = 0.014;
-  const fantasma = criarFantasmaDeCarta(m.carta);
+  // Na mão de ferro o fantasma é ANÔNIMO — a prévia não pode soletrar o que nem você sabe.
+  const fantasma = criarFantasmaDeCarta(vista.ferro ? null : m.carta);
   fantasma.rotation.y = p.rotY;
   g.add(brilho, fantasma);
   g.position.set(p.x, 0, p.z);
@@ -9771,8 +9798,14 @@ function confirmarNoTruco(dado) {
   const carta = m.carta;
   cancelarEscolhaNoTruco();
   if (navigator.vibrate) navigator.vibrate(12);
-  // O `dado` vem do botão da confirmação. O toque na PRÉVIA 3D chama isto sem argumento, e
-  // sem argumento é jogar ABERTO — esconder é a exceção e exige o botão que a nomeia.
+  // NA MÃO DE FERRO a intenção é a POSIÇÃO, que viaja dentro da carta sintética (`['f', i]`)
+  // — nunca o índice da tela, que quebra calado quando o leque reordena. Fora dela, o `dado`
+  // vem do botão da confirmação; o toque na PRÉVIA 3D chama isto sem argumento, e sem
+  // argumento é jogar ABERTO — esconder é a exceção e exige o botão que a nomeia.
+  if (vistaAtual && vistaAtual.ferro) {
+    pedirAcao({ acao: 'jogar', posicao: carta[1] });
+    return;
+  }
   pedirAcao(dado === 'escondida'
     ? { acao: 'jogar', carta, escondida: true }
     : { acao: 'jogar', carta });
@@ -9982,20 +10015,24 @@ function barraDoTruco(vista) {
 // E não se perde nada: a carta escolhida está LEVANTADA e com o fantasma no lugar em que vai
 // cair. A barra não precisa soletrar o que a mesa já está mostrando — ela precisa dizer o que
 // o botão faz.
-const confirmacaoDoTruco = (vista, m) => ({
-  titulo: nomeCurtoDaCarta(m.carta),
+const confirmacaoDoTruco = (vista, m) => (vista.ferro
+  // Na MÃO DE FERRO a carta é sintética (não tem nome) e esconder não existe: um botão, e o
+  // título diz a única coisa que se sabe dela.
+  ? { titulo: 'Carta coberta', botoes: [{ dado: null, rotulo: 'Jogar' }] }
+  : {
+    titulo: nomeCurtoDaCarta(m.carta),
   // O SEGUNDO BOTÃO só existe quando o motor oferece (`acoes.esconder` — nunca na 1ª vaza):
   // botão que o motor recusaria é promessa, e é a espécie de defeito que o
   // `refletirMesaNosBotoes` existe para impedir. "Jogar" PRIMEIRO, porque o teclado foca o
   // primeiro botão e `3`+Enter tem de continuar jogando aberto. O `dado` volta intacto pelo
   // `JOGO.toque.confirmar` — era `null` e nada; agora distingue as duas intenções sobre a
   // MESMA carta.
-  botoes: vista.acoes.esconder
-    ? [{ dado: null, rotulo: 'Jogar' },
-      { dado: 'escondida', rotulo: 'Esconder', principal: false,
-        titulo: 'De barriga para baixo — a carta não vale nada' }]
-    : [{ dado: null, rotulo: 'Jogar' }],
-});
+    botoes: vista.acoes.esconder
+      ? [{ dado: null, rotulo: 'Jogar' },
+        { dado: 'escondida', rotulo: 'Esconder', principal: false,
+          titulo: 'De barriga para baixo — a carta não vale nada' }]
+      : [{ dado: null, rotulo: 'Jogar' }],
+  });
 
 // ─── a tela de fim de mão ────────────────────────────────────────────────────
 const TITULO_DO_FIM_DO_TRUCO = {

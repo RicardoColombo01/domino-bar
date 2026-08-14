@@ -237,16 +237,24 @@ function criarCarta(carta, proprio) {
   return g;
 }
 
-// Carta de costas: o que se vê da mão dos outros. Só o corpo e o verso, e nenhuma face —
-// é a fronteira de segurança na forma que dá para conferir com o olho.
-function criarVersoDeCarta() {
+// Carta de costas: o que se vê da mão dos outros — e, na mão de ferro do truco, da SUA. Só
+// o corpo e o verso, e nenhuma face — é a fronteira de segurança na forma que dá para
+// conferir com o olho.
+//
+// `proprio` clona o material pelo MESMO motivo do `criarCarta`: o leque tinge o corpo da
+// carta apontada, e sem o clone `matPapel` é uma instância só — acender um verso acenderia
+// as quarenta cartas e todos os versos da mesa. E `userData.corpo` entra porque o leque
+// desreferencia `m.obj.userData.corpo` em dois pontos; um verso sem ele era um leque cego
+// que lançava na primeira sincronização.
+function criarVersoDeCarta(proprio) {
   const g = new THREE.Group();
-  const corpo = new THREE.Mesh(geomCorpoCarta, matPapel);
+  const corpo = new THREE.Mesh(geomCorpoCarta, proprio ? matPapel.clone() : matPapel);
   corpo.castShadow = true;
   const costas = new THREE.Mesh(new THREE.PlaneGeometry(CARTA_L, CARTA_C), matVersoCarta);
   costas.rotation.x = -Math.PI / 2;
   costas.position.y = CARTA_E / 2 + 0.003;
   g.add(corpo, costas);
+  g.userData = { carta: null, corpo };
   return g;
 }
 
@@ -265,10 +273,15 @@ function criarFantasmaDeCarta(carta) {
   const g = new THREE.Group();
   const corpo = new THREE.Mesh(geomCorpoCarta, matPreviaCarta);
   corpo.position.y = CARTA_E / 2;
-  const face = new THREE.Mesh(faceDaCarta(carta[0], carta[1]), matPreviaFaceCarta);
-  face.rotation.x = -Math.PI / 2;
-  face.position.y = CARTA_E + 0.004;
-  g.add(corpo, face);
+  // `carta === null` é o fantasma ANÔNIMO — a prévia da mão de ferro, que não pode soletrar
+  // o que nem o próprio jogador sabe. Mesma convenção do `criarCarta`.
+  if (carta) {
+    const face = new THREE.Mesh(faceDaCarta(carta[0], carta[1]), matPreviaFaceCarta);
+    face.rotation.x = -Math.PI / 2;
+    face.position.y = CARTA_E + 0.004;
+    g.add(face);
+  }
+  g.add(corpo);
   return g;
 }
 

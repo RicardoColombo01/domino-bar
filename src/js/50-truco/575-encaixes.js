@@ -113,20 +113,24 @@ function barraDoTruco(vista) {
 // E não se perde nada: a carta escolhida está LEVANTADA e com o fantasma no lugar em que vai
 // cair. A barra não precisa soletrar o que a mesa já está mostrando — ela precisa dizer o que
 // o botão faz.
-const confirmacaoDoTruco = (vista, m) => ({
-  titulo: nomeCurtoDaCarta(m.carta),
+const confirmacaoDoTruco = (vista, m) => (vista.ferro
+  // Na MÃO DE FERRO a carta é sintética (não tem nome) e esconder não existe: um botão, e o
+  // título diz a única coisa que se sabe dela.
+  ? { titulo: 'Carta coberta', botoes: [{ dado: null, rotulo: 'Jogar' }] }
+  : {
+    titulo: nomeCurtoDaCarta(m.carta),
   // O SEGUNDO BOTÃO só existe quando o motor oferece (`acoes.esconder` — nunca na 1ª vaza):
   // botão que o motor recusaria é promessa, e é a espécie de defeito que o
   // `refletirMesaNosBotoes` existe para impedir. "Jogar" PRIMEIRO, porque o teclado foca o
   // primeiro botão e `3`+Enter tem de continuar jogando aberto. O `dado` volta intacto pelo
   // `JOGO.toque.confirmar` — era `null` e nada; agora distingue as duas intenções sobre a
   // MESMA carta.
-  botoes: vista.acoes.esconder
-    ? [{ dado: null, rotulo: 'Jogar' },
-      { dado: 'escondida', rotulo: 'Esconder', principal: false,
-        titulo: 'De barriga para baixo — a carta não vale nada' }]
-    : [{ dado: null, rotulo: 'Jogar' }],
-});
+    botoes: vista.acoes.esconder
+      ? [{ dado: null, rotulo: 'Jogar' },
+        { dado: 'escondida', rotulo: 'Esconder', principal: false,
+          titulo: 'De barriga para baixo — a carta não vale nada' }]
+      : [{ dado: null, rotulo: 'Jogar' }],
+  });
 
 // ─── a tela de fim de mão ────────────────────────────────────────────────────
 const TITULO_DO_FIM_DO_TRUCO = {
