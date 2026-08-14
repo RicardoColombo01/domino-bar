@@ -1002,12 +1002,12 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 | | |
 |---|---|
 | commitado | **v4.14.0** — a **ONDA F** da Fila 15 (esconder a carta · mão de ferro), na `main` pelo merge `--no-ff` de sempre. As três decisões que a fila deixava em aberto o Ricardo respondeu em 14/08: a mão de ferro **decide a partida**, **sem truco** nela, e **vale na mesa de 2** (o gatilho é `alvo-1 × alvo-1`) |
-| **enviado** | ✘ **não** — os commits só existem nesta máquina; o push espera a liberação dele |
-| **PUBLICADO** | ✘ **não** — o ar continua na v4.13 (`sw.js` servido `d75060d63ec1`). Depois do push, o `sw.js` TEM de mudar: a onda toca `src/` em nove arquivos |
+| **enviado** | ✔ **sim**, 14/08 — ele liberou ("Faça isso"), e o `git ls-remote` responde `72dcda4` com a tag `v4.14.0`, igual ao local |
+| **PUBLICADO** | ✔ **sim** — `sw.js` servido `51508f9747f3` = local, em TRÊS consultas seguidas (uma só não decide), e o `index.html` no ar tem o mesmo tamanho (556.947). Conferido pelo CONTEÚDO: `jogarPorPosicao`, `P.ferro`, `Carta coberta`, `MÃO DE FERRO` e `cartasDoLequeDoTruco` estão no bundle servido |
 | em curso | **nada.** A Onda F fechou em 14/08, com 27 mutações (cada uma morta pelas suas) e as fotos de olho tiradas na própria sessão |
 | as anteriores | v4.13.0 (a Onda B: o online) · v4.12.0 (a Onda A: manilhas, vira, peso) · v4.11.0 (a carta esticada) · v4.10.0 (Fila 13 + Fase 5) · v4.9.0 (Fila 12) |
 | Filas 5 a 14 | **todas fechadas** · da **Fila 15** saíram as Ondas A, B e **F**; sobram **C, D, E** |
-| o que vem | **ENVIAR e PUBLICAR a v4.14** (só falta o push dele) e **JOGAR** — a mão de ferro e o esconder nunca foram tocados por mão humana. Depois: a onda **D** (a dívida: o `test-textura` com truco na mesa), a **E** (temas de baralho) e a **C**. A **Fase 5** segue **⏸ em espera por decisão sua** |
+| o que vem | **JOGAR** — a mão de ferro e o esconder nunca foram tocados por mão humana, e estão NO AR. Depois: a onda **D** (a dívida: o `test-textura` com truco na mesa), a **E** (temas de baralho) e a **C**. A **Fase 5** segue **⏸ em espera por decisão sua** |
 
 ---
 
@@ -1299,9 +1299,9 @@ AS SUÍTES contra este código, rodadas uma de cada vez em 14/08:
          o leque de versos, "Carta coberta", a vitória às cegas, os dois
          botões, a escondida na pilha. Todas aprovadas.
 
-➜ PASSO 1  ENVIAR: `git push origin main --tags` — os commits só existem
-           nesta máquina. Depois, a régua de sempre: o `sw.js` servido TEM
-           de mudar (a onda toca `src/`).
+➜ PASSO 1  ✔ ENVIADO E PUBLICADO na mesma sessão (ele liberou o push).
+           O sw.js servido é 51508f9747f3 = local, e os nomes da onda
+           estão no bundle no ar — pode testar direto no github.io.
 
 ➜ PASSO 2  JOGAR, e as perguntas que só o olho no CELULAR responde:
            · a mão de ferro de verdade: chegar ao 11×11 jogando. O leque
