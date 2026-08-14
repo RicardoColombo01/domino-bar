@@ -100,6 +100,10 @@ function publicar() {
 
 function atualizarVista(v) {
   vistaAtual = v;
+  // A MESA ESTÁ ESPERANDO POR VOCÊ E VOCÊ NÃO ESTÁ OLHANDO? Aqui, e não em `publicar`, porque
+  // é esta linha acima que instala a vista — e é dela que `podeAgirAgora()` tira a resposta.
+  // Quem decide se algo acontece é a BORDA da vez, lá dentro (165-chamado.js).
+  chamarPelaVez();
   // UM VERBO, e não os quatro `sincronizar*` de antes. O dominó tem tabuleiro, mão, mãos
   // dos outros e monte; o truco tem três vazas e nenhum monte. O que a casa precisa dizer é
   // "ponha a mesa de acordo com esta vista" — como, é problema de quem conhece o jogo.
@@ -275,6 +279,45 @@ function sairDaPartida() {
   P = null; vistaAtual = null;
   mostrarTela('telaMenu');
 }
+
+// HÁ GENTE DO OUTRO LADO ESPERANDO POR VOCÊ? A pergunta tem DUAS respostas, e é essa a
+// armadilha deste item: o anfitrião tem a partida na memória, o convidado NUNCA tem `P` —
+// para ele quem responde é a vista. Escrito só com `P`, que é o jeito óbvio de escrever, o
+// aviso não existiria justamente para quem mais precisa dele: o convidado que fecha a aba e
+// deixa a mesa dos outros parada os 30 s do `ESPERA_VOLTA`.
+//
+// É a mesma assimetria que o `btSair` já respeita (`:127` esconde o botão pela VISTA) e que o
+// `partidaGuardada` aprendeu do jeito caro.
+const mesaOnlineViva = () =>
+  (modo === 'anfitriao' && !!P && P.fase !== 'fim') ||
+  (modo === 'convidado' && !!vistaAtual && vistaAtual.fase !== 'fim');
+
+// AVISAR ANTES DE FECHAR A ABA NO MEIO DE UMA MESA ONLINE. Decisão do Ricardo em 11/08 — o
+// item estava na fila desde a Fila 5 esperando exatamente esta resposta, porque `beforeunload`
+// é incômodo por natureza e isso é escolha de casa, não de programador.
+//
+// SÓ NO ONLINE, e nunca fora dele. Um aviso que aparece toda vez é o aviso que todo mundo
+// aprende a ignorar — e aí ele não protege nem o caso que importa. Numa mesa local não há
+// ninguém esperando, e a partida volta pelo "Continuar a partida de antes".
+//
+// A GUARDA VAI NO DISPARO, e o ouvinte é registrado uma vez só. É o padrão que a Fila 11
+// escreveu com sangue (três `setTimeout` sem guarda no disparo custaram uma fila inteira), e
+// aqui ele ainda evita um segundo lugar onde a mesma regra estaria escrita. Registrar e
+// desregistrar conforme a partida seria mais elegante e intestável: o harness não apaga
+// ouvinte de janela, e um desregistro sem prova é um ramo verde que nunca rodou.
+//
+// E ELE NÃO DISPARA QUANDO O JOGO SAI DE PROPÓSITO, sem flag nenhuma: pelas portas do jogo
+// (`sairDaPartida`, `largarAMesa`) o estado JÁ é outro quando a página some — `P` é nulo,
+// `vistaAtual` é nulo, `modo` voltou a 'local'. Quem responde é o estado, e não uma marca que
+// alguém teria de lembrar de pôr. A faixa de abas também não navega: ela usa `replaceState`.
+//
+// O texto é do NAVEGADOR — nenhum deles deixa escolher a frase há anos. Quem explica o preço
+// é a tela de sair, que já diz "a mesa continua sem você, e esta partida conta como derrota".
+addEventListener('beforeunload', ev => {
+  if (!mesaOnlineViva()) return;
+  ev.preventDefault();
+  ev.returnValue = '';                  // o canal legado, que alguns navegadores ainda exigem
+});
 
 // ─── voltar para a mesma partida ─────────────────────────────────────────────
 // Fechar a aba sem querer, recarregar, o celular matar a página para poupar memória, um
@@ -456,11 +499,24 @@ HUD.abrirConversa.onclick = () => alternarConversa();
 // alvo do evento: com um campo na tela, escrever "vamos" chamava arrumarMao() a cada
 // 'a' digitado e Esc largava a peça levantada. (Já valia para o código da mesa, que tem
 // letras — só não aparecia porque ali não há mão desenhada.)
-const digitando = ev => /^(INPUT|TEXTAREA)$/.test((ev.target || {}).tagName || '');
+// `SELECT` entrou junto: o menu gera um `<select>` por cadeira (`montarCadeiras`), e com um
+// deles focado as setas escolhem o adversário enquanto `a`, `d` e `c` disparam por baixo. Era
+// o mesmo defeito com um terceiro nome — e só ficou escrevível como asserção quando o dublê
+// passou a dar `tagName` aos elementos, o que ele nunca fez em treze versões.
+const digitando = ev => /^(INPUT|TEXTAREA|SELECT)$/.test((ev.target || {}).tagName || '');
 
+// A ESCADA DO ESCAPE, de fora para dentro — a mesma ordem que a cortina já pratica num toque:
+// fecha o que está POR CIMA antes de mexer no que está por baixo. Com a gaveta aberta no
+// celular, cancelar uma peça que ninguém consegue ver é um comando perdido, e o jogador
+// aperta Esc de novo achando que a tecla não funciona.
+//
+// O terceiro degrau — foco dentro do campo — nem chega aqui: `digitando(ev)` devolve verdade
+// e quem trata é o `onkeydown` do próprio campo, que só tira o foco e deixa a conversa aberta.
 addEventListener('keydown', ev => {
   if (digitando(ev)) return;
-  if (ev.key === 'Escape') JOGO.toque.cancelar();
+  if (ev.key !== 'Escape') return;
+  if (conversaAberta) { alternarConversa(false); return; }
+  JOGO.toque.cancelar();
 });
 
 // Os dois `onclick` que moravam aqui — comprar e passar — foram embora com os botões: quem
@@ -500,6 +556,9 @@ addEventListener('keydown', ev => {
   if (digitando(ev)) return;
   if (ev.key === 'a' || ev.key === 'A') JOGO.mesa.arrumar();
   if (ev.key === 'd' || ev.key === 'D') pedirDica();
+  // `c` de conversa. Entra NESTE ouvinte e não num segundo: a guarda `digitando` já está
+  // aqui, e um segundo dono do mesmo evento é como duas metades passam a discordar.
+  if (ev.key === 'c' || ev.key === 'C') conversarPeloTeclado();
 });
 
 // ─── loop ────────────────────────────────────────────────────────────────────

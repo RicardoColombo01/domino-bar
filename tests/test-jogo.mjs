@@ -2,7 +2,14 @@
 // ao fim. Só o `import` já vale como teste — ele constrói a cena Three.js de verdade,
 // e geometria inválida ou variável indefinida estoura aqui em vez de virar tela preta.
 import path from 'path';
-import { installStubs, seedRandom, buildModule, frames, correrTimers, els, fire, preferir } from './harness.mjs';
+import { installStubs, seedRandom, buildModule, frames, correrTimers, els, fire, preferir,
+  // O chamado da vez (Onda B): o título GRAVA o que se escreve nele, e a aba se esconde e
+  // volta pelos dois helpers — que trocam `hidden` e `visibilityState` JUNTOS e disparam o
+  // evento, na ordem do navegador de verdade.
+  titulos, esconderAba, mostrarAba,
+  // O convite: `semCompartilhar` tira as portas de cima para os recuos ficarem alcancaveis,
+  // e `selecionados` grava o que o terceiro recuo mandou selecionar.
+  semCompartilhar, selecionados } from './harness.mjs';
 
 installStubs();
 seedRandom(99);
@@ -79,6 +86,15 @@ const mod = await import(buildModule([
   // `linkAnfitriao.on('data')` mora dentro de dois callbacks aninhados do PeerJS. Com o
   // dublê gravando ouvintes dá para dirigi-lo, e é onde entra a vista que vem de fora.
   'linkAnfitriao',
+  // A conversa pelo teclado (Onda B). `conversarPeloTeclado` é o corpo da tecla `c`, e
+  // `alternarConversa` é como a cena monta o estado sem depender de a tecla ter funcionado.
+  'conversarPeloTeclado', 'alternarConversa',
+  // `sairDaPartida` é a porta de saída do jogo, e o aviso de fechar a aba tem de calar
+  // depois dela — sem chamá-la, "não avisa quem já saiu" não é afirmável.
+  'sairDaPartida',
+  // O convite (Onda B). `usarCodigo` e a unica porta de escrita do codigo da sala, e e por
+  // ela que a cena monta uma mesa com endereco sem levantar rede nenhuma.
+  'compartilharSala', 'conviteDaMesa', 'linkDaMesa', 'salaDaURL', 'usarCodigo', 'pintarSala',
 ], undefined, path.join(import.meta.dirname, '.gerado', 'built-jogo.mjs')));
 
 let falhas = 0;
@@ -2303,6 +2319,404 @@ console.log('\no que o convidado recebe tem teto');
     'a narração de tamanho normal foi cortada — o teto está apertado demais');
   mod.encerrarRede();
   console.log('  narração e fala que chegam pelo fio têm o mesmo teto do aviso ao lado');
+}
+
+// ─── a conversa pelo teclado ─────────────────────────────────────────────────
+// A Fila 8 deixou o ciclo pela metade: dá para JOGAR sem apontador e não dava para
+// CONVERSAR. Estas asserções nascem VERDES (o conserto veio antes), então nenhuma prova
+// nada sozinha — a prova é a mutação, e cada uma tem a sua anotada no CLAUDE.md.
+//
+// E ELAS SÓ SÃO ESCREVÍVEIS DESDE HOJE: o dublê não dava `tagName` a elemento nenhum, então
+// a guarda `digitando(ev)` nunca bloqueou em Node e a asserção C-2 seria verde por
+// trivialidade — ela passaria com a guarda APAGADA.
+console.log('\na conversa pelo teclado');
+{
+  mod.encerrarRede();
+  mod.MESA.modo = 'classico'; mod.MESA.n = 2;
+  mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[1].nivel = 'normal';
+  mod.comecarLocal();
+
+  const conversa = els.get('conversa');
+  const campo = els.get('conversaTexto');
+  const botao = els.get('btConversa');
+  const aberta = () => conversa._cls.has('aberta');
+
+  // MESA LOCAL E SEM LOG: não há com quem falar, e a tecla não pode inventar uma caixa
+  // vazia. O botão oculto é a régua — a tecla não faz o que o botão não faz.
+  mod.limparConversa();
+  botao._cls.add('oculta');
+  fire('keydown', { key: 'c' });
+  ok(!aberta(), 'com o botão da conversa oculto, `c` abriu a caixa mesmo assim');
+
+  // ONLINE: o botão aparece, o campo de escrever aparece, e aí a tecla vale.
+  botao._cls.delete('oculta');
+  els.get('conversaEscrever')._cls.delete('oculta');
+  global.document.activeElement = null;
+  fire('keydown', { key: 'c' });
+  ok(aberta(), '`c` não abriu a conversa');
+  // O FOCO É METADE DO ITEM: abrir a caixa sem o cursor dentro entrega um campo em que a
+  // tecla seguinte volta a ser atalho de jogo — escrever "cadê todo mundo" arrumaria a mão.
+  ok(global.document.activeElement === campo,
+    'a conversa abriu e o cursor não foi para o campo — a tecla seguinte volta a ser atalho');
+
+  // A GUARDA `digitando`, medida a partir da conversa FECHADA — e a ordem não é detalhe.
+  // Escrita com a conversa ABERTA, ela não podia falhar: `alternarConversa(true)` é
+  // idempotente, então a tecla passando pela guarda deixaria a caixa aberta do mesmo jeito e
+  // a asserção concordaria com os dois mundos. Foi assim que a mutação do `SELECT`
+  // sobreviveu na primeira rodada — asserção que não pode reprovar é decoração com cara de
+  // cobertura, e este arquivo já registrou isso na Fila 10.
+  //
+  // O alvo é o campo DE VERDADE, não um objeto fabricado: é o elemento que o jogo usa, e o
+  // `tagName` dele sai do HTML do próprio jogo.
+  ok(campo.tagName === 'INPUT', 'montagem: o dublê não deu tagName ao campo — a guarda não seria exercitada');
+  mod.alternarConversa(false);
+  fire('keydown', { key: 'c', target: campo });
+  ok(!aberta(), 'escrever `c` DENTRO do campo abriu a conversa — a guarda de digitação não segurou');
+
+  // O `<select>` do menu é o terceiro nome do mesmo defeito: com um deles focado, as setas
+  // escolhem o adversário e `a`, `d` e `c` disparavam por baixo.
+  mod.montarCadeiras();
+  mod.alternarConversa(false);
+  fire('keydown', { key: 'c', target: { tagName: 'SELECT' } });
+  ok(!aberta(), 'com um <select> focado, `c` mexeu na conversa');
+
+  // E a tecla CONTINUA funcionando fora de campo — sem esta, uma guarda que barrasse tudo
+  // passaria nas duas de cima.
+  fire('keydown', { key: 'c' });
+  ok(aberta(), 'fora de um campo, `c` deixou de abrir a conversa');
+
+  // A ESCADA DO ESCAPE, degrau por degrau. A peça levantada é o degrau de baixo, e ela
+  // precisa existir de verdade: sem ela as duas asserções seguintes passariam por
+  // trivialidade — `escolhida` já seria nulo antes do Escape. Por isso a montagem anda a
+  // mesa até a sua vez em vez de chutar um índice.
+  for (let i = 0; i < 60 && mod.escolhida === null; i++) {
+    const v = mod.vistaAtual;
+    if (v && v.fase === 'mao' && v.vez === v.cadeira && v.acoes.jogadas.length) {
+      const j = mod.naMao.findIndex(m => m.jogavel);
+      if (j >= 0) { mod.selecionarPeca(j); break; }
+    }
+    if (!mod.P || mod.P.fase !== 'mao') { mod.comecarLocal(); continue; }
+    mod.aplicarIntencao(mod.P.vez, mod.jogadaDoBot(mod.P, mod.P.vez));
+  }
+  ok(mod.escolhida !== null, 'montagem: nenhuma peça levantada — o degrau de baixo não seria exercitado');
+  fire('keydown', { key: 'Escape' });
+  ok(!aberta(), 'Escape com a conversa aberta não fechou a conversa');
+  // E NÃO cancelou a peça: fechar o que está por cima não pode mexer no que está por baixo.
+  ok(mod.escolhida !== null,
+    'Escape fechou a conversa E cancelou a peça — dois degraus de uma vez');
+
+  // Com a conversa fechada, o Escape volta a ser o de sempre. Sem esta, o ramo novo poderia
+  // engolir o antigo para sempre e a suíte concordaria.
+  fire('keydown', { key: 'Escape' });
+  ok(mod.escolhida === null, 'Escape com a conversa fechada deixou de cancelar a escolha');
+
+  console.log('  `c` abre e foca, a guarda de campo segura, e o Escape desce um degrau por vez');
+}
+
+// ─── avisar antes de fechar a aba no meio de uma mesa online ─────────────────
+// O que se mede é `defaultPrevented`, e não um `returnValue` cerimonial: é o
+// `preventDefault()` que faz o navegador perguntar. O dublê marca a bandeira sozinho desde
+// que o `fire` existe — comparar contra um campo que o próprio teste semeou seria a
+// armadilha do "comparado contra um dublê vazio".
+const fecharAAba = () => { const ev = {}; fire('beforeunload', ev); return ev; };
+
+console.log('\navisar antes de fechar a aba no meio de uma mesa online');
+{
+  // 1 · MESA LOCAL. Um aviso que aparece toda vez é o aviso que todo mundo aprende a
+  // ignorar, e aí ele não protege nem o caso que importa.
+  mod.encerrarRede(); mod.voltarSozinho(''); mod.pararDeConectar('');
+  mod.MESA.modo = 'classico'; mod.MESA.n = 2;
+  mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[1].nivel = 'normal';
+  mod.comecarLocal();
+  ok(mod.P && mod.P.fase !== 'fim', 'montagem: sem partida viva, a asserção passaria de graça');
+  ok(!fecharAAba().defaultPrevented,
+    'numa mesa LOCAL o jogo pediu confirmação para fechar a aba — não há ninguém esperando');
+
+  // 2 · ANFITRIÃO com a mesa de pé. `montarMesaOnline` deixa uma cadeira online ocupada.
+  const { conn } = montarMesaOnline();
+  ok(mod.modo === 'anfitriao' && mod.P && mod.P.fase !== 'fim',
+    'montagem: o anfitrião não ficou com partida viva');
+  const evAnfitriao = fecharAAba();
+  ok(evAnfitriao.defaultPrevented,
+    'o anfitrião fechou a aba no meio da partida e o jogo não perguntou nada');
+  ok(evAnfitriao.returnValue === '', 'faltou o canal legado do beforeunload (`returnValue`)');
+
+  // 3 · PARTIDA ACABADA: não há o que interromper.
+  mod.P.fase = 'fim';
+  ok(!fecharAAba().defaultPrevented, 'com a partida acabada o jogo ainda pediu confirmação');
+
+  // 4 · DEPOIS DE SAIR PELA PORTA DO JOGO. Nenhuma flag foi inventada para isto: quem
+  // responde é o estado, que `sairDaPartida` já deixa zerado.
+  mod.comecarLocal();
+  ok(fecharAAba().defaultPrevented, 'montagem: a revanche não devolveu a mesa ao ar');
+  mod.sairDaPartida();
+  ok(!fecharAAba().defaultPrevented,
+    'quem acabou de clicar em "Sair" foi avisado de novo ao fechar a aba');
+  conn.close();
+  mod.encerrarRede();
+
+  // 5 · O SAGUÃO. Modo anfitrião e nenhuma partida: a mesa ainda não começou, e sair dali
+  // não custa nada a ninguém.
+  mod.abrirMesaOnline();
+  ok(mod.modo === 'anfitriao', 'montagem: o saguão não entrou em modo anfitrião');
+  ok(!fecharAAba().defaultPrevented, 'no saguão, antes de começar, o jogo já pedia confirmação');
+  mod.encerrarRede();
+
+  // 6 · O CONVIDADO, e esta é a asserção que paga o item. Ele NUNCA tem `P` — um
+  // `beforeunload` escrito só com a partida (o jeito óbvio de escrever) não existiria
+  // justamente para quem mais precisa dele: quem fecha a aba e deixa a mesa dos outros
+  // parada os 30 s do ESPERA_VOLTA.
+  // A vista é montada ANTES, de uma partida de verdade, e passa por JSON como passaria pelo
+  // fio. Depois `sairDaPartida()` zera tudo — é assim que o convidado fica sem `P`, que é o
+  // estado que esta cena existe para medir.
+  mod.comecarLocal();
+  const vistaDoConvidado = JSON.parse(JSON.stringify(mod.visaoDe(mod.P, 1)));
+  mod.sairDaPartida();
+
+  mod.encerrarRede(); mod.voltarSozinho(''); mod.pararDeConectar('');
+  mod.conectarNaMesa('BBBB');
+  Peer.ultimo.disparar('open');
+  const link = mod.linkAnfitriao;
+  ok(link && link.ouvintes.has('data'), 'montagem: o despachante do convidado não foi instalado');
+  ok(mod.modo === 'convidado' && !mod.P, 'montagem: o convidado tinha de estar sem partida na memória');
+  ok(!fecharAAba().defaultPrevented, 'o convidado ainda no saguão foi avisado sem estar em partida');
+
+  // A vista chega pelo fio, e é ela que diz que há uma mesa viva do outro lado.
+  link.disparar('data', { t: 'vista', v: vistaDoConvidado });
+  ok(mod.vistaAtual && mod.vistaAtual.fase !== 'fim',
+    'montagem: a vista não chegou ao convidado — a asserção seguinte passaria de graça');
+  ok(fecharAAba().defaultPrevented,
+    'o CONVIDADO fechou a aba no meio da partida e o jogo não perguntou nada — ' +
+    'ele não tem `P`, e é por isso que o predicado precisa das duas metades');
+  mod.encerrarRede();
+
+  console.log('  o aviso existe nos dois papéis do online, e em nenhum outro lugar');
+}
+
+// ─── o chamado da vez, com a aba no fundo ────────────────────────────────────
+// Só é escrevível desde hoje: o dublê não tinha `document.title`, `hidden` nem
+// `visibilityState`. E há um SEGUNDO DONO do título — `test-app.mjs` o usa como régua da
+// versão publicada —, então uma restauração esquecida aqui reprova LÁ, com uma mensagem que
+// fala de service worker. As mutações deste bloco rodam contra `npm test` E `npm run app`.
+//
+// A BORDA É FORJADA COM VISTAS, e não jogando: aplicar a jogada do bot para virar a vez traz
+// junto o som DA JOGADA, e aí "o chamado tocou?" mede o baque da peça caindo. Alternar duas
+// vistas — a mesma partida, o campo `vez` trocado — isola exatamente a transição, que é a
+// única coisa que este arquivo decide.
+console.log('\no chamado da vez, com a aba no fundo');
+{
+  mod.encerrarRede(); mod.voltarSozinho(''); mod.pararDeConectar('');
+  mostrarAba();
+  mod.MESA.modo = 'classico'; mod.MESA.n = 2;
+  mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[1].nivel = 'normal';
+  mod.comecarLocal();
+
+  // Duas vistas da MESMA partida: uma em que a vez é sua, outra em que não é.
+  const base = mod.visaoDe(mod.P, 0);
+  ok(base && base.fase === 'mao', 'montagem: a partida não está em curso');
+  const minhaVez = Object.assign({}, base, { vez: 0, cadeira: 0 });
+  const vezDoOutro = Object.assign({}, base, { vez: 1, cadeira: 0 });
+
+  // Quantos osciladores o jogo já pediu. O `ac` nasce no primeiro som (o embaralho), então
+  // aqui ele existe há muito tempo — mede-se a DIFERENÇA, nunca o total.
+  const somAgora = () => (mod.ac ? mod.ac.osciladores : -1);
+  ok(somAgora() >= 0, 'montagem: sem AudioContext, a asserção do som mediria -1');
+
+  // 1 · ABA À VISTA: a tela JÁ diz de quem é a vez, e piscar seria ruído. É também a
+  // asserção que protege a régua do `test-app`.
+  mod.atualizarVista(vezDoOutro);
+  titulos.length = 0;
+  const somAntes = somAgora();
+  mod.atualizarVista(minhaVez);
+  ok(titulos.length === 0,
+    `com a aba À VISTA o jogo mexeu no título ${titulos.length} vez(es) — ${JSON.stringify(titulos)}`);
+  // E NEM TOCOU NADA. Esta é a metade que o título não prova: com só uma das duas guardas de
+  // `document.hidden` removida, a irmã ainda impede o pisca — mas o SOM já saiu, e um "ó" do
+  // nada com a mesa na frente do jogador é pior que aviso nenhum. Duas camadas que falham de
+  // jeitos diferentes precisam de uma asserção cada.
+  //
+  // O contador de osciladores nasceu aqui e fecha de quebra uma lacuna que o CLAUDE.md
+  // registra desde a Fila 11: `120-audio.js` nunca teve asserção de que um som SAI.
+  ok(somAgora() === somAntes,
+    `com a aba À VISTA o chamado tocou ${somAgora() - somAntes} som(ns)`);
+
+  // 2 · ABA NO FUNDO e a vez virando: aí sim, e pelos DOIS canais.
+  mod.atualizarVista(vezDoOutro);
+  esconderAba();
+  mod.atualizarVista(vezDoOutro);       // a borda começa aqui: ainda NÃO é a sua vez
+  titulos.length = 0;
+  const somAntesDoFundo = somAgora();
+  mod.atualizarVista(minhaVez);
+  ok(/Sua vez/.test(document.title),
+    `a vez virou com a aba no fundo e o título continuou ${JSON.stringify(document.title)}`);
+  ok(somAgora() > somAntesDoFundo, 'a vez virou com a aba no fundo e nenhum som saiu');
+
+  // O PISCA VIVE EM setTimeout, e é isso que o faz existir em aba de fundo — o rAF PARA ali,
+  // que é a armadilha nº 1 desta casa. `correrTimers` drena a fila do harness; se o pisca
+  // fosse por quadro, nada aqui aconteceria.
+  const antesDoTique = document.title;
+  correrTimers();
+  ok(document.title !== antesDoTique, 'o título não alternou — o pisca não está no setTimeout');
+  correrTimers();
+  ok(/Sua vez/.test(document.title), 'o pisca parou depois de um tique só');
+
+  // 3 · NADA DE METRÔNOMO: a vista chega dezenas de vezes por jogada, e a vez continuando sua
+  // não é novidade nenhuma. Sem a borda, cada publicação recomeçaria o chamado.
+  const somAntesDaRepeticao = somAgora();
+  mod.atualizarVista(minhaVez);
+  mod.atualizarVista(minhaVez);
+  ok(somAgora() === somAntesDaRepeticao,
+    `a vez continuou sua e o chamado tocou mais ${somAgora() - somAntesDaRepeticao} vez(es)`);
+
+  // 4 · A VOLTA restaura o título EXATO. O valor é escrito à mão com o motivo ao lado: o
+  // harness não carrega o HTML (o `buildModule` extrai só o `<script type="module">`), então
+  // comparar com uma constante do dublê seria comparar o dublê com ele mesmo. Se o `<title>`
+  // do `pagina.html` mudar, esta linha reprova — e é isso que se quer, porque o `test-app`
+  // depende do mesmo texto.
+  mostrarAba();
+  ok(document.title === 'Dominó de Bar · 2 a 4 jogadores',
+    `voltar para a aba deixou o título em ${JSON.stringify(document.title)}`);
+
+  // 5 · E não reescreve o que já está certo — a regra do aria-live, aplicada ao título, que
+  // também é lido em voz alta na troca de aba.
+  titulos.length = 0;
+  mostrarAba();
+  mod.atualizarVista(minhaVez);
+  ok(titulos.length === 0, `o jogo reescreveu o título ${titulos.length} vez(es) sem nada ter mudado`);
+
+  // 5b · VOCÊ VOLTOU, VIU QUE É A SUA VEZ, E SAIU DE NOVO. Não é novidade nenhuma, e chamar
+  // aqui seria perseguir quem já sabe. É a asserção que separa a BORDA do estado: neste ponto
+  // o chamado está parado (a volta o parou) e a vez continua sua, então quem decide sozinho é
+  // `vezEraMinha`. Sem ela, trocar a borda pelo estado passaria despercebido — as outras
+  // asserções são seguradas pela guarda `chamando`, que é a camada irmã.
+  const somAntesDeSairDeNovo = somAgora();
+  titulos.length = 0;
+  esconderAba();
+  mod.atualizarVista(minhaVez);
+  ok(somAgora() === somAntesDeSairDeNovo,
+    'sair da aba com a vez JÁ sua fez o jogo chamar de novo — isso é perseguir quem já sabe');
+  ok(titulos.length === 0,
+    `sair da aba com a vez já sua mexeu no título: ${JSON.stringify(titulos)}`);
+  mostrarAba();
+
+  // 6 · A TERCEIRA PORTA DE SAÍDA: o tique reconfere sozinho. É o caso do `{t:'expulso'}` — o
+  // jogador volta ao menu SEM passar por `atualizarVista`, com a aba escondida, e sem esta
+  // guarda o título piscaria para sempre apontando para uma mesa que não existe mais.
+  mod.atualizarVista(vezDoOutro);
+  esconderAba();
+  mod.atualizarVista(vezDoOutro);
+  mod.atualizarVista(minhaVez);
+  ok(/Sua vez/.test(document.title), 'montagem: o chamado não começou, e a porta de saída não seria exercitada');
+  mod.sairDaPartida();                  // some a partida, sem ninguém avisar o chamado
+  // TRÊS DRENAGENS, e não uma. O tique ALTERNA o título, então uma única drenagem pode calhar
+  // de devolver o original e a asserção passaria com o pisca vivo — foi exatamente isso na
+  // primeira rodada, e a mutação que apaga a reconferência SOBREVIVEU. O que se afirma não é
+  // "o título está certo agora", é "ele PAROU", e parada só se mede em mais de um instante.
+  let piscouDepois = false;
+  for (let i = 0; i < 3; i++) { correrTimers(); if (/Sua vez/.test(document.title)) piscouDepois = true; }
+  ok(!piscouDepois,
+    'a partida acabou e o chamado continuou piscando — o tique não reconferiu o que o armou');
+  ok(document.title === 'Dominó de Bar · 2 a 4 jogadores',
+    `a partida acabou e o título ficou em ${JSON.stringify(document.title)}`);
+  mostrarAba();
+
+  console.log('  a vez virando no fundo chama pelos dois canais, a aba à vista não, e o chamado para sozinho');
+}
+
+// ─── o convite: como alguém vem parar na sua mesa ────────────────────────────
+// As três portas são medidas UMA A UMA, e cada uma só é alcançável tirando as de cima — por
+// isso o dublê do `navigator` sabe se apagar. Dublê que responde sempre a mesma coisa deixa
+// dois destes ramos sem uma linha de teste, que é a oitava lição da série.
+console.log('\no convite da mesa');
+{
+  mod.encerrarRede(); mod.voltarSozinho(''); mod.pararDeConectar('');
+  mostrarAba();
+  mod.usarCodigo('XJCR');
+
+  // 1 · O CELULAR: a folha de compartilhar do sistema.
+  navigator.compartilhados.length = 0;
+  navigator.copiados.length = 0;
+  navigator.aborta = false;
+  ok(mod.compartilharSala() === 'share', 'com `navigator.share` o convite não foi pela folha do sistema');
+  const mandado = (navigator.compartilhados[0] || {}).text || '';
+  ok(mandado.includes('XJCR'), `o convite saiu sem o código: ${JSON.stringify(mandado)}`);
+  ok(mandado.includes(mod.JOGO.nome),
+    'o convite não diz de que jogo é a mesa — quem recebe abre no jogo dele e é recusado');
+
+  // 2 · CANCELAR NÃO É FALHAR. A folha rejeita com AbortError quando a pessoa desiste, e cair
+  // para a cópia aqui copiaria pelas costas de quem acabou de fechar — dizendo "copiado".
+  navigator.aborta = true;
+  navigator.copiados.length = 0;
+  mod.compartilharSala();
+  await Promise.resolve(); await Promise.resolve();
+  ok(navigator.copiados.length === 0,
+    'o jogador cancelou a folha de compartilhar e o jogo copiou o convite assim mesmo');
+  navigator.aborta = false;
+
+  // 3 · O COMPUTADOR: sem folha do sistema, copia.
+  let repor = semCompartilhar({ share: true, clipboard: false });
+  navigator.copiados.length = 0;
+  ok(mod.compartilharSala() === 'copia', 'sem `share`, o convite não caiu para a área de transferência');
+  ok((navigator.copiados[0] || '').includes('XJCR'),
+    `o que foi copiado não tem o código: ${JSON.stringify(navigator.copiados[0])}`);
+  repor();
+
+  // 4 · O RECUO DO RECUO, que é o único que existe em `file://` — lá `navigator.clipboard` não
+  // existe, porque não é contexto seguro. Sem ele, quem abre o jogo por duplo-clique fica sem
+  // nenhuma forma de mandar o código.
+  repor = semCompartilhar({ share: true, clipboard: true });
+  selecionados.length = 0;
+  ok(mod.compartilharSala() === 'selecao', 'sem as duas portas, o convite não caiu para a seleção');
+  ok(selecionados[0] === els.get('salaVal'),
+    'a seleção não caiu no código da mesa — não há o que copiar com Ctrl+C');
+  repor();
+
+  // 5 · SEM MESA ABERTA não há convite. O painel some junto, mas a função é chamada por duas
+  // superfícies e não pode depender de nenhuma delas estar escondida.
+  navigator.compartilhados.length = 0;
+  mod.usarCodigo('');
+  ok(mod.compartilharSala() === '', 'sem mesa aberta o jogo tentou compartilhar alguma coisa');
+  ok(navigator.compartilhados.length === 0, 'sem mesa aberta, alguma coisa foi mandada');
+  mod.usarCodigo('XJCR');
+
+  // 6 · O LINK. Em `file://` o `location.origin` é a STRING "null", e um endereço montado ali
+  // sairia como `null/index.html?sala=XJCR` colado na conversa de alguém.
+  ok(mod.linkDaMesa('XJCR') === '', `em file:// o convite montou um link: ${mod.linkDaMesa('XJCR')}`);
+  const soTexto = mod.conviteDaMesa('XJCR');
+  ok(!/null|undefined/.test(soTexto), `o convite em file:// tem lixo: ${JSON.stringify(soTexto)}`);
+
+  location.protocol = 'https:';
+  location.origin = 'https://ricardocolombo01.github.io';
+  location.pathname = '/domino-bar/';
+  const link = mod.linkDaMesa('XJCR');
+  ok(link.includes('sala=XJCR'), `o link não leva a sala: ${link}`);
+  // O `jogo=` é obrigatório: sem ele quem recebe abre na preferência DELE e leva um "essa mesa
+  // é de outro jogo" — o mecanismo de recusa da v4.7 funcionando contra o próprio convite.
+  ok(link.includes('jogo=' + mod.JOGO_ID), `o link não diz o jogo: ${link}`);
+  ok(link.startsWith('https://ricardocolombo01.github.io/domino-bar/'), `o link saiu torto: ${link}`);
+  location.protocol = 'file:'; location.origin = 'null'; location.pathname = '/index.html';
+
+  // 7 · O CÓDIGO QUE VEM PELA URL é entrada de fora, e passa pelo MESMO validador do
+  // `salaGuardada` — a pergunta do irmão, respondida antes de custar alguma coisa.
+  const tentar = valor => { location.search = '?sala=' + valor; return mod.salaDaURL(); };
+  ok(tentar('XJCR') === 'XJCR', 'um código válido na URL foi recusado');
+  ok(tentar('xjcr') === 'XJCR', 'o código da URL não foi normalizado para maiúsculas');
+  ok(tentar('%3Cimg%20src%3Dx%3E') === '', 'um código-ataque na URL passou pelo validador');
+  ok(tentar('constructor') === '', '`constructor` na URL passou pelo validador');
+  ok(tentar('A'.repeat(40)) === '', 'um código de 40 letras passou pelo validador');
+  ok(tentar('') === '', 'um `?sala=` vazio virou código');
+  location.search = '';
+
+  // 8 · O PAINEL VIROU BOTÃO, e botão precisa dizer o que faz: sem rótulo, o leitor de tela
+  // anuncia "botão Mesa XJCR" e ninguém descobre que dá para tocar ali.
+  mod.pintarSala('XJCR');
+  ok(/XJCR/.test(els.get('salaPainel').getAttribute('aria-label') || ''),
+    'o painel da mesa virou botão e não diz o que faz para quem não vê a tela');
+  mod.pintarSala('');
+  ok(!els.get('salaPainel').getAttribute('aria-label'),
+    'sem mesa, o painel continuou anunciando um convite');
+
+  console.log('  as três portas em cascata, o link só onde ele presta, e o código da URL validado');
 }
 
 console.log(falhas ? `\n${falhas} falha(s)` : '\ntudo certo');

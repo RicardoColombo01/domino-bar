@@ -721,7 +721,10 @@ function entrarNumaMesa() {
   if (!temPeerJS()) { avisar('A biblioteca de rede não carregou — sem internet, só dá para jogar local.'); return; }
   encerrarRede();
   const guardada = salaGuardada();
-  saguaoDeConvidado(MESA.cadeiras[0].nome, guardada ? guardada.codigo : '');
+  // A ESCADA DO CÓDIGO, e ela é a mesma do `?jogo=`: a URL é o que estão te pedindo AGORA,
+  // o guardado é onde você esteve. Quem chega por um link de convite não devia ter de
+  // digitar as quatro letras que já vieram no endereço.
+  saguaoDeConvidado(MESA.cadeiras[0].nome, salaDoConvite || (guardada ? guardada.codigo : ''));
   // Destrava o botão: a tentativa anterior pode ter deixado 'Entrando…' ou 'Na mesa'.
   // Aqui e não no `encerrarRede`, que roda em pontos do carregamento onde `conectando`
   // ainda estaria na zona morta — e `typeof` sobre `let` na zona morta LANÇA.

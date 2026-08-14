@@ -8,8 +8,8 @@ gente e bot, na mesma tela ou pela internet. No ar em
 Sem framework, sem bundler, e **dois binários** — os ícones do aplicativo, exigidos pelo
 manifest: madeira, pintas, cartas e sons continuam gerados em canvas e WebAudio na hora.
 Three.js e PeerJS vêm de CDN, e o **service worker os guarda**, então depois de uma partida o
-jogo abre sem internet. **10.135 linhas** no total (`src/js` + `src/pagina.html` +
-`src/css/estilo.css` + `src/sw.js`), conferido em 12/08/2026 — este número **envelhece**, e já
+jogo abre sem internet. **10.505 linhas** no total (`src/js` + `src/pagina.html` +
+`src/css/estilo.css` + `src/sw.js`), conferido em 13/08/2026 — este número **envelhece**, e já
 envelheceu quatro vezes: ficou dizendo 2.100 por três releases seguidas, a medição de 10/08
 (9.648) estava velha no dia seguinte, a de 11/08 (9.768) durou um dia, e a primeira de 12/08
 (10.098) não durou a própria sessão. **Rode a conta, não leia o número daqui.**
@@ -206,8 +206,10 @@ src/icone.svg                    a fonte dos dois PNG do manifest
 10-casa/140-menu         montagem da mesa (as cadeiras) + modos, alvos e opções, gerados
 10-casa/141-abas         QUAL JOGO está na mesa: a faixa, a URL, a preferência, a ponte
 10-casa/145-saguao       a tela do online: código, quem chegou, os quatro cliques
+10-casa/146-convite      o convite: compartilhar o código, e o link `?sala=` que traz alguém
 10-casa/150-rede         PeerJS, anfitrião autoritativo — ZERO chamadas ao DOM
 10-casa/160-loop         estado do app, turno, hotseat, render loop
+10-casa/165-chamado      a vez virando com a aba no fundo: o título piscando e o som
 50-truco/575-encaixes    os mesmos encaixes, respondidos em truco — a aposta é a barra
 
 — 2º tempo: CADA JOGO SE REGISTRA ——————————————————————————————————————————
@@ -953,7 +955,7 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 
 | | |
 |---|---|
-| commitado | **v4.12.0** — a **ONDA A** da Fila 15: as manilhas realçadas, a vira em cima do baralho, o peso da mão no topo do dominó |
+| commitado | **v4.13.0** — a **ONDA B** da Fila 15 (o online: o convite, o chamado da vez, a conversa pelo teclado, o aviso de saída) mais o defeito de campo das cartas encavaladas |
 | **enviado** | ✔ **sim**, 12/08 — `git ls-remote` responde `c8efa38`, igual ao local, com as tags `v4.12.0` e `v4.12.1` |
 | **PUBLICADO** | ✔ **sim** — `sw.js` servido `84ad320c54f7` = local, e o `index.html` no ar é **byte a byte** o mesmo (544.501). Conferido também pelo CONTEÚDO: `tocoDoBaralho`, `ehManilha`, `MARGEM_MANILHA`, `ALTURA_DA_VIRA` e `rot: 'Peso'` estão no bundle servido |
 | em curso | **nada.** As Filas 12, 13 e 14 fecharam em 11/08; a **Onda A** da Fila 15 fechou em 12/08 |
@@ -1157,104 +1159,113 @@ A ONDA A  ✔ FEITA em 12/08, e saiu na v4.12.0 — três commits, um por item,
 
 ⚑ AMANHÃ COMEÇA AQUI ──────────────────────────────────────────────────────
 
-✔ ENVIADO E PUBLICADO em 12/08, e conferido pelas TRÊS réguas, não por uma:
+A ONDA B ✔ FEITA em 13/08/2026 — o online. Cinco commits, um por assunto, e
+         **25 mutações**, cada uma matando exatamente a sua. Sai na v4.13.0.
 
-    git rev-parse main                    c8efa38
-    git ls-remote origin refs/heads/main  c8efa38   ← o servidor, consultado
-    sw.js local = servido                 84ad320c54f7
-    index.html servido vs local           IDÊNTICOS byte a byte (544.501)
+         B1 o convite: `navigator.share` → área de transferência → seleção, e
+            o link `?sala=ABCD` que PRÉ-PREENCHE o campo do saguão
+         B2 o chamado da vez: o título da aba piscando e um som de duas notas
+            quando a vez vira com a aba no fundo
+         B3 a conversa pelo teclado (`c`), e o Escape descendo um degrau por vez
+         B4 o `beforeunload` no meio de uma mesa online
 
-  E pelo CONTEÚDO, que é mais forte que o resumo: o bundle no ar tem
-  `tocoDoBaralho` (5×), `ehManilha` (4×), `MARGEM_MANILHA`, `ALTURA_DA_VIRA`
-  e `rot: 'Peso'`. A Onda A está no ar.
+         AS DECISÕES DE CASA foram dele, no plano: título+som e não
+         `Notification`; o link pré-preenche e NÃO conecta sozinho; o botão
+         no saguão mais o painel do topo virando alvo.
 
-  O Pages levou ~30 s: a primeira consulta ainda deu o `df4e87d66f6b` da
-  v4.11 e a segunda já deu o novo. **Uma consulta só não decide** — se a
-  primeira discordar, espere e pergunte de novo antes de concluir qualquer
-  coisa.
+         E O QUE MUDOU EM RELAÇÃO AO PLANO, com o motivo: o chamado da vez
+         vale para QUALQUER mesa, não só as online. Contra bot também há
+         espera — é justamente por isso que a pessoa troca de aba — e o
+         hotseat já não pisca porque `podeAgirAgora()` carrega `!travado`.
 
-➜ PASSO 1  JOGAR. Não há código pendente e não há defeito conhecido em
-           aberto. Há duas perguntas concretas que só o olho responde e que
-           a foto de 900px NÃO respondeu:
-           · a moldura da manilha se lê no CELULAR, com o dedo em cima e a
-             tela ao sol? Ela é fina de propósito — a margem é derivada da
-             folga do leque para não encostar na carta vizinha.
-           · a vira erguida ainda parece parte da mesa num retrato de 360px?
-             Na foto de 900 ela está ótima; em 360 a carta tem um terço disso.
-           Se qualquer das duas falhar, o conserto é de UM número:
-           `MARGEM_MANILHA` e `CARTAS_NO_TOCO`, os dois em `550-mesa.js`/
-           `540-layout.js`, e os dois com o porquê escrito ao lado.
+O DEFEITO DA FOTO ✔ CONSERTADO na mesma sessão, e ele é o achado da onda.
+         Relato dele, jogando: as cartas no meio da mesa encavaladas. A conta
+         que ninguém tinha feito: duas cartas vizinhas a 90° se cobrem em
+         `0.75 − RAIO_DA_VAZA`, e o raio era 0.686 — **0.064 de sobreposição**,
+         medido na mesa de verdade (0.57 × 0.84 já escalado). Hoje o raio é
+         `CARTA_C * 0.92`.
 
-           E o truco em DUPLAS, com quatro pessoas de verdade no celular,
-           continua sem ter acontecido nenhuma vez — só bots em suítes e
-           quatro abas no `test-online`. É o que este arquivo aponta há
-           quatro filas como a fonte mais barata que o projeto tem.
+         DUAS COISAS QUE ISSO ENSINOU:
+         · o `folgaEntre` do `test-telas` só compara ENTRE grupos, e a vira e
+           as cartas jogadas são irmãs DENTRO de um. O ponto cego estava
+           declarado no `590-registro.js` desde a v4.7 — segunda vez que um
+           ponto cego declarado é onde o defeito mora.
+         · havia uma asserção ali medindo a PERGUNTA ERRADA: distância entre
+           centros (`hypot > CARTA_L`) com o comentário dizendo "nada se
+           sobrepõe". A carta é 0.62 × 0.88; duas giradas a 90° passam
+           folgado naquele teste e mesmo assim se cobrem. Hoje ela compara as
+           CAIXAS, e separa o que falha por motivos diferentes.
 
-➜ PASSO 2  SE FOR ESCREVER CÓDIGO, a ordem recomendada das ondas que sobram:
+⚠ E DUAS HIPÓTESES MINHAS CAÍRAM PARA A MEDIÇÃO nesta sessão — a conta de
+         sempre, agora em 13 e 14:
+         · "trocar de aba não reenquadra a câmera, e por isso a mesa escala
+           demais". Medido: o fov satura no PISO (46° em wide) e no TETO (62°
+           em retrato) nos DOIS jogos, então a troca não muda nada. A linha
+           que eu tinha acrescentado era no-op, e saiu.
+         · "trocar de jogo com partida viva corrompe a mesa". Medido: a trava
+           FUNCIONA — a aba fica `disabled` com o título explicando. Só um
+           clique forçado por script atravessa, e aí quebra como previsto.
 
-           ONDA B (o online) — a de melhor retorno. Compartilhar o código da
-             sala (`navigator.share`), avisar que é a sua vez com a aba no
-             fundo, o `beforeunload` que ele já aprovou (B4), e o chat pelo
-             teclado. Cuidado já escrito: `requestAnimationFrame` PARA em aba
-             de fundo — relógio disso vai em `setTimeout`, como o do bot.
+AS SUÍTES contra este código, rodadas uma de cada vez:
+         npm test (8 + 51 + 393) · lembrar (13 cenas) · app · check
+         telas 1ª metade: **folga mínima 0.33**, o MESMO número da Onda A —
+         que é a régua de determinismo, e não só de aprovação
 
-           ONDA D (a dívida) — e ela é a única da fila que é DÍVIDA e não
-             ideia: o `test-textura` nunca rodou com o TRUCO na mesa, então
-             ninguém nunca perguntou se a CARTA sobrevive a sair do
-             aplicativo e voltar. É o defeito que custou a Fila 7 inteira, e
-             a proteção existe sem a prova. Barata, e fecha um buraco real.
+➜ PASSO 1  JOGAR, e há TRÊS perguntas que só o olho responde:
+           · as cartas da vaza ainda parecem encavaladas? A sobreposição
+             MEDIDA acabou, mas na foto de 900px elas continuam grandes em
+             relação ao tampo. Se o incômodo for o TAMANHO e não a
+             sobreposição, o conserto é outro número — `ESCALA_TRUCO_MAX`
+             (hoje 2.35), em `550-mesa.js`.
+           · o convite: tocar no painel `Mesa ABCD` abre a folha de
+             compartilhar do sistema? É o único caminho que nenhuma suíte
+             alcança — em Node o `navigator.share` é dublê, e no Chrome
+             headless ele não existe.
+           · o chamado da vez: sair do aplicativo com a vez do outro e voltar
+             quando ela virar. O título piscando aparece na lista de abas do
+             celular?
 
-           ONDA E (temas de baralho, ideia dele) e ONDA C (estatísticas, a
-             primeira mão guiada, desfazer no hotseat) vêm depois.
+➜ PASSO 2  SE FOR ESCREVER CÓDIGO, o que sobra da Fila 15:
 
-           As três decisões que travavam alguma coisa já estão respondidas
-           desde 11/08, e o PIFE é o próximo jogo quando houver apetite para
-           uma onda grande.
-           A mais barata com valor real é a ONDA B (o online): compartilhar o
-           código da sala, avisar que é a sua vez com a aba no fundo, e o
-           `beforeunload` que ele já aprovou (B4).
-           A ONDA D é DÍVIDA e não ideia: o `test-textura` nunca rodou com o
-           TRUCO na mesa, então ninguém nunca perguntou se a CARTA sobrevive a
-           sair do aplicativo e voltar — que é o defeito que custou a Fila 7
-           inteira. A proteção existe; a prova não.
-           AS TRÊS DECISÕES JÁ ESTÃO RESPONDIDAS (11/08): temas de baralho com
-           inventário (ideia dele, é a ONDA E), avisar antes de sair no online
-           (o B4), e o PIFE como próximo jogo. Nada trava.
-           E a fonte mais barata deste projeto continua sendo JOGAR: o truco em
-           duplas no CELULAR, com gente de verdade, é o que nenhuma suíte
-           alcança — e é o que este arquivo aponta há três filas. Agora com
-           duas coisas novas para olhar que foto nenhuma responde: se o anel
-           âmbar da manilha se distingue do anel verde de "está ganhando", e
-           se a vira erguida ainda parece parte da mesa.
+           ONDA F (as duas regras de truco que ele mandou em 13/08) — esconder
+             a carta e a mão de ferro. Ver a seção própria: as duas são REGRA,
+             nascem em `510-regras.js`/`520-partida.js`, e a mão de ferro traz
+             o primeiro estado do projeto em que a SUA PRÓPRIA mão é segredo
+             para você — o que mexe na fronteira do invariante 3.
+
+           ONDA D (a dívida) — o `test-textura` nunca rodou com o TRUCO na
+             mesa. O mapa já está levantado: a suíte monta `MESA.modo =
+             'classico'` sem `?jogo=`, o `nomeDe()` batiza textura por LARGURA
+             (e o verso da carta, 256×256, colidiria com o `'piso'`), e o
+             `uvDaMao()` lê `m.peca`, que a mão do truco não tem.
+
+           ONDA E (temas de baralho) e ONDA C (estatísticas, primeira mão
+             guiada, desfazer no hotseat) vêm depois. O PIFE é o próximo jogo.
 ```
 
-> ### ⚠ ESTA RELEASE NÃO MUDA O QUE O JOGADOR VÊ, e isso desarma a régua de sempre
+> ### ⚠ ESTA RELEASE MUDA `src/`, e a régua de sempre volta a valer
 >
-> Não houve `npm run build` dentro do merge, e é a única vez em que isso vale: a onda não
-> tocou `src/`. Quem provou foi o `npm run check` rodado **depois** do merge, não o
-> raciocínio.
->
-> A consequência é uma armadilha, e ela é a do `e2f9a7a` (v4.5.2) de volta: como `src/` não
-> mudou, **o `sw.js` servido continua `a72ce27eec71` de propósito** — ele é um resumo do
-> bundle, e bundle igual dá resumo igual. Então o `curl` diz "iguais" tanto antes quanto
-> depois do push, e **os dois baterem não prova que o envio chegou**. Aqui quem prova é o
-> `git ls-remote`. Vale toda vez que uma onda mexe só em registro e em testes.
+> A v4.12.2 era registro puro e por isso desarmava o `curl` (bundle igual dá resumo igual). A
+> **v4.13.0 toca `src/` em nove arquivos**, então o `sw.js` servido TEM de mudar — e se ele não
+> mudar depois do push, isso é informação: ou o Pages não rodou, ou o merge saiu sem
+> `npm run build`. As três réguas continuam sendo três perguntas diferentes: o log local, o
+> `git ls-remote`, e o conteúdo servido.
 
-**O BLOQUEIO DE CREDENCIAL ACABOU.** As duas releases que este arquivo dava como paradas na
-máquina estão no ar; o 403 virou registro histórico, logo abaixo. Nada a fazer ali.
+**AS SUÍTES ESTÃO VERDES contra a v4.13**, rodadas uma de cada vez em 13/08 e não lembradas:
 
-**AS OITO SUÍTES CONTINUAM VERDES**, medido em 10/08 e não lembrado — `npm test`, `online`
-(7 cenas), `lembrar`, `textura`, `app`, `telas` (as duas metades, folga mínima 0.29 nas duas),
-`check`, mais as 5 mutações.
+```
+npm test        8 + 51 + 393 asserções
+npm run telas   as DUAS metades, folga mínima 0.33 em cada — o MESMO número da Onda A,
+                que é a régua de determinismo e não só de aprovação
+npm run online  as SETE cenas (uma a uma: a rodada cheia estourou o prazo de navegação
+                numa recarga, e a mesma cena sozinha passou — é a fragilidade de rede que
+                este arquivo já registra, não defeito)
+npm run lembrar 13 cenas, com a do convite nova · npm run app · npm run check
+mutações        25, cada uma matando exatamente a sua
+```
 
-> **E MESMO ASSIM O PROJETO PASSOU A TER SETE DEFEITOS CONHECIDOS EM ABERTO** — a Fila 12, de
-> 11/08. Esta linha dizia "nenhum defeito conhecido" e **estava certa pela régua que tinha**:
-> nenhum dos sete reprova suíte nenhuma. Eles não são regressão; são o que ninguém tinha
-> procurado ainda, e é literalmente para isso que uma varredura existe (a Fila 6 e a Fila 11
-> nasceram assim, com tudo verde). **Suíte verde mede o que alguém já pensou em perguntar.**
-
-O que sobra, em ordem: a **Fila 12** (sete achados, ordem recomendada na seção dela) e a
-**Fase 5**, que é conta e não código.
+**O `src/` tem 10.505 linhas** — conferido com `node`, não com o PowerShell, em 13/08/2026.
+Este número envelhece: rode a conta.
 
 > ### ⚠ A RÉGUA DE "ENVIADO" É O REMOTO CONSULTADO, e isto custou um diagnóstico errado
 >
@@ -4841,6 +4852,56 @@ Os cinco que eu proporia, e cada um resolve um problema de verdade:
 (`080-peca3d.js` tem o atlas de pintas pela mesma técnica). Vale desenhar o inventário
 pensando nos dois desde o começo — mas **entregar o baralho primeiro**, porque é onde o pedido
 nasceu e onde o pife herda.
+
+#### ONDA F — AS DUAS REGRAS DE TRUCO QUE FALTAM (pedido dele, 13/08/2026)
+
+**Anotadas para fazer, não feitas.** Palavras dele, na íntegra, porque regra de casa não se
+parafraseia:
+
+> *"Esconder Carta: Também denominado 'carta coberta ou encoberta', é quando o jogador joga a
+> carta que acabou de virar na mesa, passando a não valer mais nada. Não se pode encobrir a
+> carta se estiver na primeira rodada de cada mão."*
+>
+> *"Mão de Ferro: Acontece quando ambas as duplas alcançam os 11 pontos em uma mesma partida.
+> Neste caso, os jogadores recebem as cartas viradas para baixo 'cobertas' e devem jogar com as
+> cartas para baixo. A dupla que vencer a mão, vencerá a partida."*
+
+**As duas são REGRA e não tela**, então nascem em `50-truco/510-regras.js` e `520-partida.js`,
+com o layout e a mesa acompanhando depois. E as duas mexem no que o motor já tem, o que as
+torna mais arriscadas do que parecem — a v4.5 registra que **defeito de regra que atravessa
+duas mãos não existe para caso escrito à mão**, e foi a partida inteira jogada pela casa que
+achou os dois defeitos daquela release. Ela é a suíte que tem de crescer aqui.
+
+**F1 · ESCONDER A CARTA.** Uma jogada nova, e ela é a primeira do truco que **não tem força**:
+a carta vai para a mesa de barriga para baixo e não disputa a vaza. O que a implementação vai
+ter de responder, e nenhuma leitura de código responde:
+
+| | |
+|---|---|
+| a proibição na 1ª vaza | ele já disse: **não pode**. Vale para toda mão, inclusive depois de truco |
+| e se TODOS esconderem? | a vaza empata (não há carta com força), e aí cai na regra do melou que já existe |
+| o que a tela mostra | o verso já existe (`criarVersoDeCarta`), e a mesa já sabe virar carta de barriga para baixo ao recolher a vaza — é a mesma geometria |
+| como se ESCOLHE esconder | é uma segunda intenção sobre a mesma carta. A barra de ações já é gerada pelo jogo (`JOGO.hud.barra`), então cabe sem tocar na casa |
+| o bot | `530-bot.js` precisa saber quando vale a pena — esconder é jogar uma carta forte fora para guardá-la, e isso muda a conta de `escolherCarta` |
+
+**F2 · MÃO DE FERRO.** Ela é irmã da **mão de 11**, que já existe (`fase` própria, dois botões,
+`visaoDoTruco` mudando de forma) — e é por isso que ela é mais barata do que parece **e** mais
+perigosa: o validador `vistaDoTrucoValida` é frouxo de propósito porque *"a forma da vista muda
+com a fase"*, e uma fase nova entra por essa porta. As perguntas em aberto:
+
+| | |
+|---|---|
+| **quanto vale a mão?** | ele não disse. Na maioria das casas ela decide a PARTIDA inteira, e é o que a frase dele sugere ("vencerá a partida") — mas isso é escolha, como o melou foi |
+| dá para trucar na mão de ferro? | na maioria das casas **não** — a mão já vale tudo |
+| e numa mesa de DOIS? | "ambas as duplas" é linguagem de mesa de 4. Numa de 2 o gatilho é 11×11 igual, e a regra deve valer — mas quem decide é ele |
+| a sua própria mão | você **não vê as suas cartas**. Isso fura a suposição mais antiga da tela do truco (`vista.mao` são as cartas que você enxerga), e é o ponto onde a `visaoDe` precisa de cuidado: esconder da TELA é fácil, esconder da VISTA é o que impede alguém de espiar pelo console |
+
+**⚠ E ESTA É A ARMADILHA QUE VALE ESCREVER ANTES:** a mão de ferro é o primeiro estado do
+projeto em que **a sua própria mão é segredo para você**. O invariante 3 diz que `visaoDe` é a
+fronteira, e ele sempre foi usado para esconder a mão dos OUTROS. Mandar as suas cartas na
+vista e só não desenhá-las seria a fronteira valendo para todo mundo menos para o caso novo —
+e há teste conferindo que nenhuma peça da mão alheia chega ao convidado, que é exatamente o
+molde da asserção que falta aqui.
 
 #### O que NÃO recomendo, e por quê
 

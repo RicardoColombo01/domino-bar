@@ -67,6 +67,15 @@ function tocarBatida() {
   [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => nota(f, 0.32, 0.16, 'triangle', i * 0.075));
 }
 
+// É A SUA VEZ, e você está noutro aplicativo. Duas notas subindo — a forma de pergunta, o
+// "ó" de quem chama alguém —, e curtas: isto toca com a aba no fundo, então tem de ser
+// reconhecível sem ser um alarme. Som PRÓPRIO e não a batida reaproveitada: aquele arpejo
+// já quer dizer "alguém bateu", e um som que diz duas coisas não diz nenhuma.
+function tocarChamado() {
+  nota(587.33, 0.16, 0.14, 'triangle');
+  nota(880, 0.22, 0.14, 'triangle', 0.16);
+}
+
 // Murmurinho do salão: ruído grave filtrado, bem baixo. Mantém o silêncio de estúdio
 // longe sem virar trilha sonora.
 function ligarMurmuro() {

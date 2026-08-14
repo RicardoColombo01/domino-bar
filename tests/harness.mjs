@@ -7,6 +7,11 @@ import { pathToFileURL } from 'url';
 
 export const els = new Map();
 export const listeners = new Map();
+// Tudo o que foi escrito em `document.title`, na ordem. Ver o acessor em `installStubs`.
+export const titulos = [];
+// O que o jogo mandou selecionar — o terceiro recuo do convite, quando não há nem folha de
+// compartilhar nem área de transferência.
+export const selecionados = [];
 export const rafQueue = [];
 export const timers = new Map();
 let proxTimer = 0;
@@ -35,9 +40,34 @@ export function preferir(consulta, ligada = true) {
   else preferencias.delete(consulta);
 }
 
-function makeEl(id) {
+// QUAL É A TAG DE CADA ELEMENTO, lida do próprio HTML do jogo.
+//
+// É a DÉCIMA TERCEIRA vez que este dublê fica para trás, e a mais silenciosa da série: nenhum
+// elemento jamais teve `tagName`, então a guarda `digitando(ev)` de `160-loop.js` — que existe
+// para o atalho de teclado não disparar enquanto alguém escreve no chat — lia `undefined` e
+// NUNCA bloqueava. Todo teste de atalho em Node passava medindo um mundo em que aquela guarda
+// não existe, que é a definição de verde por trivialidade.
+//
+// Sai do HTML e não de uma lista escrita aqui, pela razão de sempre: lista de ids à mão apodrece
+// calada no dia em que alguém acrescenta um campo — e apodrece na direção ruim, deixando o teste
+// verde. Sem o arquivo, o mapa fica vazio e tudo se comporta como antes.
+let tagsPorId = null;
+function tagDe(id) {
+  if (!tagsPorId) {
+    tagsPorId = new Map();
+    try {
+      const html = fs.readFileSync(JOGO_HTML, 'utf8');
+      for (const [, tag, alvo] of html.matchAll(/<(input|select|textarea)\b[^>]*\bid="([^"]+)"/gi))
+        tagsPorId.set(alvo, tag.toUpperCase());
+    } catch (e) { void e; }
+  }
+  return tagsPorId.get(id) || 'DIV';
+}
+
+function makeEl(id, tag) {
   const e = {
-    id, textContent: '', innerHTML: '', className: '', value: '', title: '', offsetWidth: 1,
+    id, tagName: String(tag || tagDe(id)).toUpperCase(),
+    textContent: '', innerHTML: '', className: '', value: '', title: '', offsetWidth: 1,
     // O `style` GRAVA as propriedades customizadas, e é a DÉCIMA SEGUNDA vez que o dublê fica
     // para trás do jogo. Ele era `{}` puro, e no dia em que a barra de confirmar passou a
     // publicar a própria altura (`style.setProperty('--alt-confirmar', …)`, em 130-hud.js) a
@@ -76,7 +106,17 @@ function makeEl(id) {
     scrollTop: 0, scrollHeight: 0,
     appendChild(ch) { e.children.push(ch); return ch; },
     removeChild(ch) { const i = e.children.indexOf(ch); if (i >= 0) e.children.splice(i, 1); return ch; },
-    addEventListener() {}, removeEventListener() {}, remove() {}, focus() {}, select() {},
+    addEventListener() {}, removeEventListener() {}, remove() {}, select() {},
+    // O FOCO GRAVA, em vez de ser um no-op. Mesma razão do `style.setProperty` e do
+    // `history.trocas`: um `focus()` sem rastro torna inescrevível a asserção "o atalho abriu a
+    // conversa E pôs o cursor no campo" — e sem essa metade o atalho abre uma caixa em que
+    // ninguém consegue escrever, que é meia funcionalidade com cara de inteira.
+    //
+    // O `blur` NEM EXISTIA, e o jogo o chama desde a Fila 8 (`HUD.texto.blur()`, no Escape do
+    // campo de conversa): qualquer teste que disparasse aquele Escape estouraria com
+    // "blur is not a function" apontando para o teste em vez de para o dublê.
+    focus() { if (global.document) global.document.activeElement = e; },
+    blur() { if (global.document && global.document.activeElement === e) global.document.activeElement = null; },
     querySelectorAll: () => [], querySelector: () => null,
   };
   return e;
@@ -97,13 +137,41 @@ function makeCanvas() {
 
 export function installStubs() {
   global.document = {
-    createElement: tag => (tag === 'canvas' ? makeCanvas() : makeEl(tag)),
+    createElement: tag => (tag === 'canvas' ? makeCanvas() : makeEl(tag, tag)),
     getElementById: id => { if (!els.has(id)) els.set(id, makeEl(id)); return els.get(id); },
     querySelectorAll: () => [],
     querySelector: () => null,
-    body: makeEl('body'),
+    body: makeEl('body', 'body'),
     addEventListener: (t, fn) => global.addEventListener(t, fn),
+    // O TÍTULO é instalado logo abaixo, como acessor: ele precisa GRAVAR as escritas.
+    // A ABA ESTÁ NO FUNDO? Os dois campos andam JUNTOS de propósito. Hoje duas suítes escrevem
+    // `document.hidden = true` na mão (o gesto interrompido pelo sistema, em test-jogo e
+    // test-truco) e nada mantém o `visibilityState` coerente com ele — um jogo que passasse a
+    // ler o segundo veria "visible" com a aba escondida. Quem troca os dois é `esconderAba()`.
+    hidden: false,
+    visibilityState: 'visible',
+    // Quem está com o foco. Começa nulo, e só `el.focus()` escreve aqui.
+    activeElement: null,
   };
+  // O TÍTULO DA ABA, com o valor de verdade do `pagina.html` — o `buildModule` extrai só o
+  // `<script type="module">`, então nada do HTML chega aqui sozinho, e sem isto a asserção
+  // "voltar para a aba restaura o título original" partiria de `undefined` e ficaria verde
+  // comparando nada com nada.
+  //
+  // E ele é ACESSOR porque precisa GRAVAR: a regra do `aria-live` — só escrever quando muda —
+  // vale para o título, que também é lido em voz alta na troca de aba, e sem o rastro não há
+  // como afirmar "não reescreveu o mesmo título N vezes". Mesma razão do `history.trocas`.
+  //
+  // ISTO TEM UM SEGUNDO DONO, e é bom saber antes: `test-app.mjs:238` usa `document.title` como
+  // RÉGUA da versão publicada (`/^v2 /`). Um aviso de vez que esqueça de restaurar o título
+  // deixa aquela suíte vermelha com uma mensagem que fala de service worker — longe da causa.
+  titulos.length = 0;
+  let tituloAtual = 'Dominó de Bar · 2 a 4 jogadores';
+  Object.defineProperty(global.document, 'title', {
+    get: () => tituloAtual,
+    set: v => { tituloAtual = String(v); titulos.push(tituloAtual); },
+    configurable: true,
+  });
   global.window = global;
   global.innerWidth = 1600;
   global.innerHeight = 900;
@@ -156,21 +224,30 @@ export function installStubs() {
     set: () => true,
     apply: () => nada(),
   });
+  // E ELE CONTA OS OSCILADORES. O `CLAUDE.md` registra desde a Fila 11 que `120-audio.js` não
+  // tem NENHUMA asserção de que um som sai — o dublê era um objeto-nulo, então `nota()` e
+  // `estalo()` rodavam inteiros e ninguém perguntava o que saiu. Um contador não mede som (não
+  // há som nenhum aqui), mas mede a DECISÃO de tocar, que é o que o jogo escolhe: "avisou com
+  // a aba à vista" e "avisou com o som desligado" passam a ser afirmáveis.
   global.AudioContext = class {
     constructor() {
       this.state = 'running';
       this.sampleRate = 44100;
       this.currentTime = 0;
       this.destination = nada();
+      this.osciladores = 0;
+      this.ruidos = 0;
+      AudioContext.ultimo = this;
     }
     suspend() { this.state = 'suspended'; return Promise.resolve(); }
     resume() { this.state = 'running'; return Promise.resolve(); }
     createBuffer(_canais, n) { return { getChannelData: () => new Float32Array(n) }; }
-    createBufferSource() { return nada(); }
+    createBufferSource() { this.ruidos++; return nada(); }
     createGain() { return nada(); }
     createBiquadFilter() { return nada(); }
-    createOscillator() { return nada(); }
+    createOscillator() { this.osciladores++; return nada(); }
   };
+  global.AudioContext.ultimo = null;
   global.Image = class {};
   // Peer que ABRE E NÃO FALA. Não serve para testar rede — o test-online.mjs faz isso no
   // Chrome, com duas abas e uma mesa de verdade. Serve para o jogo poder ENTRAR em modo
@@ -244,7 +321,50 @@ export function installStubs() {
   // E ele GRAVA, como o `Peer` passou a gravar os ouvintes: um `replaceState` que não deixa
   // rastro faz a asserção "a URL passou a dizer qual jogo está na mesa" ser inescrevível. O
   // teste enche `location.search` antes de carregar e lê `history.trocas` depois.
-  global.location = { protocol: 'file:', href: '', search: '', pathname: '/index.html' };
+  // O NAVIGATOR, e ele é a DÉCIMA QUARTA vez — com uma armadilha que nenhuma das treze
+  // anteriores teve: `global.navigator = {…}` LANÇA neste Node. O `navigator` do Node 24 é um
+  // getter sem setter, e o harness roda em ESM (modo estrito), onde atribuir a um getter é
+  // TypeError em vez de silêncio. Só `defineProperty` entra por cima.
+  //
+  // Ele GRAVA o que foi compartilhado e o que foi copiado, pela razão de sempre: sem rastro, a
+  // asserção "o convite levou o código e o link" não existe. E as duas portas são REMOVÍVEIS
+  // (`semCompartilhar()`), porque o jogo tem três caminhos em cascata — share, clipboard,
+  // seleção à mão — e um dublê que responde sempre a mesma coisa deixa dois deles inalcançáveis.
+  // É literalmente a oitava lição desta lista, aplicada antes de custar alguma coisa.
+  //
+  // `vibrate` entra junto: ele é usado pelos dois jogos desde a v1.2 e vivia neste limbo — o
+  // jogo o guarda com `navigator.vibrate &&`, então o ramo ligado nunca rodou em Node.
+  // `aborta` é o usuário FECHANDO a folha de compartilhar sem mandar nada. O navegador rejeita
+  // com `AbortError`, e isso NÃO é falha: um jogo que caísse para a cópia ali copiaria pelas
+  // costas e diria "copiado" a quem acabou de desistir. Sem poder simular a rejeição, essa
+  // regra não tem asserção — e ela é justamente a que a leitura do código não pega.
+  Object.defineProperty(globalThis, 'navigator', {
+    value: {
+      compartilhados: [], copiados: [], vibrou: [], aborta: false,
+      share(dados) {
+        this.compartilhados.push(dados);
+        if (!this.aborta) return Promise.resolve();
+        const e = new Error('Share canceled');
+        e.name = 'AbortError';
+        return Promise.reject(e);
+      },
+      clipboard: { writeText(txt) { globalThis.navigator.copiados.push(String(txt)); return Promise.resolve(); } },
+      vibrate(ms) { this.vibrou.push(ms); return true; },
+    },
+    configurable: true, writable: true,
+  });
+  // A SELEÇÃO, que é o recuo do recuo do convite: sem folha de compartilhar e sem área de
+  // transferência (é o caso do `file://`), o jogo seleciona o código para o Ctrl+C. Grava, como
+  // todo o resto — um `selectAllChildren` sem rastro deixa aquele ramo inalcançável do Node.
+  selecionados.length = 0;
+  global.getSelection = () => ({
+    selectAllChildren(el) { selecionados.push(el); },
+    removeAllRanges() {},
+  });
+  // `origin` é a string "null" em `file://` — é o navegador que responde isso, não um
+  // descuido do dublê, e é justamente o ramo SEM link do convite: um endereço montado ali
+  // sairia como `null/index.html?sala=XJCR` colado na conversa de alguém.
+  global.location = { protocol: 'file:', href: '', search: '', pathname: '/index.html', origin: 'null' };
   global.history = {
     trocas: [],
     replaceState(estado, titulo, url) { this.trocas.push(url); global.location.search = String(url).replace(/^[^?]*/, ''); },
@@ -274,6 +394,38 @@ export function fire(type, ev = {}) {
   ev.preventDefault ??= () => { ev.defaultPrevented = true; };
   ev.stopPropagation ??= () => {};
   for (const fn of listeners.get(type) || []) fn(ev);
+}
+
+// TROCAR DE APLICATIVO, e voltar. Os dois campos que o navegador mantém juntos são trocados
+// juntos aqui, e o evento sai depois — que é a ordem do navegador de verdade: quando o
+// `visibilitychange` chega, `document.hidden` JÁ vale o valor novo. Um teste que dispare o evento
+// antes de trocar o campo mede o estado anterior e passa pelo motivo errado.
+export function esconderAba() {
+  global.document.hidden = true;
+  global.document.visibilityState = 'hidden';
+  fire('visibilitychange');
+}
+
+export function mostrarAba() {
+  global.document.hidden = false;
+  global.document.visibilityState = 'visible';
+  fire('visibilitychange');
+}
+
+// AS DUAS PORTAS DO CONVITE, tiradas de cena. O jogo tenta `share`, cai para `clipboard` e cai
+// para a seleção à mão; sem poder remover as de cima, os dois ramos de baixo são inalcançáveis —
+// e ramo inalcançável é ramo que ninguém prova.
+//
+// DEVOLVE A FUNÇÃO QUE REPÕE, e isso não é conveniência: `installStubs()` roda UMA vez por suíte,
+// então um `delete` sem volta contamina todos os blocos seguintes — que é a lição de "cena que
+// mexe em estado compartilhado tem de devolver como encontrou", já paga três vezes aqui (o
+// localStorage das telas, o MESA do online, o P do harness).
+export function semCompartilhar({ share = true, clipboard = true } = {}) {
+  const n = globalThis.navigator;
+  const guardados = { share: n.share, clipboard: n.clipboard };
+  if (share) delete n.share;
+  if (clipboard) delete n.clipboard;
+  return () => { n.share = guardados.share; n.clipboard = guardados.clipboard; };
 }
 
 // O navegador passa o instante do quadro para o callback do requestAnimationFrame.

@@ -724,6 +724,53 @@ try {
     await pagina.evaluate(() => { limpar(); });
     console.log(`  mão ${voltou.maoNum}, vira ${voltou.vira}, ${voltou.cartasNaMesa} cartas na mesa`);
   }
+
+  // ─── 9. o convite: quem chega pelo link ────────────────────────────────────
+  // O `?sala=` é o único mecanismo desta onda que não dá para exercitar em Node: ele mora na
+  // CARGA da página, e o harness carrega o módulo uma vez só. Aqui a URL é de verdade.
+  console.log('\nquem chega pelo link cai no saguão com o código no campo');
+  {
+    await pagina.evaluate(() => { limpar(); });
+    // `jogo=truco` e não `domino`: o padrão SAI da URL de propósito (o endereço limpo tem de
+    // continuar sendo o do jogo de sempre), então com o dominó não haveria como distinguir
+    // "preservou o parâmetro do vizinho" de "apagou tudo". A primeira rodada desta cena
+    // reprovou por isso — e quem estava errada era a asserção, não o código.
+    await abrirCom('?jogo=truco&sala=XJCR');
+    const chegou = await pagina.evaluate(() => ({
+      // Ler DENTRO da página e devolver string: `classList` e `dataset` atravessam o CDP como
+      // `{}`, e a asserção compararia contra objeto vazio com o valor certo na tela.
+      telaOnline: !document.getElementById('telaOnline').classList.contains('oculta'),
+      campo: document.getElementById('onlineEntrada').value,
+      // O RÓTULO DO BOTÃO é como se prova que NÃO conectou sozinho: `saguaoEntrar` escreve
+      // 'Entrando…' assim que uma tentativa começa. 'Entrar' quer dizer que a mesa espera o
+      // clique da pessoa, que é a decisão desta onda.
+      botao: document.getElementById('btConectar').textContent,
+      busca: location.search,
+    }));
+    ok(chegou.telaOnline, 'o link com `?sala=` não abriu o saguão');
+    ok(chegou.campo === 'XJCR', `o código não chegou ao campo: ${JSON.stringify(chegou.campo)}`);
+    ok(chegou.botao === 'Entrar',
+      `o jogo conectou sozinho ao abrir o link — o botão diz ${JSON.stringify(chegou.botao)}`);
+    // A URL É LIMPA depois de consumida, senão um F5 reabre o saguão para sempre — e quem
+    // recarrega no meio de outra coisa é levado de volta a uma mesa que ele já recusou.
+    ok(!/sala=/.test(chegou.busca), `o \`?sala=\` continuou na URL: ${chegou.busca}`);
+    // E o `?jogo=` continua lá: o convite diz de que jogo é a mesa, e apagar um parâmetro ao
+    // mexer no outro é exatamente o que `reescreverBusca` existe para impedir.
+    ok(/jogo=truco/.test(chegou.busca), `o link comeu o jogo da URL: ${chegou.busca}`);
+
+    // Um código torto não abre nada — entrada de fora é entrada de fora.
+    await pagina.evaluate(() => { limpar(); });
+    await abrirCom('?jogo=domino&sala=%3Cimg%20src%3Dx%3E');
+    const torto = await pagina.evaluate(() => ({
+      telaOnline: !document.getElementById('telaOnline').classList.contains('oculta'),
+      menu: !document.getElementById('telaMenu').classList.contains('oculta'),
+      campo: document.getElementById('onlineEntrada').value,
+    }));
+    ok(!torto.telaOnline && torto.menu, 'um `?sala=` torto abriu o saguão mesmo assim');
+    ok(torto.campo === '', `um código torto foi parar no campo: ${JSON.stringify(torto.campo)}`);
+    await pagina.evaluate(() => { limpar(); });
+    console.log('  o código do link chega no campo, a URL é limpa, e o torto não abre nada');
+  }
 } catch (e) {
   console.error('  ✗ ' + e.message);
   falhas++;

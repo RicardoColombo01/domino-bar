@@ -23,7 +23,26 @@
 // O raio em que as cartas da vaza caem, a partir do centro. Sai do tamanho da carta, e não
 // de um número escolhido a olho: é o mesmo argumento do espaçamento da mão no dominó — um
 // número fixo menor que a carta faz uma cobrir a outra.
-const RAIO_DA_VAZA = CARTA_C * 0.78;
+//
+// ⚠ E ELE ERA PEQUENO DEMAIS — defeito de campo, relatado com foto em 13/08/2026 ("todo
+// bugado"). A conta, que ninguém tinha feito:
+//
+//   a sua carta ocupa      x ∈ [−0.31, 0.31]   z ∈ [R − 0.44, R + 0.44]
+//   a do vizinho (a 90°)   x ∈ [R − 0.44, R + 0.44]   z ∈ [−0.31, 0.31]
+//   elas se cobrem em      0.75 − R,  nos DOIS eixos
+//   a vira, deitada        x ∈ [−0.44, 0.44]   z ∈ [−0.31, 0.31]  →  o MESMO 0.75 − R
+//
+// Com `0.78` o raio era 0.686, e sobravam **0.064 de sobreposição** com o vizinho e com a
+// vira. Medido na mesa de verdade, já escalado: 0.57 × 0.84 entre duas cartas vizinhas.
+// `0.75 / CARTA_C` = 0.852 é o ponto em que elas apenas se encostam; `0.92` dá a folga que
+// separa de fato — e é a mesma disciplina do "sete pixels de folga não são um conserto, são
+// sorte".
+//
+// POR QUE NENHUMA SUÍTE VIA, e isto estava escrito no `590-registro.js` há uma release: o
+// `folgaEntre` do `test-telas` **só compara ENTRE grupos, nunca dentro de um** — a vira e as
+// cartas jogadas são irmãs dentro de `grupoMesaDoTruco`. Ponto cego declarado é ponto cego
+// onde o defeito mora, e agora há asserção no `test-truco`, que é puro e instantâneo.
+const RAIO_DA_VAZA = CARTA_C * 0.92;
 
 // Onde a vira fica: no centro, deitada de lado. Deitada porque assim ela não se confunde
 // com carta jogada nenhuma — a mesa inteira está de pé para alguém, e ela não está para
