@@ -29,6 +29,7 @@ const mod = await import(buildModule([
   // E o corpo do truco.
   'naMaoDoTruco', 'naMesaDoTruco', 'grupoMaoDoTruco', 'selecionarCarta', 'confirmarNoTruco',
   'cancelarEscolhaNoTruco', 'escolhidaNoTruco', 'barraDoTruco', 'medidoresDoTruco',
+  'aberturaDoTruco',
   // Fila 15 · F1: a confirmação com dois botões. O harness não constrói botão de innerHTML,
   // então a barra de confirmar se mede pelo DESCRITOR — como a barra de ações.
   'confirmacaoDoTruco',
@@ -1750,6 +1751,40 @@ console.log('\na mão de ferro, na tela cega');
   mod.JOGO.mesa.sincronizar(mod.semAMaoNoTruco(mod.vistaAtual));
   ok(mod.naMaoDoTruco.length === 0, 'a tela de passe mostrou o leque cego de outra pessoa');
   console.log('  3 versos, 6 malhas, zero faces · joga por posição e cai aberta · passe limpo');
+}
+
+// ─── as regras novas na tela, a abertura e os medidores ──────────────────────
+console.log('\nas regras da Onda F ditas ao jogador');
+{
+  // AS REGRAS DA TELA: quem senta precisa saber qual vale AQUI — o melou já pagou essa
+  // conta. Procura-se o CONCEITO, não a frase inteira, para uma reescrita não derrubar isto.
+  const texto = mod.JOGOS.truco.regras.join(' ');
+  ok(/esconder a carta/i.test(texto), 'a regra de esconder a carta não está na tela');
+  ok(/mão de ferro/i.test(texto), 'a regra da mão de ferro não está na tela');
+
+  // A ABERTURA ANUNCIA O FERRO — uma mesa que esconde as suas cartas sem uma palavra lê
+  // como defeito. E fora dele, nada de ferro na frase.
+  const P = mod.novaPartidaDoTruco(mesa(2));
+  P.placar = [11, 11];
+  mod.novaMaoDoTruco(P);
+  ok(/MÃO DE FERRO/.test(mod.aberturaDoTruco(P)), 'a abertura não anuncia a mão de ferro');
+  const Pn = mod.novaPartidaDoTruco(mesa(2));
+  ok(!/ferro/i.test(mod.aberturaDoTruco(Pn)), 'a abertura fala de ferro numa mão comum');
+
+  // O MEDIDOR, PELO RÓTULO e nunca pelo índice — a lição do meds[2].
+  const vale = mod.medidoresDoTruco(mod.visaoDoTruco(P, 0)).find(m => m.rot === 'Vale');
+  ok(!!vale && vale.val === 'tudo', `o Vale do ferro devia dizer "tudo", veio ${JSON.stringify(vale)}`);
+
+  // O TÍTULO DO FIM: ferro GANHO troca o título; ferro MELADO continua "Melou" — o que
+  // houve foi o melou, o ferro é o contexto.
+  P.resultado = { motivo: 'vazas', time: 0, pontos: 1, aposta: 1, vazas: [0, 0], vira: P.vira, ferro: true };
+  P.fase = 'fimDeMao';
+  ok(mod.fimDeMaoDoTruco(mod.visaoDoTruco(P, 0)).titulo === 'Mão de ferro!',
+    'o fim da mão de ferro devia se anunciar');
+  P.resultado = { motivo: 'melou', time: null, pontos: 0, aposta: 1, vazas: [null, null, null], vira: P.vira, ferro: true };
+  ok(mod.fimDeMaoDoTruco(mod.visaoDoTruco(P, 0)).titulo === 'Melou',
+    'a mão morta no ferro devia continuar dizendo Melou');
+  console.log('  as duas regras escritas · a abertura anuncia · Vale diz tudo · o título vira');
 }
 
 // ─── a barra de apostas ──────────────────────────────────────────────────────

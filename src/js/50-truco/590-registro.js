@@ -35,7 +35,11 @@ JOGOS.truco = {
     '<b>Empatou a vaza ("melou"):</b> a <b>primeira</b> vaza é o desempate de tudo — quem a ganhou leva qualquer mão que empate depois.',
     '<b>Empataram as três:</b> a mão <b>morre</b> e ninguém marca.',
     '<b>A aposta:</b> truco vale 3 · seis · nove · doze. Quem corre paga o que valia <b>antes</b> do pedido.',
+    // As duas da Onda F são regra de casa (pedidas em 13/08/2026, decididas em 14/08) e por
+    // isso estão na tela, como o melou: quem senta precisa saber qual vale AQUI.
+    '<b>Esconder a carta:</b> da 2ª vaza em diante dá para jogar de barriga para baixo — ela <b>não vale nada</b>. Se todos esconderem, a vaza mela.',
     '<b>Mão de 11:</b> quem chega a 11 vê as cartas e decide jogar (valendo 3) ou entregar 1 ponto.',
+    '<b>Mão de ferro:</b> 11 a 11, todos jogam <b>sem ver</b> as próprias cartas (elas caem abertas na mesa). Não há truco: quem faz a mão <b>leva a partida</b>.',
     '<b>A partida</b> vai até 12, de 2 ou de 4 (duplas em cruz).',
     'Sair no meio <b>conta como derrota</b>. Quem cai no online tem 30 s para voltar.',
   ],

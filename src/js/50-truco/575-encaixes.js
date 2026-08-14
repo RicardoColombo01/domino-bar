@@ -37,7 +37,10 @@
 const medidoresDoTruco = vista => [
   { rot: 'Manilha', val: vista.manilha === null || vista.manilha === undefined
     ? '—' : VALORES[vista.manilha] },
-  { rot: 'Vale', val: vista.pedido ? `${vista.aposta} → ${vista.pedido.valor}` : vista.aposta },
+  // Na mão de ferro "Vale" não é um número: quem faz a mão leva a partida, e o painel é o
+  // lugar de dizer isso o tempo todo — a narração da abertura passa, o medidor fica.
+  { rot: 'Vale', val: vista.ferro ? 'tudo'
+    : (vista.pedido ? `${vista.aposta} → ${vista.pedido.valor}` : vista.aposta) },
   { rot: 'Vazas', val: placarDeVazas(vista) },
 ];
 
@@ -168,7 +171,10 @@ function fimDeMaoDoTruco(vista) {
     (r.vira ? `<div><span>vira</span><b>${escapar(nomeDaCarta(r.vira))}</b></div>` : '');
 
   return {
-    titulo: TITULO_DO_FIM_DO_TRUCO[r.motivo] || 'Fim da mão',
+    // O FERRO É UM JEITO DE A MÃO TER ACONTECIDO, não um motivo novo de ela acabar — os
+    // quatro motivos continuam sendo os quatro, e a marca só troca o título. A mão morta
+    // no ferro continua dizendo "Melou": o que houve foi o melou; o ferro é o contexto.
+    titulo: r.ferro && r.time !== null ? 'Mão de ferro!' : (TITULO_DO_FIM_DO_TRUCO[r.motivo] || 'Fim da mão'),
     tipo: comoAcabouNoTruco(vista),
     quem: r.time === null
       ? 'Ninguém marca — a mão morre e embaralha de novo.'
@@ -194,7 +200,12 @@ const semAMaoNoTruco = v => Object.assign({}, v, {
 // ─── a abertura da mão ───────────────────────────────────────────────────────
 // A VIRA VAI NA NARRAÇÃO, e não é enfeite: ela é a única carta pública do baralho, e é dela
 // que sai a manilha. Quem chega atrasado à tela lê aqui o que a mesa toda já viu.
+//
+// A MÃO DE FERRO É ANUNCIADA ANTES de tudo: é o único estado do jogo em que a sua mão não
+// aparece, e uma mesa que esconde as suas cartas sem uma palavra lê como defeito — a espécie
+// que este projeto mais odeia.
 const aberturaDoTruco = P =>
+  (P.ferro ? 'MÃO DE FERRO — 11 a 11: todos jogam às cegas, e quem fizer a mão leva a partida. ' : '') +
   `Mão ${P.maoNum} · abre ${P.cadeiras[P.vez].nome} · vira ${nomeDaCarta(P.vira)}, ` +
   `manilha ${VALORES[P.manilha]}`;
 
