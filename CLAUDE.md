@@ -776,6 +776,51 @@ por mutação nas quatro direções, inclusive as duas de falso positivo.
   servidor e não escreve nada (o `git fetch` também resolve, mas mexe nos refs — para
   *auditar*, o `ls-remote` é a pergunta certa). **São TRÊS réguas para três perguntas: o log
   local, o remoto consultado, e o `curl` do conteúdo servido.**
+- **MUTADOR MORTO DE FORA DEIXA A MUTAÇÃO NO CÓDIGO — a SEXTA forma de a conferência mentir, e
+  a pior de todas.** As outras cinco mentem no RELATÓRIO; esta contamina a FONTE. O `finally`
+  do `tests/mutar.mjs` desfaz sempre — menos quando o processo é morto de fora, e foi o que
+  aconteceu com um comando que estourou o prazo de 10 min: a linha mutada ficou em
+  `150-rede.js`, o `npm test` seguinte passou (a mutação era compatível), e só um `git diff`
+  acusou. **Toda rodada de mutação com prazo apertado termina com `git status`** — e se o
+  arquivo estiver sujo, o que está lá é código que ninguém escreveu.
+- **ASSERÇÃO SOBRE OPERAÇÃO IDEMPOTENTE NÃO PODE FALHAR, e por isso não prova nada.** A do
+  atalho da conversa media "a conversa continua aberta" partindo do estado ABERTO — e
+  `alternarConversa(true)` é idempotente, então a tecla passando pela guarda deixaria a caixa
+  aberta do mesmo jeito. A mutação sobreviveu. Medida a partir do estado FECHADO, ela mata.
+  **Ao afirmar que uma guarda BARRA alguma coisa, parta do estado que a ação mudaria** — senão
+  a asserção concorda com os dois mundos, que é a decoração com cara de cobertura da Fila 10.
+- **"PAROU" NÃO SE MEDE NUM INSTANTE SÓ.** A asserção da terceira porta do chamado da vez
+  drenava os temporizadores UMA vez e lia o título — e o tique ALTERNA, então a drenagem
+  calhou de devolver o valor certo com o pisca vivo. A mutação sobreviveu. Três drenagens,
+  perguntando em cada uma, matam. É irmã da lição do item 11 da Fila 5 ("medir logo depois de
+  mandar parar mede a própria parada"), por outra porta.
+- **`navigator` NÃO É ATRIBUÍVEL no Node moderno.** `global.navigator = {…}` **LANÇA**
+  (`TypeError: … has only a getter`) em ESM, que é o modo do `harness.mjs`. Só
+  `Object.defineProperty(globalThis, 'navigator', { value, configurable: true })` entra por
+  cima. Medido no Node 24 desta máquina, e é a única API do dublê que precisa disso.
+- **O DUBLÊ FICOU PARA TRÁS PELA DÉCIMA TERCEIRA VEZ, e desta vez o buraco era um CAMPO que
+  nunca existiu.** Nenhum elemento do harness tinha `tagName`, então a guarda `digitando(ev)`
+  do `160-loop.js` — que impede um atalho de teclado de disparar enquanto alguém escreve no
+  chat — lia `undefined` e **nunca bloqueou em Node**. Todo teste de atalho passava medindo um
+  mundo em que aquela guarda não existe. A tag passou a sair do próprio HTML do jogo, por
+  regex, e não de uma lista escrita à mão, que apodreceria na direção verde.
+- **DUAS GUARDAS QUE SE COBREM PRECISAM DE ASSERÇÕES DIFERENTES, e o que as separa é o EFEITO
+  COLATERAL.** O chamado da vez pergunta `document.hidden` em dois lugares (ao armar e a cada
+  tique); apagar um sozinho deixa a suíte verde, porque a irmã impede o pisca. O que denuncia
+  é o SOM: a guarda de cima já tocou antes de a de baixo desligar tudo. Foi para medir isso que
+  o dublê do `AudioContext` passou a CONTAR osciladores — o que de quebra fecha a lacuna que
+  este arquivo registra desde a Fila 11 (`120-audio.js` sem nenhuma asserção de que um som sai).
+- **ASSERÇÃO QUE MEDE A PERGUNTA ERRADA sobrevive a tudo — inclusive ao defeito que ela nomeia.**
+  O `test-truco` tinha um bloco chamado "NADA SE SOBREPÕE" que comparava a **distância entre os
+  centros** de duas cartas com a largura de uma (`hypot > CARTA_L`). A carta é 0.62 × 0.88:
+  duas vizinhas giradas a 90° ficam a 0.97 uma da outra — passam folgado — e mesmo assim se
+  cobrem em 0.064. **Sobreposição se mede com CAIXAS, e distância entre centros só responde
+  sobre círculos.** É a família do `has('vira')` e do "tem tinta em algum lugar".
+- **PONTO CEGO DECLARADO É PONTO CEGO ONDE O DEFEITO MORA — pela SEGUNDA vez, no mesmo lugar.**
+  O `590-registro.js` diz de frente que `folgaEntre` *"só compara ENTRE grupos, nunca dentro de
+  um"*. Na v4.12 isso escondeu a vira coplanar com a carta jogada; em 13/08 escondeu as cartas
+  da vaza se cobrindo entre si, que virou relato de campo com foto. **Quando um comentário do
+  projeto declara uma lacuna de medição, aquilo é uma lista de lugares para olhar à mão.**
 
 ---
 
@@ -951,17 +996,17 @@ campo acha o que está escrito certo e mesmo assim não funciona.
 **Leia isto primeiro ao retomar.** É o estado real do trabalho, o que ele produziu, o que
 fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numerados mais abaixo.
 
-#### ESTADO EM UMA OLHADA (12/08/2026)
+#### ESTADO EM UMA OLHADA (13/08/2026)
 
 | | |
 |---|---|
 | commitado | **v4.13.0** — a **ONDA B** da Fila 15 (o online: o convite, o chamado da vez, a conversa pelo teclado, o aviso de saída) mais o defeito de campo das cartas encavaladas |
-| **enviado** | ✔ **sim**, 12/08 — `git ls-remote` responde `c8efa38`, igual ao local, com as tags `v4.12.0` e `v4.12.1` |
-| **PUBLICADO** | ✔ **sim** — `sw.js` servido `84ad320c54f7` = local, e o `index.html` no ar é **byte a byte** o mesmo (544.501). Conferido também pelo CONTEÚDO: `tocoDoBaralho`, `ehManilha`, `MARGEM_MANILHA`, `ALTURA_DA_VIRA` e `rot: 'Peso'` estão no bundle servido |
-| em curso | **nada.** As Filas 12, 13 e 14 fecharam em 11/08; a **Onda A** da Fila 15 fechou em 12/08 |
-| as anteriores | v4.11.0 (a carta 42% esticada) · v4.10.0 (Fila 13 + o pacote da Fase 5) · v4.9.0 (a Fila 12) · v4.8.0 (o truco em duplas online) · v4.7.0 (o truco online) · v4.5.0 (o corpo do truco) |
-| Filas 5 a 14 | **todas fechadas** · da **Fila 15** sai a Onda A; sobram **B, C, D e E** |
-| o que vem | as ondas **B** (o online: compartilhar o código, avisar da vez, o `beforeunload`), **D** (a dívida: o `test-textura` com truco na mesa) e **E** (temas de baralho). A **Fase 5** segue **⏸ em espera por decisão sua**. E **JOGAR** continua sendo o mais barato |
+| **enviado** | ✔ **sim**, 13/08 — `git ls-remote` responde `d0f4171`, igual ao local, com a tag `v4.13.0` |
+| **PUBLICADO** | ✔ **sim** — `sw.js` servido `d75060d63ec1` = local, e o `index.html` no ar tem o mesmo tamanho (540.384). Conferido pelo CONTEÚDO: `compartilharSala`, `salaDoConvite`, `chamarPelaVez`, `conversarPeloTeclado`, `beforeunload` e `RAIO_DA_VAZA` estão no bundle servido. **A 1ª consulta ainda deu a v4.12 e a 2ª deu a nova** — uma consulta só não decide |
+| em curso | **nada.** As Filas 12, 13 e 14 fecharam em 11/08; a **Onda A** fechou em 12/08 e a **Onda B** em 13/08 |
+| as anteriores | v4.12.0 (a Onda A: manilhas realçadas, a vira sobre o baralho, o peso da mão) · v4.11.0 (a carta 42% esticada) · v4.10.0 (Fila 13 + o pacote da Fase 5) · v4.9.0 (a Fila 12) · v4.8.0 (o truco em duplas online) |
+| Filas 5 a 14 | **todas fechadas** · da **Fila 15** saíram a Onda A e a **B**; sobram **C, D, E** e a **F** (as duas regras de truco que ele pediu em 13/08) |
+| o que vem | a onda **F** (esconder a carta · mão de ferro — e ela tem TRÊS decisões dele em aberto), a **D** (a dívida: o `test-textura` com truco na mesa), a **E** (temas de baralho) e a **C**. A **Fase 5** segue **⏸ em espera por decisão sua**. E **JOGAR** continua sendo o mais barato |
 
 ---
 
@@ -4746,6 +4791,22 @@ trocar, pôr na gaveta de contagem, ou tentar o quarto medindo.
   `vistaDoDominoValida` cobra `mao.every(jogadaDoFioDoDomino)` desde a Fila 13, então `somaMao`
   nunca recebe lixo do convidado. Nada novo a escrever ali.
 
+#### ONDA B — o online  ✔ FEITA (v4.13.0, 13/08/2026)
+
+**Os quatro saíram**, e o plano abaixo fica como registro do que foi combinado antes de
+começar. O que a execução mudou está dito em cada item; o resto saiu como estava escrito.
+
+| o que | como ficou |
+|---|---|
+| **B1** o convite | as três portas em cascata (`share` → área de transferência → seleção), o link com `?sala=` que PRÉ-PREENCHE, o botão no saguão e o painel do topo virando alvo. Nasceu em `146-convite.js` |
+| **B2** o chamado da vez | `165-chamado.js`: o título piscando e um som de duas notas, na BORDA da vez. **Vale para qualquer mesa, não só as online** — contra bot também há espera, e o hotseat já não pisca porque `podeAgirAgora()` carrega `!travado` |
+| **B3** a conversa pelo teclado | `c` abre e foca; o `Escape` desce um degrau por vez. E `SELECT` entrou na guarda `digitando`, que era o mesmo defeito com um terceiro nome |
+| **B4** o `beforeunload` | só no online, com a guarda no disparo, e o predicado com as DUAS metades — o convidado nunca tem `P` |
+
+**25 mutações**, cada uma matando a sua. O que elas ensinaram está no ponteiro, lá em cima.
+
+<details><summary>o plano da onda, de antes de ela ser feita</summary>
+
 #### ONDA B — o online, que é onde o jogo tem gente esperando  ·  ~meio dia
 
 **B1 · Compartilhar o código da sala** (casa · `130-hud.js`)
@@ -4762,6 +4823,8 @@ Numa mesa online o jogador vai para outro aplicativo e volta sem saber se a vez 
 
 **B3 · Reabrir o chat pelo teclado** (casa) — pequeno, e fecha o ciclo do item de acessibilidade
 da Fila 8: dá para jogar sem apontador e **não** dá para conversar.
+
+</details>
 
 #### ONDA C — quem chega pela primeira vez  ·  ~um dia
 
