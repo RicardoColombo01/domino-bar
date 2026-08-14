@@ -71,15 +71,22 @@ function novaMaoDoTruco(P) {
 
   // A MÃO DE 11 É DECIDIDA ANTES DE QUALQUER CARTA, e por isso é uma fase própria: quem está
   // a um ponto do alvo vê as três cartas e escolhe. Se os DOIS times estão em 11, ninguém
-  // escolhe nada — a mão vale 1 e joga-se normal, que é a regra da casa para não travar.
+  // escolhe nada — é a MÃO DE FERRO (regra do Ricardo, 13-14/08/2026): todos jogam sem ver
+  // as próprias cartas, ninguém truca, e quem faz a mão leva a PARTIDA.
+  //
+  // `ferro` é FLAG e não fase, de propósito: com a fase em 'mao', `emJogo`, o HUD e a rede
+  // continuam valendo sem uma linha. E ele é escrito nos DOIS ramos — campo que não zera
+  // atravessa mãos, que é a lição do `donoDaAposta`, três comentários acima.
   const onzes = [0, 1].filter(t => naMaoDeOnze(P, t));
   if (onzes.length === 1) {
     P.fase = 'onze';
     P.decideOnze = onzes[0];
+    P.ferro = false;
     P.vez = P.cadeiras.findIndex((_, c) => timeNoTruco(P, c) === onzes[0]);
   } else {
     P.fase = 'mao';
     P.decideOnze = null;
+    P.ferro = onzes.length === 2;
   }
   return P;
 }
@@ -87,7 +94,10 @@ function novaMaoDoTruco(P) {
 // O que esta cadeira pode fazer AGORA. Uma fonte só para três consumidores: acender os
 // botões, alimentar o bot, e validar o que chega pela rede — igual ao dominó.
 function acoesDoTruco(P, cadeira) {
-  const nada = { cartas: [], trucar: null, aceitar: false, correr: false, onze: false };
+  const nada = {
+    cartas: [], trucar: null, aceitar: false, correr: false, onze: false, esconder: false,
+    posicoes: 0,
+  };
   // A CADEIRA VEM DE FORA. No online ela é o número que o anfitrião atribuiu, mas o motor
   // também é chamado pelo bot, pela ponte das suítes e pelo `visaoDe` — e um índice fora da
   // faixa faz `P.maos[cadeira].slice()` LANÇAR, o que para a mesa de todo mundo.
@@ -115,6 +125,13 @@ function acoesDoTruco(P, cadeira) {
     });
   }
 
+  // A MÃO DE FERRO: joga-se por POSIÇÃO e às cegas. `cartas` VAZIO é a guarda do oráculo —
+  // se jogar por carta continuasse aceito, um convidado sondaria a própria mão por palpites
+  // pelo fio (acerto joga, erro recusa: a diferença revela a carta). E `trucar` nulo é a
+  // guarda REAL de "não há truco na mão de ferro" — na fonte das ações, de onde os botões, o
+  // bot e a validação do fio bebem, e não num comentário como o do `decidirOnze`.
+  if (P.ferro) return Object.assign({}, nada, { posicoes: P.maos[cadeira].length });
+
   return {
     cartas: P.maos[cadeira].slice(),
     // TRUCAR SÓ SE O OUTRO TIME NÃO PEDIU POR ÚLTIMO. Sem isto, a mesma dupla subiria a
@@ -124,6 +141,10 @@ function acoesDoTruco(P, cadeira) {
     aceitar: false,
     correr: false,
     onze: false,
+    // ESCONDER SÓ DA SEGUNDA VAZA EM DIANTE — regra do Ricardo (13/08/2026): "não se pode
+    // encobrir a carta se estiver na primeira rodada de cada mão". A conta é por MÃO, e
+    // `P.vazas` zera em `novaMaoDoTruco`, então a semântica sai de graça.
+    esconder: P.vazas.length > 0,
   };
 }
 
@@ -145,7 +166,7 @@ function decidirOnze(P, cadeira, jogar) {
 }
 
 // ─── jogar uma carta ─────────────────────────────────────────────────────────
-function jogarCarta(P, cadeira, carta) {
+function jogarCarta(P, cadeira, carta, escondida) {
   // A FORMA ANTES DO CONTEÚDO. `mesmaCarta` lê `b[0]`, e `undefined[0]` LANÇA — no online
   // isso é a mesa do anfitrião inteira parando por causa de uma mensagem torta de um
   // convidado. É o C3 da Fila 11, e ele apareceu aqui na primeira rodada do teste.
@@ -153,18 +174,53 @@ function jogarCarta(P, cadeira, carta) {
   // A guarda mora no motor e não só no `jogadaDoFio` do registro porque o motor também é
   // chamado pelo bot e pela ponte das suítes, que entram por baixo da rede.
   if (!cartaValida(carta)) return { erro: 'carta inválida' };
-  const { cartas } = acoesDoTruco(P, cadeira);
-  if (!cartas.some(x => mesmaCarta(x, carta))) return { erro: 'carta inválida' };
+  const acoes = acoesDoTruco(P, cadeira);
+  if (!acoes.cartas.some(x => mesmaCarta(x, carta))) return { erro: 'carta inválida' };
+  // A GUARDA É REAL E MORA NA FONTE DAS AÇÕES: quem decide se dá para esconder é
+  // `acoesDoTruco` (a mesma fonte dos botões e do bot), e aqui só se cobra a resposta dela.
+  // Recusa FALADA, nunca silêncio — a doença que quatro filas passaram consertando.
+  if (escondida && !acoes.esconder) {
+    return { erro: 'não dá para esconder a carta na primeira vaza' };
+  }
 
-  const i = P.maos[cadeira].findIndex(x => mesmaCarta(x, carta));
+  return baixarCartaNoTruco(P, cadeira, P.maos[cadeira].findIndex(x => mesmaCarta(x, carta)),
+    escondida);
+}
+
+// O MIOLO da jogada, sem guardas: tira da mão pelo índice, põe na mesa, e a vez anda. As
+// DUAS portas caem aqui — `jogarCarta` (por carta, validada contra as ações) e
+// `jogarPorPosicao` (às cegas, na mão de ferro). Duas cópias do miolo é como duas metades
+// passam a discordar; as guardas é que são de cada porta.
+function baixarCartaNoTruco(P, cadeira, i, escondida) {
+  const carta = P.maos[cadeira][i];
   P.maos[cadeira].splice(i, 1);
-  P.mesa.push({ cadeira, carta });
+  // A CARTA ESCONDIDA GUARDA O VALOR EM `P` — a partida é dado guardado e retomável, e o
+  // motor precisa dela inteira para nada além disso: a força quem decide é `vencedorDaVaza`,
+  // que a filtra. Quem NUNCA vê o valor é a vista: `visaoDoTruco` redige a jogada antes de
+  // ela trafegar (invariante 3 — `P.mesa` viaja inteiro no fio).
+  P.mesa.push(escondida ? { cadeira, carta, escondida: true } : { cadeira, carta });
 
   if (P.mesa.length < P.n) {
     P.vez = (cadeira + 1) % P.n;
     return { ok: true };
   }
   return fecharVaza(P);
+}
+
+// A JOGADA DA MÃO DE FERRO: uma POSIÇÃO na sua mão, e a carta que estiver lá cai ABERTA.
+// Aberta por necessidade lógica, não por escolha: com todas as cartas cobertas não haveria o
+// que comparar, toda vaza melaria, toda mão morreria e o 11×11 seria um laço sem saída.
+//
+// A posição é entrada de fora (vem do fio, do bot e da tela) e a faixa é conferida AQUI, no
+// motor — a mesma razão do `cartaValida` de `jogarCarta`. Devolve a `carta` junto porque a
+// narração precisa dizer o que caiu, e quem chama não pode ler `P.maos` (já saiu de lá).
+function jogarPorPosicao(P, cadeira, posicao) {
+  if (!acoesDoTruco(P, cadeira).posicoes) return { erro: 'não é hora de jogar às cegas' };
+  if (!Number.isInteger(posicao) || posicao < 0 || posicao >= P.maos[cadeira].length) {
+    return { erro: 'posição inválida' };
+  }
+  const carta = P.maos[cadeira][posicao];
+  return Object.assign({ carta }, baixarCartaNoTruco(P, cadeira, posicao, false));
 }
 
 function fecharVaza(P) {
@@ -255,6 +311,13 @@ function quemFalta(P) {
 
 // ─── o fim da mão ────────────────────────────────────────────────────────────
 function fecharMaoDoTruco(P, res) {
+  // A MÃO DE FERRO DECIDE A PARTIDA (decisão do Ricardo, 14/08/2026) — e repare que isso
+  // NÃO precisa de uma linha: o ferro só nasce com os dois em `alvo-1`, a aposta fica
+  // travada em 1 (trucar está desligado na fonte das ações), então quem faz a mão soma 1 e
+  // cruza o alvo por aritmética. Uma primeira versão forçava `pontos = alvo - placar` aqui,
+  // e era guarda que nunca dispara — o par (gatilho em alvo-1, aposta presa em 1) já é a
+  // regra inteira. Se um dia alguém soltar a aposta no ferro, é ESTA conta que quebra, e a
+  // asserção do 12 × 11 acusa.
   if (res.time !== null && res.pontos) P.placar[res.time] += res.pontos;
   // Abre a próxima quem está à esquerda de quem abriu esta. A saída ANDA sempre, inclusive
   // quando a mão morre — senão uma mesa azarada ficaria com o mesmo abridor para sempre.
@@ -266,6 +329,10 @@ function fecharMaoDoTruco(P, res) {
     aposta: P.aposta,
     vazas: P.vazas.map(v => v.time),
     vira: P.vira,
+    // A tela de fim usa a marca para dizer "mão de ferro" sem inventar motivo novo — os
+    // quatro motivos existentes continuam sendo os quatro, e o ferro é um jeito de a mão
+    // ter acontecido, não um jeito de ela acabar.
+    ferro: !!P.ferro,
   };
   P.fase = P.placar.some(v => v >= P.regras.alvo) ? 'fim' : 'fimDeMao';
   return { ok: true, fim: P.resultado };
@@ -280,15 +347,31 @@ function abandonarOTruco(P, cadeira) {
 }
 
 // ─── o que esta cadeira pode ver ─────────────────────────────────────────────
+// A CARTA ESCONDIDA É REDIGIDA ANTES DE TRAFEGAR. `P.mesa` e as vazas fechadas viajam
+// inteiros no fio (as cartas na mesa são públicas por definição) — MENOS a escondida, que
+// "não vale mais nada" e não é de ninguém ver. A redação é UNIFORME, dona inclusive: a
+// narração "escondeu uma carta" é o rastro, e uma vista que dependesse de quem pergunta
+// seria a primeira do projeto. Sem esta linha o valor vazaria pelo fio, e o teste da
+// fronteira só varre as mãos NÃO jogadas — não pegaria.
+const jogadaVisivel = j => (j.escondida ? { cadeira: j.cadeira, escondida: true } : j);
+
 // O INVARIANTE 3, no truco. É literalmente o que trafega no online, e a mão alheia não está
 // aqui — só a CONTAGEM. A vira está, porque ela é pública por definição do jogo.
 function visaoDoTruco(P, cadeira) {
   return {
     cadeira,
-    mao: P.maos[cadeira],                              // só a sua
+    // NA MÃO DE FERRO A SUA PRÓPRIA MÃO É SEGREDO PARA VOCÊ — o primeiro estado do projeto
+    // em que isso vale. Esconder da TELA não bastaria: a vista é literalmente o que trafega
+    // e o que um F12 lê. Vazio, e não mascarado: nenhuma carta sua sai daqui, e o leque
+    // cego se desenha da CONTAGEM (`naMao`), que já viaja.
+    mao: P.ferro ? [] : P.maos[cadeira],               // só a sua — e no ferro nem ela
+    ferro: !!P.ferro,
     naMao: P.maos.map(m => m.length),                  // dos outros, só quantas
-    mesa: P.mesa,                                      // as cartas já jogadas nesta vaza
-    vazas: P.vazas.map(v => ({ time: v.time, vencedor: v.vencedor, jogadas: v.jogadas })),
+    mesa: P.mesa.map(jogadaVisivel),                   // as cartas já jogadas nesta vaza
+    // O `&&` preserva a forma: vaza fabricada sem `jogadas` (as cenas de fim de mão fazem
+    // isso) continua sem, em vez de ganhar um `[]` que o fio nunca produziu.
+    vazas: P.vazas.map(v =>
+      ({ time: v.time, vencedor: v.vencedor, jogadas: v.jogadas && v.jogadas.map(jogadaVisivel) })),
     // QUEM ESTÁ GANHANDO A VAZA EM CURSO — pedido do Ricardo em 07/08, jogando: sem isto o
     // jogador não tem parâmetro para decidir se gasta uma carta forte ou descarta.
     //

@@ -268,11 +268,16 @@ function desenharHUD(vista) {
 //   { titulo: '3 | 5',  botoes: [{ rotulo: '◀ encaixar no 3', dado: 'esq' }, …] }
 //
 // `dado` volta INTACTO para `JOGO.toque.confirmar`: é um símbolo do jogo, e a casa nunca o
-// lê. No dominó é o lado; no truco não é nada.
+// lê. No dominó é o lado; no truco distingue jogar aberto de esconder.
+//
+// `principal` é OPT-OUT (`=== false`), e não opt-in como na barra de ações: os botões daqui
+// sempre nasceram todos acesos, e o padrão contrário apagaria os do dominó sem ninguém pedir.
+// Quem declara `principal: false` é o botão raro — o "Esconder" do truco.
 function mostrarConfirmacao(escolha) {
   el('confPeca').textContent = escolha.titulo;
   el('confBotoes').innerHTML = escolha.botoes.map((b, i) =>
-    `<button class="btn peq principal" data-i="${i}">${escapar(b.rotulo)}</button>`).join('');
+    `<button class="btn peq${b.principal === false ? '' : ' principal'}" data-i="${i}"` +
+    `${b.titulo ? ` title="${escapar(b.titulo)}"` : ''}>${escapar(b.rotulo)}</button>`).join('');
   el('confBotoes').querySelectorAll('button').forEach(b => {
     b.onclick = () => JOGO.toque.confirmar(escolha.botoes[+b.dataset.i].dado);
   });

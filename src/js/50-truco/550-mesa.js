@@ -39,6 +39,12 @@ let escalaAlvoDoTruco = 1;
 const naMesaDoTruco = new Map();
 const CHAVE_DA_VIRA = 'vira';
 
+// "O objeto desta chave mostra a carta que o alvo pede?" — a pergunta da guarda geral da
+// reconciliação, agora com a carta ESCONDIDA no vocabulário: ela chega redigida (sem carta)
+// e `mesmaCarta(null, …)` LANÇARIA. Dois nulos são a mesma identidade porque a chave
+// sintética `esc:cadeira:vaza` já é única por jogada; um nulo só é troca de verdade.
+const mesmaIdentidadeDeCarta = (a, b) => (!a && !b) || (!!a && !!b && mesmaCarta(a, b));
+
 // ─── o toco do baralho, embaixo da vira ──────────────────────────────────────
 // MOBÍLIA, e por isso NÃO entra em `naMesaDoTruco`: aquele mapa é de cartas reconciliadas
 // por chave, e o toco não é carta nenhuma — é o resto do baralho, que ninguém joga. Montado
@@ -90,15 +96,25 @@ const esquecerArrumacaoDoTruco = () => { ordemDaMaoDoTruco.clear(); maoDaOrdemNo
 const larguraDaMaoDoTruco = () =>
   Math.max(2.4, Math.min(6.4, larguraVisivelEm(MAO_TRUCO_Y, MAO_TRUCO_Z) - 0.45));
 
+// O QUE O LEQUE DESENHA. Na mão de ferro a vista chega com `mao` VAZIA de propósito —
+// nenhuma carta sua trafega, nem para você (invariante 3, estendido à própria mão) — e o
+// leque nasce da CONTAGEM, com cartas SINTÉTICAS `['f', i]`: elas passam por `chaveCarta`
+// ('f:0'), pela assinatura e pela arrumação sem caso especial, `ehManilha('f', …)` nunca
+// marca por construção, e o `i` é a POSIÇÃO que a intenção manda ao motor.
+const cartasDoLequeDoTruco = vista => (vista.ferro
+  ? Array.from({ length: vista.naMao[vista.cadeira] || 0 }, (_, i) => ['f', i])
+  : vista.mao);
+
 function reconciliarMaoDoTruco(vista) {
+  const cartas = cartasDoLequeDoTruco(vista);
   // Vista travada (a tela de passe do hotseat) chega com `mao: []` e ainda com a cadeira do
   // jogador ANTERIOR — gravar a ordem aqui apagaria a arrumação dele.
-  if (!vista.mao.length) {
+  if (!cartas.length) {
     naMaoDoTruco.forEach(m => grupoMaoDoTruco.remove(m.obj));
     naMaoDoTruco.length = 0;
     return;
   }
-  const querem = new Set(vista.mao.map(chaveCarta));
+  const querem = new Set(cartas.map(chaveCarta));
   for (let i = naMaoDoTruco.length - 1; i >= 0; i--) {
     if (!querem.has(chaveCarta(naMaoDoTruco[i].carta))) {
       grupoMaoDoTruco.remove(naMaoDoTruco[i].obj);
@@ -106,9 +122,11 @@ function reconciliarMaoDoTruco(vista) {
     }
   }
   const tem = new Set(naMaoDoTruco.map(m => chaveCarta(m.carta)));
-  for (const carta of vista.mao) {
+  for (const carta of cartas) {
     if (tem.has(chaveCarta(carta))) continue;
-    const obj = criarCarta(carta, true);
+    // O verso no lugar da carta é a fronteira DESENHADA: no ferro não existe face na cena,
+    // nem a sua — a um F12 de distância só há versos.
+    const obj = vista.ferro ? criarVersoDeCarta(true) : criarCarta(carta, true);
     // Carta na mão está NA SUA MÃO: se projetar sombra, vira um borrão no tampo atrás.
     obj.userData.corpo.castShadow = false;
     grupoMaoDoTruco.add(obj);
@@ -172,8 +190,8 @@ function arrumarMaoDoTruco() {
 function sincronizarMaoDoTruco(vista) {
   // A assinatura é de CONJUNTO (chaves ordenadas) mais a largura, e nunca da ordem: sensível
   // à ordem, ela entraria em laço com a arrumação — reordena, reconstrói, perde a seleção.
-  const assinatura = vista.mao.map(chaveCarta).sort().join(',') + '#' + vista.cadeira +
-    '#' + larguraDaMaoDoTruco().toFixed(2);
+  const assinatura = cartasDoLequeDoTruco(vista).map(chaveCarta).sort().join(',')
+    + '#' + vista.cadeira + '#' + larguraDaMaoDoTruco().toFixed(2);
   // Mão nova apaga a arrumação: as cartas são outras, e a de antes não quer dizer nada.
   if (vista.maoNum !== maoDaOrdemNoTruco) { esquecerArrumacaoDoTruco(); maoDaOrdemNoTruco = vista.maoNum; }
   if (assinatura !== assinaturaDaMaoDoTruco) {
@@ -183,10 +201,11 @@ function sincronizarMaoDoTruco(vista) {
   }
 
   // Quais dá para jogar agora vem da MESMA função que valida a jogada de verdade
-  // (`acoesDoTruco`), então a tela nunca acende uma carta que o motor recusaria.
+  // (`acoesDoTruco`), então a tela nunca acende uma carta que o motor recusaria — e no
+  // ferro a fonte é a MESMA: `posicoes` só é maior que zero na sua vez.
   const podem = new Set((vista.acoes.cartas || []).map(chaveCarta));
   for (const m of naMaoDoTruco) {
-    m.jogavel = podem.has(chaveCarta(m.carta));
+    m.jogavel = vista.ferro ? vista.acoes.posicoes > 0 : podem.has(chaveCarta(m.carta));
     // Apagar a carta que não serve não pode custar a LEITURA dela: você ainda precisa ver o
     // naipe para planejar a mão. Escurece de leve e tira o brilho, só isso.
     const mat = m.obj.userData.corpo.material;
@@ -347,6 +366,15 @@ function sincronizarMesaDoTruco(vista) {
     && vista.ganhandoAVaza !== undefined
     ? (vista.mesa.find(j => j.cadeira === vista.ganhandoAVaza) || {}).carta : null;
   for (const p of layoutDaVaza(vista.mesa || [], eu, n)) {
+    // A JOGADA ESCONDIDA chega REDIGIDA da visão — sem `carta`, de propósito (invariante 3:
+    // o valor nunca trafega). A chave é SINTÉTICA e estável: `cadeira` mais o número que
+    // esta vaza vai ter quando fechar, que é `vazas.length` agora e o índice `i` na pilha —
+    // é o que faz o verso DESLIZAR para a pilha em vez de sumir e renascer.
+    if (p.escondida) {
+      alvos.set(`esc:${p.cadeira}:${(vista.vazas || []).length}`,
+        { carta: null, x: p.x, z: p.z, rotY: p.rotY, baixo: true, y: 0 });
+      continue;
+    }
     const ganhando = !!mandaAgora && mesmaCarta(p.carta, mandaAgora);
     alvos.set(chaveCarta(p.carta), {
       carta: p.carta, x: p.x, z: p.z, rotY: p.rotY, baixo: false,
@@ -361,8 +389,9 @@ function sincronizarMesaDoTruco(vista) {
   (vista.vazas || []).forEach((v, i) => {
     const p = postas[i];
     (v.jogadas || []).forEach((j, k) => {
-      alvos.set(chaveCarta(j.carta), {
-        carta: j.carta,
+      // O irmão da chave sintética da vaza em curso: aqui o número da vaza é o índice `i`.
+      alvos.set(j.escondida ? `esc:${j.cadeira}:${i}` : chaveCarta(j.carta), {
+        carta: j.escondida ? null : j.carta,
         x: p.x + k * CARTA_E * 0.6, z: p.z, rotY: p.rotY + (p.inclinada ? 0.22 : 0),
         y: p.y + k * CARTA_E, baixo: true,
       });
@@ -389,16 +418,21 @@ function sincronizarMesaDoTruco(vista) {
     // A guarda é GERAL de propósito, e não um `if` para a vira: ela restabelece o invariante
     // que o resto do arquivo já supõe — **o objeto guardado numa chave mostra a carta que o
     // alvo daquela chave pede**. Um terceiro jogo com outra chave fixa herda isto de graça.
-    if (reg && !mesmaCarta(reg.obj.userData.carta, alvo.carta)) {
+    // `null` DOS DOIS LADOS É A MESMA CARTA para esta guarda: a escondida não tem identidade,
+    // e quem responde por ela é a chave sintética, única por jogada. Um lado só nulo é troca
+    // de verdade — o objeto tem de renascer, senão uma face fica onde devia haver um verso.
+    if (reg && !mesmaIdentidadeDeCarta(reg.obj.userData.carta, alvo.carta)) {
       grupoMesaDoTruco.remove(reg.obj);
       naMesaDoTruco.delete(k);
       reg = null;
     }
     if (!reg) {
       const obj = criarCarta(alvo.carta, false);
-      // Nasce no alto e torta: é a queda que dá o "toc" na mesa.
+      // Nasce no alto e torta: é a queda que dá o "toc" na mesa. E nasce JÁ no lado que o
+      // alvo pede — a escondida de barriga para baixo desde o primeiro quadro (sem isto ela
+      // piscaria aberta), e a carta retomada de uma partida guardada idem, na pilha.
       obj.position.set(alvo.x, 2.0, alvo.z);
-      obj.rotation.set(0, alvo.rotY + 0.4, 0);
+      obj.rotation.set(0, alvo.rotY + 0.4, alvo.baixo ? Math.PI : 0);
       grupoMesaDoTruco.add(obj);
       reg = { obj };
       naMesaDoTruco.set(k, reg);
@@ -546,7 +580,8 @@ function mostrarPreviaDoTruco(vista) {
   const brilho = new THREE.Mesh(geomBrilhoDoTruco, matBrilhoDoTruco);
   brilho.rotation.x = -Math.PI / 2;
   brilho.position.y = 0.014;
-  const fantasma = criarFantasmaDeCarta(m.carta);
+  // Na mão de ferro o fantasma é ANÔNIMO — a prévia não pode soletrar o que nem você sabe.
+  const fantasma = criarFantasmaDeCarta(vista.ferro ? null : m.carta);
   fantasma.rotation.y = p.rotY;
   g.add(brilho, fantasma);
   g.position.set(p.x, 0, p.z);

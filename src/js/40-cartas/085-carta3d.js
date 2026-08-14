@@ -213,9 +213,17 @@ function criarCarta(carta, proprio) {
   const corpo = new THREE.Mesh(geomCorpoCarta, proprio ? matPapel.clone() : matPapel);
   corpo.castShadow = true;
   corpo.receiveShadow = true;
-  const face = new THREE.Mesh(faceDaCarta(carta[0], carta[1]), matFaceCarta);
-  face.rotation.x = -Math.PI / 2;
-  face.position.y = CARTA_E / 2 + 0.003;
+  // `carta === null` É A CARTA SEM IDENTIDADE — a escondida da mesa do truco. Ela nasce SEM
+  // o plano da face, e isso é fronteira e não economia: um objeto que não tem geometria de
+  // face não pode mostrá-la nem por um quadro, nem de barriga para cima, nem no F12. A
+  // biblioteca não sabe POR QUE uma carta seria anônima (isso é regra de jogo); ela só
+  // oferece a forma.
+  if (carta) {
+    const face = new THREE.Mesh(faceDaCarta(carta[0], carta[1]), matFaceCarta);
+    face.rotation.x = -Math.PI / 2;
+    face.position.y = CARTA_E / 2 + 0.003;
+    g.add(face);
+  }
   // O VERSO VAI JUNTO, e não é simetria gratuita: uma carta que já foi jogada pode ser
   // RECOLHIDA — quem ganha a vaza junta as cartas e as põe viradas na sua frente. Isso é uma
   // volta de 180° no mesmo objeto, deslizando, e sem esta face o que apareceria do outro lado
@@ -224,21 +232,29 @@ function criarCarta(carta, proprio) {
   const costas = new THREE.Mesh(new THREE.PlaneGeometry(CARTA_L, CARTA_C), matVersoCarta);
   costas.rotation.x = Math.PI / 2;
   costas.position.y = -CARTA_E / 2 - 0.003;
-  g.add(corpo, face, costas);
-  g.userData = { carta, corpo };
+  g.add(corpo, costas);
+  g.userData = { carta: carta || null, corpo };
   return g;
 }
 
-// Carta de costas: o que se vê da mão dos outros. Só o corpo e o verso, e nenhuma face —
-// é a fronteira de segurança na forma que dá para conferir com o olho.
-function criarVersoDeCarta() {
+// Carta de costas: o que se vê da mão dos outros — e, na mão de ferro do truco, da SUA. Só
+// o corpo e o verso, e nenhuma face — é a fronteira de segurança na forma que dá para
+// conferir com o olho.
+//
+// `proprio` clona o material pelo MESMO motivo do `criarCarta`: o leque tinge o corpo da
+// carta apontada, e sem o clone `matPapel` é uma instância só — acender um verso acenderia
+// as quarenta cartas e todos os versos da mesa. E `userData.corpo` entra porque o leque
+// desreferencia `m.obj.userData.corpo` em dois pontos; um verso sem ele era um leque cego
+// que lançava na primeira sincronização.
+function criarVersoDeCarta(proprio) {
   const g = new THREE.Group();
-  const corpo = new THREE.Mesh(geomCorpoCarta, matPapel);
+  const corpo = new THREE.Mesh(geomCorpoCarta, proprio ? matPapel.clone() : matPapel);
   corpo.castShadow = true;
   const costas = new THREE.Mesh(new THREE.PlaneGeometry(CARTA_L, CARTA_C), matVersoCarta);
   costas.rotation.x = -Math.PI / 2;
   costas.position.y = CARTA_E / 2 + 0.003;
   g.add(corpo, costas);
+  g.userData = { carta: null, corpo };
   return g;
 }
 
@@ -257,10 +273,15 @@ function criarFantasmaDeCarta(carta) {
   const g = new THREE.Group();
   const corpo = new THREE.Mesh(geomCorpoCarta, matPreviaCarta);
   corpo.position.y = CARTA_E / 2;
-  const face = new THREE.Mesh(faceDaCarta(carta[0], carta[1]), matPreviaFaceCarta);
-  face.rotation.x = -Math.PI / 2;
-  face.position.y = CARTA_E + 0.004;
-  g.add(corpo, face);
+  // `carta === null` é o fantasma ANÔNIMO — a prévia da mão de ferro, que não pode soletrar
+  // o que nem o próprio jogador sabe. Mesma convenção do `criarCarta`.
+  if (carta) {
+    const face = new THREE.Mesh(faceDaCarta(carta[0], carta[1]), matPreviaFaceCarta);
+    face.rotation.x = -Math.PI / 2;
+    face.position.y = CARTA_E + 0.004;
+    g.add(face);
+  }
+  g.add(corpo);
   return g;
 }
 

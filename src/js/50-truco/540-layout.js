@@ -106,9 +106,13 @@ function postaDaVaza(cadeira, eu, n) {
   };
 }
 
-// A mesa inteira de uma vaza: uma posta por carta jogada, na ordem em que caíram.
+// A mesa inteira de uma vaza: uma posta por carta jogada, na ordem em que caíram. A marca
+// `escondida` atravessa — a jogada redigida não tem `carta`, e é a marca que diz à mesa 3D
+// que aquilo é um verso, não um buraco.
 function layoutDaVaza(mesa, eu, n) {
-  return mesa.map(j => Object.assign({ cadeira: j.cadeira, carta: j.carta }, postaDaVaza(j.cadeira, eu, n)));
+  return mesa.map(j => Object.assign(
+    { cadeira: j.cadeira, carta: j.carta, escondida: j.escondida },
+    postaDaVaza(j.cadeira, eu, n)));
 }
 
 // ─── as vazas já ganhas ──────────────────────────────────────────────────────

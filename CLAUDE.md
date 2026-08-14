@@ -8,11 +8,12 @@ gente e bot, na mesma tela ou pela internet. No ar em
 Sem framework, sem bundler, e **dois binários** — os ícones do aplicativo, exigidos pelo
 manifest: madeira, pintas, cartas e sons continuam gerados em canvas e WebAudio na hora.
 Three.js e PeerJS vêm de CDN, e o **service worker os guarda**, então depois de uma partida o
-jogo abre sem internet. **10.505 linhas** no total (`src/js` + `src/pagina.html` +
-`src/css/estilo.css` + `src/sw.js`), conferido em 13/08/2026 — este número **envelhece**, e já
-envelheceu quatro vezes: ficou dizendo 2.100 por três releases seguidas, a medição de 10/08
-(9.648) estava velha no dia seguinte, a de 11/08 (9.768) durou um dia, e a primeira de 12/08
-(10.098) não durou a própria sessão. **Rode a conta, não leia o número daqui.**
+jogo abre sem internet. **10.753 linhas** no total (`src/js` + `src/pagina.html` +
+`src/css/estilo.css` + `src/sw.js`), conferido em 14/08/2026 — este número **envelhece**, e já
+envelheceu cinco vezes: ficou dizendo 2.100 por três releases seguidas, a medição de 10/08
+(9.648) estava velha no dia seguinte, a de 11/08 (9.768) durou um dia, a primeira de 12/08
+(10.098) não durou a própria sessão, e a de 13/08 (10.505) durou um dia. **Rode a conta, não
+leia o número daqui.**
 
 **Conte com `node`, não com o PowerShell.** `Measure-Object -Line` **não conta linha em
 branco** e devolve ~450 a menos; a discordância entre as duas réguas já custou uma
@@ -996,17 +997,17 @@ campo acha o que está escrito certo e mesmo assim não funciona.
 **Leia isto primeiro ao retomar.** É o estado real do trabalho, o que ele produziu, o que
 fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numerados mais abaixo.
 
-#### ESTADO EM UMA OLHADA (13/08/2026)
+#### ESTADO EM UMA OLHADA (14/08/2026)
 
 | | |
 |---|---|
-| commitado | **v4.13.0** — a **ONDA B** da Fila 15 (o online: o convite, o chamado da vez, a conversa pelo teclado, o aviso de saída) mais o defeito de campo das cartas encavaladas |
-| **enviado** | ✔ **sim**, 13/08 — `git ls-remote` responde `d0f4171`, igual ao local, com a tag `v4.13.0` |
-| **PUBLICADO** | ✔ **sim** — `sw.js` servido `d75060d63ec1` = local, e o `index.html` no ar tem o mesmo tamanho (540.384). Conferido pelo CONTEÚDO: `compartilharSala`, `salaDoConvite`, `chamarPelaVez`, `conversarPeloTeclado`, `beforeunload` e `RAIO_DA_VAZA` estão no bundle servido. **A 1ª consulta ainda deu a v4.12 e a 2ª deu a nova** — uma consulta só não decide |
-| em curso | **nada.** As Filas 12, 13 e 14 fecharam em 11/08; a **Onda A** fechou em 12/08 e a **Onda B** em 13/08 |
-| as anteriores | v4.12.0 (a Onda A: manilhas realçadas, a vira sobre o baralho, o peso da mão) · v4.11.0 (a carta 42% esticada) · v4.10.0 (Fila 13 + o pacote da Fase 5) · v4.9.0 (a Fila 12) · v4.8.0 (o truco em duplas online) |
-| Filas 5 a 14 | **todas fechadas** · da **Fila 15** saíram a Onda A e a **B**; sobram **C, D, E** e a **F** (as duas regras de truco que ele pediu em 13/08) |
-| o que vem | a onda **F** (esconder a carta · mão de ferro — e ela tem TRÊS decisões dele em aberto), a **D** (a dívida: o `test-textura` com truco na mesa), a **E** (temas de baralho) e a **C**. A **Fase 5** segue **⏸ em espera por decisão sua**. E **JOGAR** continua sendo o mais barato |
+| commitado | **v4.14.0** — a **ONDA F** da Fila 15 (esconder a carta · mão de ferro), na `main` pelo merge `--no-ff` de sempre. As três decisões que a fila deixava em aberto o Ricardo respondeu em 14/08: a mão de ferro **decide a partida**, **sem truco** nela, e **vale na mesa de 2** (o gatilho é `alvo-1 × alvo-1`) |
+| **enviado** | ✘ **não** — os commits só existem nesta máquina; o push espera a liberação dele |
+| **PUBLICADO** | ✘ **não** — o ar continua na v4.13 (`sw.js` servido `d75060d63ec1`). Depois do push, o `sw.js` TEM de mudar: a onda toca `src/` em nove arquivos |
+| em curso | **nada.** A Onda F fechou em 14/08, com 27 mutações (cada uma morta pelas suas) e as fotos de olho tiradas na própria sessão |
+| as anteriores | v4.13.0 (a Onda B: o online) · v4.12.0 (a Onda A: manilhas, vira, peso) · v4.11.0 (a carta esticada) · v4.10.0 (Fila 13 + Fase 5) · v4.9.0 (Fila 12) |
+| Filas 5 a 14 | **todas fechadas** · da **Fila 15** saíram as Ondas A, B e **F**; sobram **C, D, E** |
+| o que vem | **ENVIAR e PUBLICAR a v4.14** (só falta o push dele) e **JOGAR** — a mão de ferro e o esconder nunca foram tocados por mão humana. Depois: a onda **D** (a dívida: o `test-textura` com truco na mesa), a **E** (temas de baralho) e a **C**. A **Fase 5** segue **⏸ em espera por decisão sua** |
 
 ---
 
@@ -1202,8 +1203,6 @@ A ONDA A  ✔ FEITA em 12/08, e saiu na v4.12.0 — três commits, um por item,
              troca. O test-telas media se eles CABEM; ninguém media se eles
              dizem a verdade. O irmão em truco tem as dele desde a v4.5.
 
-⚑ AMANHÃ COMEÇA AQUI ──────────────────────────────────────────────────────
-
 A ONDA B ✔ FEITA em 13/08/2026 — o online. Cinco commits, um por assunto, e
          **25 mutações**, cada uma matando exatamente a sua. Sai na v4.13.0.
 
@@ -1256,27 +1255,64 @@ AS SUÍTES contra este código, rodadas uma de cada vez:
          telas 1ª metade: **folga mínima 0.33**, o MESMO número da Onda A —
          que é a régua de determinismo, e não só de aprovação
 
-➜ PASSO 1  JOGAR, e há TRÊS perguntas que só o olho responde:
-           · as cartas da vaza ainda parecem encavaladas? A sobreposição
-             MEDIDA acabou, mas na foto de 900px elas continuam grandes em
-             relação ao tampo. Se o incômodo for o TAMANHO e não a
-             sobreposição, o conserto é outro número — `ESCALA_TRUCO_MAX`
-             (hoje 2.35), em `550-mesa.js`.
-           · o convite: tocar no painel `Mesa ABCD` abre a folha de
-             compartilhar do sistema? É o único caminho que nenhuma suíte
-             alcança — em Node o `navigator.share` é dublê, e no Chrome
-             headless ele não existe.
-           · o chamado da vez: sair do aplicativo com a vez do outro e voltar
-             quando ela virar. O título piscando aparece na lista de abas do
-             celular?
+⚑ AMANHÃ COMEÇA AQUI ──────────────────────────────────────────────────────
 
-➜ PASSO 2  SE FOR ESCREVER CÓDIGO, o que sobra da Fila 15:
+A ONDA F ✔ FEITA em 14/08/2026 — esconder a carta e a mão de ferro. Seis
+         commits na branch `f`, merge --no-ff com a tag v4.14.0, e
+         **27 mutações**, cada uma matando exatamente a sua.
 
-           ONDA F (as duas regras de truco que ele mandou em 13/08) — esconder
-             a carta e a mão de ferro. Ver a seção própria: as duas são REGRA,
-             nascem em `510-regras.js`/`520-partida.js`, e a mão de ferro traz
-             o primeiro estado do projeto em que a SUA PRÓPRIA mão é segredo
-             para você — o que mexe na fronteira do invariante 3.
+         F1 ESCONDER: a flag viaja DENTRO da jogada (`{cadeira, carta,
+            escondida}`) porque `vencedorDaVaza` é puro; o valor fica em P
+            (dado guardado) e a VISTA o redige — uniforme, dona inclusive.
+            Todas escondidas, a vaza mela. A memória do bot filtra o `saiu`
+            nos DOIS irmãos. Na tela: 2º botão via `dado`, verso SEM
+            geometria de face (vazamento impossível por construção), chave
+            sintética `esc:cadeira:vaza` estável na descida para a pilha.
+         F2 FERRO: flag e não fase (`P.ferro`, nos DOIS ramos do embaralho
+            — a lição do donoDaAposta). A vista manda `mao: []`; o leque
+            cego nasce da CONTAGEM com sintéticas `['f', i]`; joga-se POR
+            POSIÇÃO e a carta cai ABERTA (necessidade lógica: coberta,
+            tudo melaria e o 11×11 não teria saída). O ORÁCULO está
+            fechado: jogar por carta é recusado até com a carta certa.
+            "Decide a partida" é aritmética, não código: alvo-1 + 1 = alvo.
+
+         AS DECISÕES DELE (14/08): decide a partida · sem truco nela ·
+         vale na mesa de 2 (o gatilho é `alvo-1 × alvo-1`, nunca 11).
+
+         O QUE A EXECUÇÃO ACHOU, além do plano:
+         · o despachante da MEDIÇÃO DE FORÇA engolia o `escondida` e não
+           conhecia `posicao` — a "força idêntica" do commit do bot era
+           artefato, e 72 partidas travaram no 11×11. A medição honesta:
+           258×142 (64.5%, 5.8σ) — esconder custa ~1pp ao difícil, que
+           nega a própria contagem.
+         · o override de pontos do ferro era GUARDA QUE NUNCA DISPARA
+           (aposta presa em 1) e saiu, com o porquê escrito no lugar.
+         · dois cenários de teste meus erraram a escada (o 6 ganha do 5) —
+           asserção vermelha acusando o TESTE, de novo.
+
+AS SUÍTES contra este código, rodadas uma de cada vez em 14/08:
+         npm test (8 + 51 + **511** no truco) · lembrar (13 cenas) ·
+         online --so=truco · check
+         telas 1ª metade: **folga mínima 0.33, na MESMA cena** (mesa
+         cheia, retrato 390×844) — a régua de determinismo bateu
+         E CINCO FOTOS DE OLHO na própria sessão (a lição da v4.12):
+         o leque de versos, "Carta coberta", a vitória às cegas, os dois
+         botões, a escondida na pilha. Todas aprovadas.
+
+➜ PASSO 1  ENVIAR: `git push origin main --tags` — os commits só existem
+           nesta máquina. Depois, a régua de sempre: o `sw.js` servido TEM
+           de mudar (a onda toca `src/`).
+
+➜ PASSO 2  JOGAR, e as perguntas que só o olho no CELULAR responde:
+           · a mão de ferro de verdade: chegar ao 11×11 jogando. O leque
+             de versos lê como "não é a sua mão" ou como defeito?
+           · o botão Esconder no dedo: ele cabe na barra do celular
+             deitado? (A cena `truco confirmando` mede a geometria; a
+             LEITURA é do olho.)
+           · as três perguntas da Onda B seguem valendo (convite, chamado
+             da vez, tamanho das cartas da vaza).
+
+➜ PASSO 3  SE FOR ESCREVER CÓDIGO, o que sobra da Fila 15:
 
            ONDA D (a dívida) — o `test-textura` nunca rodou com o TRUCO na
              mesa. O mapa já está levantado: a suíte monta `MESA.modo =
@@ -4916,10 +4952,17 @@ Os cinco que eu proporia, e cada um resolve um problema de verdade:
 pensando nos dois desde o começo — mas **entregar o baralho primeiro**, porque é onde o pedido
 nasceu e onde o pife herda.
 
-#### ONDA F — AS DUAS REGRAS DE TRUCO QUE FALTAM (pedido dele, 13/08/2026)
+#### ONDA F — AS DUAS REGRAS DE TRUCO QUE FALTAM  ✔ FEITA (v4.14.0, 14/08/2026)
 
-**Anotadas para fazer, não feitas.** Palavras dele, na íntegra, porque regra de casa não se
-parafraseia:
+**As duas saíram**, com as três decisões dele respondidas em 14/08 (a mão de ferro decide a
+partida · não se pode trucar nela · vale na mesa de 2 — o gatilho é `alvo-1 × alvo-1`, nunca
+o literal 11). O plano abaixo fica como registro; o que a execução mudou está no ponteiro
+"⚑ AMANHÃ COMEÇA AQUI", e a resposta às perguntas que a fila deixava: a carta do ferro cai
+ABERTA ao ser jogada (necessidade lógica — coberta, toda vaza melaria e o 11×11 seria um
+laço de mãos mortas), esconder é proibido durante o ferro pelo mesmo motivo, e "todos
+esconderam" mela a vaza e cai na tabela do melou que já existia.
+
+Palavras dele, na íntegra, porque regra de casa não se parafraseia:
 
 > *"Esconder Carta: Também denominado 'carta coberta ou encoberta', é quando o jogador joga a
 > carta que acabou de virar na mesa, passando a não valer mais nada. Não se pode encobrir a

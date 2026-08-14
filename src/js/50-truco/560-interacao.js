@@ -118,13 +118,23 @@ function cancelarEscolhaNoTruco() {
   esconderConfirmacao();
 }
 
-function confirmarNoTruco() {
+function confirmarNoTruco(dado) {
   const m = escolhidaNoTruco === null ? null : naMaoDoTrucoPorChave(escolhidaNoTruco);
   if (!m) return;
   const carta = m.carta;
   cancelarEscolhaNoTruco();
   if (navigator.vibrate) navigator.vibrate(12);
-  pedirAcao({ acao: 'jogar', carta });
+  // NA MÃO DE FERRO a intenção é a POSIÇÃO, que viaja dentro da carta sintética (`['f', i]`)
+  // — nunca o índice da tela, que quebra calado quando o leque reordena. Fora dela, o `dado`
+  // vem do botão da confirmação; o toque na PRÉVIA 3D chama isto sem argumento, e sem
+  // argumento é jogar ABERTO — esconder é a exceção e exige o botão que a nomeia.
+  if (vistaAtual && vistaAtual.ferro) {
+    pedirAcao({ acao: 'jogar', posicao: carta[1] });
+    return;
+  }
+  pedirAcao(dado === 'escondida'
+    ? { acao: 'jogar', carta, escondida: true }
+    : { acao: 'jogar', carta });
 }
 
 // O truco não tem arrasto, mas o hotseat continua podendo trocar de jogador com o dedo no ar

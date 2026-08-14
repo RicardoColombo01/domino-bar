@@ -37,7 +37,10 @@
 const medidoresDoTruco = vista => [
   { rot: 'Manilha', val: vista.manilha === null || vista.manilha === undefined
     ? '—' : VALORES[vista.manilha] },
-  { rot: 'Vale', val: vista.pedido ? `${vista.aposta} → ${vista.pedido.valor}` : vista.aposta },
+  // Na mão de ferro "Vale" não é um número: quem faz a mão leva a partida, e o painel é o
+  // lugar de dizer isso o tempo todo — a narração da abertura passa, o medidor fica.
+  { rot: 'Vale', val: vista.ferro ? 'tudo'
+    : (vista.pedido ? `${vista.aposta} → ${vista.pedido.valor}` : vista.aposta) },
   { rot: 'Vazas', val: placarDeVazas(vista) },
 ];
 
@@ -113,10 +116,24 @@ function barraDoTruco(vista) {
 // E não se perde nada: a carta escolhida está LEVANTADA e com o fantasma no lugar em que vai
 // cair. A barra não precisa soletrar o que a mesa já está mostrando — ela precisa dizer o que
 // o botão faz.
-const confirmacaoDoTruco = (vista, m) => ({
-  titulo: nomeCurtoDaCarta(m.carta),
-  botoes: [{ dado: null, rotulo: 'Jogar' }],
-});
+const confirmacaoDoTruco = (vista, m) => (vista.ferro
+  // Na MÃO DE FERRO a carta é sintética (não tem nome) e esconder não existe: um botão, e o
+  // título diz a única coisa que se sabe dela.
+  ? { titulo: 'Carta coberta', botoes: [{ dado: null, rotulo: 'Jogar' }] }
+  : {
+    titulo: nomeCurtoDaCarta(m.carta),
+  // O SEGUNDO BOTÃO só existe quando o motor oferece (`acoes.esconder` — nunca na 1ª vaza):
+  // botão que o motor recusaria é promessa, e é a espécie de defeito que o
+  // `refletirMesaNosBotoes` existe para impedir. "Jogar" PRIMEIRO, porque o teclado foca o
+  // primeiro botão e `3`+Enter tem de continuar jogando aberto. O `dado` volta intacto pelo
+  // `JOGO.toque.confirmar` — era `null` e nada; agora distingue as duas intenções sobre a
+  // MESMA carta.
+    botoes: vista.acoes.esconder
+      ? [{ dado: null, rotulo: 'Jogar' },
+        { dado: 'escondida', rotulo: 'Esconder', principal: false,
+          titulo: 'De barriga para baixo — a carta não vale nada' }]
+      : [{ dado: null, rotulo: 'Jogar' }],
+  });
 
 // ─── a tela de fim de mão ────────────────────────────────────────────────────
 const TITULO_DO_FIM_DO_TRUCO = {
@@ -154,7 +171,10 @@ function fimDeMaoDoTruco(vista) {
     (r.vira ? `<div><span>vira</span><b>${escapar(nomeDaCarta(r.vira))}</b></div>` : '');
 
   return {
-    titulo: TITULO_DO_FIM_DO_TRUCO[r.motivo] || 'Fim da mão',
+    // O FERRO É UM JEITO DE A MÃO TER ACONTECIDO, não um motivo novo de ela acabar — os
+    // quatro motivos continuam sendo os quatro, e a marca só troca o título. A mão morta
+    // no ferro continua dizendo "Melou": o que houve foi o melou; o ferro é o contexto.
+    titulo: r.ferro && r.time !== null ? 'Mão de ferro!' : (TITULO_DO_FIM_DO_TRUCO[r.motivo] || 'Fim da mão'),
     tipo: comoAcabouNoTruco(vista),
     quem: r.time === null
       ? 'Ninguém marca — a mão morre e embaralha de novo.'
@@ -164,17 +184,28 @@ function fimDeMaoDoTruco(vista) {
 }
 
 // ─── a vista sem a mão ───────────────────────────────────────────────────────
-// A tela de troca do hotseat. Zerar as ações exige saber quais são — no truco há cinco, e
+// A tela de troca do hotseat. Zerar as ações exige saber quais são — no truco há seis, e
 // nenhuma delas se chama `jogadas`.
 const semAMaoNoTruco = v => Object.assign({}, v, {
   mao: [],
-  acoes: { cartas: [], trucar: null, aceitar: false, correr: false, onze: false },
+  // `ferro` desligado na vista travada: sem isto a tela de passe do hotseat desenharia o
+  // leque cego do jogador ANTERIOR — inofensivo (são versos), mas mentiria "esta mesa é sua".
+  ferro: false,
+  acoes: {
+    cartas: [], trucar: null, aceitar: false, correr: false, onze: false, esconder: false,
+    posicoes: 0,
+  },
 });
 
 // ─── a abertura da mão ───────────────────────────────────────────────────────
 // A VIRA VAI NA NARRAÇÃO, e não é enfeite: ela é a única carta pública do baralho, e é dela
 // que sai a manilha. Quem chega atrasado à tela lê aqui o que a mesa toda já viu.
+//
+// A MÃO DE FERRO É ANUNCIADA ANTES de tudo: é o único estado do jogo em que a sua mão não
+// aparece, e uma mesa que esconde as suas cartas sem uma palavra lê como defeito — a espécie
+// que este projeto mais odeia.
 const aberturaDoTruco = P =>
+  (P.ferro ? 'MÃO DE FERRO — 11 a 11: todos jogam às cegas, e quem fizer a mão leva a partida. ' : '') +
   `Mão ${P.maoNum} · abre ${P.cadeiras[P.vez].nome} · vira ${nomeDaCarta(P.vira)}, ` +
   `manilha ${VALORES[P.manilha]}`;
 
@@ -233,11 +264,29 @@ function aplicarNoTruco(P, cadeira, i) {
   const nome = P.cadeiras[cadeira].nome;
 
   if (i.acao === 'jogar') {
-    const r = jogarCarta(P, cadeira, i.carta);
+    // NA MÃO DE FERRO joga-se por POSIÇÃO, e a rota é decidida pelo ESTADO além da intenção:
+    // com `P.ferro`, até um `{acao:'jogar', carta}` com a carta CERTA cai aqui e é recusado
+    // por não trazer posição — recusa UNIFORME, que não conta ao convidado se ele acertou o
+    // palpite (o oráculo). E esconder às cegas é recusa falada: a carta do ferro cai aberta
+    // por necessidade lógica, senão toda vaza melaria e o 11×11 não teria saída.
+    if (P.ferro || i.posicao !== undefined) {
+      if (i.escondida) return { erro: 'na mão de ferro a carta cai aberta' };
+      const r = jogarPorPosicao(P, cadeira, i.posicao);
+      if (r.erro) return r;
+      return {
+        ok: true,
+        narracao: [`${nome} jogou ${nomeDaCarta(r.carta)} sem ver`]
+          .concat(narrarVaza(P, r.vaza)).concat(fimDoTruco(P, r)),
+      };
+    }
+    const esc = !!i.escondida;
+    const r = jogarCarta(P, cadeira, i.carta, esc);
     if (r.erro) return r;
     return {
       ok: true,
-      narracao: [`${nome} jogou ${nomeDaCarta(i.carta)}`]
+      // A NARRAÇÃO NÃO SOLETRA A CARTA ESCONDIDA — ela é o rastro público da jogada, e
+      // dizer o nome aqui desfaria a redação da vista pela porta do texto.
+      narracao: [esc ? `${nome} escondeu uma carta` : `${nome} jogou ${nomeDaCarta(i.carta)}`]
         .concat(narrarVaza(P, r.vaza)).concat(fimDoTruco(P, r)),
     };
   }
