@@ -709,6 +709,73 @@ console.log('\nesconder a carta');
   console.log('  1ª vaza recusa · a escondida não disputa · todos escondendo mela · nada vaza');
 }
 
+console.log('\no bot esconde o descarte — e só ele');
+{
+  // `Math.random` é SOBRESCRITO E DEVOLVIDO nesta seção: `jogadaDoBotNoTruco` consome o
+  // gerador nos testes de ruído, e consumo novo no meio da suíte desloca a sequência semeada
+  // de tudo o que vem depois — foi assim que o falso positivo do [0,0] ficou latente por
+  // três releases. Com 0.99 fixo, nenhum ramo de impulso dispara e nada é consumido.
+  const rndDeVerdade = Math.random;
+  Math.random = () => 0.99;
+
+  const arma = (maoBot) => {
+    const P = mod.novaPartidaDoTruco(mesa(2));
+    P.cadeiras[1].nivel = 'dificil';                  // ruído 0, memória ligada
+    P.maos = [[c('3', 'ouros'), c('3', 'copas'), c('5', 'ouros')], maoBot];
+    P.vira = c('Q', 'paus');
+    P.manilha = mod.manilhaDaVira(P.vira);            // J
+    P.vez = 0; P.saiu = 0; P.vazas = []; P.mesa = [];
+    return P;
+  };
+
+  // O CASO QUE ESCONDE: 2ª vaza, o adversário manda com o 3, e o bot só tem descarte.
+  const P = arma([c('4', 'paus'), c('5', 'paus'), c('6', 'paus')]);
+  mod.jogarCarta(P, 0, c('3', 'ouros'));
+  mod.jogarCarta(P, 1, c('4', 'paus'));               // 1ª vaza aberta, o 3 leva
+  mod.jogarCarta(P, 0, c('3', 'copas'));              // 2ª: o líder é imbatível
+  const j = mod.jogadaDoBotNoTruco(P, 1);
+  ok(((j || {}).escondida) === true,
+    `o bot difícil devia esconder o descarte na 2ª vaza: ${JSON.stringify(j)}`);
+
+  // NA 1ª VAZA NUNCA — o motor nem oferece, e o bot obedece à mesma fonte dos botões.
+  const P1 = arma([c('4', 'paus'), c('5', 'paus'), c('6', 'paus')]);
+  mod.jogarCarta(P1, 0, c('3', 'ouros'));
+  const j1 = mod.jogadaDoBotNoTruco(P1, 1);
+  ok(!!j1 && j1.acao === 'jogar' && !j1.escondida, 'o bot escondeu na 1ª vaza');
+
+  // O EMPATE NÃO SE ESCONDE: a carta que EMPATA com o líder mela a vaza, e o melou pode ser
+  // exatamente o que segura a mão — esconder um empate é entregar a vaza de graça. O cenário
+  // custou dois erros meus de escada (o 4 perde estrito, o 6 GANHA do 5) até ficar honesto:
+  // para o descarte e o empate serem a MESMA carta, as duas que sobram empatam com o líder.
+  const P2 = arma([c('5', 'paus'), c('5', 'copas'), c('4', 'paus')]);
+  mod.jogarCarta(P2, 0, c('3', 'ouros'));
+  mod.jogarCarta(P2, 1, c('4', 'paus'));
+  mod.jogarCarta(P2, 0, c('5', 'ouros'));             // 2ª: o líder é o 5
+  const j2 = mod.jogadaDoBotNoTruco(P2, 1);
+  ok(!!j2 && !j2.escondida && mod.compararCartas(j2.carta, c('5', 'ouros'), P2.manilha) === 0,
+    `a carta que empata o líder devia sair ABERTA para melar: ${JSON.stringify(j2)}`);
+
+  // QUEM PODE GANHAR JOGA ABERTO — carta escondida não vale nada, inclusive a que ganharia.
+  const P3 = arma([c('3', 'paus'), c('4', 'paus'), c('6', 'paus')]);
+  mod.jogarCarta(P3, 0, c('3', 'ouros'));
+  mod.jogarCarta(P3, 1, c('4', 'paus'));
+  mod.jogarCarta(P3, 0, c('5', 'ouros'));
+  const j3 = mod.jogadaDoBotNoTruco(P3, 1);
+  ok(!!j3 && !j3.escondida, `com carta que ganha, o bot escondeu: ${JSON.stringify(j3)}`);
+
+  // E O FÁCIL NÃO ESCONDE: quem não repara no que saiu não nega o que não conta.
+  const P4 = arma([c('4', 'paus'), c('5', 'paus'), c('6', 'paus')]);
+  P4.cadeiras[1].nivel = 'facil';
+  mod.jogarCarta(P4, 0, c('3', 'ouros'));
+  mod.jogarCarta(P4, 1, c('4', 'paus'));
+  mod.jogarCarta(P4, 0, c('3', 'copas'));
+  const j4 = mod.jogadaDoBotNoTruco(P4, 1);
+  ok(!!j4 && !j4.escondida, 'o bot fácil escondeu — memória desligada não conta carta');
+
+  Math.random = rndDeVerdade;
+  console.log('  esconde o descarte estrito · nunca na 1ª, no empate, com vitória, ou sem memória');
+}
+
 console.log('\nsair conta como derrota');
 {
   const P = mod.novaPartidaDoTruco(mesa(2));

@@ -291,5 +291,17 @@ function jogadaDoBotNoTruco(P, cadeira) {
   const carta = Math.random() < cfg.ruido
     ? mao[Math.floor(Math.random() * mao.length)]
     : escolherCarta(mao, info, time).carta;
+
+  // ESCONDER O DESCARTE. Quem entende de contar carta (memoria) nega ao adversário o que
+  // ele contaria: a carta que PERDE na certa cai de barriga para baixo. Três limites, e cada
+  // um é regra e não gosto: só quando o motor oferece (`a.esconder` — nunca na 1ª vaza);
+  // só descarte ESTRITO (`< 0`) — a carta que EMPATA com o líder mela a vaza, e esconder um
+  // empate seria entregar de graça a vaza que o melou seguraria; e SEM sorteio novo — um
+  // `Math.random()` a mais aqui deslocaria a sequência semeada de todas as suítes.
+  const manda = mandandoNaVaza(info, time);
+  if (a.esconder && cfg.memoria && manda && !manda.meu
+    && compararCartas(carta, manda.carta, info.manilha) < 0) {
+    return { acao: 'jogar', carta, escondida: true };
+  }
   return { acao: 'jogar', carta };
 }
