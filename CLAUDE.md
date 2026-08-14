@@ -822,6 +822,15 @@ por mutação nas quatro direções, inclusive as duas de falso positivo.
   um"*. Na v4.12 isso escondeu a vira coplanar com a carta jogada; em 13/08 escondeu as cartas
   da vaza se cobrindo entre si, que virou relato de campo com foto. **Quando um comentário do
   projeto declara uma lacuna de medição, aquilo é uma lista de lugares para olhar à mão.**
+- **SONDA QUE MEDE PELA PONTE MEDE O JOGO NOVO — a ponte é exatamente o que a troca de jogo
+  reaponta.** A sonda da Fila 14 ("ida e volta três vezes não vaza malha") lia `j.naMesa` de
+  `window.__jogo` DEPOIS de trocar de aba: `porAPonteDoJogo` acabara de apontar a ponte para o
+  jogo da mesa, então ela mediu os grupos VAZIOS do jogo novo — os do velho continuavam cheios
+  na cena, fora do alcance. E o segundo furo somado: a ponte do dominó nem declara `naMesa`, e
+  a guarda `if (j.naMesa && ...)` transformou "a chave não existe" em `naMesa: 0`, lido como
+  "não vazou" — **um `undefined` mascarado virou prova de limpeza**. A medição honesta lê os
+  grupos pelo REGISTRO DO OUTRO JOGO (`JOGOS.truco.ponte.grupoMesa`…), nunca pela ponte. Foi
+  por este buraco que a mesa órfã (Fila 16) chegou ao campo com "medido" escrito ao lado.
 
 ---
 
@@ -1004,10 +1013,10 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 | commitado | **v4.14.0** — a **ONDA F** da Fila 15 (esconder a carta · mão de ferro), na `main` pelo merge `--no-ff` de sempre. As três decisões que a fila deixava em aberto o Ricardo respondeu em 14/08: a mão de ferro **decide a partida**, **sem truco** nela, e **vale na mesa de 2** (o gatilho é `alvo-1 × alvo-1`) |
 | **enviado** | ✔ **sim**, 14/08 — ele liberou ("Faça isso"), e o `git ls-remote` responde `72dcda4` com a tag `v4.14.0`, igual ao local |
 | **PUBLICADO** | ✔ **sim** — `sw.js` servido `51508f9747f3` = local, em TRÊS consultas seguidas (uma só não decide), e o `index.html` no ar tem o mesmo tamanho (556.947). Conferido pelo CONTEÚDO: `jogarPorPosicao`, `P.ferro`, `Carta coberta`, `MÃO DE FERRO` e `cartasDoLequeDoTruco` estão no bundle servido |
-| em curso | **nada.** A Onda F fechou em 14/08, com 27 mutações (cada uma morta pelas suas) e as fotos de olho tiradas na própria sessão |
+| em curso | **a FILA 16 — a mesa órfã**, relato de campo dele com foto (14/08, 07:11): trocar de jogo deixa a mesa 3D do anterior em cena. O diagnóstico está MEDIDO e o conserto DESENHADO na seção própria — amanhã é executar, não investigar |
 | as anteriores | v4.13.0 (a Onda B: o online) · v4.12.0 (a Onda A: manilhas, vira, peso) · v4.11.0 (a carta esticada) · v4.10.0 (Fila 13 + Fase 5) · v4.9.0 (Fila 12) |
 | Filas 5 a 14 | **todas fechadas** · da **Fila 15** saíram as Ondas A, B e **F**; sobram **C, D, E** |
-| o que vem | **JOGAR** — a mão de ferro e o esconder nunca foram tocados por mão humana, e estão NO AR. Depois: a onda **D** (a dívida: o `test-textura` com truco na mesa), a **E** (temas de baralho) e a **C**. A **Fase 5** segue **⏸ em espera por decisão sua** |
+| o que vem | **1º a FILA 16** (o conserto da mesa órfã — hotfix, plano pronto), depois **JOGAR** (a mão de ferro e o esconder estão no ar e nunca foram tocados por mão humana), e então as ondas **D** (a dívida: o `test-textura` com truco na mesa), **E** (temas de baralho) e **C**. A **Fase 5** segue **⏸ em espera por decisão sua** |
 
 ---
 
@@ -1299,9 +1308,16 @@ AS SUÍTES contra este código, rodadas uma de cada vez em 14/08:
          o leque de versos, "Carta coberta", a vitória às cegas, os dois
          botões, a escondida na pilha. Todas aprovadas.
 
-➜ PASSO 1  ✔ ENVIADO E PUBLICADO na mesma sessão (ele liberou o push).
-           O sw.js servido é 51508f9747f3 = local, e os nomes da onda
-           estão no bundle no ar — pode testar direto no github.io.
+➜ PASSO 1  A FILA 16 PRIMEIRO — o relato de campo da mesa órfã (14/08,
+           foto das 07:11): trocar de jogo deixa a mesa 3D do jogo
+           anterior em cena (o toco do truco no tampo do dominó, e
+           vice-versa). Ele mandou ANOTAR para fazer amanhã. A seção
+           própria (## Fila 16) tem TUDO: causa raiz com arquivo:linha,
+           o conserto desenhado (o verbo `JOGO.mesa.limpar` + os dois
+           limpadores + a chamada em `abrirJogo`), as armadilhas (a
+           prévia é FILHA do grupo da mesa — nada de clear() no grupo),
+           os testes, as ~5 mutações e a foto de reprodução. Branch
+           `hotfix/mesa-orfa`, tag v4.14.3 (a v4.14.2 é este registro).
 
 ➜ PASSO 2  JOGAR, e as perguntas que só o olho no CELULAR responde:
            · a mão de ferro de verdade: chegar ao 11×11 jogando. O leque
@@ -4658,6 +4674,11 @@ asserções caem).
 
 ### A troca de jogo — pedida, medida, e já estava coberta
 
+> **⚠ CORRIGIDO EM 14/08/2026: coberta para ESTADO, cega para MALHA.** O "não vaza malha"
+> abaixo estava ERRADO — a sonda media pela ponte, que a troca acabara de reapontar (ver a
+> armadilha própria na lista, e a **Fila 16**, que é o relato de campo deste exato defeito
+> com foto). O que segue vale para o ESTADO (chaves, trava, menu), que continua coberto.
+
 *"testar a troca de cada jogo, para não bugar"*. Medido: ida e volta três vezes com partida
 montada em cada um não vaza malha nem mão, e a trava de mesa ocupada **já tem asserção no
 Chrome** (`test-lembrar`), incluindo o motivo escrito no botão.
@@ -5088,6 +5109,107 @@ ordem. Um "jogar a primeira mão comigo" reaproveitaria a dica inteira.
 **JOGAR.** As Filas 5, 7 e 10 saíram de jogo de verdade no celular.
 
 </details>
+
+---
+
+## Fila 16 — A MESA ÓRFÃ: trocar de jogo não limpa a cena do anterior
+
+**Relato de campo do Ricardo, 14/08/2026, foto das 07:11 — anotado a pedido dele ("anote
+tudo, para que possa ser feito amanhã"). NADA daqui foi implementado.** A v4.14 (Onda F)
+está no ar e não tem relação com este defeito; ele existe desde que o truco sentou na mesa.
+
+**O relato:** jogou truco, saiu, trocou para o dominó — e a mesa do dominó nasceu com as
+sobras do truco em cena: o toco do baralho com a vira em cima, três versos de adversário nas
+beiradas, uma carta aberta da vaza no meio (e o fantasma do dominó desenhado POR CIMA dela).
+"Continua acontecendo", nos dois sentidos. A foto mostra os dois jogos no mesmo tampo.
+
+### A causa raiz — MEDIDA em 14/08, não lida
+
+- **Os grupos 3D dos DOIS jogos são pendurados na `scene` NA CARGA e nunca saem**:
+  `090-tabuleiro.js:9` (`grupoMesa`), `100-mao.js:8-11` (`grupoMao/Outros/Monte`),
+  `550-mesa.js:18-22` (`grupoMesaDoTruco/MaoDoTruco/OutrosDoTruco`). O `070-cena.js` não
+  conhece nenhum deles — os 14 `scene.add` dele são luz e mobília.
+- **Quem esvazia um grupo é o `sincronizar` do próprio jogo** — que só roda para o jogo DA
+  MESA. Trocar de jogo é o `sincronizar` do velho nunca mais rodar: os objetos congelam na
+  última escala (o toco a até 2.35×) e ficam.
+- **`abrirJogo` (`141-abas.js:178-213`) tem ZERO contato com 3D** — troca contrato, menu,
+  ponte e URL. E **não existe NENHUMA função de limpeza de mesa no projeto**: `grep
+  "limpar|desmontar|esvaziar" src/js` dá só `limparConversa`. Só a MÃO tem `esconderMao`, e
+  só o hotseat (`pedirTroca`, `160-loop.js:204`) a chama.
+- **`sairDaPartida` (`160-loop.js:252-281`)** faz `P = null; vistaAtual = null;
+  mostrarTela('telaMenu')` — nenhuma linha de 3D. O menu é um overlay translúcido com blur
+  (`.tela`, `estilo.css:270`) sobre a cena viva; o render loop nunca para.
+- **A reprodução:** montar mesa → (jogar) → `btSair` → `P = null` destrava as abas
+  (`ocupada = !!(P && P.fase !== 'fim')`, `141-abas.js:121`) → aba do outro jogo → Sentar: o
+  jogo novo enche os grupos DELE por cima dos do anterior, que continuam lá. Também reproduz
+  por partida ACABADA (`fase === 'fim'` destrava igual).
+- **Por que a medição da Fila 14 não pegou:** ver a armadilha nova na lista ("SONDA QUE MEDE
+  PELA PONTE MEDE O JOGO NOVO") — a sonda leu `j.naMesa` da ponte reapontada (o vazio do
+  jogo novo) e um `undefined` mascarado (`if (j.naMesa && ...)` numa ponte que nem declara
+  `naMesa`) virou "não vazou".
+
+### O conserto desenhado — o verbo que falta no contrato
+
+**`JOGO.mesa.limpar()`** — a casa ganha o direito de dizer "tire suas coisas do tampo", e
+cada jogo sabe o que é dele. Chamado em UM lugar, `abrirJogo`, no jogo de SAÍDA, antes de
+`trocarDeJogo(id)`:
+
+```js
+// O jogo que SAI da mesa leva as suas coisas: os grupos 3D dos dois jogos moram na cena
+// desde a carga, e sem isto o tampo do dominó nascia com o toco do truco em cima (foto de
+// campo de 14/08). No de ENTRADA não há o que limpar: o sincronizar dele reconcilia.
+if (JOGO && JOGOS[id] !== JOGO && JOGO.mesa && JOGO.mesa.limpar) JOGO.mesa.limpar();
+```
+
+No arranque `JOGO` é nulo → não roda. Aba já ativa (`JOGOS[id] === JOGO`) → não limpa — a
+mesa acabada atrás do menu continua aparecendo, que é o comportamento de sempre DENTRO de um
+jogo. `sairDaPartida` NÃO limpa (de propósito): o cenário atrás do menu é estética, não vazamento.
+
+**`limparMesaDoTruco()` em `550-mesa.js`:** `esconderMaoDoTruco()` (já existe: mão + gesto +
+escolha + assinatura) · `esconderPreviaDoTruco()` · remover de `grupoMesaDoTruco` cada
+`reg.obj` de `naMesaDoTruco` e limpar o Map · tirar `tocoDoBaralho` do grupo se tem pai ·
+`grupoOutrosDoTruco.clear()` · `esquecerArrumacaoDoTruco()`.
+
+> **⚠ NÃO usar `grupoMesaDoTruco.clear()`:** `grupoPreviaDoTruco` é FILHO dele
+> (`550-mesa.js:21-23`) — um clear() o arrancaria e toda prévia futura nasceria num grupo
+> solto, invisível para sempre. Remove-se só o que a reconciliação pôs (os `reg.obj` + o
+> toco). **A mesma armadilha existe no dominó**: `grupoPrevia` é filho de `grupoMesa`
+> (`090-tabuleiro.js:16-17`).
+
+**`limparMesaDoDomino()` em `090-tabuleiro.js`:** `esconderMao()` (já existe,
+`100-mao.js:260`) · `esconderPrevia()` · remover de `grupoMesa` cada `reg.obj` de `naMesa`
+(o Map de `090:12`) e limpar · `ultima = null` (a marca é filha da peça e sai junto; o ref é
+que não pode apontar para objeto órfão) · `grupoOutros.clear()` · `grupoMonte.clear()` ·
+`esquecerArrumacao()`.
+
+**Registro:** `mesa: { …, limpar: … }` em `590-registro.js` e `300-registro.js`.
+
+### Os testes — e a lição que eles carregam
+
+Seção nova no `test-truco.mjs` (os dois jogos já estão carregados lá): `comecarLocal()` no
+truco → jogar uma carta (mesa cheia: vira + toco + jogada + versos) → `abandonarOTruco`
+(fase `fim`, o caminho que destrava a aba) → `abrirJogo('domino')` → cobrar **PELO REGISTRO
+DO OUTRO JOGO** (`JOGOS.truco.ponte.grupoMesa.children.length === 0` etc.), nunca pela
+ponte — porque a ponte é o que troca:
+
+- grupos `mesa`/`outros`/`mao` do truco vazios; `naMesa.size === 0`; toco sem pai;
+- **`grupoPrevia` do truco CONTINUA pendurado** (a asserção que separa a remoção fina do
+  clear() indiscriminado);
+- a volta: `abrirJogo('truco')` + `comecarLocal()` remonta a mesa inteira (vira desenhada,
+  leque de 3) e os grupos do DOMINÓ é que ficam vazios — as duas direções;
+- a prévia ainda funciona depois da limpeza (selecionar → `temPreviaDoTruco()`).
+
+Asserções nascem verdes → **mutação obrigatória** (~5): tirar a chamada em `abrirJogo` ·
+tirar a remoção do toco · tirar o `grupoOutros.clear()` · trocar a remoção fina por
+`grupoMesaDoTruco.clear()` (a asserção da prévia pendurada cai) · o espelho do dominó.
+
+### A entrega
+
+Branch `hotfix/mesa-orfa`, merge `--no-ff` com tag **v4.14.3** (a v4.14.2 é o registro desta
+fila), `npm run build` no merge. **Foto de reprodução antes/depois** no Chrome — o molde já
+existe (`tests/.gerado/foto-onda-f.mjs`: truco → jogar → sair → aba dominó → sentar →
+screenshot). Regressão: `npm test` + `npm run lembrar` (a cena das abas). Push só com a
+liberação dele.
 
 ---
 
