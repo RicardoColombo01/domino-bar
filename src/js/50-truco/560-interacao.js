@@ -118,13 +118,17 @@ function cancelarEscolhaNoTruco() {
   esconderConfirmacao();
 }
 
-function confirmarNoTruco() {
+function confirmarNoTruco(dado) {
   const m = escolhidaNoTruco === null ? null : naMaoDoTrucoPorChave(escolhidaNoTruco);
   if (!m) return;
   const carta = m.carta;
   cancelarEscolhaNoTruco();
   if (navigator.vibrate) navigator.vibrate(12);
-  pedirAcao({ acao: 'jogar', carta });
+  // O `dado` vem do botão da confirmação. O toque na PRÉVIA 3D chama isto sem argumento, e
+  // sem argumento é jogar ABERTO — esconder é a exceção e exige o botão que a nomeia.
+  pedirAcao(dado === 'escondida'
+    ? { acao: 'jogar', carta, escondida: true }
+    : { acao: 'jogar', carta });
 }
 
 // O truco não tem arrasto, mas o hotseat continua podendo trocar de jogador com o dedo no ar

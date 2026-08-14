@@ -3031,9 +3031,17 @@ function criarCarta(carta, proprio) {
   const corpo = new THREE.Mesh(geomCorpoCarta, proprio ? matPapel.clone() : matPapel);
   corpo.castShadow = true;
   corpo.receiveShadow = true;
-  const face = new THREE.Mesh(faceDaCarta(carta[0], carta[1]), matFaceCarta);
-  face.rotation.x = -Math.PI / 2;
-  face.position.y = CARTA_E / 2 + 0.003;
+  // `carta === null` É A CARTA SEM IDENTIDADE — a escondida da mesa do truco. Ela nasce SEM
+  // o plano da face, e isso é fronteira e não economia: um objeto que não tem geometria de
+  // face não pode mostrá-la nem por um quadro, nem de barriga para cima, nem no F12. A
+  // biblioteca não sabe POR QUE uma carta seria anônima (isso é regra de jogo); ela só
+  // oferece a forma.
+  if (carta) {
+    const face = new THREE.Mesh(faceDaCarta(carta[0], carta[1]), matFaceCarta);
+    face.rotation.x = -Math.PI / 2;
+    face.position.y = CARTA_E / 2 + 0.003;
+    g.add(face);
+  }
   // O VERSO VAI JUNTO, e não é simetria gratuita: uma carta que já foi jogada pode ser
   // RECOLHIDA — quem ganha a vaza junta as cartas e as põe viradas na sua frente. Isso é uma
   // volta de 180° no mesmo objeto, deslizando, e sem esta face o que apareceria do outro lado
@@ -3042,8 +3050,8 @@ function criarCarta(carta, proprio) {
   const costas = new THREE.Mesh(new THREE.PlaneGeometry(CARTA_L, CARTA_C), matVersoCarta);
   costas.rotation.x = Math.PI / 2;
   costas.position.y = -CARTA_E / 2 - 0.003;
-  g.add(corpo, face, costas);
-  g.userData = { carta, corpo };
+  g.add(corpo, costas);
+  g.userData = { carta: carta || null, corpo };
   return g;
 }
 
@@ -4344,11 +4352,16 @@ function desenharHUD(vista) {
 //   { titulo: '3 | 5',  botoes: [{ rotulo: '◀ encaixar no 3', dado: 'esq' }, …] }
 //
 // `dado` volta INTACTO para `JOGO.toque.confirmar`: é um símbolo do jogo, e a casa nunca o
-// lê. No dominó é o lado; no truco não é nada.
+// lê. No dominó é o lado; no truco distingue jogar aberto de esconder.
+//
+// `principal` é OPT-OUT (`=== false`), e não opt-in como na barra de ações: os botões daqui
+// sempre nasceram todos acesos, e o padrão contrário apagaria os do dominó sem ninguém pedir.
+// Quem declara `principal: false` é o botão raro — o "Esconder" do truco.
 function mostrarConfirmacao(escolha) {
   el('confPeca').textContent = escolha.titulo;
   el('confBotoes').innerHTML = escolha.botoes.map((b, i) =>
-    `<button class="btn peq principal" data-i="${i}">${escapar(b.rotulo)}</button>`).join('');
+    `<button class="btn peq${b.principal === false ? '' : ' principal'}" data-i="${i}"` +
+    `${b.titulo ? ` title="${escapar(b.titulo)}"` : ''}>${escapar(b.rotulo)}</button>`).join('');
   el('confBotoes').querySelectorAll('button').forEach(b => {
     b.onclick = () => JOGO.toque.confirmar(escolha.botoes[+b.dataset.i].dado);
   });
@@ -8878,9 +8891,13 @@ function postaDaVaza(cadeira, eu, n) {
   };
 }
 
-// A mesa inteira de uma vaza: uma posta por carta jogada, na ordem em que caíram.
+// A mesa inteira de uma vaza: uma posta por carta jogada, na ordem em que caíram. A marca
+// `escondida` atravessa — a jogada redigida não tem `carta`, e é a marca que diz à mesa 3D
+// que aquilo é um verso, não um buraco.
 function layoutDaVaza(mesa, eu, n) {
-  return mesa.map(j => Object.assign({ cadeira: j.cadeira, carta: j.carta }, postaDaVaza(j.cadeira, eu, n)));
+  return mesa.map(j => Object.assign(
+    { cadeira: j.cadeira, carta: j.carta, escondida: j.escondida },
+    postaDaVaza(j.cadeira, eu, n)));
 }
 
 // ─── as vazas já ganhas ──────────────────────────────────────────────────────
@@ -8969,6 +8986,12 @@ let escalaAlvoDoTruco = 1;
 // chave da carta → { obj, alvo }. `alvo` traz posição, giro e se ela está virada para baixo.
 const naMesaDoTruco = new Map();
 const CHAVE_DA_VIRA = 'vira';
+
+// "O objeto desta chave mostra a carta que o alvo pede?" — a pergunta da guarda geral da
+// reconciliação, agora com a carta ESCONDIDA no vocabulário: ela chega redigida (sem carta)
+// e `mesmaCarta(null, …)` LANÇARIA. Dois nulos são a mesma identidade porque a chave
+// sintética `esc:cadeira:vaza` já é única por jogada; um nulo só é troca de verdade.
+const mesmaIdentidadeDeCarta = (a, b) => (!a && !b) || (!!a && !!b && mesmaCarta(a, b));
 
 // ─── o toco do baralho, embaixo da vira ──────────────────────────────────────
 // MOBÍLIA, e por isso NÃO entra em `naMesaDoTruco`: aquele mapa é de cartas reconciliadas
@@ -9278,6 +9301,15 @@ function sincronizarMesaDoTruco(vista) {
     && vista.ganhandoAVaza !== undefined
     ? (vista.mesa.find(j => j.cadeira === vista.ganhandoAVaza) || {}).carta : null;
   for (const p of layoutDaVaza(vista.mesa || [], eu, n)) {
+    // A JOGADA ESCONDIDA chega REDIGIDA da visão — sem `carta`, de propósito (invariante 3:
+    // o valor nunca trafega). A chave é SINTÉTICA e estável: `cadeira` mais o número que
+    // esta vaza vai ter quando fechar, que é `vazas.length` agora e o índice `i` na pilha —
+    // é o que faz o verso DESLIZAR para a pilha em vez de sumir e renascer.
+    if (p.escondida) {
+      alvos.set(`esc:${p.cadeira}:${(vista.vazas || []).length}`,
+        { carta: null, x: p.x, z: p.z, rotY: p.rotY, baixo: true, y: 0 });
+      continue;
+    }
     const ganhando = !!mandaAgora && mesmaCarta(p.carta, mandaAgora);
     alvos.set(chaveCarta(p.carta), {
       carta: p.carta, x: p.x, z: p.z, rotY: p.rotY, baixo: false,
@@ -9292,8 +9324,9 @@ function sincronizarMesaDoTruco(vista) {
   (vista.vazas || []).forEach((v, i) => {
     const p = postas[i];
     (v.jogadas || []).forEach((j, k) => {
-      alvos.set(chaveCarta(j.carta), {
-        carta: j.carta,
+      // O irmão da chave sintética da vaza em curso: aqui o número da vaza é o índice `i`.
+      alvos.set(j.escondida ? `esc:${j.cadeira}:${i}` : chaveCarta(j.carta), {
+        carta: j.escondida ? null : j.carta,
         x: p.x + k * CARTA_E * 0.6, z: p.z, rotY: p.rotY + (p.inclinada ? 0.22 : 0),
         y: p.y + k * CARTA_E, baixo: true,
       });
@@ -9320,16 +9353,21 @@ function sincronizarMesaDoTruco(vista) {
     // A guarda é GERAL de propósito, e não um `if` para a vira: ela restabelece o invariante
     // que o resto do arquivo já supõe — **o objeto guardado numa chave mostra a carta que o
     // alvo daquela chave pede**. Um terceiro jogo com outra chave fixa herda isto de graça.
-    if (reg && !mesmaCarta(reg.obj.userData.carta, alvo.carta)) {
+    // `null` DOS DOIS LADOS É A MESMA CARTA para esta guarda: a escondida não tem identidade,
+    // e quem responde por ela é a chave sintética, única por jogada. Um lado só nulo é troca
+    // de verdade — o objeto tem de renascer, senão uma face fica onde devia haver um verso.
+    if (reg && !mesmaIdentidadeDeCarta(reg.obj.userData.carta, alvo.carta)) {
       grupoMesaDoTruco.remove(reg.obj);
       naMesaDoTruco.delete(k);
       reg = null;
     }
     if (!reg) {
       const obj = criarCarta(alvo.carta, false);
-      // Nasce no alto e torta: é a queda que dá o "toc" na mesa.
+      // Nasce no alto e torta: é a queda que dá o "toc" na mesa. E nasce JÁ no lado que o
+      // alvo pede — a escondida de barriga para baixo desde o primeiro quadro (sem isto ela
+      // piscaria aberta), e a carta retomada de uma partida guardada idem, na pilha.
       obj.position.set(alvo.x, 2.0, alvo.z);
-      obj.rotation.set(0, alvo.rotY + 0.4, 0);
+      obj.rotation.set(0, alvo.rotY + 0.4, alvo.baixo ? Math.PI : 0);
       grupoMesaDoTruco.add(obj);
       reg = { obj };
       naMesaDoTruco.set(k, reg);
@@ -9652,13 +9690,17 @@ function cancelarEscolhaNoTruco() {
   esconderConfirmacao();
 }
 
-function confirmarNoTruco() {
+function confirmarNoTruco(dado) {
   const m = escolhidaNoTruco === null ? null : naMaoDoTrucoPorChave(escolhidaNoTruco);
   if (!m) return;
   const carta = m.carta;
   cancelarEscolhaNoTruco();
   if (navigator.vibrate) navigator.vibrate(12);
-  pedirAcao({ acao: 'jogar', carta });
+  // O `dado` vem do botão da confirmação. O toque na PRÉVIA 3D chama isto sem argumento, e
+  // sem argumento é jogar ABERTO — esconder é a exceção e exige o botão que a nomeia.
+  pedirAcao(dado === 'escondida'
+    ? { acao: 'jogar', carta, escondida: true }
+    : { acao: 'jogar', carta });
 }
 
 // O truco não tem arrasto, mas o hotseat continua podendo trocar de jogador com o dedo no ar
@@ -9867,7 +9909,17 @@ function barraDoTruco(vista) {
 // o botão faz.
 const confirmacaoDoTruco = (vista, m) => ({
   titulo: nomeCurtoDaCarta(m.carta),
-  botoes: [{ dado: null, rotulo: 'Jogar' }],
+  // O SEGUNDO BOTÃO só existe quando o motor oferece (`acoes.esconder` — nunca na 1ª vaza):
+  // botão que o motor recusaria é promessa, e é a espécie de defeito que o
+  // `refletirMesaNosBotoes` existe para impedir. "Jogar" PRIMEIRO, porque o teclado foca o
+  // primeiro botão e `3`+Enter tem de continuar jogando aberto. O `dado` volta intacto pelo
+  // `JOGO.toque.confirmar` — era `null` e nada; agora distingue as duas intenções sobre a
+  // MESMA carta.
+  botoes: vista.acoes.esconder
+    ? [{ dado: null, rotulo: 'Jogar' },
+      { dado: 'escondida', rotulo: 'Esconder', principal: false,
+        titulo: 'De barriga para baixo — a carta não vale nada' }]
+    : [{ dado: null, rotulo: 'Jogar' }],
 });
 
 // ─── a tela de fim de mão ────────────────────────────────────────────────────

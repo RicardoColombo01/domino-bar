@@ -115,7 +115,17 @@ function barraDoTruco(vista) {
 // o botão faz.
 const confirmacaoDoTruco = (vista, m) => ({
   titulo: nomeCurtoDaCarta(m.carta),
-  botoes: [{ dado: null, rotulo: 'Jogar' }],
+  // O SEGUNDO BOTÃO só existe quando o motor oferece (`acoes.esconder` — nunca na 1ª vaza):
+  // botão que o motor recusaria é promessa, e é a espécie de defeito que o
+  // `refletirMesaNosBotoes` existe para impedir. "Jogar" PRIMEIRO, porque o teclado foca o
+  // primeiro botão e `3`+Enter tem de continuar jogando aberto. O `dado` volta intacto pelo
+  // `JOGO.toque.confirmar` — era `null` e nada; agora distingue as duas intenções sobre a
+  // MESMA carta.
+  botoes: vista.acoes.esconder
+    ? [{ dado: null, rotulo: 'Jogar' },
+      { dado: 'escondida', rotulo: 'Esconder', principal: false,
+        titulo: 'De barriga para baixo — a carta não vale nada' }]
+    : [{ dado: null, rotulo: 'Jogar' }],
 });
 
 // ─── a tela de fim de mão ────────────────────────────────────────────────────

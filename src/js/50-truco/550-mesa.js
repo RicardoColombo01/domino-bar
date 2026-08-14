@@ -39,6 +39,12 @@ let escalaAlvoDoTruco = 1;
 const naMesaDoTruco = new Map();
 const CHAVE_DA_VIRA = 'vira';
 
+// "O objeto desta chave mostra a carta que o alvo pede?" — a pergunta da guarda geral da
+// reconciliação, agora com a carta ESCONDIDA no vocabulário: ela chega redigida (sem carta)
+// e `mesmaCarta(null, …)` LANÇARIA. Dois nulos são a mesma identidade porque a chave
+// sintética `esc:cadeira:vaza` já é única por jogada; um nulo só é troca de verdade.
+const mesmaIdentidadeDeCarta = (a, b) => (!a && !b) || (!!a && !!b && mesmaCarta(a, b));
+
 // ─── o toco do baralho, embaixo da vira ──────────────────────────────────────
 // MOBÍLIA, e por isso NÃO entra em `naMesaDoTruco`: aquele mapa é de cartas reconciliadas
 // por chave, e o toco não é carta nenhuma — é o resto do baralho, que ninguém joga. Montado
@@ -347,6 +353,15 @@ function sincronizarMesaDoTruco(vista) {
     && vista.ganhandoAVaza !== undefined
     ? (vista.mesa.find(j => j.cadeira === vista.ganhandoAVaza) || {}).carta : null;
   for (const p of layoutDaVaza(vista.mesa || [], eu, n)) {
+    // A JOGADA ESCONDIDA chega REDIGIDA da visão — sem `carta`, de propósito (invariante 3:
+    // o valor nunca trafega). A chave é SINTÉTICA e estável: `cadeira` mais o número que
+    // esta vaza vai ter quando fechar, que é `vazas.length` agora e o índice `i` na pilha —
+    // é o que faz o verso DESLIZAR para a pilha em vez de sumir e renascer.
+    if (p.escondida) {
+      alvos.set(`esc:${p.cadeira}:${(vista.vazas || []).length}`,
+        { carta: null, x: p.x, z: p.z, rotY: p.rotY, baixo: true, y: 0 });
+      continue;
+    }
     const ganhando = !!mandaAgora && mesmaCarta(p.carta, mandaAgora);
     alvos.set(chaveCarta(p.carta), {
       carta: p.carta, x: p.x, z: p.z, rotY: p.rotY, baixo: false,
@@ -361,8 +376,9 @@ function sincronizarMesaDoTruco(vista) {
   (vista.vazas || []).forEach((v, i) => {
     const p = postas[i];
     (v.jogadas || []).forEach((j, k) => {
-      alvos.set(chaveCarta(j.carta), {
-        carta: j.carta,
+      // O irmão da chave sintética da vaza em curso: aqui o número da vaza é o índice `i`.
+      alvos.set(j.escondida ? `esc:${j.cadeira}:${i}` : chaveCarta(j.carta), {
+        carta: j.escondida ? null : j.carta,
         x: p.x + k * CARTA_E * 0.6, z: p.z, rotY: p.rotY + (p.inclinada ? 0.22 : 0),
         y: p.y + k * CARTA_E, baixo: true,
       });
@@ -389,16 +405,21 @@ function sincronizarMesaDoTruco(vista) {
     // A guarda é GERAL de propósito, e não um `if` para a vira: ela restabelece o invariante
     // que o resto do arquivo já supõe — **o objeto guardado numa chave mostra a carta que o
     // alvo daquela chave pede**. Um terceiro jogo com outra chave fixa herda isto de graça.
-    if (reg && !mesmaCarta(reg.obj.userData.carta, alvo.carta)) {
+    // `null` DOS DOIS LADOS É A MESMA CARTA para esta guarda: a escondida não tem identidade,
+    // e quem responde por ela é a chave sintética, única por jogada. Um lado só nulo é troca
+    // de verdade — o objeto tem de renascer, senão uma face fica onde devia haver um verso.
+    if (reg && !mesmaIdentidadeDeCarta(reg.obj.userData.carta, alvo.carta)) {
       grupoMesaDoTruco.remove(reg.obj);
       naMesaDoTruco.delete(k);
       reg = null;
     }
     if (!reg) {
       const obj = criarCarta(alvo.carta, false);
-      // Nasce no alto e torta: é a queda que dá o "toc" na mesa.
+      // Nasce no alto e torta: é a queda que dá o "toc" na mesa. E nasce JÁ no lado que o
+      // alvo pede — a escondida de barriga para baixo desde o primeiro quadro (sem isto ela
+      // piscaria aberta), e a carta retomada de uma partida guardada idem, na pilha.
       obj.position.set(alvo.x, 2.0, alvo.z);
-      obj.rotation.set(0, alvo.rotY + 0.4, 0);
+      obj.rotation.set(0, alvo.rotY + 0.4, alvo.baixo ? Math.PI : 0);
       grupoMesaDoTruco.add(obj);
       reg = { obj };
       naMesaDoTruco.set(k, reg);

@@ -28,6 +28,9 @@ const mod = await import(buildModule([
   // E o corpo do truco.
   'naMaoDoTruco', 'naMesaDoTruco', 'grupoMaoDoTruco', 'selecionarCarta', 'confirmarNoTruco',
   'cancelarEscolhaNoTruco', 'escolhidaNoTruco', 'barraDoTruco', 'medidoresDoTruco',
+  // Fila 15 · F1: a confirmação com dois botões. O harness não constrói botão de innerHTML,
+  // então a barra de confirmar se mede pelo DESCRITOR — como a barra de ações.
+  'confirmacaoDoTruco',
   'fimDeMaoDoTruco', 'semAMaoNoTruco', 'aplicarNoTruco', 'arrumarMaoDoTruco',
   // Quem está ganhando a vaza e quem ganhou — os dois pedidos do Ricardo de 07/08.
   'notaDaVezNoTruco', 'narrarVaza', 'placarDeVazas', 'timeDaVistaNoTruco',
@@ -1419,6 +1422,71 @@ console.log('\na casa senta na mesa de truco');
   mod.publicar();
   const sobrando = marcadas().length;
   ok(sobrando === 0, `a vaza fechou e ${sobrando} marca(s) ficaram para trás`);
+}
+
+// ─── esconder a carta, na tela ───────────────────────────────────────────────
+// Continua do estado da seção anterior DE PROPÓSITO: a vaza 1 acabou de fechar ali, então
+// esconder está liberado — que é exatamente a fronteira que a confirmação tem de mostrar.
+console.log('\nesconder a carta, na tela');
+{
+  mod.P.vez = 0;
+  mod.publicar();
+
+  // A CONFIRMAÇÃO MUDA DE FORMA COM A REGRA, e se mede pelo DADO e nunca pelo índice: com
+  // esconder liberado são DOIS botões — "Jogar" PRIMEIRO (o teclado foca o primeiro, e
+  // `3`+Enter tem de continuar jogando aberto) e "Esconder" com o dado que o nomeia.
+  const m0 = mod.naMaoDoTruco[0];
+  const conf2 = mod.confirmacaoDoTruco(mod.vistaAtual, m0);
+  ok(conf2.botoes.length === 2, `com esconder liberado deviam ser 2 botões, vieram ${conf2.botoes.length}`);
+  ok((conf2.botoes[0] || {}).dado === null && /jogar/i.test((conf2.botoes[0] || {}).rotulo),
+    'o primeiro botão devia ser "Jogar" aberto — é ele que o teclado foca');
+  const esconderBt = conf2.botoes.find(b => b.dado === 'escondida');
+  ok(!!esconderBt, 'faltou o botão com dado "escondida"');
+  ok((esconderBt || {}).principal === false,
+    'o "Esconder" devia ser secundário — dois botões âmbar idênticos não se distinguem');
+
+  // NA 1ª VAZA o segundo botão NÃO existe — botão que o motor recusaria é promessa.
+  const P1v = mod.novaPartidaDoTruco(mesa(2));
+  const conf1 = mod.confirmacaoDoTruco(
+    mod.visaoDoTruco(P1v, P1v.vez), { carta: P1v.maos[P1v.vez][0] });
+  ok(conf1.botoes.length === 1 && conf1.botoes[0].dado === null,
+    `na 1ª vaza a confirmação devia ter só "Jogar", veio ${conf1.botoes.length} botão(ões)`);
+
+  // O CAMINHO INTEIRO: escolher, confirmar com o dado, e a jogada sai ESCONDIDA.
+  const antes = mod.P.maos[0].length;
+  mod.selecionarCarta(0);
+  mod.confirmarNoTruco('escondida');
+  ok(mod.P.maos[0].length === antes - 1, 'esconder não tirou a carta da mão');
+  ok(((mod.P.mesa[0] || {}).escondida) === true, 'a jogada não saiu escondida em P');
+
+  // O OBJETO 3D NÃO TEM FACE — vazamento impossível por construção, e é a irmã da asserção
+  // "nenhuma marca em grupoOutros": a fronteira também é o que a tela desenha. A chave é a
+  // sintética (`esc:cadeira:vaza`), o alvo é de barriga para baixo, e o nascimento já é em
+  // `Math.PI` — sem isso a carta piscaria aberta por um quadro.
+  const chaveEsc = 'esc:0:1';
+  const regEsc = mod.naMesaDoTruco.get(chaveEsc);
+  ok(!!regEsc, `a escondida não entrou na mesa 3D pela chave sintética ${chaveEsc}`);
+  ok(((regEsc || {}).obj || { userData: {} }).userData.carta === null,
+    'o objeto da escondida carrega uma carta — a identidade vazou para a cena');
+  const meshes = [];
+  if (regEsc) regEsc.obj.traverse(o => { if (o.isMesh) meshes.push(o); });
+  ok(meshes.length === 2,
+    `o verso da escondida devia ter só corpo e costas, veio com ${meshes.length} malhas`);
+  ok(!!regEsc && ((regEsc.alvo || {}).baixo) === true, 'o alvo da escondida não é de barriga para baixo');
+  ok(!!regEsc && Math.abs(regEsc.obj.rotation.z - Math.PI) < 1e-9,
+    'a escondida não nasceu virada — um quadro de face aberta já é vazamento');
+
+  // A VAZA FECHA E O VERSO DESLIZA PARA A PILHA — a MESMA chave, o MESMO objeto. Chave que
+  // muda na descida faria a carta sumir e renascer, que é o que a reconciliação existe para
+  // não fazer.
+  const objAntes = (regEsc || {}).obj;
+  mod.aplicarIntencao(mod.P.vez, { acao: 'jogar', carta: mod.P.maos[mod.P.vez][0] });
+  const regDepois = mod.naMesaDoTruco.get(chaveEsc);
+  ok(!!regDepois && regDepois.obj === objAntes,
+    'a escondida trocou de objeto ao descer para a pilha — a chave não ficou estável');
+  ok(!!regDepois && ((regDepois.alvo || {}).baixo) === true,
+    'na pilha a escondida devia continuar de barriga para baixo');
+  console.log('  2 botões com o dado certo · verso sem face · nasce virada · desliza para a pilha');
 }
 
 // ─── a barra de apostas ──────────────────────────────────────────────────────

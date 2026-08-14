@@ -213,9 +213,17 @@ function criarCarta(carta, proprio) {
   const corpo = new THREE.Mesh(geomCorpoCarta, proprio ? matPapel.clone() : matPapel);
   corpo.castShadow = true;
   corpo.receiveShadow = true;
-  const face = new THREE.Mesh(faceDaCarta(carta[0], carta[1]), matFaceCarta);
-  face.rotation.x = -Math.PI / 2;
-  face.position.y = CARTA_E / 2 + 0.003;
+  // `carta === null` É A CARTA SEM IDENTIDADE — a escondida da mesa do truco. Ela nasce SEM
+  // o plano da face, e isso é fronteira e não economia: um objeto que não tem geometria de
+  // face não pode mostrá-la nem por um quadro, nem de barriga para cima, nem no F12. A
+  // biblioteca não sabe POR QUE uma carta seria anônima (isso é regra de jogo); ela só
+  // oferece a forma.
+  if (carta) {
+    const face = new THREE.Mesh(faceDaCarta(carta[0], carta[1]), matFaceCarta);
+    face.rotation.x = -Math.PI / 2;
+    face.position.y = CARTA_E / 2 + 0.003;
+    g.add(face);
+  }
   // O VERSO VAI JUNTO, e não é simetria gratuita: uma carta que já foi jogada pode ser
   // RECOLHIDA — quem ganha a vaza junta as cartas e as põe viradas na sua frente. Isso é uma
   // volta de 180° no mesmo objeto, deslizando, e sem esta face o que apareceria do outro lado
@@ -224,8 +232,8 @@ function criarCarta(carta, proprio) {
   const costas = new THREE.Mesh(new THREE.PlaneGeometry(CARTA_L, CARTA_C), matVersoCarta);
   costas.rotation.x = Math.PI / 2;
   costas.position.y = -CARTA_E / 2 - 0.003;
-  g.add(corpo, face, costas);
-  g.userData = { carta, corpo };
+  g.add(corpo, costas);
+  g.userData = { carta: carta || null, corpo };
   return g;
 }
 
