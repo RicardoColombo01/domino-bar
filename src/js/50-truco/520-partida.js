@@ -87,7 +87,7 @@ function novaMaoDoTruco(P) {
 // O que esta cadeira pode fazer AGORA. Uma fonte só para três consumidores: acender os
 // botões, alimentar o bot, e validar o que chega pela rede — igual ao dominó.
 function acoesDoTruco(P, cadeira) {
-  const nada = { cartas: [], trucar: null, aceitar: false, correr: false, onze: false };
+  const nada = { cartas: [], trucar: null, aceitar: false, correr: false, onze: false, esconder: false };
   // A CADEIRA VEM DE FORA. No online ela é o número que o anfitrião atribuiu, mas o motor
   // também é chamado pelo bot, pela ponte das suítes e pelo `visaoDe` — e um índice fora da
   // faixa faz `P.maos[cadeira].slice()` LANÇAR, o que para a mesa de todo mundo.
@@ -124,6 +124,10 @@ function acoesDoTruco(P, cadeira) {
     aceitar: false,
     correr: false,
     onze: false,
+    // ESCONDER SÓ DA SEGUNDA VAZA EM DIANTE — regra do Ricardo (13/08/2026): "não se pode
+    // encobrir a carta se estiver na primeira rodada de cada mão". A conta é por MÃO, e
+    // `P.vazas` zera em `novaMaoDoTruco`, então a semântica sai de graça.
+    esconder: P.vazas.length > 0,
   };
 }
 
@@ -145,7 +149,7 @@ function decidirOnze(P, cadeira, jogar) {
 }
 
 // ─── jogar uma carta ─────────────────────────────────────────────────────────
-function jogarCarta(P, cadeira, carta) {
+function jogarCarta(P, cadeira, carta, escondida) {
   // A FORMA ANTES DO CONTEÚDO. `mesmaCarta` lê `b[0]`, e `undefined[0]` LANÇA — no online
   // isso é a mesa do anfitrião inteira parando por causa de uma mensagem torta de um
   // convidado. É o C3 da Fila 11, e ele apareceu aqui na primeira rodada do teste.
@@ -153,12 +157,22 @@ function jogarCarta(P, cadeira, carta) {
   // A guarda mora no motor e não só no `jogadaDoFio` do registro porque o motor também é
   // chamado pelo bot e pela ponte das suítes, que entram por baixo da rede.
   if (!cartaValida(carta)) return { erro: 'carta inválida' };
-  const { cartas } = acoesDoTruco(P, cadeira);
-  if (!cartas.some(x => mesmaCarta(x, carta))) return { erro: 'carta inválida' };
+  const acoes = acoesDoTruco(P, cadeira);
+  if (!acoes.cartas.some(x => mesmaCarta(x, carta))) return { erro: 'carta inválida' };
+  // A GUARDA É REAL E MORA NA FONTE DAS AÇÕES: quem decide se dá para esconder é
+  // `acoesDoTruco` (a mesma fonte dos botões e do bot), e aqui só se cobra a resposta dela.
+  // Recusa FALADA, nunca silêncio — a doença que quatro filas passaram consertando.
+  if (escondida && !acoes.esconder) {
+    return { erro: 'não dá para esconder a carta na primeira vaza' };
+  }
 
   const i = P.maos[cadeira].findIndex(x => mesmaCarta(x, carta));
   P.maos[cadeira].splice(i, 1);
-  P.mesa.push({ cadeira, carta });
+  // A CARTA ESCONDIDA GUARDA O VALOR EM `P` — a partida é dado guardado e retomável, e o
+  // motor precisa dela inteira para nada além disso: a força quem decide é `vencedorDaVaza`,
+  // que a filtra. Quem NUNCA vê o valor é a vista: `visaoDoTruco` redige a jogada antes de
+  // ela trafegar (invariante 3 — `P.mesa` viaja inteiro no fio).
+  P.mesa.push(escondida ? { cadeira, carta, escondida: true } : { cadeira, carta });
 
   if (P.mesa.length < P.n) {
     P.vez = (cadeira + 1) % P.n;
@@ -280,6 +294,14 @@ function abandonarOTruco(P, cadeira) {
 }
 
 // ─── o que esta cadeira pode ver ─────────────────────────────────────────────
+// A CARTA ESCONDIDA É REDIGIDA ANTES DE TRAFEGAR. `P.mesa` e as vazas fechadas viajam
+// inteiros no fio (as cartas na mesa são públicas por definição) — MENOS a escondida, que
+// "não vale mais nada" e não é de ninguém ver. A redação é UNIFORME, dona inclusive: a
+// narração "escondeu uma carta" é o rastro, e uma vista que dependesse de quem pergunta
+// seria a primeira do projeto. Sem esta linha o valor vazaria pelo fio, e o teste da
+// fronteira só varre as mãos NÃO jogadas — não pegaria.
+const jogadaVisivel = j => (j.escondida ? { cadeira: j.cadeira, escondida: true } : j);
+
 // O INVARIANTE 3, no truco. É literalmente o que trafega no online, e a mão alheia não está
 // aqui — só a CONTAGEM. A vira está, porque ela é pública por definição do jogo.
 function visaoDoTruco(P, cadeira) {
@@ -287,8 +309,11 @@ function visaoDoTruco(P, cadeira) {
     cadeira,
     mao: P.maos[cadeira],                              // só a sua
     naMao: P.maos.map(m => m.length),                  // dos outros, só quantas
-    mesa: P.mesa,                                      // as cartas já jogadas nesta vaza
-    vazas: P.vazas.map(v => ({ time: v.time, vencedor: v.vencedor, jogadas: v.jogadas })),
+    mesa: P.mesa.map(jogadaVisivel),                   // as cartas já jogadas nesta vaza
+    // O `&&` preserva a forma: vaza fabricada sem `jogadas` (as cenas de fim de mão fazem
+    // isso) continua sem, em vez de ganhar um `[]` que o fio nunca produziu.
+    vazas: P.vazas.map(v =>
+      ({ time: v.time, vencedor: v.vencedor, jogadas: v.jogadas && v.jogadas.map(jogadaVisivel) })),
     // QUEM ESTÁ GANHANDO A VAZA EM CURSO — pedido do Ricardo em 07/08, jogando: sem isto o
     // jogador não tem parâmetro para decidir se gasta uma carta forte ou descarta.
     //

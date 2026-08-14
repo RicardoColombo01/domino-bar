@@ -55,8 +55,13 @@ function informacaoDoTruco(P, cadeira, cfg) {
     manilha: P.manilha,
     mesa: P.mesa,                                     // a vaza em curso, à vista de todos
     vazas: cfg.memoria ? P.vazas.map(v => v.time) : SEM_MEMORIA,
-    // O que já SAIU do baralho nas vazas fechadas — quem prestou atenção sabe.
-    saiu: cfg.memoria ? P.vazas.flatMap(v => v.jogadas.map(j => j.carta)) : SEM_MEMORIA,
+    // O que já SAIU do baralho nas vazas fechadas — quem prestou atenção sabe. MENOS a
+    // carta escondida: ela caiu de barriga para baixo e NINGUÉM viu o valor. Sem o filtro o
+    // bot com memória "lembraria" uma carta que a mesa inteira não conhece — acesso
+    // privilegiado a `P`, que é exatamente o que este arquivo existe para não ter.
+    saiu: cfg.memoria
+      ? P.vazas.flatMap(v => v.jogadas.filter(j => !j.escondida).map(j => j.carta))
+      : SEM_MEMORIA,
     aposta: P.aposta,
     pedido: P.pedido,
     placar: P.placar,
@@ -76,7 +81,11 @@ function informacaoDoTrucoDaVista(vista) {
     manilha: vista.manilha,
     mesa: vista.mesa,
     vazas: (vista.vazas || []).map(v => v.time),
-    saiu: (vista.vazas || []).flatMap(v => (v.jogadas || []).map(j => j.carta)),
+    // O IRMÃO do filtro de `informacaoDoTruco`, e aqui ele é de FORMA além de regra: a
+    // jogada escondida chega do fio REDIGIDA (sem `carta`), e um `undefined` no meio de
+    // `saiu` estouraria a primeira comparação da dica do convidado.
+    saiu: (vista.vazas || []).flatMap(v =>
+      (v.jogadas || []).filter(j => !j.escondida).map(j => j.carta)),
     aposta: vista.aposta,
     pedido: vista.pedido,
     placar: vista.placar,
@@ -89,11 +98,16 @@ function informacaoDoTrucoDaVista(vista) {
   };
 }
 
-// Quem está ganhando a vaza em curso, e com que carta. `null` se a mesa está vazia.
+// Quem está ganhando a vaza em curso, e com que carta. `null` se a mesa está vazia — ou se
+// só há carta ESCONDIDA nela: sem força não há quem mande. O filtro repete o de
+// `vencedorDaVaza` porque esta função repete a comparação (nota antiga do arquivo), e na
+// vista do convidado a jogada escondida chega SEM `carta` — sem o filtro, `compararCartas`
+// leria `undefined[0]` e a dica derrubaria a tela.
 function mandandoNaVaza(info, time) {
-  if (!info.mesa.length) return null;
-  let melhor = info.mesa[0];
-  for (const j of info.mesa) {
+  const mesa = info.mesa.filter(j => !j.escondida);
+  if (!mesa.length) return null;
+  let melhor = mesa[0];
+  for (const j of mesa) {
     if (compararCartas(j.carta, melhor.carta, info.manilha) > 0) melhor = j;
   }
   return { cadeira: melhor.cadeira, carta: melhor.carta, meu: time(melhor.cadeira) === info.meuTime };

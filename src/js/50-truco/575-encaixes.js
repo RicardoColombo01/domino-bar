@@ -164,11 +164,11 @@ function fimDeMaoDoTruco(vista) {
 }
 
 // ─── a vista sem a mão ───────────────────────────────────────────────────────
-// A tela de troca do hotseat. Zerar as ações exige saber quais são — no truco há cinco, e
+// A tela de troca do hotseat. Zerar as ações exige saber quais são — no truco há seis, e
 // nenhuma delas se chama `jogadas`.
 const semAMaoNoTruco = v => Object.assign({}, v, {
   mao: [],
-  acoes: { cartas: [], trucar: null, aceitar: false, correr: false, onze: false },
+  acoes: { cartas: [], trucar: null, aceitar: false, correr: false, onze: false, esconder: false },
 });
 
 // ─── a abertura da mão ───────────────────────────────────────────────────────
@@ -233,11 +233,14 @@ function aplicarNoTruco(P, cadeira, i) {
   const nome = P.cadeiras[cadeira].nome;
 
   if (i.acao === 'jogar') {
-    const r = jogarCarta(P, cadeira, i.carta);
+    const esc = !!i.escondida;
+    const r = jogarCarta(P, cadeira, i.carta, esc);
     if (r.erro) return r;
     return {
       ok: true,
-      narracao: [`${nome} jogou ${nomeDaCarta(i.carta)}`]
+      // A NARRAÇÃO NÃO SOLETRA A CARTA ESCONDIDA — ela é o rastro público da jogada, e
+      // dizer o nome aqui desfaria a redação da vista pela porta do texto.
+      narracao: [esc ? `${nome} escondeu uma carta` : `${nome} jogou ${nomeDaCarta(i.carta)}`]
         .concat(narrarVaza(P, r.vaza)).concat(fimDoTruco(P, r)),
     };
   }

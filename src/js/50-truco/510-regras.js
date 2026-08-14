@@ -91,6 +91,12 @@ function compararCartas(a, b, manilha) {
 // mesmo valor, melou; se as duas mais fortes são da MESMA dupla, a dupla ganhou e quem leva
 // é a primeira delas (é ela quem sai na vaza seguinte).
 function vencedorDaVaza(jogadas, manilha, time) {
+  // A CARTA ESCONDIDA NÃO DISPUTA — "passa a não valer mais nada" (regra do Ricardo,
+  // 13/08/2026). O filtro mora AQUI e não em quem chama, porque esta função é pura e recebe
+  // `jogadas` sem `P`: a flag tem de viajar dentro da própria jogada, e é o que faz a mesma
+  // linha valer para a vaza em curso, para o `ganhandoAVaza` da vista e para o bot. TODAS
+  // escondidas devolve `null` — sem carta com força não há vencedor, e a vaza mela.
+  jogadas = jogadas.filter(j => !j.escondida);
   if (!jogadas.length) return null;
   let melhor = jogadas[0];
   let empatado = false;

@@ -607,6 +607,105 @@ console.log('\na fronteira de segurança');
   console.log(`  4 cadeiras · a visão da 0 não tem carta alheia · naMao ${v.naMao.join()}`);
 }
 
+console.log('\nesconder a carta');
+{
+  // Regra do Ricardo (13/08/2026): jogar de barriga para baixo, "passando a não valer mais
+  // nada" — e proibido na primeira rodada de cada mão. A mesa é ARMADA (não sorteada), e as
+  // cartas escondidas ([3,0], [4,0], [6,1]) não colidem com nenhum par que a visão produza
+  // por outro motivo — a lição do falso positivo do [0,0], aplicada antes de doer.
+  const P = mod.novaPartidaDoTruco(mesa(2));
+  P.maos = [
+    [c('3', 'ouros'), c('4', 'ouros'), c('5', 'ouros')],
+    [c('K', 'espadas'), c('4', 'copas'), c('7', 'espadas')],
+  ];
+  P.vira = c('Q', 'paus');
+  P.manilha = mod.manilhaDaVira(P.vira);              // J — nenhuma das mãos acima é manilha
+  P.vez = 0; P.saiu = 0; P.abridor = 0; P.vazas = []; P.mesa = [];
+
+  // NA 1ª VAZA a oferta está desligada e a recusa FALA.
+  ok(mod.acoesDoTruco(P, 0).esconder === false, 'a 1ª vaza devia proibir esconder');
+  const r1 = mod.jogarCarta(P, 0, c('4', 'ouros'), true);
+  ok(!!(r1 || {}).erro && /primeira vaza/.test((r1 || {}).erro),
+    `esconder na 1ª vaza devia ser recusado dizendo por quê: ${(r1 || {}).erro}`);
+  ok(P.mesa.length === 0 && P.maos[0].length === 3, 'a recusa não podia mexer na mesa nem na mão');
+
+  // A 1ª vaza sai aberta: o 3 bate o K.
+  mod.jogarCarta(P, 0, c('3', 'ouros'));
+  mod.jogarCarta(P, 1, c('K', 'espadas'));
+  ok(P.vazas.length === 1 && P.vazas[0].vencedor === 0, 'a 1ª vaza devia ser da cadeira 0');
+
+  // 2ª VAZA: a cadeira 0 ESCONDE o 4 de ouros. Enquanto só há a escondida na mesa, ninguém
+  // está ganhando — `null` é "está melando", que é a leitura certa de uma mesa sem força.
+  ok(mod.acoesDoTruco(P, 0).esconder === true, 'da 2ª vaza em diante devia dar para esconder');
+  const r2 = mod.jogarCarta(P, 0, c('4', 'ouros'), true);
+  ok(!(r2 || {}).erro, `esconder na 2ª vaza devia valer: ${(r2 || {}).erro}`);
+  ok(((P.mesa[0] || {}).escondida) === true, 'a jogada escondida devia carregar a marca em P');
+  const v0 = mod.visaoDoTruco(P, 0);
+  ok(v0.ganhandoAVaza === null, 'com só a escondida na mesa, ninguém devia estar ganhando');
+  // A REDAÇÃO É UNIFORME — nem quem escondeu revê o valor pela vista. E é a fronteira do
+  // invariante 3 pela porta nova: `P.mesa` viaja inteiro no fio, MENOS a carta escondida.
+  for (const cad of [0, 1]) {
+    const tx = JSON.stringify(Object.assign({}, mod.visaoDoTruco(P, cad), { mao: [] }));
+    ok(!tx.includes(JSON.stringify(c('4', 'ouros'))),
+      `a carta escondida vazou na visão da cadeira ${cad}`);
+  }
+  ok(((v0.mesa[0] || {}).carta) === undefined && ((v0.mesa[0] || {}).escondida) === true,
+    'a jogada redigida devia sair sem carta e com a marca');
+  // A DICA DO CONVIDADO com a jogada redigida na mesa: sem o filtro do `mandandoNaVaza`,
+  // `compararCartas` lê `undefined[0]` e derruba a tela de quem só pediu uma dica.
+  let dicaDeu = null, dica = null;
+  try { dica = mod.dicaDoTruco(mod.visaoDoTruco(P, 1)); } catch (e) { dicaDeu = e.message; }
+  ok(!dicaDeu, `a dica estourou com a escondida na mesa: ${dicaDeu}`);
+  ok(!!(dica && dica.carta), 'a dica devia continuar sugerindo uma carta');
+
+  // A ABERTA MAIS FRACA GANHA DA ESCONDIDA — o 4 de copas contra o 4 de ouros escondido
+  // seria EMPATE se a escondida disputasse; com ela fora, a aberta leva sozinha. É o caso
+  // que separa o filtro de qualquer outra leitura.
+  mod.jogarCarta(P, 1, c('4', 'copas'));
+  ok(P.vazas.length === 2 && P.vazas[1].vencedor === 1,
+    `a aberta devia ganhar da escondida, veio ${JSON.stringify((P.vazas[1] || {}).vencedor)}`);
+
+  // O BOT COM MEMÓRIA NÃO SABE A CARTA ESCONDIDA. `saiu` é "o que a mesa viu sair" — a
+  // escondida caiu de barriga para baixo, então lembrá-la seria ler `P` por baixo do pano.
+  // As abertas TÊM de estar lá, senão o filtro certo e a memória desligada seriam o mesmo verde.
+  const info = mod.informacaoDoTruco(P, 1, { ruido: 0, memoria: true, coragem: 0 });
+  ok(!info.saiu.some(x => mod.mesmaCarta(x, c('4', 'ouros'))),
+    'a memória do bot sabe a carta escondida');
+  for (const aberta of [c('3', 'ouros'), c('K', 'espadas'), c('4', 'copas')]) {
+    ok(info.saiu.some(x => mod.mesmaCarta(x, aberta)),
+      `a memória do bot perdeu a aberta ${mod.nomeDaCarta(aberta)}`);
+  }
+
+  // 3ª VAZA: os DOIS escondem — sem carta com força a vaza mela, e cai na tabela do melou
+  // que já existe: 1 a 1 com a 3ª empatada, leva quem fez a 1ª.
+  mod.jogarCarta(P, 1, c('7', 'espadas'), true);
+  mod.jogarCarta(P, 0, c('5', 'ouros'), true);
+  ok(P.vazas.length === 3 && P.vazas[2].vencedor === null, 'todos escondendo, a vaza devia melar');
+  ok(((P.resultado || {}).motivo) === 'vazas' && ((P.resultado || {}).time) === 0,
+    `a mão devia ir para quem fez a 1ª vaza: ${JSON.stringify(P.resultado)}`);
+  // As vazas FECHADAS também trafegam redigidas — o irmão da redação da mesa em curso.
+  const vFim = JSON.stringify(Object.assign({}, mod.visaoDoTruco(P, 1), { mao: [] }));
+  for (const esc of [c('4', 'ouros'), c('5', 'ouros'), c('7', 'espadas')]) {
+    ok(!vFim.includes(JSON.stringify(esc)),
+      `a escondida ${mod.nomeDaCarta(esc)} vazou pelas vazas fechadas`);
+  }
+
+  // A PARTIDA COM ESCONDIDA SOBREVIVE AO JSON — ela é dado guardado e retomável.
+  const volta = JSON.parse(JSON.stringify(P));
+  ok(mod.JOGOS.truco.motor.partidaValida(volta), 'a partida com escondida devia passar no validador');
+  ok(((volta.vazas[2] || {}).jogadas || []).every(j => j.escondida && Array.isArray(j.carta)),
+    'a marca e o valor deviam sobreviver ao JSON dentro de P');
+
+  // E DEPOIS DE TRUCO ACEITO a 1ª vaza continua sendo a 1ª vaza.
+  const Q = mod.novaPartidaDoTruco(mesa(2));
+  Q.vez = 0; Q.saiu = 0;
+  mod.trucar(Q, 0);
+  mod.aceitarTruco(Q, 1);
+  ok(mod.acoesDoTruco(Q, Q.vez).esconder === false,
+    'truco aceito não devia liberar esconder na 1ª vaza');
+  console.log('  1ª vaza recusa · a escondida não disputa · todos escondendo mela · nada vaza');
+}
+
 console.log('\nsair conta como derrota');
 {
   const P = mod.novaPartidaDoTruco(mesa(2));
@@ -643,7 +742,7 @@ console.log('\nmil mãos bot×bot, sem estourar e sem travar');
   // A VARREDURA. Um caso escrito à mão prova o caso; mil mãos aleatórias provam que não há
   // estado de onde não se sai — que é o defeito que mais dói neste projeto (mesa parada, sem
   // mensagem e sem botão), e o único que não aparece em teste de caso.
-  let maos = 0, melou = 0, correu = 0, entregou = 0, lances = 0, presa = 0;
+  let maos = 0, melou = 0, correu = 0, entregou = 0, lances = 0, presa = 0, escondidas = 0;
   for (let p = 0; p < 60; p++) {
     const P = mod.novaPartidaDoTruco(mesa(p % 2 ? 4 : 2));
     for (let guarda = 0; guarda < 4000 && P.fase !== 'fim'; guarda++) {
@@ -659,7 +758,11 @@ console.log('\nmil mãos bot×bot, sem estourar e sem travar');
       }
       if (a.trucar && guarda % 11 === 0) { mod.trucar(P, P.vez); continue; }
       if (!a.cartas.length) { presa++; break; }        // mesa parada: é o que se caça
-      mod.jogarCarta(P, P.vez, a.cartas[guarda % a.cartas.length]);
+      // De vez em quando ESCONDE — só quando o motor oferece, que é como a varredura prova
+      // que a jogada nova não abre estado de onde não se sai (nem vaza pelo caminho comum).
+      const esconde = a.esconder && guarda % 13 === 0;
+      mod.jogarCarta(P, P.vez, a.cartas[guarda % a.cartas.length], esconde);
+      if (esconde) escondidas++;
       lances++;
     }
     if (P.fase !== 'fim') presa++;
@@ -675,8 +778,11 @@ console.log('\nmil mãos bot×bot, sem estourar e sem travar');
   // naipe tendo vazado para as cartas comuns, e o melou deixando de existir no jogo inteiro
   // sem nenhuma outra asserção notar.
   ok(melou > 0, 'nenhuma vaza empatou em centenas de mãos — o melou não existe mais');
+  // A JOGADA NOVA TEM DE TER RODADO — varredura que não alcança o ramo aprova por ausência,
+  // que é a família do `conn.open` e do helper que passava índice.
+  ok(escondidas > 0, 'nenhuma carta foi escondida na varredura — o ramo novo não rodou');
   console.log(`  60 partidas · ${maos} mãos · ${lances} cartas · ${correu} corridas · ` +
-    `${entregou} entregas · ${melou} vazas empatadas · 0 travadas`);
+    `${entregou} entregas · ${melou} vazas empatadas · ${escondidas} escondidas · 0 travadas`);
 }
 
 // ═══ O BOT ══════════════════════════════════════════════════════════════════
@@ -1389,7 +1495,8 @@ console.log('\na barra de apostas oferece o que o motor aceita');
   const v = mod.semAMaoNoTruco(mod.visaoDoTruco(P3, 0));
   ok(v.mao.length === 0, 'a mão sobreviveu à vista travada');
   ok(v.acoes.cartas.length === 0 && !v.acoes.aceitar && !v.acoes.correr
-    && !v.acoes.onze && v.acoes.trucar === null, 'sobrou ação na vista travada');
+    && !v.acoes.onze && v.acoes.trucar === null && !v.acoes.esconder,
+  'sobrou ação na vista travada');
 }
 
 // ─── uma partida inteira pela casa ───────────────────────────────────────────
