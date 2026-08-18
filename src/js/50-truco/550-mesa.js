@@ -592,6 +592,27 @@ function mostrarPreviaDoTruco(vista) {
 const esconderPreviaDoTruco = () => grupoPreviaDoTruco.clear();
 const temPreviaDoTruco = () => grupoPreviaDoTruco.children.length > 0;
 
+// TIRAR TUDO O QUE É DO TRUCO DO TAMPO — o verbo `JOGO.mesa.limpar`, chamado pela casa quando
+// OUTRO jogo vai sentar (`abrirJogo`, 141-abas.js). O irmão de `limparMesaDoDomino`, e a
+// razão está escrita lá: os grupos moram na `scene` desde a carga, e sem isto o toco com a
+// vira em cima, os versos dos adversários e a carta da vaza ficavam no tampo do dominó — a
+// foto de campo de 14/08/2026 (Fila 16).
+//
+// NÃO É `grupoMesaDoTruco.clear()`: `grupoPreviaDoTruco` é FILHO dele (linha 23), e um clear()
+// o arrancaria — toda prévia futura nasceria invisível, sem erro. Remove-se o que a
+// reconciliação pôs (os `reg.obj`; a marca de "está ganhando" é filha da carta e sai junto)
+// mais o TOCO, que é mobília fora do mapa de propósito e por isso precisa de uma linha
+// própria — é exatamente o objeto da foto.
+function limparMesaDoTruco() {
+  esconderMaoDoTruco();
+  esconderPreviaDoTruco();
+  for (const reg of naMesaDoTruco.values()) grupoMesaDoTruco.remove(reg.obj);
+  naMesaDoTruco.clear();
+  if (tocoDoBaralho.parent) grupoMesaDoTruco.remove(tocoDoBaralho);
+  grupoOutrosDoTruco.clear();
+  esquecerArrumacaoDoTruco();
+}
+
 // ─── a animação ──────────────────────────────────────────────────────────────
 function animarTrucoNaMesa(dt, apontadaAgora) {
   escalaDaMesaDoTruco = chegarPerto(escalaDaMesaDoTruco, escalaAlvoDoTruco, 8, dt);

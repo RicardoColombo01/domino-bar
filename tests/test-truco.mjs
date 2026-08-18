@@ -49,6 +49,10 @@ const mod = await import(buildModule([
   // Fila 12: projetar a carta para NDC é o único jeito de mirar com o DEDO de verdade —
   // e é o dedo, não o teclado, que o sistema interrompe.
   'ponteiroDoTruco',
+  // Fila 16: a mesa órfã. `sairDaPartida` é o botão Sair (o caminho do relato de campo);
+  // `acoesDe` e `naMesa` são do DOMINÓ — a cena troca de jogo nas DUAS direções, e a mesa do
+  // dominó tem de encher e esvaziar de verdade, não só a do truco.
+  'sairDaPartida', 'acoesDe', 'naMesa',
 ]));
 
 let falhas = 0, n = 0;
@@ -2221,6 +2225,117 @@ console.log('\no gesto que o sistema interrompe');
     'o ouvinte do truco mexeu na mira com o DOMINÓ na mesa — falta a guarda estaNaMesa');
   mod.abrirJogo('truco');
   console.log('  sair para outro aplicativo solta a mira, como no dominó — e só com o truco na mesa');
+}
+
+// ─── Fila 16: a mesa órfã — trocar de jogo leva as coisas do jogo anterior ───
+// Relato de campo com foto (14/08/2026): jogou truco, saiu, abriu o dominó, e o tampo nasceu
+// com o toco do baralho e a vira em cima, os versos dos adversários e uma carta da vaza. Os
+// grupos 3D dos dois jogos moram na `scene` desde a carga; quem os esvazia é o `sincronizar`
+// de cada jogo, que só roda para o jogo DA MESA. O verbo que faltava é `JOGO.mesa.limpar`,
+// chamado por `abrirJogo` no jogo que SAI.
+//
+// TUDO AQUI SE MEDE PELO REGISTRO DO OUTRO JOGO (`JOGOS.truco.ponte`, `JOGOS.domino.ponte`)
+// e nunca pela ponte da casa (`window.__jogo`): a ponte é exatamente o que a troca de jogo
+// reaponta, e foi medindo por ela que a Fila 14 leu os grupos VAZIOS do jogo novo e deu este
+// defeito como "não vaza". Sonda que mede pela ponte mede o jogo novo.
+//
+// TODAS AS ASSERÇÕES NASCEM VERDES (o conserto veio antes), então a prova é a MUTAÇÃO — ver
+// o registro da Fila 16 no CLAUDE.md: tirar a chamada em `abrirJogo`, tirar a remoção do
+// toco, tirar o `clear()` dos adversários, e trocar a remoção fina por `grupoMesa.clear()`.
+console.log('\na mesa órfã: trocar de jogo limpa o tampo do jogo anterior');
+{
+  const truco = mod.JOGOS.truco.ponte, domino = mod.JOGOS.domino.ponte;
+
+  // ─── monta a mesa do truco CHEIA: vira + toco, uma carta jogada, os versos, a sua mão ──
+  mod.abrirJogo('truco');
+  mod.MESA.n = 2; mod.MESA.modo = 'paulista'; mod.MESA.alvo = 12;
+  mod.MESA.cadeiras[0].tipo = 'voce';
+  mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[1].nivel = 'dificil';
+  mod.comecarLocal();
+  mod.aplicarIntencao(mod.P.vez, { acao: 'jogar', carta: mod.P.maos[mod.P.vez][0] });
+  // A MONTAGEM TEM DE TER CONSEGUIDO, senão as asserções de "ficou vazio" passam por
+  // trivialidade — a lição do helper que passava índice e nunca levantou peça nenhuma.
+  ok(truco.naMesa.has('vira') && !!mod.tocoDoBaralho.parent,
+    'montagem: a vira e o toco não estão na mesa do truco');
+  ok(truco.naMesa.size >= 2, `montagem: só ${truco.naMesa.size} carta(s) na mesa do truco (queria vira + jogada)`);
+  ok(truco.grupoOutros.children.length > 0, 'montagem: nenhum verso de adversário no truco');
+  ok(truco.naMao.length > 0 && truco.grupoMao.children.length > 0, 'montagem: a sua mão do truco está vazia');
+  const cartasNaMesaAntes = truco.grupoMesa.children.length;
+  ok(cartasNaMesaAntes > 1, 'montagem: o grupo da mesa do truco só tem a prévia dentro');
+
+  // ─── o caminho do relato: Sair, e a aba do dominó ─────────────────────────
+  mod.sairDaPartida();
+  ok(mod.P === null, 'sair da partida não zerou P — a aba continuaria travada');
+  // A saída NÃO limpa a mesa (de propósito: atrás do menu ela é cenário). É a TROCA que limpa.
+  ok(truco.grupoMesa.children.length === cartasNaMesaAntes,
+    'sair da partida esvaziou a mesa — o cenário atrás do menu é estética, não vazamento');
+  ok(mod.abrirJogo('domino'), 'a casa não conseguiu abrir o dominó');
+
+  // O truco levou as suas coisas: mesa, adversários, mão e o mapa de reconciliação.
+  ok(truco.naMesa.size === 0, `${truco.naMesa.size} carta(s) do truco continuam no mapa da mesa`);
+  ok(truco.grupoOutros.children.length === 0,
+    `${truco.grupoOutros.children.length} verso(s) de adversário do truco ficaram no tampo do dominó`);
+  ok(truco.grupoMao.children.length === 0 && truco.naMao.length === 0,
+    'a sua mão do truco continua na cena com o dominó na mesa');
+  ok(!mod.tocoDoBaralho.parent, 'o TOCO do baralho ficou no tampo do dominó — é o objeto da foto');
+  // O GRUPO DA MESA FICA SÓ COM A PRÉVIA DENTRO. É a asserção que separa a remoção fina de
+  // um `grupoMesa.clear()`: a prévia é FILHA do grupo da mesa, e um clear() a arrancaria —
+  // toda prévia futura nasceria num grupo solto, invisível para sempre e sem erro nenhum.
+  ok(truco.grupoMesa.children.length === 1 && truco.grupoMesa.children[0] === truco.grupoPrevia,
+    `o grupo da mesa do truco devia ficar SÓ com a prévia pendurada; tem ${truco.grupoMesa.children.length} filho(s)` +
+    (truco.grupoMesa.children.includes(truco.grupoPrevia) ? '' : ' — E A PRÉVIA FOI ARRANCADA'));
+
+  // ─── e o dominó monta a dele por cima de um tampo limpo ─────────────────────
+  mod.MESA.n = 2; mod.MESA.modo = 'classico';
+  mod.MESA.cadeiras[0].tipo = 'voce';
+  mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[1].nivel = 'dificil';
+  mod.comecarLocal();
+  const j0 = mod.acoesDe(mod.P, mod.P.vez).jogadas[0];
+  ok(!!j0, 'montagem: o dominó não ofereceu jogada nenhuma a quem abre');
+  if (j0) mod.aplicarIntencao(mod.P.vez, { acao: 'jogar', peca: j0.peca, ponta: j0.ponta });
+  ok(mod.naMesa.size === 1 && domino.grupoMesa.children.length === 2,
+    `montagem: a mesa do dominó devia ter UMA peça (mais a prévia); tem ${mod.naMesa.size} no mapa e ` +
+    `${domino.grupoMesa.children.length} filho(s) no grupo`);
+  ok(domino.grupoOutros.children.length > 0 && domino.grupoMonte.children.length > 0,
+    'montagem: o dominó de 2 no clássico devia ter adversário e monte na cena');
+  ok(domino.naMao.length > 0, 'montagem: a sua mão do dominó está vazia');
+  const pecasNaMesaAntes = domino.grupoMesa.children.length;
+
+  // ─── a volta: o dominó sai, o truco entra, e é o DOMINÓ que leva as coisas ──
+  mod.sairDaPartida();
+  ok(domino.grupoMesa.children.length === pecasNaMesaAntes,
+    'sair da partida esvaziou o tabuleiro — a saída não limpa, a troca limpa');
+  ok(mod.abrirJogo('truco'), 'a casa não conseguiu voltar ao truco');
+  ok(mod.naMesa.size === 0, `${mod.naMesa.size} peça(s) do dominó continuam no mapa do tabuleiro`);
+  ok(domino.grupoMesa.children.length === 1 && domino.grupoMesa.children[0] === domino.grupoPrevia,
+    `o tabuleiro do dominó devia ficar SÓ com a prévia pendurada; tem ${domino.grupoMesa.children.length} filho(s)` +
+    (domino.grupoMesa.children.includes(domino.grupoPrevia) ? '' : ' — E A PRÉVIA FOI ARRANCADA'));
+  ok(domino.grupoOutros.children.length === 0, 'as mãos dos adversários do dominó ficaram na mesa do truco');
+  ok(domino.grupoMonte.children.length === 0, 'o MONTE do dominó ficou na mesa do truco');
+  ok(domino.naMao.length === 0, 'a sua mão do dominó continua na cena com o truco na mesa');
+
+  // ─── e o truco REMONTA inteiro, e a prévia dele ainda funciona ────────────────
+  // Sem isto, um `limpar` que quebrasse a reconciliação (um mapa não zerado, um toco preso
+  // a um pai órfão) passaria nas asserções de "está vazio" e a mesa nasceria coxa na volta.
+  mod.MESA.n = 2; mod.MESA.modo = 'paulista'; mod.MESA.alvo = 12;
+  mod.MESA.cadeiras[0].tipo = 'voce';
+  mod.MESA.cadeiras[1].tipo = 'bot'; mod.MESA.cadeiras[1].nivel = 'dificil';
+  mod.comecarLocal();
+  ok(truco.naMesa.has('vira') && !!mod.tocoDoBaralho.parent && mod.tocoDoBaralho.parent === truco.grupoMesa,
+    'na volta ao truco a vira e o toco não remontaram no grupo da mesa');
+  ok(truco.grupoOutros.children.length > 0, 'na volta ao truco os versos dos adversários não remontaram');
+  ok(truco.naMao.length === 3, `na volta ao truco a sua mão tem ${truco.naMao.length} carta(s), e devia ter 3`);
+  mod.P.vez = 0; mod.publicar();
+  // O ÍNDICE, não a carta — `selecionarCarta(i)` desiste calada com `naMaoDoTruco[obj]`, e a
+  // asserção seguinte reprovaria acusando a limpeza por um erro de chamada (foi o que
+  // aconteceu na primeira rodada desta seção). E cobrar que a escolha PEGOU é o que impede
+  // uma montagem que falhe calada de fazer a asserção da prévia mentir amanhã.
+  mod.selecionarCarta(0);
+  ok(mod.escolhidaNoTruco !== null, 'montagem: a carta 0 não foi escolhida — a prévia nem chegou a ser pedida');
+  ok(mod.temPreviaDoTruco(), 'depois da limpeza a PRÉVIA do truco não aparece mais — a limpeza arrancou o grupo dela');
+  mod.cancelarEscolhaNoTruco();
+  console.log('  o truco leva o toco, a vaza, os versos e a mão · o dominó leva a linha, o monte e as mãos · ' +
+    'a prévia fica pendurada nos dois · a volta remonta inteira');
 }
 
 console.log(`\n${falhas ? falhas + ' falha(s)' : 'tudo certo'} — ${n} asserções`);

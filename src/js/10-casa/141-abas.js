@@ -176,6 +176,17 @@ function porAPonteDoJogo() {
 // O caminho único: o arranque entra por aqui e a aba entra por aqui. Duas cópias da mesma
 // sequência, uma delas esquecendo um passo, é literalmente como o defeito 3 da Fila 6 durou.
 function abrirJogo(id) {
+  // O JOGO QUE SAI DA MESA LEVA AS SUAS COISAS — e ANTES do `trocarDeJogo`, porque depois
+  // dele `JOGO` já é o novo. Os grupos 3D dos dois jogos moram na `scene` desde a carga, e
+  // quem os esvazia é o `sincronizar` de cada um, que só roda para o jogo DA MESA: sem isto
+  // o tampo do dominó nascia com o toco do truco e a vira em cima (foto de campo de 14/08/2026,
+  // Fila 16). No arranque `JOGO` é nulo e não há o que limpar; na aba já ativa também não —
+  // a mesa acabada atrás do menu continua aparecendo, que é o de sempre DENTRO de um jogo.
+  // E `sairDaPartida` NÃO limpa, de propósito: o cenário atrás do menu é estética, não
+  // vazamento. Quem entra não precisa de nada: o `sincronizar` dele reconcilia do zero.
+  if (JOGO && Object.hasOwn(JOGOS, id) && JOGOS[id] !== JOGO && JOGO.mesa && JOGO.mesa.limpar) {
+    JOGO.mesa.limpar();
+  }
   if (!trocarDeJogo(id)) return false;
 
   // ANTES de qualquer leitura: o acervo guardado sem sufixo é de quem declarou herdá-lo, e a

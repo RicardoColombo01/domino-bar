@@ -68,6 +68,8 @@ JOGOS.truco = {
   mesa: {
     sincronizar: sincronizarTrucoNaMesa,
     animar: animarTrucoNaMesa,
+    // "Tire suas coisas do tampo": a casa chama quando OUTRO jogo vai sentar (Fila 16).
+    limpar: limparMesaDoTruco,
     esconderMao: esconderMaoDoTruco,
     arrumar: arrumarMaoDoTruco,
     esquecerArrumacao: esquecerArrumacaoDoTruco,
