@@ -51,16 +51,32 @@ const AJUDA = `
     j.comecarLocal();
     j.pararBots();
   };
+  // E A MESA DO TRUCO — a lacuna que a Fila 14 achou (Onda D da Fila 15): esta suíte nunca
+  // tinha rodado com uma CARTA na cena, e a carta é a única textura do jogo cujo dono é uma
+  // biblioteca (\`40-cartas/\`) e não a casa nem o dominó. A proteção existia (a carta usa
+  // \`pintar()\`); a prova é esta. Qual jogo está na mesa é decidido pela URL da recarga
+  // (\`?jogo=…\`), e não aqui — ver \`doZero\`.
+  const mesaDoTruco = () => {
+    j.MESA.modo = 'paulista'; j.MESA.n = 2;
+    j.MESA.cadeiras[1].tipo = 'bot'; j.MESA.cadeiras[1].nivel = 'normal';
+    j.comecarLocal();
+    j.pararBots();
+  };
 
   const tela = () => document.querySelector('#app canvas');
   const gl = () => { const c = tela(); return c.getContext('webgl2') || c.getContext('webgl'); };
   const perdedor = () => gl().getExtension('WEBGL_lose_context');
 
   // AS TEXTURAS, sem ponte: as com \`map\` estão no grafo, e o atlas está no material de
-  // uma face da sua própria mão. Nomeadas pelo TAMANHO, que é único e não depende de o
-  // jogo ter nome para elas — 1792x256 pintas, 512x512 madeira, 256x256 piso.
-  const nomeDe = (im) => im.width === 1792 ? 'pintas' : im.width === 512 ? 'madeira'
-                       : im.width === 256 ? 'piso' : im.width + 'x' + im.height;
+  // uma face da sua própria mão. O NOME sai do registro do \`pintar()\` (\`j.texturas\`, a
+  // ponte da casa) quando o canvas está lá, e do TAMANHO só como último recurso: nomear
+  // pela largura batizava o verso da carta (256×256) de "piso" — o mesmo tamanho, outro
+  // dono —, e a comparação por índice passava a contar uma história de dois pisos.
+  // Achar o canvas no grafo continua sendo o que se mede; o registro só dá o nome.
+  const nomeDe = (im) => {
+    const reg = (j.texturas || []).find(t => t.canvas === im);
+    return reg ? reg.nome : im.width + 'x' + im.height;
+  };
   const texturas = () => {
     const achadas = new Map();
     const olhar = (o) => {
@@ -111,6 +127,22 @@ const AJUDA = `
     return { px: (v.x + 1) / 2 * window.innerWidth, py: (1 - v.y) / 2 * window.innerHeight };
   };
 
+  // ONDE PERGUNTAR "ESTÁ PRETA?". Na PEÇA, o centro: o marfim domina e a mediana de 9 pixels
+  // ignora a pinta. Na CARTA o centro é o pior lugar — é onde mora o naipe grande, e um paus
+  // preto ali daria luz baixa com a textura perfeita, indistinguível da carta preta que este
+  // teste existe para pegar. A margem de papel a meia altura, no lado esquerdo, é papel em
+  // qualquer valor e qualquer naipe (o canto com o índice fica em cima). É calculada em
+  // coordenadas LOCAIS da carta e levada ao mundo pelo próprio objeto, então vale com o
+  // tombo, o leque e a escala da mão. A carta se reconhece pelo campo \`carta\` da entrada da
+  // mão (a peça tem \`peca\`), e não pelo jogo na mesa: é a FORMA que decide onde é papel.
+  const pontoDaSonda = (m) => {
+    if (!m.carta) return [m.xBase, m.yBase, m.zBase];
+    const V = m.obj.position.constructor;
+    m.obj.updateMatrixWorld(true);
+    const p = m.obj.localToWorld(new V(-0.24, 0.02, 0));
+    return [p.x, p.y, p.z];
+  };
+
   // ERRO DENTRO DE UM rAF NÃO REJEITA A PROMESSA QUE O ENVOLVE: o \`reject\` nunca é
   // chamado, a promessa nunca resolve, e o puppeteer só reclama 180 s depois com um
   // ProtocolError que não fala da causa. O projeto já pagou isso uma vez (item 11 da Fila
@@ -127,7 +159,7 @@ const AJUDA = `
     await quadro(); await quadro();
     const peca = j.naMao[0];
     if (!peca) return { erro: 'a mão está vazia: naMao tem ' + j.naMao.length + ' peças' };
-    const p = ondeNaTela(peca.xBase, peca.yBase, peca.zBase);
+    const p = ondeNaTela(...pontoDaSonda(peca));
     const t = ondeNaTela(0, 0, 0);
     const luz = await noQuadro(() => [luzEm(p.px, p.py), luzEm(t.px, t.py)]);
     if (luz.erro) return { erro: 'lendo o pixel da tela: ' + luz.erro };
@@ -183,11 +215,12 @@ const AJUDA = `
   const GRADE = [0.28, 0.5, 0.72];
   // O ATLAS DAS CARTAS, que é a mesma pergunta noutra pasta: 40 células, e cada uma tem de
   // desenhar o naipe da SUA linha. Elas têm todas a mesma forma, então um naipe trocado de
-  // linha é invisível a olho — e como a pasta das cartas ainda não tem jogo que a consuma,
-  // isto é a única coisa que olha o desenho.
+  // linha é invisível a olho. (Este bloco nasceu em 06/08 dizendo que "a pasta das cartas
+  // ainda não tem jogo que a consuma" — o truco senta nela desde a v4.5, e desde a Onda D
+  // da Fila 15 esta suíte também roda o E3 com uma carta na cena, lá embaixo.)
   //
-  // Vem de window.__jogo.texturas (a ponte da CASA, por nome) e não do grafo: nenhuma carta
-  // está na cena ainda, então caçar material com map não acharia nada.
+  // Vem de window.__jogo.texturas (a ponte da CASA, por nome) e não do grafo: nesta cena a
+  // mesa é de dominó e não há carta no grafo, então caçar material com map não acharia nada.
   //
   // O que se amostra é a COR do naipe grande no centro. A forma exata (coração, folha) não
   // dá para afirmar por amostragem sem virar um teste de pixel frágil; a FAMÍLIA da cor dá,
@@ -276,10 +309,14 @@ pagina.on('console', m => { if (m.type() === 'error') erros.push(m.text()); });
 // Cada experimento começa de uma página nova: E2 e E3 apagam bitmaps que, no código de
 // hoje, ninguém repinta — sem recarregar, um experimento contaminaria o seguinte. É a
 // mesma lição do localStorage compartilhado que as suítes de tela já pagaram.
-const doZero = async () => {
-  await pagina.goto(JOGO, { waitUntil: 'networkidle2', timeout: 45000 });
+// O JOGO VAI NA URL, e nos DOIS casos: `?jogo=…` é a escada de precedência da casa (URL →
+// preferência → padrão), e abrir o truco uma vez GRAVA a preferência — o `localStorage` do
+// `file://` é o mesmo em toda recarga desta rodada, então um `goto` sem `?jogo=` depois da
+// cena de truco abriria o TRUCO calado. Cada cena diz o que quer (a lição do `contar()`).
+const doZero = async (jogo = 'domino', montagem = 'mesa()') => {
+  await pagina.goto(`${JOGO}?jogo=${jogo}`, { waitUntil: 'networkidle2', timeout: 45000 });
   await pagina.waitForFunction('window.__jogo && window.__jogo.pronto', { timeout: 30000, polling: 400 });
-  await pagina.evaluate(naPagina('mesa()'));
+  await pagina.evaluate(naPagina(montagem));
 };
 
 // A AJUDA vai DENTRO de uma IIFE, e não solta no script. `page.evaluate(string)` avalia em
@@ -296,8 +333,8 @@ const mostrar = (rotulo, m) => {
     `tampo ${String(m.luzTampo).padStart(3)} · ${bs}`);
 };
 
-const experimento = async (nome, oQueFaz) => {
-  await doZero();
+const experimento = async (nome, oQueFaz, jogo, montagem) => {
+  await doZero(jogo, montagem);
   if (process.env.DOMINO_DEBUG) console.log('    …medindo o antes');
   const antes = await pagina.evaluate(naPagina('medir()'));
   if (process.env.DOMINO_DEBUG) console.log('    …mexendo');
@@ -533,6 +570,42 @@ for (let i = 0; i < umaVez.length; i++) {
 }
 console.log(`    ${umaVez.length} bitmaps idênticos entre duas repinturas ` +
   `(a 1ª pintura difere ~0,6%: é o rasterizador do Chrome, não o desenho)`);
+
+// ─── 5. E A CARTA — o E3 com o TRUCO na mesa ─────────────────────────────────
+// A dívida da Fila 14, paga na Onda D: tudo acima mede o dominó, e a carta é a única textura
+// cujo dono é uma BIBLIOTECA (`40-cartas/`). "A carta usa `pintar()`, logo está protegida"
+// era uma afirmação, e este arquivo já pagou duas vezes por afirmação não medida (o truco
+// online "herdando de graça", a vira "em volta e não por cima"). Aqui é o E3 inteiro — as
+// duas perdas juntas, que é o único caso que produz a foto — com o truco montado, e o pixel
+// medido na margem de papel da carta da sua mão.
+//
+// PROVA POR MUTAÇÃO, porque nasce verde: em `conferirTexturas` (070-cena.js), trocar
+// `for (const t of texturas)` por `for (const t of texturas.filter(t => t.nome !== 'cartas'))`
+// tem de derrubar SÓ este bloco — os quatro de cima continuam verdes, o que é a prova de que
+// eles nunca olharam para uma carta.
+console.log('\n  a CARTA sobrevive a sair do jogo e voltar (o truco na mesa)');
+const e3t = await experimento('E3 · com o TRUCO na mesa: apagar os bitmaps E perder/restaurar',
+  '(apagarBitmaps(), perderERestaurar())', 'truco', 'mesaDoTruco()');
+ok(!e3t.antes.erro && !e3t.depois.erro,
+  `não deu para medir o truco: ${e3t.antes.erro || e3t.depois.erro}`);
+if (!e3t.antes.erro && !e3t.depois.erro) {
+  // A GUARDA CONTRA VERDE VAZIO: a montagem tem de ter posto CARTA no grafo — o atlas das
+  // faces E o verso (as costas da carta e o toco do baralho). Sem esta linha, uma cena que
+  // abrisse o dominó por engano passaria em tudo abaixo medindo peça.
+  const nomes = e3t.depois.bitmaps.map(b => b.nome);
+  ok(nomes.includes('cartas') && nomes.includes('versoCarta'),
+    `a cena do truco não alcançou as texturas da carta — achou só [${nomes.join(', ')}]`);
+  ok(!nomes.includes('pintas'),
+    'a cena do truco tem o atlas de PINTAS no grafo — peça de dominó numa mesa de truco (a mesa órfã da Fila 16?)');
+  for (const b of e3t.depois.bitmaps) {
+    ok(b.alfa === 255, `com o truco na mesa, depois de voltar o bitmap de ${b.nome} está APAGADO (alfa ${b.alfa})`);
+  }
+  ok(e3t.antes.luzPeca >= 100,
+    `montagem: a margem da carta já estava escura ANTES (luz ${e3t.antes.luzPeca}) — a sonda não caiu no papel`);
+  ok(e3t.depois.luzPeca >= 100,
+    `depois de voltar, a carta na tela tem luz ${e3t.depois.luzPeca} — antes tinha ${e3t.antes.luzPeca}. ` +
+    `É a peça preta da Fila 7, agora numa carta`);
+}
 
 if (erros.length) {
   console.log(`\nerros no console: ${erros.length}\n  ${erros.slice(0, 4).join('\n  ')}`);

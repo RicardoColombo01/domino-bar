@@ -1019,13 +1019,13 @@ fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numera
 
 | | |
 |---|---|
-| commitado | **v4.14.3** — o hotfix da **FILA 16** (a mesa órfã: trocar de jogo leva as coisas do jogo anterior), na `main` pelo merge `--no-ff` de sempre. Antes dela a v4.14.2 (registro) e a **v4.14.0** (a Onda F: esconder a carta · mão de ferro) |
-| **enviado** | ⚠ **NÃO** — o `git ls-remote` responde `da24719` (**v4.14.1**). A **v4.14.2 e a v4.14.3 estão só nesta máquina**, esperando a liberação dele. É a régua do remoto consultado, que já respondeu `0 0` no `rev-list` com tudo por enviar |
-| **PUBLICADO** | o que está no ar é a **v4.14** — `sw.js` servido `51508f9747f3`. A v4.14.3 **toca `src/`** (o `sw.js` local é `4d994c336032`), então depois do push o servido TEM de mudar; se não mudar, é informação |
+| commitado | **v4.14.4** — a **ONDA D** da Fila 15 (o `test-textura` com o truco na mesa; só testes). Antes dela a **v4.14.3** — o hotfix da **FILA 16** (a mesa órfã: trocar de jogo leva as coisas do jogo anterior), na `main` pelo merge `--no-ff` de sempre. Antes dela a v4.14.2 (registro) e a **v4.14.0** (a Onda F: esconder a carta · mão de ferro) |
+| **enviado** | ✔ a v4.14.3 (com a v4.14.2), 18/08 — ele liberou, e o `git ls-remote` responde `5e09183`. A **v4.14.4** (Onda D) ver o rodapé desta tabela |
+| **PUBLICADO** | ⚠ **NÃO, e é o Pages** — o push da v4.14.3 chegou (18/08, `5e09183` no servidor) e **~25 min depois o Pages não tinha aberto rodada nenhuma**: a última é a da v4.14.1 (14/08). O `sw.js` servido continua `51508f9747f3` (v4.14); o local é `4d994c336032`. É a fila do Pages de 05/08 outra vez — não é gatilho nem código, e a régua continua sendo o `curl`. Se seguir parada, um push novo (a v4.14.4 está pronta) costuma destravar |
 | em curso | nada aberto no jogo. **O que sobra é JOGAR** — a mão de ferro, o esconder e agora a troca de jogo, nunca tocados por mão humana |
+| Filas 5 a 16 | **todas fechadas** · da **Fila 15** saíram as Ondas A, B, F e **D**; sobram **C e E** |
 | as anteriores | v4.14.0 (a Onda F) · v4.13.0 (a Onda B: o online) · v4.12.0 (a Onda A: manilhas, vira, peso) · v4.11.0 (a carta esticada) · v4.10.0 (Fila 13 + Fase 5) · v4.9.0 (Fila 12) |
-| Filas 5 a 16 | **todas fechadas** · da **Fila 15** saíram as Ondas A, B e **F**; sobram **C, D, E** |
-| o que vem | **1º ENVIAR** (a v4.14.2 e a v4.14.3, com a liberação dele — e conferir o `sw.js` servido depois), **2º JOGAR**, e então as ondas **D** (a dívida: o `test-textura` com truco na mesa), **E** (temas de baralho) e **C**. A **Fase 5** segue **⏸ em espera por decisão sua** |
+| o que vem | **JOGAR**, e então as ondas **E** (temas de baralho) e **C** (estatísticas, primeira mão guiada, desfazer no hotseat); depois o **PIFE**. A **Fase 5** segue **⏸ em espera por decisão sua** |
 
 ---
 
@@ -1351,16 +1351,17 @@ A FILA 16 ✔ FEITA em 18/08/2026 — a mesa órfã. O verbo `JOGO.mesa.limpar`
            · as três perguntas da Onda B seguem valendo (convite, chamado
              da vez, tamanho das cartas da vaza).
 
+A ONDA D ✔ FEITA em 18/08/2026, na mesma sessão da Fila 16 — sai na
+         v4.14.4 (só testes e registro; o bundle não muda). O `test-textura`
+         roda o E3 com o TRUCO na mesa (bloco 5), o `nomeDe` lê o registro do
+         `pintar()`, a sonda do pixel vai na margem de papel da carta, e cada
+         recarga diz `?jogo=`. UMA mutação, que derruba SÓ o bloco novo (2).
+         O `.gerado/` foi de 104 arquivos para 9. Detalhes na Onda D da Fila 15.
+
 ➜ PASSO 3  SE FOR ESCREVER CÓDIGO, o que sobra da Fila 15:
 
-           ONDA D (a dívida) — o `test-textura` nunca rodou com o TRUCO na
-             mesa. O mapa já está levantado: a suíte monta `MESA.modo =
-             'classico'` sem `?jogo=`, o `nomeDe()` batiza textura por LARGURA
-             (e o verso da carta, 256×256, colidiria com o `'piso'`), e o
-             `uvDaMao()` lê `m.peca`, que a mão do truco não tem.
-
            ONDA E (temas de baralho) e ONDA C (estatísticas, primeira mão
-             guiada, desfazer no hotseat) vêm depois. O PIFE é o próximo jogo.
+             guiada, desfazer no hotseat). O PIFE é o próximo jogo.
 ```
 
 > ### ⚠ ESTA RELEASE MUDA `src/`, e a régua de sempre volta a valer
@@ -4716,7 +4717,7 @@ Chrome** (`test-lembrar`), incluindo o motivo escrito no botão.
    **400 fases de fim**, o motor SEMPRE põe `resultado` ao entrar nelas. Era estado que o jogo
    não produz — a armadilha que este arquivo já nomeia.
 
-### O que a Fila 14 deixa como lacuna registrada
+### O que a Fila 14 deixa como lacuna registrada — ✔ FECHADA na Onda D (v4.14.4, 18/08)
 
 **O `test-textura` nunca rodou com o TRUCO na mesa.** Ele monta dominó (`j.MESA.modo =
 'classico'`) e o ciclo E3 — as duas perdas juntas, que é o único caso que produz o sintoma —
@@ -4919,18 +4920,33 @@ nenhum caminho que ensine na ordem. Reaproveita a dica inteira.
 **Só em mesa local**: online ou contra bot seria trapaça, e a fronteira do invariante 3 não
 protege contra o próprio jogador voltando o tempo.
 
-#### ONDA D — a dívida técnica que já tem nome  ·  ~meio dia
+#### ONDA D — a dívida técnica que já tem nome  ✔ FEITA (v4.14.4, 18/08/2026)
 
-**D1 · O `test-textura` com o TRUCO na mesa** — a lacuna que a Fila 14 achou e não fechou.
-Ninguém nunca perguntou se a CARTA sobrevive a sair do aplicativo e voltar, que é o defeito que
-custou a Fila 7 inteira. A proteção existe; a prova não. **É a única desta fila que é dívida e
-não ideia.**
+**D1 · O `test-textura` com o TRUCO na mesa** ✔ — o bloco 5 da suíte roda o **E3 inteiro**
+(apagar os bitmaps E perder/restaurar o contexto — o único caso que produz a foto da Fila 7)
+com o truco montado, e cobra `cartas` e `versoCarta` repintados **e** a carta na tela clara.
+**Mutação:** `conferirTexturas` deixando de repintar `'cartas'` derruba **só** este bloco —
+*"a carta na tela tem luz 41, antes tinha 250"* — e nenhum dos quatro de dominó, que é a
+prova de que eles nunca olharam para uma carta.
 
-**D2 · Apagar o comentário que envelheceu** — o bloco do atlas de cartas ainda diz *"a pasta
-das cartas ainda não tem jogo que a consuma"*. Era verdade em 06/08.
+Três coisas que a execução obrigou, e o mapa da Fila 14 já previa duas:
+- **o jogo vai na URL nos DOIS casos** (`?jogo=domino` / `?jogo=truco`): abrir o truco uma vez
+  GRAVA a preferência, e o `localStorage` do `file://` é o mesmo em toda recarga — um `goto`
+  sem `?jogo=` depois da cena de truco abriria o truco calado. Cada cena diz o que quer;
+- **`nomeDe` lê o nome do registro do `pintar()`** (`j.texturas`, por canvas) em vez de
+  adivinhar pela largura: o verso da carta é 256×256 como o piso, e a comparação por índice
+  passaria a contar dois "pisos";
+- **a sonda do pixel na CARTA vai na margem de papel, não no centro** — o centro é o naipe
+  grande, e um paus preto ali daria luz baixa com a textura perfeita, indistinguível da carta
+  preta que o teste existe para pegar. O ponto é local à carta (`localToWorld`), então vale
+  com o tombo, o leque e a escala; e a montagem cobra `luz ≥ 100` ANTES para provar que a
+  sonda caiu no papel. Quem decide é a FORMA da entrada da mão (`carta` vs `peca`), não o jogo.
 
-**D3 · Limpar `tests/.gerado/`** — 50 arquivos, 45 deles detritos de ondas fechadas. Está no
-`.gitignore`, então é desordem local e não sujeira versionada.
+**D2 · O comentário que envelheceu** ✔ — reescrito apontando para o bloco 5.
+
+**D3 · `tests/.gerado/`** ✔ — de 104 arquivos para 9: os `built*.mjs` (a suíte regenera),
+`shots/`, os dois moldes de foto e as duas fotos da Fila 16 citadas neste arquivo. Local, não
+versionado; vai encher de novo, e a régua é "o que este arquivo cita fica".
 
 #### ✔ AS TRÊS DECISÕES, RESPONDIDAS PELO RICARDO (11/08/2026)
 
