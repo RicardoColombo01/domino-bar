@@ -124,6 +124,30 @@ function mostrarPrevia(vista, peca, pontas) {
 const esconderPrevia = () => grupoPrevia.clear();
 const temPrevia = () => grupoPrevia.children.length > 0;
 
+// TIRAR TUDO O QUE É DO DOMINÓ DO TAMPO — o verbo `JOGO.mesa.limpar`, chamado pela casa
+// quando OUTRO jogo vai sentar (`abrirJogo`, 141-abas.js). Os grupos 3D dos dois jogos moram
+// na `scene` desde a carga e nunca saem; quem os esvazia é o `sincronizar` de cada jogo, que
+// só roda para o jogo DA MESA. Sem isto, trocar de aba congelava o tabuleiro na última
+// escala e o truco nascia por cima dele — foto de campo de 14/08/2026 (Fila 16).
+//
+// NÃO É `grupoMesa.clear()`, e a diferença é a PRÉVIA: `grupoPrevia` é FILHO de `grupoMesa`.
+// Um clear() indiscriminado o arrancaria, e toda prévia futura nasceria num grupo solto —
+// invisível para sempre, sem erro nenhum. Remove-se só o que a reconciliação pôs: os `reg.obj`
+// do mapa (a marca da última é filha da peça e sai junto; o `ultima` é que não pode ficar
+// apontando para um objeto órfão). Os grupos de fora (mão, adversários, monte) não têm
+// filho permanente e podem ser esvaziados inteiros. `esconderMao` já é o limpador da mão
+// (o hotseat o usa) e é reaproveitado, não copiado.
+function limparMesaDoDomino() {
+  esconderMao();
+  esconderPrevia();
+  for (const reg of naMesa.values()) grupoMesa.remove(reg.obj);
+  naMesa.clear();
+  ultima = null;
+  grupoOutros.clear();
+  grupoMonte.clear();
+  esquecerArrumacao();
+}
+
 // `chegarPerto` FOI PARA A CASA (010-constantes.js) na v4.5. Ela fala de número e de tempo,
 // nunca de peça — e é a única função de suavização do projeto, o que a torna também o único
 // lugar onde "menos movimento" cabe numa linha. Com o truco, ou ela subia ou o segundo jogo

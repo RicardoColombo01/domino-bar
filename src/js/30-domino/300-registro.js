@@ -88,6 +88,8 @@ JOGOS.domino = {
   mesa: {
     sincronizar(v) { sincronizarTabuleiro(v); sincronizarMao(v); sincronizarOutros(v); sincronizarMonte(v); },
     animar(dt, apontada) { animarTabuleiro(dt); animarMao(dt, apontada); },
+    // "Tire suas coisas do tampo": a casa chama quando OUTRO jogo vai sentar (Fila 16).
+    limpar: limparMesaDoDomino,
     esconderMao,
     arrumar: arrumarMao,
     esquecerArrumacao,
