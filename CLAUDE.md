@@ -8,12 +8,12 @@ gente e bot, na mesma tela ou pela internet. No ar em
 Sem framework, sem bundler, e **dois binários** — os ícones do aplicativo, exigidos pelo
 manifest: madeira, pintas, cartas e sons continuam gerados em canvas e WebAudio na hora.
 Three.js e PeerJS vêm de CDN, e o **service worker os guarda**, então depois de uma partida o
-jogo abre sem internet. **10.753 linhas** no total (`src/js` + `src/pagina.html` +
-`src/css/estilo.css` + `src/sw.js`), conferido em 14/08/2026 — este número **envelhece**, e já
-envelheceu cinco vezes: ficou dizendo 2.100 por três releases seguidas, a medição de 10/08
+jogo abre sem internet. **10.813 linhas** no total (`src/js` + `src/pagina.html` +
+`src/css/estilo.css` + `src/sw.js`), conferido em 18/08/2026 — este número **envelhece**, e já
+envelheceu seis vezes: ficou dizendo 2.100 por três releases seguidas, a medição de 10/08
 (9.648) estava velha no dia seguinte, a de 11/08 (9.768) durou um dia, a primeira de 12/08
-(10.098) não durou a própria sessão, e a de 13/08 (10.505) durou um dia. **Rode a conta, não
-leia o número daqui.**
+(10.098) não durou a própria sessão, a de 13/08 (10.505) durou um dia, e a de 14/08 (10.753)
+durou até a Fila 16. **Rode a conta, não leia o número daqui.**
 
 **Conte com `node`, não com o PowerShell.** `Measure-Object -Line` **não conta linha em
 branco** e devolve ~450 a menos; a discordância entre as duas réguas já custou uma
@@ -831,6 +831,15 @@ por mutação nas quatro direções, inclusive as duas de falso positivo.
   "não vazou" — **um `undefined` mascarado virou prova de limpeza**. A medição honesta lê os
   grupos pelo REGISTRO DO OUTRO JOGO (`JOGOS.truco.ponte.grupoMesa`…), nunca pela ponte. Foi
   por este buraco que a mesa órfã (Fila 16) chegou ao campo com "medido" escrito ao lado.
+- **GRUPO ARRANCADO DO PAI CONTINUA RESPONDENDO `children.length > 0`.** `grupoPrevia` é FILHO
+  de `grupoMesa` nos dois jogos; um `grupoMesa.clear()` o tira da árvore, mas o grupo solto
+  segue existindo e ganhando filhos — `temPrevia()` diz `true` para uma prévia que ninguém vê.
+  Por isso `limparMesa*` remove só o que a reconciliação pôs, e a asserção que protege isso é
+  "o grupo da mesa fica SÓ com a prévia pendurada" (`children[0] === grupoPrevia`), não
+  `temPrevia`. Achado pela mutação da Fila 16: a do `clear()` passou por uma e caiu na outra.
+- **`sairDaPartida` NÃO esconde nada, e a MÃO fica com a mesa.** A foto do "antes" da Fila 16
+  mostrou a mão do truco atrás do leque de peças — `esconderMaoDoTruco` só era chamado pelo
+  hotseat. Toda função de "tirar as coisas do tampo" tem de listar a mão junto com a mesa.
 
 ---
 
@@ -1006,17 +1015,17 @@ campo acha o que está escrito certo e mesmo assim não funciona.
 **Leia isto primeiro ao retomar.** É o estado real do trabalho, o que ele produziu, o que
 fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numerados mais abaixo.
 
-#### ESTADO EM UMA OLHADA (14/08/2026)
+#### ESTADO EM UMA OLHADA (18/08/2026)
 
 | | |
 |---|---|
-| commitado | **v4.14.0** — a **ONDA F** da Fila 15 (esconder a carta · mão de ferro), na `main` pelo merge `--no-ff` de sempre. As três decisões que a fila deixava em aberto o Ricardo respondeu em 14/08: a mão de ferro **decide a partida**, **sem truco** nela, e **vale na mesa de 2** (o gatilho é `alvo-1 × alvo-1`) |
-| **enviado** | ✔ **sim**, 14/08 — ele liberou ("Faça isso"), e o `git ls-remote` responde `72dcda4` com a tag `v4.14.0`, igual ao local |
-| **PUBLICADO** | ✔ **sim** — `sw.js` servido `51508f9747f3` = local, em TRÊS consultas seguidas (uma só não decide), e o `index.html` no ar tem o mesmo tamanho (556.947). Conferido pelo CONTEÚDO: `jogarPorPosicao`, `P.ferro`, `Carta coberta`, `MÃO DE FERRO` e `cartasDoLequeDoTruco` estão no bundle servido |
-| em curso | **a FILA 16 — a mesa órfã**, relato de campo dele com foto (14/08, 07:11): trocar de jogo deixa a mesa 3D do anterior em cena. O diagnóstico está MEDIDO e o conserto DESENHADO na seção própria — amanhã é executar, não investigar |
-| as anteriores | v4.13.0 (a Onda B: o online) · v4.12.0 (a Onda A: manilhas, vira, peso) · v4.11.0 (a carta esticada) · v4.10.0 (Fila 13 + Fase 5) · v4.9.0 (Fila 12) |
-| Filas 5 a 14 | **todas fechadas** · da **Fila 15** saíram as Ondas A, B e **F**; sobram **C, D, E** |
-| o que vem | **1º a FILA 16** (o conserto da mesa órfã — hotfix, plano pronto), depois **JOGAR** (a mão de ferro e o esconder estão no ar e nunca foram tocados por mão humana), e então as ondas **D** (a dívida: o `test-textura` com truco na mesa), **E** (temas de baralho) e **C**. A **Fase 5** segue **⏸ em espera por decisão sua** |
+| commitado | **v4.14.3** — o hotfix da **FILA 16** (a mesa órfã: trocar de jogo leva as coisas do jogo anterior), na `main` pelo merge `--no-ff` de sempre. Antes dela a v4.14.2 (registro) e a **v4.14.0** (a Onda F: esconder a carta · mão de ferro) |
+| **enviado** | ⚠ **NÃO** — o `git ls-remote` responde `da24719` (**v4.14.1**). A **v4.14.2 e a v4.14.3 estão só nesta máquina**, esperando a liberação dele. É a régua do remoto consultado, que já respondeu `0 0` no `rev-list` com tudo por enviar |
+| **PUBLICADO** | o que está no ar é a **v4.14** — `sw.js` servido `51508f9747f3`. A v4.14.3 **toca `src/`** (o `sw.js` local é `4d994c336032`), então depois do push o servido TEM de mudar; se não mudar, é informação |
+| em curso | nada aberto no jogo. **O que sobra é JOGAR** — a mão de ferro, o esconder e agora a troca de jogo, nunca tocados por mão humana |
+| as anteriores | v4.14.0 (a Onda F) · v4.13.0 (a Onda B: o online) · v4.12.0 (a Onda A: manilhas, vira, peso) · v4.11.0 (a carta esticada) · v4.10.0 (Fila 13 + Fase 5) · v4.9.0 (Fila 12) |
+| Filas 5 a 16 | **todas fechadas** · da **Fila 15** saíram as Ondas A, B e **F**; sobram **C, D, E** |
+| o que vem | **1º ENVIAR** (a v4.14.2 e a v4.14.3, com a liberação dele — e conferir o `sw.js` servido depois), **2º JOGAR**, e então as ondas **D** (a dívida: o `test-textura` com truco na mesa), **E** (temas de baralho) e **C**. A **Fase 5** segue **⏸ em espera por decisão sua** |
 
 ---
 
@@ -1308,16 +1317,30 @@ AS SUÍTES contra este código, rodadas uma de cada vez em 14/08:
          o leque de versos, "Carta coberta", a vitória às cegas, os dois
          botões, a escondida na pilha. Todas aprovadas.
 
-➜ PASSO 1  A FILA 16 PRIMEIRO — o relato de campo da mesa órfã (14/08,
-           foto das 07:11): trocar de jogo deixa a mesa 3D do jogo
-           anterior em cena (o toco do truco no tampo do dominó, e
-           vice-versa). Ele mandou ANOTAR para fazer amanhã. A seção
-           própria (## Fila 16) tem TUDO: causa raiz com arquivo:linha,
-           o conserto desenhado (o verbo `JOGO.mesa.limpar` + os dois
-           limpadores + a chamada em `abrirJogo`), as armadilhas (a
-           prévia é FILHA do grupo da mesa — nada de clear() no grupo),
-           os testes, as ~5 mutações e a foto de reprodução. Branch
-           `hotfix/mesa-orfa`, tag v4.14.3 (a v4.14.2 é este registro).
+A FILA 16 ✔ FEITA em 18/08/2026 — a mesa órfã. O verbo `JOGO.mesa.limpar`
+         nos dois registros, os dois limpadores (`limparMesaDoDomino`,
+         `limparMesaDoTruco`) e UMA chamada em `abrirJogo`, no jogo que SAI,
+         ANTES do `trocarDeJogo`. Sai na **v4.14.3** (hotfix/mesa-orfa).
+         29 asserções novas no `test-truco` (540 no total), todas nascidas
+         verdes, e **6 mutações**, cada uma matando a sua: 10 · 2 · 1 · 1 ·
+         2 · 1. As duas fotos (antes/depois) em `tests/.gerado/fila16-*.png`.
+
+         O QUE A EXECUÇÃO ACHOU, além do plano:
+         · a foto do ANTES mostrou mais do que o relato: a MÃO do truco
+           também ficava (os 6♦ e 2♦ atrás do leque de peças). O
+           `esconderMaoDoTruco` só era chamado pelo hotseat; hoje o
+           `limpar` o reaproveita, com asserção própria.
+         · a primeira rodada da seção nova reprovou pelo TESTE: passei o
+           OBJETO da carta a `selecionarCarta(i)`, que espera o ÍNDICE e
+           desiste calada — a mesma família do helper que passava índice
+           (v4.6), no sentido inverso. Hoje ela cobra que a escolha PEGOU.
+         · `temPreviaDoTruco()` NÃO denuncia a prévia arrancada do grupo da
+           mesa (o grupo solto continua tendo filhos); quem denuncia é a
+           asserção "o grupo da mesa fica SÓ com a prévia pendurada". A
+           mutação do `clear()` matou a segunda e passou pela primeira —
+           por isso as duas existem.
+         Suítes: npm test (8 + 51 + 540) · lembrar · check.
+         ⚠ ENVIO PENDENTE: v4.14.2 e v4.14.3 só nesta máquina.
 
 ➜ PASSO 2  JOGAR, e as perguntas que só o olho no CELULAR responde:
            · a mão de ferro de verdade: chegar ao 11×11 jogando. O leque
@@ -5112,11 +5135,12 @@ ordem. Um "jogar a primeira mão comigo" reaproveitaria a dica inteira.
 
 ---
 
-## Fila 16 — A MESA ÓRFÃ: trocar de jogo não limpa a cena do anterior
+## Fila 16 — A MESA ÓRFÃ: trocar de jogo não limpa a cena do anterior ✔ fechada (v4.14.3)
 
 **Relato de campo do Ricardo, 14/08/2026, foto das 07:11 — anotado a pedido dele ("anote
-tudo, para que possa ser feito amanhã"). NADA daqui foi implementado.** A v4.14 (Onda F)
-está no ar e não tem relação com este defeito; ele existe desde que o truco sentou na mesa.
+tudo, para que possa ser feito amanhã") e FEITO em 18/08/2026, exatamente como desenhado.**
+O defeito existia desde que o truco sentou na mesa (v4.5). O plano abaixo fica como registro;
+o que a execução acrescentou está em "O que a execução ensinou", no fim da seção.
 
 **O relato:** jogou truco, saiu, trocou para o dominó — e a mesa do dominó nasceu com as
 sobras do truco em cena: o toco do baralho com a vira em cima, três versos de adversário nas
@@ -5210,6 +5234,36 @@ fila), `npm run build` no merge. **Foto de reprodução antes/depois** no Chrome
 existe (`tests/.gerado/foto-onda-f.mjs`: truco → jogar → sair → aba dominó → sentar →
 screenshot). Regressão: `npm test` + `npm run lembrar` (a cena das abas). Push só com a
 liberação dele.
+
+### O que a execução ensinou (18/08/2026)
+
+**Saiu como o plano dizia, e é a primeira fila deste arquivo em que o diagnóstico de leitura
+não perdeu para a medição** — porque ele já tinha sido MEDIDO antes de ser escrito (14/08). O
+que a execução acrescentou:
+
+- **A foto do ANTES mostrou mais do que o relato dele.** Além do toco, dos versos e da carta da
+  vaza, a **MÃO do truco** também ficava — os 6♦ e 2♦ visíveis atrás do leque de peças
+  (`tests/.gerado/fila16-antes.png`). `esconderMaoDoTruco` só era chamado pelo hotseat, e
+  `sairDaPartida` nunca esconde nada. O `limpar` a reaproveita, com asserção própria.
+- **A primeira rodada da seção nova reprovou pelo TESTE, não pelo jogo:** passei o OBJETO da
+  carta a `selecionarCarta(i)`, que espera o ÍNDICE e desiste calada no `if (!m) return`. É a
+  família do helper que passava índice onde a ponte esperava PEÇA (v4.6), no sentido inverso —
+  e o remédio é o mesmo: cobrar que a escolha PEGOU (`escolhidaNoTruco !== null`) antes de
+  medir a prévia, senão uma montagem que falhe amanhã faz a asserção mentir.
+- **`temPreviaDoTruco()` não denuncia a prévia ARRANCADA.** Um `grupoMesa.clear()` tira o
+  `grupoPrevia` da árvore, mas o grupo solto continua existindo e continua ganhando filhos —
+  `temPrevia` diz `true` para uma prévia invisível. Quem denuncia é a asserção "o grupo da
+  mesa fica SÓ com a prévia pendurada" (`children.length === 1 && children[0] === grupoPrevia`).
+  A mutação do `clear()` matou a segunda e passou pela primeira, nos dois jogos — as duas
+  existem porque falham por motivos diferentes.
+- **A guarda em `abrirJogo` leva `Object.hasOwn(JOGOS, id)`**: um id inválido, que
+  `trocarDeJogo` recusa, não pode esvaziar a mesa de quem fica.
+
+**As seis mutações, cada uma matando a sua:** a chamada em `abrirJogo` some (**10** — a lista é
+a foto: "o TOCO do baralho ficou no tampo do dominó") · a remoção do toco (**2**) · o `clear()`
+dos versos (**1**) · remoção fina → `grupoMesaDoTruco.clear()` (**1**, "E A PRÉVIA FOI
+ARRANCADA") · o espelho no dominó (**2**) · o `grupoMonte.clear()` (**1**). Depois delas o
+`sw.js` recuperou o MESMO resumo (`4d994c336032`) — a prova de que a fonte voltou inteira.
 
 ---
 
