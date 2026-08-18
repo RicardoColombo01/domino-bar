@@ -3246,6 +3246,30 @@ function mostrarPrevia(vista, peca, pontas) {
 const esconderPrevia = () => grupoPrevia.clear();
 const temPrevia = () => grupoPrevia.children.length > 0;
 
+// TIRAR TUDO O QUE É DO DOMINÓ DO TAMPO — o verbo `JOGO.mesa.limpar`, chamado pela casa
+// quando OUTRO jogo vai sentar (`abrirJogo`, 141-abas.js). Os grupos 3D dos dois jogos moram
+// na `scene` desde a carga e nunca saem; quem os esvazia é o `sincronizar` de cada jogo, que
+// só roda para o jogo DA MESA. Sem isto, trocar de aba congelava o tabuleiro na última
+// escala e o truco nascia por cima dele — foto de campo de 14/08/2026 (Fila 16).
+//
+// NÃO É `grupoMesa.clear()`, e a diferença é a PRÉVIA: `grupoPrevia` é FILHO de `grupoMesa`.
+// Um clear() indiscriminado o arrancaria, e toda prévia futura nasceria num grupo solto —
+// invisível para sempre, sem erro nenhum. Remove-se só o que a reconciliação pôs: os `reg.obj`
+// do mapa (a marca da última é filha da peça e sai junto; o `ultima` é que não pode ficar
+// apontando para um objeto órfão). Os grupos de fora (mão, adversários, monte) não têm
+// filho permanente e podem ser esvaziados inteiros. `esconderMao` já é o limpador da mão
+// (o hotseat o usa) e é reaproveitado, não copiado.
+function limparMesaDoDomino() {
+  esconderMao();
+  esconderPrevia();
+  for (const reg of naMesa.values()) grupoMesa.remove(reg.obj);
+  naMesa.clear();
+  ultima = null;
+  grupoOutros.clear();
+  grupoMonte.clear();
+  esquecerArrumacao();
+}
+
 // `chegarPerto` FOI PARA A CASA (010-constantes.js) na v4.5. Ela fala de número e de tempo,
 // nunca de peça — e é a única função de suavização do projeto, o que a torna também o único
 // lugar onde "menos movimento" cabe numa linha. Com o truco, ou ela subia ou o segundo jogo
@@ -5587,6 +5611,17 @@ function porAPonteDoJogo() {
 // O caminho único: o arranque entra por aqui e a aba entra por aqui. Duas cópias da mesma
 // sequência, uma delas esquecendo um passo, é literalmente como o defeito 3 da Fila 6 durou.
 function abrirJogo(id) {
+  // O JOGO QUE SAI DA MESA LEVA AS SUAS COISAS — e ANTES do `trocarDeJogo`, porque depois
+  // dele `JOGO` já é o novo. Os grupos 3D dos dois jogos moram na `scene` desde a carga, e
+  // quem os esvazia é o `sincronizar` de cada um, que só roda para o jogo DA MESA: sem isto
+  // o tampo do dominó nascia com o toco do truco e a vira em cima (foto de campo de 14/08/2026,
+  // Fila 16). No arranque `JOGO` é nulo e não há o que limpar; na aba já ativa também não —
+  // a mesa acabada atrás do menu continua aparecendo, que é o de sempre DENTRO de um jogo.
+  // E `sairDaPartida` NÃO limpa, de propósito: o cenário atrás do menu é estética, não
+  // vazamento. Quem entra não precisa de nada: o `sincronizar` dele reconcilia do zero.
+  if (JOGO && Object.hasOwn(JOGOS, id) && JOGOS[id] !== JOGO && JOGO.mesa && JOGO.mesa.limpar) {
+    JOGO.mesa.limpar();
+  }
   if (!trocarDeJogo(id)) return false;
 
   // ANTES de qualquer leitura: o acervo guardado sem sufixo é de quem declarou herdá-lo, e a
@@ -7841,6 +7876,8 @@ JOGOS.domino = {
   mesa: {
     sincronizar(v) { sincronizarTabuleiro(v); sincronizarMao(v); sincronizarOutros(v); sincronizarMonte(v); },
     animar(dt, apontada) { animarTabuleiro(dt); animarMao(dt, apontada); },
+    // "Tire suas coisas do tampo": a casa chama quando OUTRO jogo vai sentar (Fila 16).
+    limpar: limparMesaDoDomino,
     esconderMao,
     arrumar: arrumarMao,
     esquecerArrumacao,
@@ -9628,6 +9665,27 @@ function mostrarPreviaDoTruco(vista) {
 const esconderPreviaDoTruco = () => grupoPreviaDoTruco.clear();
 const temPreviaDoTruco = () => grupoPreviaDoTruco.children.length > 0;
 
+// TIRAR TUDO O QUE É DO TRUCO DO TAMPO — o verbo `JOGO.mesa.limpar`, chamado pela casa quando
+// OUTRO jogo vai sentar (`abrirJogo`, 141-abas.js). O irmão de `limparMesaDoDomino`, e a
+// razão está escrita lá: os grupos moram na `scene` desde a carga, e sem isto o toco com a
+// vira em cima, os versos dos adversários e a carta da vaza ficavam no tampo do dominó — a
+// foto de campo de 14/08/2026 (Fila 16).
+//
+// NÃO É `grupoMesaDoTruco.clear()`: `grupoPreviaDoTruco` é FILHO dele (linha 23), e um clear()
+// o arrancaria — toda prévia futura nasceria invisível, sem erro. Remove-se o que a
+// reconciliação pôs (os `reg.obj`; a marca de "está ganhando" é filha da carta e sai junto)
+// mais o TOCO, que é mobília fora do mapa de propósito e por isso precisa de uma linha
+// própria — é exatamente o objeto da foto.
+function limparMesaDoTruco() {
+  esconderMaoDoTruco();
+  esconderPreviaDoTruco();
+  for (const reg of naMesaDoTruco.values()) grupoMesaDoTruco.remove(reg.obj);
+  naMesaDoTruco.clear();
+  if (tocoDoBaralho.parent) grupoMesaDoTruco.remove(tocoDoBaralho);
+  grupoOutrosDoTruco.clear();
+  esquecerArrumacaoDoTruco();
+}
+
 // ─── a animação ──────────────────────────────────────────────────────────────
 function animarTrucoNaMesa(dt, apontadaAgora) {
   escalaDaMesaDoTruco = chegarPerto(escalaDaMesaDoTruco, escalaAlvoDoTruco, 8, dt);
@@ -10406,6 +10464,8 @@ JOGOS.truco = {
   mesa: {
     sincronizar: sincronizarTrucoNaMesa,
     animar: animarTrucoNaMesa,
+    // "Tire suas coisas do tampo": a casa chama quando OUTRO jogo vai sentar (Fila 16).
+    limpar: limparMesaDoTruco,
     esconderMao: esconderMaoDoTruco,
     arrumar: arrumarMaoDoTruco,
     esquecerArrumacao: esquecerArrumacaoDoTruco,
