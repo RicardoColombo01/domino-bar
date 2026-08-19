@@ -76,7 +76,13 @@ for (let k = 0; k < CARTAS_NO_TOCO; k++) {
 // ─── a sua mão ───────────────────────────────────────────────────────────────
 // Três cartas, e por isso não há leque em fileiras nem `porFileira`: o problema que aquilo
 // resolve — catorze peças numa tela de 360px — não existe aqui.
-const MAO_TRUCO_Z = 4.55, MAO_TRUCO_Y = 1.15, MAO_TRUCO_TOMBO = 0.58;
+//
+// O TOMBO subiu de 0.58 para 0.80 em 19/08, por relato de campo: no celular o valor e o
+// naipe não se liam. A carta quase deitada paga o ângulo da câmera duas vezes — o glifo
+// já pequeno chega comprimido em quase metade da altura. Mais de pé, a face olha para a
+// câmera e devolve essa metade; quem confere que ela continua no quadro e sem invadir
+// vizinho é o test-telas, nas três cenas de truco.
+const MAO_TRUCO_Z = 4.55, MAO_TRUCO_Y = 1.15, MAO_TRUCO_TOMBO = 0.80;
 const FOLGA_DO_LEQUE_TRUCO = 1.14;
 const ESCALA_MAO_TRUCO = 1.7;         // três cartas cabem grandes, e carta pequena não se lê
 const naMaoDoTruco = [];              // { obj, carta, xBase, yBase, zBase, tombo, escalaBase }
