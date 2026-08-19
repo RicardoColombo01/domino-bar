@@ -259,7 +259,9 @@ const AJUDA = `
         // E O NAIPE PEQUENO DO CANTO, que é o que sobra quando as cartas se sobrepõem na
         // mão (medido: em retrato 390 e 360 elas se sobrepõem). Sem esta amostra, apagar o
         // naipe do canto passaria despercebido — e no truco é ele que separa duas manilhas.
-        cantoLinha.push(familia(0.155, 0.195));
+        // (0.18, 0.275) é onde o desenho o põe desde 19/08, quando o canto cresceu por
+        // relato de campo; a coordenada acompanha o desenho, a exigência não muda.
+        cantoLinha.push(familia(0.18, 0.275));
       }
       celulas.push(linha);
       cantos.push(cantoLinha);

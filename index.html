@@ -2956,11 +2956,12 @@ const texCartas = pintar('cartas', CEL_CARTA * COLS_CARTA, CEL_CARTA_A * LINS_CA
       c.strokeStyle = naipe.cor;
 
       // A moldura, um tico para dentro: é ela que separa uma carta da vizinha quando duas
-      // ficam encostadas na mesa, do mesmo jeito que a FOLGA da peça de dominó faz.
+      // ficam encostadas na mesa, do mesmo jeito que a FOLGA da peça de dominó faz. Ela se
+      // apertou contra a beirada em 19/08 para o canto crescido caber por dentro dela.
       c.globalAlpha = 0.22;
       c.lineWidth = CEL_CARTA * 0.018;
-      c.strokeRect(ox + CEL_CARTA * 0.06, oy + CEL_CARTA_A * 0.05,
-        CEL_CARTA * 0.88, CEL_CARTA_A * 0.90);
+      c.strokeRect(ox + CEL_CARTA * 0.035, oy + CEL_CARTA_A * 0.03,
+        CEL_CARTA * 0.93, CEL_CARTA_A * 0.94);
       c.globalAlpha = 1;
 
       // O NAIPE GRANDE, no meio. É o que se lê de longe, e é o que a suíte de textura
@@ -2981,22 +2982,26 @@ const texCartas = pintar('cartas', CEL_CARTA * COLS_CARTA, CEL_CARTA_A * LINS_CA
       // (ouros < espadas < copas < paus), e as quatro se dividem em DUAS cores só. Ver a
       // carta e não saber o naipe é ver metade da carta.
       const rot = VALORES[v];
+      // O CANTO CRESCEU DE NOVO EM 19/08, por relato de campo: "no celular não está tendo
+      // como ver os símbolos e nem o número". A conta que o relato cobrou: em retrato 360 a
+      // carta tem ~103px de tela, e o valor a 0.23 da célula dava ~24px — legíveis DE
+      // FRENTE. Mas a carta da mesa está deitada e a da mão tomba: o ângulo da câmera
+      // comprime o glifo em quase metade, e o que se lê são ~12px. Como o canto é a única
+      // faixa visível da carta coberta no leque, é ele que carrega a legibilidade: valor a
+      // 0.30, naipe a 0.12, e a âncora um tico para dentro para o conjunto caber.
       const cantoDe = (px, py, virado) => {
         c.save();
         c.translate(ox + CEL_CARTA * px, oy + CEL_CARTA_A * py);
         if (virado) c.rotate(Math.PI);
         c.textAlign = 'center';
         c.textBaseline = 'middle';
-        // 0.23 e não 0.20: em paisagem a carta inteira tem 79px de tela, e o valor ficava com
-        // 15.8px. Três pontos a mais aqui são ~3px lá, que é a diferença entre ler um "Q" e
-        // adivinhá-lo.
-        c.font = `bold ${Math.round(CEL_CARTA * 0.23)}px Georgia, "Times New Roman", serif`;
-        c.fillText(rot, 0, -CEL_CARTA_A * 0.045);
-        naipeNoCanvas(c, naipe.id, 0, CEL_CARTA_A * 0.070, CEL_CARTA * 0.090);
+        c.font = `bold ${Math.round(CEL_CARTA * 0.30)}px Georgia, "Times New Roman", serif`;
+        c.fillText(rot, 0, -CEL_CARTA_A * 0.055);
+        naipeNoCanvas(c, naipe.id, 0, CEL_CARTA_A * 0.115, CEL_CARTA * 0.12);
         c.restore();
       };
-      cantoDe(0.155, 0.125, false);
-      cantoDe(0.845, 0.875, true);
+      cantoDe(0.18, 0.16, false);
+      cantoDe(0.82, 0.84, true);
     }
   }
 });
