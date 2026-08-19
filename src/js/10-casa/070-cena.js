@@ -83,9 +83,19 @@ function pintar(nome, w, h, desenho) {
   // Repinta o MESMO canvas e a MESMA textura, nunca uma nova: `matPintas` e
   // `matPreviaPinta` apontam para esta instância, e trocá-la consertaria uma e deixaria a
   // outra preta. `needsUpdate` porque o bitmap mudou e a cópia na GPU é velha.
-  const repintar = () => { desenho(cv.getContext('2d'), w, h); t.needsUpdate = true; };
-  repintar();
-  texturas.push({ nome, canvas: cv, textura: t, repintar });
+  const reg = { nome, canvas: cv, textura: t, repintar: null, assinatura: null };
+  // A ASSINATURA é o pixel (0,0) capturado LOGO DEPOIS de pintar — é contra ela que a
+  // sonda compara, porque o descarte não tem uma cor só (ver `bitmapApagado`). Recapturada
+  // a cada repintura por disciplina; as receitas são determinísticas, então o valor não
+  // muda. No harness de Node o getImageData não existe e ela fica nula — a sonda cai no
+  // teste de alfa, que é o comportamento de sempre.
+  const capturar = () => {
+    try { reg.assinatura = cv.getContext('2d').getImageData(0, 0, 1, 1).data.slice(); }
+    catch (e) { void e; reg.assinatura = null; }
+  };
+  reg.repintar = () => { desenho(cv.getContext('2d'), w, h); capturar(); t.needsUpdate = true; };
+  reg.repintar();
+  texturas.push(reg);
   return t;
 }
 
@@ -147,17 +157,32 @@ texPiso.wrapS = texPiso.wrapT = THREE.RepeatWrapping;
 texPiso.repeat.set(9, 9);
 
 // ─── e quem devolve a textura quando o sistema a leva ────────────────────────
-// O bitmap descartado volta como PRETO TRANSPARENTE, e toda receita daqui começa com um
-// fillRect opaco cobrindo o canvas — então alfa 0 no canto é a assinatura do descarte, e
-// custa um getImageData de 1×1 por textura. Quem escrever textura nova aqui herda essa
-// obrigação: começar opaca, ou a sonda mente.
+// O DESCARTE NÃO TEM UMA COR SÓ, e isso custou uma foto de campo (16/08/2026). A sonda
+// original perguntava só o ALFA — "descarte volta preto transparente" — e havia aparelho
+// devolvendo o backing store PRETO OPACO: alfa 255 respondia "está desenhado", nada era
+// repintado, e o restore subia o preto com toda a diligência do mundo. A peça preta da
+// Fila 7, de volta, com a proteção no ar.
+//
+// Hoje a sonda compara o pixel (0,0) com a ASSINATURA capturada na pintura (ver
+// `pintar()`), que discorda de QUALQUER descarte — transparente, preto opaco ou branco.
+// Toda receita começa com um fillRect opaco de cor própria (nenhuma é preta nem branca em
+// (0,0)), então a assinatura separa "desenhado" de "descartado" por construção. Quem
+// escrever textura nova herda a obrigação: começar com fillRect opaco não-preto.
+//
+// A tolerância de 48 (soma dos desvios dos 4 canais) existe porque rasterização não é
+// prometida byte a byte entre pinturas; um descarte real erra por centenas.
 //
 // A sonda olha UM pixel. Um descarte parcial passaria batido; ninguém relatou nada assim,
 // o mecanismo conhecido joga fora o bitmap inteiro, e se um dia aparecer a resposta é
 // amostrar três pontos — não abandonar a sonda, que é o que torna o segundo gancho barato.
 const bitmapApagado = t => {
-  try { return t.canvas.getContext('2d').getImageData(0, 0, 1, 1).data[3] < 8; }
-  catch (e) { void e; return false; }      // canvas que não deixa ler não é canvas apagado
+  try {
+    const d = t.canvas.getContext('2d').getImageData(0, 0, 1, 1).data;
+    if (d[3] < 8) return true;             // o descarte clássico: preto transparente
+    const a = t.assinatura;
+    return !!a && Math.abs(d[0] - a[0]) + Math.abs(d[1] - a[1]) +
+      Math.abs(d[2] - a[2]) + Math.abs(d[3] - a[3]) > 48;
+  } catch (e) { void e; return false; }    // canvas que não deixa ler não é canvas apagado
 };
 
 let perdasDeContexto = 0, restauracoes = 0, repinturas = 0;
