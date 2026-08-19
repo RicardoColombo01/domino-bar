@@ -208,6 +208,19 @@ const AJUDA = `
   // preto transparente, que é o que um backing store descartado entrega de volta.
   const apagarBitmaps = () => { for (const x of texturas()) x.im.width = x.im.width; };
 
+  // E APAGAR COMO *OUTRO* SISTEMA APAGA: nem todo descarte volta transparente. A foto de
+  // campo de 16/08 mostrou a peça preta COM a proteção da Fila 7 no ar — e a única forma
+  // de a sonda e o aparelho discordarem é o bitmap voltar PRETO OPACO (alfa 255), que
+  // responde "está desenhado" a quem só pergunta o alfa. Este é o dublê desse segundo
+  // modo de descarte.
+  const apagarOpaco = () => {
+    for (const x of texturas()) {
+      const c2 = x.im.getContext('2d');
+      c2.save(); c2.globalAlpha = 1; c2.fillStyle = '#000';
+      c2.fillRect(0, 0, x.im.width, x.im.height); c2.restore();
+    }
+  };
+
   // ─── o que o ATLAS realmente desenha ────────────────────────────────────────
   // Onde as pintas caem dentro de uma célula, em fração dela. É a mesma grade de três
   // colunas do desenho, dita AQUI e não lida do jogo: um teste que importasse a tabela do
@@ -369,6 +382,9 @@ const e3 = await experimento('E3 · apagar os bitmaps E perder/restaurar o conte
 await experimento('E4 · perder e restaurar TRÊS vezes seguidas',
   'perderERestaurar().then(perderERestaurar).then(perderERestaurar)');
 
+const e5 = await experimento('E5 · descarte OPACO: bitmaps pretos com alfa 255 E perder/restaurar',
+  '(apagarOpaco(), perderERestaurar())');
+
 // ─── 1. O ATLAS DESENHA O QUE PROMETE ────────────────────────────────────────
 // Verde hoje, de propósito: é rede de regressão, não conserto. E é a lacuna que o
 // CLAUDE.md aponta como a mais perigosa do projeto — `080-peca3d.js` não tinha NENHUMA
@@ -488,6 +504,22 @@ if (!e3.depois.erro) {
 // escurecer a peça, o mecanismo mudou e o conserto pode estar no lugar errado.
 ok(e1.depois.luzPeca >= 100, `só perder o contexto já apagou a peça (luz ${e1.depois.luzPeca})`);
 ok(e2.depois.luzPeca >= 100, `só apagar o bitmap já apagou a peça (luz ${e2.depois.luzPeca})`);
+
+// O DESCARTE NÃO É SEMPRE TRANSPARENTE. A foto de campo de 16/08/2026 mostrou a peça preta
+// com a proteção da Fila 7 no ar — e a sonda de alfa só sabe pegar o descarte que volta
+// transparente, que é também o único que este teste simulava: o dublê e a guarda dividiam
+// a MESMA suposição, e erravam juntos. Esta asserção NASCEU VERMELHA contra a sonda de
+// alfa; quem a mata é a ASSINATURA — o pixel (0,0) capturado na pintura e comparado na
+// sonda, que discorda de QUALQUER descarte (transparente, preto opaco, branco).
+console.log('\n  o descarte OPACO — a peça preta de 16/08');
+ok(!e5.antes.erro && !e5.depois.erro, `não deu para medir o E5: ${e5.antes.erro || e5.depois.erro}`);
+if (!e5.antes.erro && !e5.depois.erro) {
+  ok(e5.antes.luzPeca >= 100,
+    `montagem: a peça já estava escura ANTES do E5 (luz ${e5.antes.luzPeca})`);
+  ok(e5.depois.luzPeca >= 100,
+    `depois do descarte OPACO a peça na tela tem luz ${e5.depois.luzPeca} — antes tinha ` +
+    `${e5.antes.luzPeca}. Bitmap preto com alfa 255 passa pela sonda que só pergunta o alfa`);
+}
 
 // ─── 3. O GANCHO SEM PERDA DE CONTEXTO ───────────────────────────────────────
 // O bitmap pode ser descartado sem o contexto cair, e aí NENHUM evento avisa. A tela

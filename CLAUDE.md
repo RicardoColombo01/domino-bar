@@ -1015,13 +1015,13 @@ campo acha o que está escrito certo e mesmo assim não funciona.
 **Leia isto primeiro ao retomar.** É o estado real do trabalho, o que ele produziu, o que
 fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numerados mais abaixo.
 
-#### ESTADO EM UMA OLHADA (18/08/2026)
+#### ESTADO EM UMA OLHADA (19/08/2026)
 
 | | |
 |---|---|
 | commitado | **v4.14.4** — a **ONDA D** da Fila 15 (o `test-textura` com o truco na mesa; só testes). Antes dela a **v4.14.3** — o hotfix da **FILA 16** (a mesa órfã: trocar de jogo leva as coisas do jogo anterior), na `main` pelo merge `--no-ff` de sempre. Antes dela a v4.14.2 (registro) e a **v4.14.0** (a Onda F: esconder a carta · mão de ferro) |
-| **enviado** | ✔ a v4.14.3 (com a v4.14.2), 18/08 — ele liberou, e o `git ls-remote` responde `5e09183`. A **v4.14.4** (Onda D) ver o rodapé desta tabela |
-| **PUBLICADO** | ⚠ **NÃO, e é o Pages** — o push da v4.14.3 chegou (18/08, `5e09183` no servidor) e **~25 min depois o Pages não tinha aberto rodada nenhuma**: a última é a da v4.14.1 (14/08). O `sw.js` servido continua `51508f9747f3` (v4.14); o local é `4d994c336032`. É a fila do Pages de 05/08 outra vez — não é gatilho nem código, e a régua continua sendo o `curl`. Se seguir parada, um push novo (a v4.14.4 está pronta) costuma destravar |
+| **enviado** | ✔ a v4.14.4 (com tudo até ela), 19/08 — ele liberou, e o `git ls-remote` responde `08809e5` |
+| **PUBLICADO** | ✔ **SIM, e foi o push da v4.14.4 que destravou** — a fila do Pages estava parada desde a v4.14.3 (18/08, ~25 min sem abrir rodada), e o push de 19/08 disparou a rodada na hora, `success` em ~1 min. O `sw.js` servido é `4d994c336032`, **igual ao local** (a v4.14.4 não muda o bundle, então o resumo é o da v4.14.3), conferido DUAS vezes pelo `curl`. É a terceira vez que a fila trava e destrava com um push novo (05/08, 18/08) — o padrão do "fila travada engole o push" segue valendo, e a régua segue sendo o conteúdo servido |
 | em curso | nada aberto no jogo. **O que sobra é JOGAR** — a mão de ferro, o esconder e agora a troca de jogo, nunca tocados por mão humana |
 | Filas 5 a 16 | **todas fechadas** · da **Fila 15** saíram as Ondas A, B, F e **D**; sobram **C e E** |
 | as anteriores | v4.14.0 (a Onda F) · v4.13.0 (a Onda B: o online) · v4.12.0 (a Onda A: manilhas, vira, peso) · v4.11.0 (a carta esticada) · v4.10.0 (Fila 13 + Fase 5) · v4.9.0 (Fila 12) |
@@ -1340,7 +1340,7 @@ A FILA 16 ✔ FEITA em 18/08/2026 — a mesa órfã. O verbo `JOGO.mesa.limpar`
            mutação do `clear()` matou a segunda e passou pela primeira —
            por isso as duas existem.
          Suítes: npm test (8 + 51 + 540) · lembrar · check.
-         ⚠ ENVIO PENDENTE: v4.14.2 e v4.14.3 só nesta máquina.
+         ✔ enviada em 18/08, e publicada em 19/08 com o push da v4.14.4.
 
 ➜ PASSO 2  JOGAR, e as perguntas que só o olho no CELULAR responde:
            · a mão de ferro de verdade: chegar ao 11×11 jogando. O leque
