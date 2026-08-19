@@ -840,6 +840,15 @@ por mutação nas quatro direções, inclusive as duas de falso positivo.
 - **`sairDaPartida` NÃO esconde nada, e a MÃO fica com a mesa.** A foto do "antes" da Fila 16
   mostrou a mão do truco atrás do leque de peças — `esconderMaoDoTruco` só era chamado pelo
   hotseat. Toda função de "tirar as coisas do tampo" tem de listar a mão junto com a mesa.
+- **DUBLÊ E GUARDA QUE DIVIDEM A MESMA SUPOSIÇÃO ERRAM JUNTOS — a 14ª vez do dublê, e a mais
+  cara porque a guarda errava IGUAL.** O descarte de bitmap era simulado como
+  `c.width = c.width` (preto TRANSPARENTE) e a sonda perguntava só o alfa: o teste verde
+  certificava exatamente o mundo que a sonda sabia ver. Em campo há aparelho que descarta
+  para preto OPACO (alfa 255), e a peça preta da Fila 7 voltou com a proteção no ar (foto de
+  16/08). O conserto é a ASSINATURA — o pixel (0,0) capturado na pintura, comparado na sonda,
+  que discorda de QUALQUER descarte — e o dublê novo (`apagarOpaco`, E5) simula o segundo
+  modo. **Ao escrever guarda contra evento externo, pergunte: o dublê simula o evento como
+  ele É, ou como a guarda o ESPERA?**
 
 ---
 
@@ -1015,15 +1024,15 @@ campo acha o que está escrito certo e mesmo assim não funciona.
 **Leia isto primeiro ao retomar.** É o estado real do trabalho, o que ele produziu, o que
 fazer em seguida e por quê. Os detalhes de cada assunto estão nos itens numerados mais abaixo.
 
-#### ESTADO EM UMA OLHADA (19/08/2026)
+#### ESTADO EM UMA OLHADA (19/08/2026, à noite)
 
 | | |
 |---|---|
-| commitado | **v4.14.4** — a **ONDA D** da Fila 15 (o `test-textura` com o truco na mesa; só testes). Antes dela a **v4.14.3** — o hotfix da **FILA 16** (a mesa órfã: trocar de jogo leva as coisas do jogo anterior), na `main` pelo merge `--no-ff` de sempre. Antes dela a v4.14.2 (registro) e a **v4.14.0** (a Onda F: esconder a carta · mão de ferro) |
-| **enviado** | ✔ a v4.14.4 (com tudo até ela), 19/08 — ele liberou, e o `git ls-remote` responde `08809e5` |
-| **PUBLICADO** | ✔ **SIM, e foi o push da v4.14.4 que destravou** — a fila do Pages estava parada desde a v4.14.3 (18/08, ~25 min sem abrir rodada), e o push de 19/08 disparou a rodada na hora, `success` em ~1 min. O `sw.js` servido é `4d994c336032`, **igual ao local** (a v4.14.4 não muda o bundle, então o resumo é o da v4.14.3), conferido DUAS vezes pelo `curl`. É a terceira vez que a fila trava e destrava com um push novo (05/08, 18/08) — o padrão do "fila travada engole o push" segue valendo, e a régua segue sendo o conteúdo servido |
-| em curso | nada aberto no jogo. **O que sobra é JOGAR** — a mão de ferro, o esconder e agora a troca de jogo, nunca tocados por mão humana |
-| Filas 5 a 16 | **todas fechadas** · da **Fila 15** saíram as Ondas A, B, F e **D**; sobram **C e E** |
+| commitado | **v4.15.0** — a **FILA 17** (relato de campo com foto de 16/08): a sonda de textura por ASSINATURA (o descarte opaco furava a sonda de alfa — a peça preta da Fila 7, de volta), o canto da carta ~30% maior e o leque do truco tombado para a câmera. Antes dela a v4.14.4 (Onda D) e a v4.14.3 (Fila 16, a mesa órfã) |
+| **enviado** | ⚠ a v4.15.0 está SÓ NESTA MÁQUINA — aguarda a liberação dele. O servidor responde `08809e5` (v4.14.4), enviada e publicada em 19/08 |
+| **PUBLICADO** | ✔ a v4.14.4 — o push de 19/08 destravou a fila do Pages parada desde 18/08 (rodada `success` em ~1 min; `sw.js` servido `4d994c336032`, igual ao local de então, conferido DUAS vezes). Terceira vez que a fila trava e destrava com push novo; a régua segue sendo o conteúdo servido |
+| em curso | nada aberto no jogo. **O que sobra é JOGAR** — a mão de ferro, o esconder, a troca de jogo (consertada na v4.14.3 e nunca retestada em campo) e as cartas legíveis da v4.15 |
+| Filas 5 a 17 | **todas fechadas** · da **Fila 15** saíram as Ondas A, B, F e **D**; sobram **C e E** |
 | as anteriores | v4.14.0 (a Onda F) · v4.13.0 (a Onda B: o online) · v4.12.0 (a Onda A: manilhas, vira, peso) · v4.11.0 (a carta esticada) · v4.10.0 (Fila 13 + Fase 5) · v4.9.0 (Fila 12) |
 | o que vem | **JOGAR**, e então as ondas **E** (temas de baralho) e **C** (estatísticas, primeira mão guiada, desfazer no hotseat); depois o **PIFE**. A **Fase 5** segue **⏸ em espera por decisão sua** |
 
@@ -5280,6 +5289,61 @@ a foto: "o TOCO do baralho ficou no tampo do dominó") · a remoção do toco (*
 dos versos (**1**) · remoção fina → `grupoMesaDoTruco.clear()` (**1**, "E A PRÉVIA FOI
 ARRANCADA") · o espelho no dominó (**2**) · o `grupoMonte.clear()` (**1**). Depois delas o
 `sw.js` recuperou o MESMO resumo (`4d994c336032`) — a prova de que a fonte voltou inteira.
+
+---
+
+## Fila 17 — a peça preta DE VOLTA, e as cartas ilegíveis ✔ fechada (v4.15.0)
+
+**Relato de campo do Ricardo, 19/08/2026, com foto de 16/08, 10:07.** Três coisas na mesma
+mensagem — e a primeira providência foi DATAR a foto, que é a lição da Fila 7:
+
+| # | relato | veredito |
+|---|---|---|
+| 1 | peças e cartas PRETAS de novo | **DEFEITO REAL** — a sonda supunha a COR do descarte |
+| 2 | o bug visual da troca de jogo | a foto é de 16/08 e o conserto da mesa órfã (v4.14.3) só foi PUBLICADO em 19/08 — a foto mostra o site DE ANTES do conserto. Nada a consertar; retestar no site atualizado |
+| 3 | cartas ilegíveis no celular ("não dá para ver os símbolos nem o número") | pedido de desenho — o canto da carta cresceu e o leque tombou para a câmera |
+
+### 1. A sonda supunha a cor do descarte — e o TESTE supunha a MESMA
+
+A proteção da Fila 7 estava no ar e a peça voltou preta em campo. A sonda (`bitmapApagado`,
+`070-cena.js`) perguntava só o ALFA — "descarte volta preto transparente" — e o
+`apagarBitmaps` do `test-textura` simulava o descarte com `c.width = c.width`, que produz
+exatamente preto transparente: **o dublê e a guarda dividiam a mesma suposição, e erravam
+juntos.** Há aparelho que devolve o backing store PRETO OPACO (alfa 255): a sonda respondia
+"está desenhado", nada era repintado, e o restore subia o preto.
+
+**O conserto é a ASSINATURA:** `pintar()` captura o pixel (0,0) a cada pintura e a sonda
+compara contra ele — discorda de QUALQUER descarte (transparente, preto opaco, branco).
+Toda receita começa com `fillRect` opaco de cor própria, nenhuma preta em (0,0), então a
+assinatura separa "desenhado" de "descartado" por construção. No harness de Node o
+`getImageData` não existe, a assinatura fica nula e a sonda cai no teste de alfa de sempre.
+
+**O E5 nasceu VERMELHO com os números da Fila 7:** peça luz 3, tampo 80 — a foto do
+Ricardo reproduzida em laboratório pela porta que ninguém tinha simulado. Vermelho → 
+conserto → verde, sem precisar de mutação: asserção que nasce vermelha é a prova forte.
+
+### 3. A legibilidade — o canto e o tombo
+
+Duas causas somadas, nenhuma delas resolução: o valor a 0.23 da célula dava ~24px numa
+tela de 360 (legíveis DE FRENTE), e a carta deitada/quase deitada pagava o ângulo da
+câmera, que comprime o glifo em quase metade da altura.
+
+- **O canto cresceu** (`085-carta3d.js`): valor 0.23 → 0.30, naipe do canto 0.090 → 0.12,
+  âncora um tico para dentro, moldura apertada contra a beirada. **O naipe grande do centro
+  NÃO cresceu, e o motivo está medido:** a sonda do E3-truco cai na margem de papel a
+  fração 0.11 da largura, e as copas já alcançam ali — crescer o centro faria a montagem
+  do teste reprovar com "a sonda não caiu no papel".
+- **O leque tombou para a câmera** (`550-mesa.js`): `MAO_TRUCO_TOMBO` 0.58 → 0.80.
+- A amostra do naipe do canto no `test-textura` acompanhou o desenho — (0.155, 0.195) →
+  (0.18, 0.275) — e a mutação prova que ela mede o lugar certo: o naipe do canto apagado
+  derruba **5** asserções, as 40 células lendo "papel" na coordenada nova.
+- Verificação: `test-telas` nas três cenas de truco × seis telas (folga mínima **1.03**,
+  tudo no quadro) e **fotos de olho** no retrato 390×844 e na paisagem 844×390
+  (`tests/.gerado/legibilidade-*.png`) — o valor e o naipe se leem de relance nas duas.
+
+**A lição da fila, para a lista de armadilhas:** ao escrever guarda contra evento externo,
+perguntar — *o dublê simula o evento como ele É, ou como a guarda o ESPERA?* Dublê e guarda
+que dividem a mesma suposição são um teste verde certificando o mundo errado.
 
 ---
 
