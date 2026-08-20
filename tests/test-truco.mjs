@@ -1353,9 +1353,14 @@ console.log('\na casa senta na mesa de truco');
   ok(!mod.JOGO.painel,
     'o truco declarou um painel de apoio — sem ele, a casa esconde o botão "Contar"');
 
-  // O menu do truco: até 12, e nenhuma opção de mesa (compra livre é regra de monte).
+  // O menu do truco: até 12, e NENHUMA regra de mesa (compra livre é regra de monte, e o
+  // truco não tem monte). A única entrada em OPCOES é o tema do baralho — e ela tem de vir
+  // marcada EXTERNA, porque não é regra da mesa: é preferência da pessoa (082-temas.js). Sem
+  // a marca, `lembrarMesa`/`mesaLembrada` tratariam o tema como se fosse do jogo em curso, e
+  // duas pessoas na mesma mesa passariam a discordar sobre quem viu o quê.
   ok(mod.JOGO.menu.ALVOS[0] === 12, `o alvo padrão do truco é ${mod.JOGO.menu.ALVOS[0]}, não 12`);
-  ok(mod.JOGO.menu.OPCOES.length === 0, 'o truco declarou opção de mesa que não existe nele');
+  ok(mod.JOGO.menu.OPCOES.length === 1, `o truco tem ${mod.JOGO.menu.OPCOES.length} opções, e devia ter só o tema`);
+  ok(mod.JOGO.menu.OPCOES[0].externa, 'o tema do baralho não está marcado como opção EXTERNA');
 
   // Mesa de 2: você e um bot difícil.
   mod.MESA.n = 2;

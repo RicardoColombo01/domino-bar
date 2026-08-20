@@ -405,7 +405,10 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
 .grandao { font-size: 27px; font-weight: 700; color: var(--ambar); margin: 6px 0 10px; }
 
 .linha { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 14px 0; }
-.grupo { display: flex; gap: 5px; }
+/* `wrap` porque um grupo é UM item da .linha e não encolhe: os cinco temas do baralho
+   passam de 322px numa tela de 360, e sem quebrar por dentro o grupo transbordaria — a
+   armadilha do quarto cartão de jogador, numa faixa nova. */
+.grupo { display: flex; gap: 5px; flex-wrap: wrap; }
 .acoesMenu { margin-top: 20px; }
 
 #cadeiras { display: grid; gap: 7px; margin: 6px 0 4px; }
@@ -1872,6 +1875,8 @@ const VALORES = ['A', '2', '3', '4', '5', '6', '7', 'Q', 'J', 'K'];
 
 // Os quatro naipes. `cor` é do DESENHO e não da regra: num baralho espanhol de verdade os
 // quatro são da mesma cor, e vermelho/preto é a convenção que todo mundo lê de relance.
+// Desde a v4.16 quem pinta o atlas lê a cor do TEMA (082-temas.js); esta continua sendo a
+// fonte do tema CLÁSSICO — o tema a deriva daqui para não haver duas cópias do mesmo hex.
 //
 // A ordem aqui também é só identidade. O desempate do truco entre manilhas
 // (ouros < espadas < copas < paus) calha de ser esta, e isso é COINCIDÊNCIA: quem depender
@@ -2842,6 +2847,128 @@ function porNaMesa(obj, posta) {
   obj.rotation.set(0, posta.rotY, 0);
 }
 
+/* ····· 40-cartas/082-temas.js ····· */
+//
+// Ideia do Ricardo (11/08/2026): "baralho de temas diferentes, aí deixa um inventário para
+// cada pessoa escolher que tema irá jogar". A infraestrutura já existia por acidente feliz:
+// a Fila 7 obrigou toda textura a guardar a própria RECEITA para poder ser repintada quando
+// o Android descarta o bitmap (`pintar()`, 070-cena.js) — trocar de tema é chamar a MESMA
+// repintura com outras cores. O mecanismo que existe para sobreviver ao sistema operacional
+// serve, sem uma linha nova, para trocar a cara do baralho.
+//
+// MORA NA BIBLIOTECA e não num jogo, e isso é o que faz o tema valer para o truco, para o
+// pife e para o 21 de uma vez — o `test-acoplamento` cobra que esta pasta não alcance nome
+// de jogo nenhum. E a preferência é DA PESSOA, não da mesa: ela não muda regra, não viaja
+// pelo fio (cada jogador vê o SEU baralho), e vale para todos os jogos de carta — por isso
+// a chave é comum (`dominobar.temaBaralho`) e não uma das chaves por jogo.
+//
+// UM TEMA SÓ MUDA COR, nunca geometria. As asserções do atlas amostram COORDENADAS (o
+// centro do naipe a 0.53 da célula, o canto a 0.18×0.275), e um tema que movesse o desenho
+// as cegaria — fonte, âncora e tamanho são os mesmos em todos os temas, por contrato.
+//
+// E TODA COR DE FUNDO (o papel do atlas e o fundo do verso) TEM DE FICAR LONGE DE PRETO E
+// DE BRANCO: o pixel (0,0) é a ASSINATURA que separa "desenhado" de "descartado"
+// (070-cena.js), e o descarte devolve preto transparente, preto opaco ou branco. Um papel
+// preto seria indistinguível de bitmap descartado, e a peça preta da Fila 7/17 voltaria por
+// dentro de um tema. O `test-cartas` cobra a distância de cada tema, com o limiar da
+// própria sonda (48).
+
+// O clássico lê as cores de `NAIPES` (045-baralho.js) em vez de repeti-las: duas cópias da
+// mesma cor é como duas metades passam a discordar.
+const CORES_CLASSICAS = Object.fromEntries(NAIPES.map(n => [n.id, n.cor]));
+
+const TEMAS_DO_BARALHO = {
+  classico: {
+    nome: 'Clássico',
+    papel: '#f6f1e4',
+    naipes: CORES_CLASSICAS,
+    verso: { fundo: '#7a3b2e', linha: 'rgba(255,225,190,.22)', borda: 'rgba(255,225,190,.5)' },
+  },
+  // A convenção dos baralhos de quatro cores: espadas pretas, copas vermelhas, OUROS AZUIS
+  // e PAUS VERDES. No truco a ordem das manilhas é POR NAIPE (ouros < espadas < copas <
+  // paus) e o baralho comum as divide em duas cores só — aqui a cor passa a mostrar o que
+  // decide a mão.
+  quatrocores: {
+    nome: '4 cores',
+    papel: '#f6f1e4',
+    naipes: { ouros: '#1d5fb4', espadas: '#1a1a1a', copas: '#c0392b', paus: '#1e7a34' },
+    verso: { fundo: '#31456e', linha: 'rgba(200,220,255,.22)', borda: 'rgba(200,220,255,.5)' },
+  },
+  // Papel QUASE branco — branco puro colidiria com um descarte branco, ver o aviso lá em
+  // cima — e a tinta o mais escura possível. Irmão do piso `--fraco: .58` da Fila 8:
+  // acessibilidade é contraste medido, não gosto.
+  contraste: {
+    nome: 'Contraste',
+    papel: '#ececec',
+    naipes: { ouros: '#b40000', espadas: '#000000', copas: '#b40000', paus: '#000000' },
+    verso: { fundo: '#3a3a3a', linha: 'rgba(255,255,255,.28)', borda: 'rgba(255,255,255,.55)' },
+  },
+  // Papel envelhecido e tinta desbotada — a identidade da casa, na carta.
+  boteco: {
+    nome: 'Boteco',
+    papel: '#e4d6b8',
+    naipes: { ouros: '#a3524a', espadas: '#43392f', copas: '#a3524a', paus: '#43392f' },
+    verso: { fundo: '#5c6b4c', linha: 'rgba(240,230,200,.20)', borda: 'rgba(240,230,200,.45)' },
+  },
+  // Carta escura de tinta clara, para jogar no escuro sem a tela queimar.
+  noturno: {
+    nome: 'Noturno',
+    papel: '#262b33',
+    naipes: { ouros: '#ff8b7b', espadas: '#dde4ee', copas: '#ff8b7b', paus: '#dde4ee' },
+    verso: { fundo: '#161b23', linha: 'rgba(120,150,200,.25)', borda: 'rgba(120,150,200,.55)' },
+  },
+};
+
+// A preferência guardada é ENTRADA DE FORA como qualquer outra: `Object.hasOwn`, nunca
+// `TEMAS_DO_BARALHO[id] ?` — chave de protótipo já deu tela preta permanente uma vez
+// (defeito 5 da Fila 6). Valor que não fecha volta ao clássico em silêncio.
+let TEMA_BARALHO_ID = (() => {
+  const g = lido('temaBaralho', 'classico');
+  return Object.hasOwn(TEMAS_DO_BARALHO, g) ? g : 'classico';
+})();
+
+// Lido PELA RECEITA a cada pintura (085-carta3d.js). Como a leitura acontece na hora de
+// pintar e a preferência é lida acima ANTES de o atlas existir, a PRIMEIRA pintura já sai
+// no tema da pessoa — não há repintura na carga.
+const temaDoBaralho = () => TEMAS_DO_BARALHO[TEMA_BARALHO_ID];
+const temaDoBaralhoEscolhido = () => TEMA_BARALHO_ID;
+
+// Troca o tema: guarda a preferência e repinta o atlas e o verso NA MESMA textura — o
+// material de toda carta aponta para a instância, então tudo o que está na tela muda
+// junto, sem reconstruir objeto nenhum. `repintar()` recaptura a assinatura, então a troca
+// nunca parece um bitmap descartado para a sonda (`bitmapApagado` compara contra ela).
+//
+// O que NÃO acompanha na hora: o corpo de papel das cartas com material CLONADO (as da sua
+// mão, que acendem no hover) fica com a cor antiga até a próxima sincronização — é só a
+// beirada de 0.035 de espessura, e `sincronizarMaoDoTruco` a repinta pelo tema a cada
+// publicação. `matPapel` (a instância base, de todas as outras) muda aqui.
+function escolherTemaDoBaralho(id) {
+  if (!Object.hasOwn(TEMAS_DO_BARALHO, id)) return false;
+  if (id === TEMA_BARALHO_ID) return true;
+  TEMA_BARALHO_ID = id;
+  guardar('temaBaralho', id);
+  for (const reg of texturas) {
+    if (reg.nome === 'cartas' || reg.nome === 'versoCarta') reg.repintar();
+  }
+  matPapel.color.set(temaDoBaralho().papel);
+  return true;
+}
+
+// A LINHA DO MENU, pronta para qualquer jogo de carta pendurar em `menu.OPCOES` — o truco
+// a usa hoje e o pife a herda numa linha. É uma opção EXTERNA (ver 140-menu.js): a verdade
+// dela mora AQUI e não na MESA, porque tema é preferência da pessoa e não regra da mesa —
+// não entra no `lembrarMesa`, não é validada contra a mesa guardada e não viaja no online.
+const OPCAO_TEMA_DO_BARALHO = {
+  id: 'temaBaralho',
+  dado: 'tema',
+  rot: 'Baralho',
+  externa: true,
+  valores: Object.keys(TEMAS_DO_BARALHO).map(k =>
+    ({ dado: k, v: k, rotulo: TEMAS_DO_BARALHO[k].nome })),
+  atual: temaDoBaralhoEscolhido,
+  aoEscolher: escolherTemaDoBaralho,
+};
+
 /* ····· 40-cartas/085-carta3d.js ····· */
 //
 // Mesma ideia do `080-peca3d.js`, um tamanho acima: em vez de desenhar 40 cartas, o atlas
@@ -2884,7 +3011,9 @@ const CEL_CARTA_A = Math.round(CEL_CARTA * (CARTA_C / CARTA_L));   // 272
 const COLS_CARTA = VALORES.length;      // 10
 const LINS_CARTA = NAIPES.length;       // 4
 
-const PAPEL = '#f6f1e4';
+// A COR DO PAPEL (e as dos naipes) SAI DO TEMA (082-temas.js), lida DENTRO das receitas —
+// é o que faz `repintar()` servir de troca de tema. Um `const PAPEL` aqui congelaria a cor
+// da primeira pintura para sempre.
 
 // ─── os quatro naipes, desenhados a MÃO ──────────────────────────────────────
 // Em caminho, e não com o glifo `♠` num `fillText`. Glifo depende de a fonte do sistema ter
@@ -2944,16 +3073,21 @@ function naipeNoCanvas(c, id, x, y, r) {
 // "desenhado") e NÃO consome `Math.random` global (as suítes de tela semeiam aquele gerador
 // dentro da própria página, e mil sorteios aqui deslocariam a sequência inteira).
 const texCartas = pintar('cartas', CEL_CARTA * COLS_CARTA, CEL_CARTA_A * LINS_CARTA, (c, w, h) => {
-  // O fundo de TODA a textura primeiro, e opaco. Sem isto a sonda de alfa não funciona.
-  c.fillStyle = PAPEL;
+  // O TEMA é lido a cada pintura, e não capturado na carga: `escolherTemaDoBaralho` troca a
+  // tabela e chama esta mesma receita de novo. Só COR sai daqui — geometria, fonte e âncora
+  // são iguais em todo tema, porque as asserções do atlas amostram coordenadas.
+  const tema = temaDoBaralho();
+  // O fundo de TODA a textura primeiro, e opaco. Sem isto a sonda de alfa não funciona — e
+  // a cor não pode ser preta nem branca, porque o pixel (0,0) é a assinatura do descarte.
+  c.fillStyle = tema.papel;
   c.fillRect(0, 0, w, h);
 
   for (let n = 0; n < LINS_CARTA; n++) {
     for (let v = 0; v < COLS_CARTA; v++) {
       const ox = v * CEL_CARTA, oy = n * CEL_CARTA_A;
       const naipe = NAIPES[n];
-      c.fillStyle = naipe.cor;
-      c.strokeStyle = naipe.cor;
+      c.fillStyle = tema.naipes[naipe.id];
+      c.strokeStyle = tema.naipes[naipe.id];
 
       // A moldura, um tico para dentro: é ela que separa uma carta da vizinha quando duas
       // ficam encostadas na mesa, do mesmo jeito que a FOLGA da peça de dominó faz. Ela se
@@ -3010,23 +3144,26 @@ const texCartas = pintar('cartas', CEL_CARTA * COLS_CARTA, CEL_CARTA_A * LINS_CA
 // garantia visual de que o jogo não desenha o que não deve mostrar (invariante 3, na forma
 // que dá para fotografar).
 const texVerso = pintar('versoCarta', 256, 256, (c, w, h) => {
-  c.fillStyle = '#7a3b2e';
+  const tema = temaDoBaralho();
+  c.fillStyle = tema.verso.fundo;
   c.fillRect(0, 0, w, h);
-  c.strokeStyle = 'rgba(255,225,190,.22)';
+  c.strokeStyle = tema.verso.linha;
   c.lineWidth = 3;
   // Losangos: determinístico, sem sorteio nenhum, e some na distância em vez de virar moiré.
   for (let i = -h; i < w + h; i += 22) {
     c.beginPath(); c.moveTo(i, 0); c.lineTo(i + h, h); c.stroke();
     c.beginPath(); c.moveTo(i, h); c.lineTo(i + h, 0); c.stroke();
   }
-  c.strokeStyle = 'rgba(255,225,190,.5)';
+  c.strokeStyle = tema.verso.borda;
   c.lineWidth = 8;
   c.strokeRect(14, 14, w - 28, h - 28);
 });
 
 // ─── a geometria ─────────────────────────────────────────────────────────────
 const geomCorpoCarta = new THREE.BoxGeometry(CARTA_L, CARTA_E, CARTA_C);
-const matPapel = new THREE.MeshStandardMaterial({ color: PAPEL, roughness: 0.72, metalness: 0 });
+// A cor nasce do tema e é ATUALIZADA por `escolherTemaDoBaralho` — este material é a
+// instância base de todo corpo de carta que não precisa acender sozinho.
+const matPapel = new THREE.MeshStandardMaterial({ color: temaDoBaralho().papel, roughness: 0.72, metalness: 0 });
 const matFaceCarta = new THREE.MeshStandardMaterial({ map: texCartas, roughness: 0.62 });
 const matVersoCarta = new THREE.MeshStandardMaterial({ map: texVerso, roughness: 0.68 });
 
@@ -3149,6 +3286,9 @@ function criarFantasmaDeCarta(carta) {
 window.__cartas = {
   criarCarta, criarVersoDeCarta, criarFantasmaDeCarta, faceDaCarta,
   medidas: { CARTA_L, CARTA_C, CARTA_E, CEL_CARTA, CEL_CARTA_A, COLS_CARTA, LINS_CARTA },
+  // Os temas são da biblioteca, então a porta deles é esta e não o `__jogo`: a suíte de
+  // textura troca de tema e confere o atlas SEM depender de qual jogo está na mesa.
+  TEMAS_DO_BARALHO, temaDoBaralhoEscolhido, escolherTemaDoBaralho,
 };
 
 /* ····· 30-domino/090-tabuleiro.js ····· */
@@ -5190,6 +5330,10 @@ function mesaLembrada() {
   // o guardado só vale se o jogo de HOJE ainda o oferece.
   const opcoes = {};
   for (const o of JOGO.menu.OPCOES) {
+    // Opção EXTERNA não mora na MESA: a verdade dela é de quem a declarou (ex.: o tema do
+    // baralho, que é preferência da PESSOA e não regra da mesa — 082-temas.js). Nada a
+    // validar nem a devolver aqui; quem guarda e valida é o dono, pela chave dele.
+    if (o.externa) continue;
     const escolhido = o.valores.find(x => x.v === g[o.campo]);
     opcoes[o.campo] = (escolhido || o.valores[0]).v;
   }
@@ -5254,7 +5398,9 @@ function lembrarMesa() {
   // As opções do jogo, pelo nome que ELE deu — `compraVoluntaria` era o único e estava
   // escrito aqui. Copiar campo a campo em vez de `Object.assign(…, MESA)` é de propósito: a
   // MESA carrega `vagaOnline` e outras marcas de sessão que não podem ser persistidas.
-  for (const o of JOGO.menu.OPCOES) guardado[o.campo] = MESA[o.campo];
+  // A externa fica de fora: `o.campo` nem existe nela, e gravá-la aqui criaria a SEGUNDA
+  // cópia da preferência — duas metades que passam a discordar.
+  for (const o of JOGO.menu.OPCOES) if (!o.externa) guardado[o.campo] = MESA[o.campo];
   guardarNoJogo('mesa', guardado);
 }
 
@@ -5423,7 +5569,11 @@ function montarOpcoes() {
   for (const o of JOGO.menu.OPCOES) {
     grupo(o.id, o.dado, s => {
       const achado = o.valores.find(x => x.dado === s);
-      if (achado) MESA[o.campo] = achado.v;
+      if (!achado) return;
+      // Externa: quem aplica e guarda é o dono da opção — a MESA nem sabe dela, então não
+      // há `lembrarMesa` a chamar. O efeito (repintar, guardar) mora no `aoEscolher`.
+      if (o.externa) { o.aoEscolher(achado.v); return; }
+      MESA[o.campo] = achado.v;
       lembrarMesa();
     });
   }
@@ -5443,7 +5593,10 @@ function refletirMesaNosBotoes() {
   marcarGrupo('modoMesa', 'modo', MESA.modo);
   marcarGrupo('alvoPontos', 'alvo', MESA.alvo);
   for (const o of JOGO.menu.OPCOES) {
-    const atual = o.valores.find(x => x.v === MESA[o.campo]) || o.valores[0];
+    // Na externa a marca vem do dono (`o.atual()`), nunca da MESA — é o `refletirMesaNos-
+    // Botoes` de sempre: a tela mostra a verdade de quem a tem, senão a tela mente.
+    const valorAtual = o.externa ? o.atual() : MESA[o.campo];
+    const atual = o.valores.find(x => x.v === valorAtual) || o.valores[0];
     marcarGrupo(o.id, o.dado, atual.dado);
   }
 }
@@ -9318,7 +9471,12 @@ function sincronizarMaoDoTruco(vista) {
     // Apagar a carta que não serve não pode custar a LEITURA dela: você ainda precisa ver o
     // naipe para planejar a mão. Escurece de leve e tira o brilho, só isso.
     const mat = m.obj.userData.corpo.material;
-    mat.color.setHex(m.jogavel ? 0xf6f1e4 : 0xcfc7b6);
+    // A cor do corpo sai do TEMA do baralho (082-temas.js), não de um hex cravado: com o
+    // papel clássico escrito aqui, esta linha repintava a sua mão de creme por cima de
+    // qualquer tema a cada sincronização. Apagada = o mesmo papel escurecido (~16%), que é
+    // a proporção que o par antigo f6f1e4/cfc7b6 tinha — e funciona em papel escuro também.
+    const papel = new THREE.Color(temaDoBaralho().papel);
+    mat.color.copy(m.jogavel ? papel : papel.multiplyScalar(0.84));
     mat.emissive.setHex(m.jogavel ? 0x2a1f08 : 0x000000);
 
     // A MANILHA GANHA ANEL, e ele é PENDURADO AQUI e não na animação — mesma razão que a
@@ -10380,9 +10538,11 @@ function dicaDoTrucoParaACasa(vista) {
 // 10: escolher quanto vai durar é a decisão que se toma antes de sentar.
 const ALVOS_DO_TRUCO = [12, 6];
 
-// Nenhuma. A compra livre do dominó é uma regra de monte, e no truco não há monte para
-// comprar — a lista vazia é o que faz a segunda metade da linha do menu não ser desenhada.
-const OPCOES_DO_TRUCO = [];
+// A única opção do truco é o TEMA DO BARALHO, e ela vem PRONTA da biblioteca
+// (`OPCAO_TEMA_DO_BARALHO`, 082-temas.js) — o pife e o 21 penduram a mesma linha ao chegar.
+// Regra de mesa não há nenhuma a oferecer: a compra livre do dominó é regra de monte, e no
+// truco não há monte para comprar.
+const OPCOES_DO_TRUCO = [OPCAO_TEMA_DO_BARALHO];
 
 const notaDaMesaDoTruco = mesa =>
   `40 cartas, ${MODOS_TRUCO[mesa.modo].cartasPorMao} para cada · vira e manilha corrida`;

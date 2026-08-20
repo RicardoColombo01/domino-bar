@@ -23,6 +23,8 @@ const VALORES = ['A', '2', '3', '4', '5', '6', '7', 'Q', 'J', 'K'];
 
 // Os quatro naipes. `cor` é do DESENHO e não da regra: num baralho espanhol de verdade os
 // quatro são da mesma cor, e vermelho/preto é a convenção que todo mundo lê de relance.
+// Desde a v4.16 quem pinta o atlas lê a cor do TEMA (082-temas.js); esta continua sendo a
+// fonte do tema CLÁSSICO — o tema a deriva daqui para não haver duas cópias do mesmo hex.
 //
 // A ordem aqui também é só identidade. O desempate do truco entre manilhas
 // (ouros < espadas < copas < paus) calha de ser esta, e isso é COINCIDÊNCIA: quem depender

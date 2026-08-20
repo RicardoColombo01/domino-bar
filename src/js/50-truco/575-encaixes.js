@@ -384,9 +384,11 @@ function dicaDoTrucoParaACasa(vista) {
 // 10: escolher quanto vai durar é a decisão que se toma antes de sentar.
 const ALVOS_DO_TRUCO = [12, 6];
 
-// Nenhuma. A compra livre do dominó é uma regra de monte, e no truco não há monte para
-// comprar — a lista vazia é o que faz a segunda metade da linha do menu não ser desenhada.
-const OPCOES_DO_TRUCO = [];
+// A única opção do truco é o TEMA DO BARALHO, e ela vem PRONTA da biblioteca
+// (`OPCAO_TEMA_DO_BARALHO`, 082-temas.js) — o pife e o 21 penduram a mesma linha ao chegar.
+// Regra de mesa não há nenhuma a oferecer: a compra livre do dominó é regra de monte, e no
+// truco não há monte para comprar.
+const OPCOES_DO_TRUCO = [OPCAO_TEMA_DO_BARALHO];
 
 const notaDaMesaDoTruco = mesa =>
   `40 cartas, ${MODOS_TRUCO[mesa.modo].cartasPorMao} para cada · vira e manilha corrida`;

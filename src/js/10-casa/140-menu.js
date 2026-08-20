@@ -54,6 +54,10 @@ function mesaLembrada() {
   // o guardado só vale se o jogo de HOJE ainda o oferece.
   const opcoes = {};
   for (const o of JOGO.menu.OPCOES) {
+    // Opção EXTERNA não mora na MESA: a verdade dela é de quem a declarou (ex.: o tema do
+    // baralho, que é preferência da PESSOA e não regra da mesa — 082-temas.js). Nada a
+    // validar nem a devolver aqui; quem guarda e valida é o dono, pela chave dele.
+    if (o.externa) continue;
     const escolhido = o.valores.find(x => x.v === g[o.campo]);
     opcoes[o.campo] = (escolhido || o.valores[0]).v;
   }
@@ -118,7 +122,9 @@ function lembrarMesa() {
   // As opções do jogo, pelo nome que ELE deu — `compraVoluntaria` era o único e estava
   // escrito aqui. Copiar campo a campo em vez de `Object.assign(…, MESA)` é de propósito: a
   // MESA carrega `vagaOnline` e outras marcas de sessão que não podem ser persistidas.
-  for (const o of JOGO.menu.OPCOES) guardado[o.campo] = MESA[o.campo];
+  // A externa fica de fora: `o.campo` nem existe nela, e gravá-la aqui criaria a SEGUNDA
+  // cópia da preferência — duas metades que passam a discordar.
+  for (const o of JOGO.menu.OPCOES) if (!o.externa) guardado[o.campo] = MESA[o.campo];
   guardarNoJogo('mesa', guardado);
 }
 
@@ -287,7 +293,11 @@ function montarOpcoes() {
   for (const o of JOGO.menu.OPCOES) {
     grupo(o.id, o.dado, s => {
       const achado = o.valores.find(x => x.dado === s);
-      if (achado) MESA[o.campo] = achado.v;
+      if (!achado) return;
+      // Externa: quem aplica e guarda é o dono da opção — a MESA nem sabe dela, então não
+      // há `lembrarMesa` a chamar. O efeito (repintar, guardar) mora no `aoEscolher`.
+      if (o.externa) { o.aoEscolher(achado.v); return; }
+      MESA[o.campo] = achado.v;
       lembrarMesa();
     });
   }
@@ -307,7 +317,10 @@ function refletirMesaNosBotoes() {
   marcarGrupo('modoMesa', 'modo', MESA.modo);
   marcarGrupo('alvoPontos', 'alvo', MESA.alvo);
   for (const o of JOGO.menu.OPCOES) {
-    const atual = o.valores.find(x => x.v === MESA[o.campo]) || o.valores[0];
+    // Na externa a marca vem do dono (`o.atual()`), nunca da MESA — é o `refletirMesaNos-
+    // Botoes` de sempre: a tela mostra a verdade de quem a tem, senão a tela mente.
+    const valorAtual = o.externa ? o.atual() : MESA[o.campo];
+    const atual = o.valores.find(x => x.v === valorAtual) || o.valores[0];
     marcarGrupo(o.id, o.dado, atual.dado);
   }
 }

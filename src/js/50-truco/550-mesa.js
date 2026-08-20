@@ -215,7 +215,12 @@ function sincronizarMaoDoTruco(vista) {
     // Apagar a carta que não serve não pode custar a LEITURA dela: você ainda precisa ver o
     // naipe para planejar a mão. Escurece de leve e tira o brilho, só isso.
     const mat = m.obj.userData.corpo.material;
-    mat.color.setHex(m.jogavel ? 0xf6f1e4 : 0xcfc7b6);
+    // A cor do corpo sai do TEMA do baralho (082-temas.js), não de um hex cravado: com o
+    // papel clássico escrito aqui, esta linha repintava a sua mão de creme por cima de
+    // qualquer tema a cada sincronização. Apagada = o mesmo papel escurecido (~16%), que é
+    // a proporção que o par antigo f6f1e4/cfc7b6 tinha — e funciona em papel escuro também.
+    const papel = new THREE.Color(temaDoBaralho().papel);
+    mat.color.copy(m.jogavel ? papel : papel.multiplyScalar(0.84));
     mat.emissive.setHex(m.jogavel ? 0x2a1f08 : 0x000000);
 
     // A MANILHA GANHA ANEL, e ele é PENDURADO AQUI e não na animação — mesma razão que a
