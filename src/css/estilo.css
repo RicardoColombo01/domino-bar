@@ -379,7 +379,10 @@ body.saguao #conversa, body.saguao #btConversa { z-index: 31; }
 .grandao { font-size: 27px; font-weight: 700; color: var(--ambar); margin: 6px 0 10px; }
 
 .linha { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 14px 0; }
-.grupo { display: flex; gap: 5px; }
+/* `wrap` porque um grupo é UM item da .linha e não encolhe: os cinco temas do baralho
+   passam de 322px numa tela de 360, e sem quebrar por dentro o grupo transbordaria — a
+   armadilha do quarto cartão de jogador, numa faixa nova. */
+.grupo { display: flex; gap: 5px; flex-wrap: wrap; }
 .acoesMenu { margin-top: 20px; }
 
 #cadeiras { display: grid; gap: 7px; margin: 6px 0 4px; }

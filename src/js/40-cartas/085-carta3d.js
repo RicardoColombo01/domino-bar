@@ -41,7 +41,9 @@ const CEL_CARTA_A = Math.round(CEL_CARTA * (CARTA_C / CARTA_L));   // 272
 const COLS_CARTA = VALORES.length;      // 10
 const LINS_CARTA = NAIPES.length;       // 4
 
-const PAPEL = '#f6f1e4';
+// A COR DO PAPEL (e as dos naipes) SAI DO TEMA (082-temas.js), lida DENTRO das receitas —
+// é o que faz `repintar()` servir de troca de tema. Um `const PAPEL` aqui congelaria a cor
+// da primeira pintura para sempre.
 
 // ─── os quatro naipes, desenhados a MÃO ──────────────────────────────────────
 // Em caminho, e não com o glifo `♠` num `fillText`. Glifo depende de a fonte do sistema ter
@@ -101,16 +103,21 @@ function naipeNoCanvas(c, id, x, y, r) {
 // "desenhado") e NÃO consome `Math.random` global (as suítes de tela semeiam aquele gerador
 // dentro da própria página, e mil sorteios aqui deslocariam a sequência inteira).
 const texCartas = pintar('cartas', CEL_CARTA * COLS_CARTA, CEL_CARTA_A * LINS_CARTA, (c, w, h) => {
-  // O fundo de TODA a textura primeiro, e opaco. Sem isto a sonda de alfa não funciona.
-  c.fillStyle = PAPEL;
+  // O TEMA é lido a cada pintura, e não capturado na carga: `escolherTemaDoBaralho` troca a
+  // tabela e chama esta mesma receita de novo. Só COR sai daqui — geometria, fonte e âncora
+  // são iguais em todo tema, porque as asserções do atlas amostram coordenadas.
+  const tema = temaDoBaralho();
+  // O fundo de TODA a textura primeiro, e opaco. Sem isto a sonda de alfa não funciona — e
+  // a cor não pode ser preta nem branca, porque o pixel (0,0) é a assinatura do descarte.
+  c.fillStyle = tema.papel;
   c.fillRect(0, 0, w, h);
 
   for (let n = 0; n < LINS_CARTA; n++) {
     for (let v = 0; v < COLS_CARTA; v++) {
       const ox = v * CEL_CARTA, oy = n * CEL_CARTA_A;
       const naipe = NAIPES[n];
-      c.fillStyle = naipe.cor;
-      c.strokeStyle = naipe.cor;
+      c.fillStyle = tema.naipes[naipe.id];
+      c.strokeStyle = tema.naipes[naipe.id];
 
       // A moldura, um tico para dentro: é ela que separa uma carta da vizinha quando duas
       // ficam encostadas na mesa, do mesmo jeito que a FOLGA da peça de dominó faz. Ela se
@@ -167,23 +174,26 @@ const texCartas = pintar('cartas', CEL_CARTA * COLS_CARTA, CEL_CARTA_A * LINS_CA
 // garantia visual de que o jogo não desenha o que não deve mostrar (invariante 3, na forma
 // que dá para fotografar).
 const texVerso = pintar('versoCarta', 256, 256, (c, w, h) => {
-  c.fillStyle = '#7a3b2e';
+  const tema = temaDoBaralho();
+  c.fillStyle = tema.verso.fundo;
   c.fillRect(0, 0, w, h);
-  c.strokeStyle = 'rgba(255,225,190,.22)';
+  c.strokeStyle = tema.verso.linha;
   c.lineWidth = 3;
   // Losangos: determinístico, sem sorteio nenhum, e some na distância em vez de virar moiré.
   for (let i = -h; i < w + h; i += 22) {
     c.beginPath(); c.moveTo(i, 0); c.lineTo(i + h, h); c.stroke();
     c.beginPath(); c.moveTo(i, h); c.lineTo(i + h, 0); c.stroke();
   }
-  c.strokeStyle = 'rgba(255,225,190,.5)';
+  c.strokeStyle = tema.verso.borda;
   c.lineWidth = 8;
   c.strokeRect(14, 14, w - 28, h - 28);
 });
 
 // ─── a geometria ─────────────────────────────────────────────────────────────
 const geomCorpoCarta = new THREE.BoxGeometry(CARTA_L, CARTA_E, CARTA_C);
-const matPapel = new THREE.MeshStandardMaterial({ color: PAPEL, roughness: 0.72, metalness: 0 });
+// A cor nasce do tema e é ATUALIZADA por `escolherTemaDoBaralho` — este material é a
+// instância base de todo corpo de carta que não precisa acender sozinho.
+const matPapel = new THREE.MeshStandardMaterial({ color: temaDoBaralho().papel, roughness: 0.72, metalness: 0 });
 const matFaceCarta = new THREE.MeshStandardMaterial({ map: texCartas, roughness: 0.62 });
 const matVersoCarta = new THREE.MeshStandardMaterial({ map: texVerso, roughness: 0.68 });
 
@@ -306,4 +316,7 @@ function criarFantasmaDeCarta(carta) {
 window.__cartas = {
   criarCarta, criarVersoDeCarta, criarFantasmaDeCarta, faceDaCarta,
   medidas: { CARTA_L, CARTA_C, CARTA_E, CEL_CARTA, CEL_CARTA_A, COLS_CARTA, LINS_CARTA },
+  // Os temas são da biblioteca, então a porta deles é esta e não o `__jogo`: a suíte de
+  // textura troca de tema e confere o atlas SEM depender de qual jogo está na mesa.
+  TEMAS_DO_BARALHO, temaDoBaralhoEscolhido, escolherTemaDoBaralho,
 };

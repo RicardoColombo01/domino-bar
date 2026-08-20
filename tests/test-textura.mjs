@@ -641,6 +641,110 @@ if (!e3t.antes.erro && !e3t.depois.erro) {
     `É a peça preta da Fila 7, agora numa carta`);
 }
 
+// ─── 6. O TEMA DO BARALHO (Onda E) — troca a cor, e só a cor ─────────────────
+// A infraestrutura é a mesma da Fila 7: `repintar()` já existia para sobreviver ao
+// Android, e trocar de tema é chamar a mesma repintura com outra tabela de cores
+// (082-temas.js). O que este bloco prova é o que o plano da Onda E listava como armadilha:
+// entrada de fora guardada (chave de protótipo já deu tela preta permanente), a troca
+// muda o pixel de verdade, ela SOBREVIVE a um recarregamento (o `guardar`/`lido` de
+// verdade, não um flag em memória), e a repintura do MESMO tema é determinística.
+console.log('\n  o tema do baralho');
+await doZero('truco', 'mesaDoTruco()');
+
+// A CHAMADA VAI EM TRY/CATCH DENTRO DA PÁGINA — não por excesso de zelo: uma guarda de chave
+// de protótipo que falhasse deixaria o resto da função ler `TEMAS_DO_BARALHO['constructor']`
+// (a função Object, truthy) e `.papel` dela é `undefined`, que `matPapel.color.set()` do
+// three RECUSA com exceção. Sem o try/catch aqui, essa exceção sobe pelo `pagina.evaluate` e
+// MATA O PROCESSO DO NODE antes de qualquer \`✗\` — a conferência por mutação classificaria a
+// rodada como INCONCLUSIVA (comando quebrado) em vez de "a mutação foi pega", exatamente a
+// lição que este arquivo já registra para o `throw` dentro de rAF. Medido: aconteceu na
+// primeira tentativa deste bloco.
+const guarda = await pagina.evaluate(naPagina(`(() => {
+  const antesId = window.__cartas.temaDoBaralhoEscolhido();
+  const tenta = (id) => {
+    try { return { recusou: !window.__cartas.escolherTemaDoBaralho(id) }; }
+    catch (e) { return { erro: (e && e.message) || String(e) }; }
+  };
+  // 'constructor' É A CHAVE DE PROTÓTIPO, não um id qualquer que não existe: um id inventado
+  // como 'istoNaoExiste' já dá \`undefined\` em bracket access OU em Object.hasOwn, e a
+  // diferença entre os dois só aparece numa chave que o Object.prototype de fato tem. É o
+  // MESMO buraco que deu tela preta permanente no defeito 5 da Fila 6, agora numa porta nova.
+  const random = tenta('istoNaoExisteNemDeLonge');
+  const prototipo = tenta('constructor');
+  return {
+    antesId, random, prototipo,
+    depoisId: window.__cartas.temaDoBaralhoEscolhido(),
+  };
+})()`));
+ok(guarda.antesId === 'classico', `a página abriu no tema ${guarda.antesId}, e devia ser o padrão`);
+ok(!guarda.random.erro, `um id de tema inventado ESTOUROU em vez de ser recusado: ${guarda.random.erro}`);
+ok(guarda.random.recusou, 'um id de tema inventado FOI aceito — a entrada de fora não está guardada');
+ok(!guarda.prototipo.erro,
+  `"constructor" ESTOUROU em vez de ser recusado (${guarda.prototipo.erro}) — pior que aceitar: derruba o clique de quem só queria trocar de tema`);
+ok(guarda.prototipo.recusou,
+  '"constructor" foi aceito como tema — é a MESMA chave de protótipo que já deu tela preta permanente uma vez (Fila 6)');
+ok(guarda.depoisId === guarda.antesId,
+  `um id inválido mudou o tema ativo para ${guarda.depoisId} mesmo tendo sido recusado`);
+ok(guarda.depoisId === guarda.antesId,
+  `um tema inválido mudou o tema ativo para ${guarda.depoisId} mesmo tendo sido recusado`);
+
+const troca = await pagina.evaluate(naPagina(`(() => {
+  const antes = atlasDasCartas();
+  const trocou = window.__cartas.escolherTemaDoBaralho('quatrocores');
+  const depois = atlasDasCartas();
+  return {
+    trocou, id: window.__cartas.temaDoBaralhoEscolhido(),
+    ouroAntes: antes.celulas[0][0], ouroDepois: depois.celulas[0][0],
+  };
+})()`));
+ok(troca.trocou, 'escolherTemaDoBaralho(\'quatrocores\') recusou um tema que existe');
+ok(troca.id === 'quatrocores', `o tema ativo é ${troca.id}, não quatrocores`);
+ok(troca.ouroAntes !== troca.ouroDepois,
+  `o naipe de ouros continua "${troca.ouroDepois}" depois de trocar de tema — a repintura não pegou`);
+
+// SOBREVIVE AO RECARREGAMENTO: se isto falhar, `TEMA_BARALHO_ID` era um flag de memória e
+// não uma preferência guardada — a mesma lição do `Você` da Fila 10, por uma porta nova.
+await doZero('truco', 'mesaDoTruco()');
+const depoisDeRecarregar = await pagina.evaluate(naPagina(`(() => {
+  const atlas = atlasDasCartas();
+  return { id: window.__cartas.temaDoBaralhoEscolhido(), ouro: atlas.celulas[0][0] };
+})()`));
+ok(depoisDeRecarregar.id === 'quatrocores',
+  `depois de recarregar a página o tema voltou a ${depoisDeRecarregar.id} — a preferência não sobreviveu`);
+ok(depoisDeRecarregar.ouro !== 'vermelho',
+  `depois de recarregar, o atlas voltou a pintar ouros de vermelho (o clássico) — a preferência guardada não foi lida na carga`);
+
+// REPINTURA DO MESMO TEMA É DETERMINÍSTICA — a MESMA disciplina que a madeira já provava
+// duas seções acima ("repintar duas vezes desenha a mesma madeira"), e pela MESMA regra
+// que aquela seção documenta: comparar contra a PRIMEIRA pintura de um canvas mede o
+// rasterizador do Chrome (~0,6% de ruído, um canvas "novo" contra um já usado como fonte de
+// textura), não o desenho. `reg.repintar()` É CHAMADO DUAS VEZES SEGUIDAS, sem nada mais
+// pintado no meio — a primeira tentativa deste bloco comparava contra uma pintura separada
+// por uma troca de tema no meio, e caiu nessa mesma armadilha por outra porta.
+const determinismo = await pagina.evaluate(naPagina(`(() => {
+  const reg = j.texturas.find(x => x.nome === 'cartas');
+  reg.repintar();
+  const s1 = somaDe(reg.canvas);
+  reg.repintar();
+  const s2 = somaDe(reg.canvas);
+  return { s1, s2 };
+})()`));
+ok(determinismo.s1 === determinismo.s2,
+  `o atlas de "quatrocores" saiu diferente entre duas repinturas seguidas (${determinismo.s1} ≠ ${determinismo.s2}) — o desenho do tema não é determinístico`);
+
+// E VOLTA AO CLÁSSICO — a MESMA disciplina de "cada cena devolve como encontrou" que as
+// suítes de tela já cobram do localStorage, agora para uma preferência nova.
+const volta = await pagina.evaluate(naPagina(`(() => {
+  const voltou = window.__cartas.escolherTemaDoBaralho('classico');
+  const atlas = atlasDasCartas();
+  return { voltou, ouro: atlas.celulas[0][0] };
+})()`));
+ok(volta.voltou, 'escolherTemaDoBaralho(\'classico\') recusou o próprio padrão');
+ok(volta.ouro === 'vermelho', `de volta ao clássico, ouros saiu "${volta.ouro}" e não vermelho`);
+
+console.log('    id inválido recusado · a troca muda o pixel · sobrevive ao recarregamento · ' +
+  'repintura determinística · volta ao clássico');
+
 if (erros.length) {
   console.log(`\nerros no console: ${erros.length}\n  ${erros.slice(0, 4).join('\n  ')}`);
   falhas += erros.length;
