@@ -357,6 +357,13 @@ truco no saguão por três releases.
   5· o build dentro do comando deixa bundle SUJO no fim (`npm run check` prova; o `sw.js`
   tem de recuperar o MESMO resumo) · 6· mutador morto de fora deixa a mutação NA FONTE —
   **toda rodada com prazo apertado termina com `git status`**.
+- **`pagina.evaluate()` sem try/catch DENTRO da página propaga o throw do CÓDIGO TESTADO, não
+  só da asserção** — mesma família da "asserção que lança mata o processo", por outra porta.
+  Um guard de entrada de fora mutado para acesso por colchete não só passou a aceitar
+  `'constructor'`, o resto da função estourou (`algo.papel` de uma função é `undefined`, e o
+  three recusa cor `undefined`) — sem captura na página, isso matou o Node antes de qualquer
+  `✗`, e `mutar.mjs` classificou INCONCLUSIVO. A chamada de página que pode alcançar código
+  mutado tem de devolver o erro COMO VALOR (o padrão `noQuadro` já usa para `rAF`).
 - **Quando o conserto tem DUAS camadas, mutar UMA sai verde — é o desenho** (a irmã segura).
   A prova honesta é mutar o PAR, e isso fica escrito ao lado da asserção. Duas guardas que se
   cobrem precisam de asserções DIFERENTES, separadas pelo efeito colateral (o som que a de
@@ -435,9 +442,9 @@ as Filas 5, 7, 10, 16, 17) e **varredura** (deu as 6, 11, 12, 13).
 | commitado | **v4.15.0** — Fila 17: sonda de textura por ASSINATURA, canto da carta maior, leque tombado. Antes: v4.14.4 (Onda D), v4.14.3 (Fila 16, mesa órfã), v4.14.0 (Onda F) |
 | enviado | ✔ `git ls-remote` responde `49a0f83`, igual ao local |
 | PUBLICADO | ✔ `sw.js` servido `149d533767a9`, igual ao local, conferido duas vezes. A régua é o conteúdo servido |
-| em curso | **nada aberto no jogo** |
-| Filas 1–17 | todas fechadas · da Fila 15 sobram as Ondas **C** e **E** |
-| o que vem | **JOGAR** (abaixo), depois Ondas **E** e **C**, depois o **PIFE**. Fase 5 ⏸ em espera |
+| em curso | **nada aberto no jogo** — a Onda E fechou nesta sessão, ainda não enviada nem publicada |
+| Filas 1–17 | todas fechadas · da Fila 15 sobra a Onda **C** (a E fechou) |
+| o que vem | **JOGAR** (abaixo, prioridade), depois a Onda **C**, depois o **PIFE**. Fase 5 ⏸ em espera |
 
 ## O que vem, em ordem
 
@@ -455,23 +462,47 @@ data, use-a) · 2· qual jogo, quantas cadeiras, bot de que nível · 3· foto v
 descrição · 4· se a mesa PAROU: de quem era a vez, o que dizia o alto, se havia botão · 5·
 não precisa diagnosticar — a leitura erra muito aqui.
 
-### 2º · ONDA E — TEMAS DE BARALHO (ideia do Ricardo, 11/08) · ~um dia
+### 2º · ONDA E — TEMAS DE BARALHO ✔ FEITA em 20/08/2026, ainda NÃO enviada nem publicada
 
-A infraestrutura já existe: `pintar()` guarda a receita para repintar (Fila 7) — **trocar de
-tema é chamar `repintar` com outras cores**. Mora em `40-cartas/` (biblioteca: vale para
-truco, pife e 21 de uma vez). Um tema define: cor do papel, quatro cores de naipe, verso,
-talvez a fonte do valor — tabela por tema, do feitio de `MODOS`.
+Ideia do Ricardo (11/08). Branch `v4.16`, um commit. A infraestrutura era mesmo a da Fila
+7 — `pintar()` já guardava a receita para repintar; **trocar de tema é chamar `repintar` com
+outra tabela de cores**, sem uma linha nova no mecanismo. Nasceu `40-cartas/082-temas.js`
+(biblioteca — vale para truco, pife e 21 de graça), com os cinco temas do plano (Clássico,
+Quatro cores, Contraste, Boteco, Noturno) e uma linha de menu em `140-menu.js`.
 
-Os cinco propostos: **Clássico** (o de hoje, padrão) · **Quatro cores** (no truco a ordem das
-manilhas é POR NAIPE — a cor passa a mostrar o que decide a mão) · **Alto contraste**
-(acessibilidade) · **Boteco** (papel gasto) · **Noturno**.
+**A opção do tema é EXTERNA, e isso é um conceito novo no contrato.** Tema é preferência da
+PESSOA, não regra da MESA: não entra em `lembrarMesa`, não viaja no fio, não é validada
+contra o modo. `JOGO.menu.OPCOES` ganhou um segundo formato — `{externa: true, atual,
+aoEscolher}` em vez de `{campo, valores}` — e `140-menu.js` (mesaLembrada, lembrarMesa,
+montarOpcoes, refletirMesaNosBotoes) passou a perguntar `o.externa` antes de tocar na MESA.
+Sem essa marca, duas pessoas na mesma mesa passariam a discordar sobre o que cada uma vê.
 
-As quatro armadilhas, todas já pagas: 1· receita não consome `Math.random` global (gerador
-próprio semeado) · 2· repintura dá a MESMA carta com o mesmo tema (o `test-textura` compara)
-· 3· preferência guardada é entrada de fora (`Object.hasOwn(TEMAS, …)`) · 4· a asserção do
-atlas amostra COR — com tema trocável, ou força o Clássico ou lê a cor do tema; **decidir ao
-escrever**. O mesmo inventário serve depois para a peça de dominó — mas entregar o baralho
-primeiro.
+**As quatro armadilhas do plano, cada uma medida e não só evitada:**
+
+1. **Sem `Math.random`** — não havia motivo para usar, e não usa.
+2. **Repintura do MESMO tema é determinística** — provado no `test-textura`, mas a PRIMEIRA
+   versão do teste comparava a pintura errada: trocar de tema E VOLTAR (com uma pintura
+   diferente no meio) mediu o ruído de rasterização do Chrome (~0,6%, já documentado) e deu
+   falso positivo. A régua certa — a que a seção da madeira já usava — é repintar a MESMA
+   textura DUAS VEZES SEGUIDAS, nada mais pintado no meio.
+3. **`Object.hasOwn`, nunca acesso por colchete** — e a prova por mutação achou um segundo
+   defeito ao lado do primeiro: com o guard errado, `escolherTemaDoBaralho('constructor')`
+   não só passa, ele **ESTOURA** (`temaDoBaralho().papel` é `undefined` numa função, e
+   `matPapel.color.set(undefined)` o three recusa com exceção) — e sem a chamada em
+   try/catch dentro da própria página, essa exceção **matava o processo do Node** antes de
+   qualquer `✗`, e `tests/mutar.mjs` classificou a primeira rodada como INCONCLUSIVA (é
+   exatamente a lição "asserção que lança mata o processo", agora do lado do CÓDIGO testado,
+   não da asserção). Refeito com o try/catch, a mutação matou 5 asserções.
+4. **A asserção do atlas amostra COR** — o `test-textura` roda em Chrome com profile novo a
+   cada `npm run textura` (perfil temporário do Puppeteer), então o tema sempre começa
+   'classico' ali; a suíte de cor fixa (`FAMILIA`) continua correta porque nada muda o tema
+   antes dela. A cena nova do tema roda DEPOIS, no fim do arquivo.
+
+Verificado à mão: a linha de 5 botões no menu do truco em 360px de largura — `flex-wrap`
+no `.grupo` (CSS), sem transbordo, quebra em duas fileiras (foto conferida, não só medida).
+
+**O mesmo inventário para a peça de dominó continua não feito** — ficou de fora de
+propósito, é trabalho de uma sessão própria se algum dia importar.
 
 ### 3º · ONDA C — quem chega pela primeira vez · ~um dia
 
@@ -797,8 +828,11 @@ trocar a conta do GH.
   o que 385 asserções não acharam), vira erguida no toco (era z-fighting), Peso no topo do
   dominó. **B** (v4.13) o convite em cascata, o chamado da vez, conversa pelo teclado,
   `beforeunload`; e o raio da vaza (cartas encavaladas em campo). **F** (v4.14) esconder a
-  carta e a mão de ferro. **D** (v4.14.4) o `test-textura` com o truco na mesa. Sobram
-  **C** e **E** (ver "O que vem").
+  carta e a mão de ferro. **D** (v4.14.4) o `test-textura` com o truco na mesa. **E**
+  (20/08/2026, branch `v4.16`, ainda não enviada) os temas de baralho — o conceito de opção
+  EXTERNA no menu (preferência da pessoa, não regra da mesa), e uma mutação que achou dois
+  defeitos empilhados: guard fraco aceitando `'constructor'` E o resto da função estourando
+  por causa disso, matando o processo antes de qualquer `✗`. Sobra **C** (ver "O que vem").
 - **Fila 16** (v4.14.3): a MESA ÓRFÃ — trocar de jogo não limpava a cena (os grupos 3D dos
   dois jogos moram na `scene` desde a carga). Nasceu `JOGO.mesa.limpar()`, chamado em
   `abrirJogo` no jogo que SAI (nunca `clear()` — a prévia é filha). A foto do antes mostrou
