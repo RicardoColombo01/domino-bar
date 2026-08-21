@@ -442,13 +442,65 @@ as Filas 5, 7, 10, 16, 17) e **varredura** (deu as 6, 11, 12, 13).
 | commitado | **v4.16.0** — Onda E: os temas de baralho. Antes: v4.15.0 (Fila 17), v4.14.4 (Onda D), v4.14.3 (Fila 16, mesa órfã) |
 | enviado | ✔ `git ls-remote` responde `088c3cf`, igual ao local |
 | PUBLICADO | ✔ `sw.js` servido `a5f6c4adc2ad`, igual ao local — mas a fila do Pages TRAVOU de novo (~15 min sem rodada), destravou só depois de mexer em `Settings → Pages`. Quarta vez do padrão |
-| em curso | **nada aberto no jogo** |
+| em curso | **nada aberto no jogo** — a legibilidade da carta voltou como relato de campo (21/08), registrada e AINDA NÃO investigada a fundo (medi de leve, não implementei) |
 | Filas 1–17 | todas fechadas · da Fila 15 sobra a Onda **C** (a E fechou na v4.16.0) |
-| o que vem | **JOGAR** (prioridade), depois **tirar as firulas de IA** (pedido novo, precisa de resposta dele antes de mexer), a Onda **C**, e o **PIFE**. Fase 5 ⏸ em espera |
+| o que vem | **a carta ainda ilegível** (relato novo, prioridade), depois **JOGAR**, **tirar as firulas de IA**, a Onda **C**, e o **PIFE**. Fase 5 ⏸ em espera |
 
 ## O que vem, em ordem
 
-### 1º · JOGAR — as perguntas que só o olho no celular responde
+### 1º · A CARTA AINDA ESTÁ RUIM DE VER — relato do Ricardo, 21/08/2026
+
+A Fila 17 (v4.15.0, 19/08) já cresceu o canto uma vez por relato de campo idêntico a este
+("não dá para ver os símbolos nem o número") — e o relato voltou depois do conserto. **Não
+implementar nada até MEDIR de novo com uma foto datada** — é a segunda vez que este exato
+sintoma se repete, e a Fila 17 já tinha um antecessor que corrigiu o diagnóstico errado uma
+vez (o centro do naipe não podia crescer por causa da sonda do E3-truco).
+
+**O que já foi medido nesta sessão, em Chrome headless — e o motivo de não bastar:**
+
+```
+retrato 360×640    carta  88×113px de tela · valor do canto ~26px · naipe do canto ~11px
+retrato 390×844    carta 117×151px de tela · valor do canto ~35px · naipe do canto ~14px
+paisagem 844×390   carta  68× 89px de tela · valor do canto ~20px · naipe do canto  ~8px
+```
+
+As capturas de tela nesses tamanhos **leem razoavelmente bem** a olho nu — o que é
+informação, não conforto: a lacuna entre "legível no Chrome do computador" e "ruim de ver no
+celular de verdade" é EXATAMENTE a mesma classe de gancho que a Fila 7 e a Fila 17 já pagaram
+com a peça preta (o defeito só existe no aparelho real, nunca no headless). **Comece pedindo
+uma FOTO DATADA** (a regra de "como relatar barato", acima) antes de mexer em qualquer
+número — ela pode mostrar algo que uma medida de pixel não mostra: reflexo de tela, ângulo de
+segurar o aparelho, ou um tamanho de fonte do sistema que amplia tudo menos o canvas.
+
+**Hipóteses para amanhã, cada uma com o motivo — NENHUMA implementada, e a ordem não é
+prioridade, é custo:**
+
+1. **A fonte do valor é serifada** (`Georgia, "Times New Roman", serif`) — traço fino demais
+   para um glifo pequeno rasterizado e depois reamostrado pela GPU. Carta de baralho de
+   verdade usa fonte bold SEM serifa no índice do canto exatamente por isso: o serifado
+   embaça primeiro quando a resolução aperta. Troca de `font-family` é uma linha.
+2. **O canto não tem CONTORNO** — só `fillStyle` sólido. Um traço fino (cor oposta: escuro
+   no papel claro, claro no papel escuro dos temas Noturno/Boteco) mantém o glifo lendo
+   contra qualquer fundo, inclusive contra a carta vizinha encostada atrás dele no leque.
+   Fica mais importante agora que existem TEMAS — o contorno teria de vir do próprio tema
+   (082-temas.js), não de uma cor cravada.
+3. **O TOMBO comprime o glifo pela CÂMERA, e a Fila 17 só mediu o tamanho "de frente".**
+   `MAO_TRUCO_TOMBO` foi para 0.80, mas ninguém mediu quanto do glifo sobra depois da
+   projeção em perspectiva — pode ainda estar perto de metade, como o comentário da Fila 17
+   já registrava antes do conserto. Vale medir a ALTURA PROJETADA do glifo, não só a largura
+   da carta.
+4. **A carta é fisicamente pequena na mesa** (`CARTA_L`/`CARTA_C`) — se as três hipóteses
+   acima não bastarem, o problema pode não ser o DESENHO da carta, é o TAMANHO dela na cena.
+   Crescer a carta física custa reabrir a escala do truco (`ESCALA_TRUCO_MAX`,
+   `MESA_TRUCO_Z`) e a folga contra os assentos — é a hipótese mais cara, e por isso a
+   última a tentar.
+
+**A ordem de amanhã:** (a) pedir a foto datada · (b) comparar contra os números acima — a
+foto pode desmentir a lacuna "Chrome ≠ celular" e mostrar algo mais banal, tipo um tema
+específico com contraste ruim · (c) só então escolher entre 1–4, medir de novo, e provar por
+mutação como de costume.
+
+### 2º · JOGAR — as perguntas que só o olho no celular responde
 
 Nunca tocado por mão humana: a **mão de ferro** de verdade (o leque de versos lê como "não é
 a sua mão" ou como defeito?) · o botão **Esconder** no dedo, na barra do celular deitado · a
@@ -462,7 +514,7 @@ data, use-a) · 2· qual jogo, quantas cadeiras, bot de que nível · 3· foto v
 descrição · 4· se a mesa PAROU: de quem era a vez, o que dizia o alto, se havia botão · 5·
 não precisa diagnosticar — a leitura erra muito aqui.
 
-### 2º · ONDA E — TEMAS DE BARALHO ✔ FEITA e PUBLICADA (v4.16.0, 20-21/08/2026)
+### 3º · ONDA E — TEMAS DE BARALHO ✔ FEITA e PUBLICADA (v4.16.0, 20-21/08/2026)
 
 Ideia do Ricardo (11/08). Branch `v4.16`, um commit. A infraestrutura era mesmo a da Fila
 7 — `pintar()` já guardava a receita para repintar; **trocar de tema é chamar `repintar` com
@@ -509,7 +561,7 @@ disparar para o commit do merge; destravou só depois de mexer em `Settings → 
 (reselecionar a branch). `curl` confirmou nos dois lados (`sw.js` e o HTML servido têm a
 feature) antes de declarar publicado — a régua de sempre.
 
-### 3º · TIRAR AS FIRULAS DE IA — pedido do Ricardo, 21/08/2026
+### 4º · TIRAR AS FIRULAS DE IA — pedido do Ricardo, 21/08/2026
 
 Palavras dele: "tirar as firulas de IA do site". Perguntado o que ele quis dizer, ele marcou
 as três: **gradientes/efeitos genéricos**, **emoji em excesso**, **texto/copy "de IA"**.
@@ -529,7 +581,7 @@ em `085-carta3d.js` (caminho desenhado, não glifo de fonte, que já resolveu o 
 tofu em Android antigo). Sem essa resposta, não dá para saber se o trabalho é "trocar cinco
 ícones" ou "reescrever a paleta inteira".
 
-### 4º · ONDA C — quem chega pela primeira vez · ~um dia
+### 5º · ONDA C — quem chega pela primeira vez · ~um dia
 
 **C1 · Estatísticas locais** (casa) — partidas/vitórias/derrotas por jogo; o dado já passa
 por `publicar()`. Armadilha: estado novo no `localStorage` contamina as suítes de navegador —
@@ -537,7 +589,7 @@ cada cena diz o que quer. **C2 · Primeira mão guiada** (casa + jogo) — reapr
 inteira. **C3 · Desfazer no HOTSEAT** (os dois) — `P` é dado puro, é uma cópia. **Só em mesa
 local**: online ou contra bot seria trapaça.
 
-### 5º · O PIFE (decisão do Ricardo, 11/08)
+### 6º · O PIFE (decisão do Ricardo, 11/08)
 
 Herda pronto: o online P2P inteiro, hotseat, som, boteco, telas, partida guardada, o baralho
 de 40 e a carta 3D (`40-cartas/`), os cinco encaixes de HUD (que o truco teve de inventar), e
