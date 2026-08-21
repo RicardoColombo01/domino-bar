@@ -125,23 +125,26 @@ function layoutDaVaza(mesa, eu, n) {
 //
 // `time` é 0 ou 1; `null` (melou) empilha no MEIO, porque ela não é de ninguém.
 //
-// INVESTIGADO EM 21/08 e a conclusão é NEGATIVA — registrada para não refazer a conta: é a
-// pilha, não `RAIO_DA_VAZA`, quem manda em `caixaDaMesaDoTruco` numa mesa de 4 (1.92 contra
-// 1.25 de alcance da vaza sozinha), e como as três escalas do `sincronizarMesaDoTruco`
-// dividem por essa largura, a pilha larga é o que empurra a carta jogada — a que o relato
-// de campo reclamou ("as letras juntas" e "não dá pra ver a carta no meio") — para baixo do
-// piso: numa mesa de 4 num celular a mesa nasce achatada na escala 1 (o piso "nunca abaixo
-// de uma peça"), e a carta jogada mede só 18–40% da carta na mão, medido projetando a cena
-// de verdade. ENCOLHER `LADO_DA_PILHA` PARECE O CONSERTO E NÃO É: com 2.5 (uma redução de
-// só 4%) a pilha já esbarra na carta jogada pelo pior assento — o de lado, cuja carta gira
-// 90° e estica em X exatamente o que a pilha perdeu. O piso de 2.6 tem só 0.05 de folga
-// nesse eixo (contra o alcance de 1.25 da vaza), e a asserção abaixo (por EIXO, não por
-// raio — o raio superestima o risco dos assentos de frente e escondia que o de lado é quem
-// decide) prova o número: reduzir mais aqui reabre a MESMA classe de defeito que
-// `FOLGA_DO_VIZINHO_NO_TRUCO` existe para evitar, só que entre a pilha e a vaza em vez de
-// entre a mesa e o assento. Crescer a carta jogada de verdade pede outra ideia — tirar a
-// pilha do eixo X (outra posição, não outro número) — e fica para uma sessão própria.
-const LADO_DA_PILHA = CARTA_L * 2.6;
+// A PILHA SAIU DO EIXO X EM 21/08. Investigação de 21/08 (registrada e não desfeita — ver
+// o histórico do repositório se um dia for preciso reabrir): é a pilha, não `RAIO_DA_VAZA`,
+// quem mandava em `caixaDaMesaDoTruco` numa mesa de 4, e como as três escalas de
+// `sincronizarMesaDoTruco` dividem por essa largura, a pilha larga empurrava a carta
+// jogada — a que o relato de campo reclamou ("as letras juntas" e "não dá pra ver a carta
+// no meio") — para baixo do piso da escala. Encolher o NÚMERO antigo não tinha folga (só
+// 0,05 no eixo X contra o pior assento, o de lado). A saída foi tirar a pilha do eixo X de
+// verdade: `LADO_DA_PILHA` encolheu para o mínimo que ainda separa os dois times
+// (times 1 e 3 do que era antes) e `PROFUNDIDADE_DA_PILHA` cresceu para compensar — a
+// pilha agora fica muito mais atrás do que ao lado.
+//
+// A FOLGA É MEDIDA POR SAT (separating axis theorem), não por raio nem por eixo isolado: a
+// carta da pilha e a carta jogada pelo assento de LADO (a que mais se aproxima — gira 90° e
+// estica exatamente onde a pilha ainda mora um pouco) são dois retângulos que podem estar
+// girados um em relação ao outro, e caixa-contra-caixa alinhada ao eixo superestimaria a
+// colisão. `tests/test-truco.mjs` roda a MESMA conta (`separacaoOBB`) e reprova se alguém
+// encolher isto sem medir de novo — é o sucessor da asserção por eixo que a investigação de
+// 21/08 tinha deixado, generalizada para valer também nesta posição nova.
+const LADO_DA_PILHA = CARTA_L * 1.53;          // era 2.6 — a pilha quase não estica mais em X
+const PROFUNDIDADE_DA_PILHA = CARTA_C * 1.14;  // era 0.55 — e estica bem mais em Z
 const PASSO_DA_PILHA = CARTA_E * 1.4;
 
 function postaDaVazaGanha(indice, time, eu, n) {
@@ -151,7 +154,7 @@ function postaDaVazaGanha(indice, time, eu, n) {
   return {
     x: lado * LADO_DA_PILHA,
     // Empilha para trás, para a pilha não crescer por cima da vaza em curso.
-    z: -CARTA_C * 0.55 - indice * CARTA_C * 0.12,
+    z: -PROFUNDIDADE_DA_PILHA - indice * CARTA_C * 0.12,
     y: indice * PASSO_DA_PILHA,
     rotY: lado === 0 ? VIRA_ROT : 0,
     // O melou fica levemente girado, para se distinguir de uma pilha comum sem precisar de
@@ -172,9 +175,15 @@ function layoutDasVazas(vazas, eu, n) {
 // Devolve meia-largura e meia-profundidade, em unidades de mundo, a partir do centro.
 function caixaDaMesaDoTruco(n) {
   const alcance = RAIO_DA_VAZA + Math.max(CARTA_C, CARTA_L) / 2;
+  // A carta mais funda da pilha é a 3ª (índice 2 — três vazas por mão), e é ela que decide
+  // o alcance em Z: `PROFUNDIDADE_DA_PILHA` mais o passo de cada carta empilhada mais a
+  // metade do comprimento da própria carta.
+  const pilhaZ = PROFUNDIDADE_DA_PILHA + 2 * CARTA_C * 0.12 + CARTA_C / 2;
   return {
-    // A pilha das vazas é o que estica a mesa para os lados — mais que as cartas jogadas.
+    // Desde que a pilha saiu do eixo X (21/08), é o alcance da PRÓPRIA vaza quem decide a
+    // largura — a pilha quase não soma mais nada aqui.
     x: Math.max(alcance, LADO_DA_PILHA + CARTA_L / 2),
-    z: n === 2 ? alcance : alcance * 0.92,   // mesa de 2 só usa frente e fundo
+    // E agora é a pilha, empurrada para trás, quem pode superar o alcance da vaza em Z.
+    z: Math.max(n === 2 ? alcance : alcance * 0.92, pilhaZ),   // mesa de 2 só usa frente e fundo
   };
 }

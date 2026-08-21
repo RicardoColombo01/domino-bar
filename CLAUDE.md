@@ -439,16 +439,16 @@ as Filas 5, 7, 10, 16, 17) e **varredura** (deu as 6, 11, 12, 13).
 
 | | |
 |---|---|
-| commitado | **v4.16.3** — a carta legível de novo: o naipe de paus e o vão canto↔valor. Antes: v4.16.2 (registro), v4.16.0 (Onda E) |
+| commitado | **v4.16.4** — a carta jogada cresce de verdade na mesa de 4 (a pilha saiu do eixo X). Antes: v4.16.3 (naipe de paus + vão do canto), v4.16.0 (Onda E) |
 | enviado | ainda não — só local |
 | PUBLICADO | ainda não |
-| em curso | **nada aberto no jogo** — a legibilidade da carta (relato de 21/08) foi medida e consertada nesta sessão; sobra em aberto só o tamanho da carta JOGADA na mesa de 4, registrado abaixo como item próprio |
+| em curso | **nada aberto no jogo** — o item 1 da fila (a carta ilegível, relato de 21/08) fechou de ponta a ponta nesta sessão: naipe de paus, vão canto↔valor, E o tamanho da carta jogada |
 | Filas 1–17 | todas fechadas · da Fila 15 sobra a Onda **C** (a E fechou na v4.16.0) |
-| o que vem | **crescer a carta jogada na mesa** (item novo, ver abaixo), depois **JOGAR**, **tirar as firulas de IA**, a Onda **C**, e o **PIFE**. Fase 5 ⏸ em espera |
+| o que vem | **JOGAR**, **tirar as firulas de IA** (✔ decidido — ícones ficam, copy já auditado, ver abaixo), a Onda **C**, e o **PIFE**. Fase 5 ⏸ em espera |
 
 ## O que vem, em ordem
 
-### 1º · A CARTA — CONSERTADA (21/08/2026), sobra um item novo
+### 1º · A CARTA — CONSERTADA DE PONTA A PONTA (21/08/2026)
 
 A Fila 17 (v4.15.0, 19/08) já tinha crescido o canto uma vez por relato de campo idêntico a
 este ("não dá para ver os símbolos nem o número"), e o relato voltou. Desta vez o Ricardo
@@ -479,22 +479,35 @@ apontava exatamente onde olhar.
 
 Provado com `npm run build` + `npm test` + `npm run textura`, sem `✗`.
 
-**O item que sobrou, e que NÃO foi resolvido nesta sessão — a hipótese 4 da lista antiga,**
-medida de verdade pela primeira vez: projetando a cena real (390×844, mesa de 4), a carta
-JOGADA na mesa mede entre **18% e 40% da altura** da carta na sua mão (62px contra 152px, no
-melhor caso; 28px no pior). É bem mais que "a carta é pequena" — é a câmera mais longe da
-mesa do que da mão, somado ao ângulo de quem jogou. Investigado a fundo: quem estica a mesa
-inteira numa mesa de 4 é a PILHA de vazas ganhas (`LADO_DA_PILHA`, `540-layout.js`), não a
-vaza em curso — 1.92 de meia-caixa contra 1.25 de alcance da própria vaza
-(`caixaDaMesaDoTruco`). Encolher `LADO_DA_PILHA` PARECE o conserto barato e não é: com uma
-redução de só 4% (2.6 → 2.5) a pilha já esbarra na carta jogada pelo assento de LADO (a que
-gira 90° e estica nesse eixo exatamente o que a pilha perdeu) — o valor de hoje (2.6) tem só
-0.05 de folga nesse eixo, quase nada de sobra. Ver a asserção nova em `tests/test-truco.mjs`
-("a pilha de vazas ganhas não esbarra na vaza em curso") — ela fecha um ponto cego que
-nenhuma suíte cobria (pilha e vaza são irmãs dentro do mesmo grupo 3D, e o `folgaEntre` do
-`test-telas` só compara ENTRE grupos, nunca dentro de um). **Crescer a carta jogada de
-verdade pede tirar a pilha do eixo X — outra POSIÇÃO na mesa, não outro número no mesmo
-lugar** — e isso é desenho novo, não ajuste de constante: fica para uma sessão própria.
+**A hipótese 4 da lista antiga — a carta jogada pequena na mesa de 4 — TAMBÉM foi consertada,
+numa segunda passada da mesma sessão (21/08/2026).** Medido primeiro, como sempre: projetando
+a cena real (390×844, mesa de 4), a carta JOGADA na mesa media entre **18% e 40% da altura**
+da carta na sua mão (62px contra 152px, no melhor caso; 28px no pior) — bem mais que "a carta
+é pequena", é a câmera mais longe da mesa do que da mão, somado ao ângulo de quem jogou.
+Investigado a fundo: quem esticava a mesa inteira numa mesa de 4 era a PILHA de vazas ganhas
+(`LADO_DA_PILHA`, `540-layout.js`), não a vaza em curso — 1.92 de meia-caixa contra 1.25 de
+alcance da própria vaza (`caixaDaMesaDoTruco`). **Encolher o NÚMERO não tinha folga** (com
+2.5, uma redução de só 4%, a pilha já esbarrava na carta jogada pelo assento de LADO — a que
+gira 90° e estica nesse eixo exatamente o que a pilha perdia).
+
+A saída foi tirar a pilha do eixo X DE VERDADE: ela ganhou uma segunda constante,
+`PROFUNDIDADE_DA_PILHA`, e passou a fugir principalmente para TRÁS (Z) em vez de para o LADO
+(X) — `LADO_DA_PILHA` caiu de `CARTA_L·2.6` para `CARTA_L·1.53` (quase não estica mais em X)
+e `PROFUNDIDADE_DA_PILHA` subiu para `CARTA_C·1.14`. Os números não saíram de tentativa e
+erro: uma busca por SAT (separating axis theorem — a mesma disciplina de "sobreposição se
+mede com CAIXAS", agora para caixas GIRADAS uma em relação à outra) achou o par com a menor
+largura em X que ainda mantém uma folga real contra a carta do assento de lado (0.25, medido
+— a asserção em `tests/test-truco.mjs`, "a pilha de vazas ganhas não esbarra na vaza em
+curso", roda a MESMA conta e reprova se alguém encolher sem medir de novo). `caixaDaMesaDoTruco`
+foi atualizada para declarar o novo alcance em Z, que agora é a pilha quem decide, não mais a
+vaza sozinha.
+
+**O resultado, medido projetando a cena de verdade:** a escala da mesa de 4, que nascia
+travada no piso (1.0) em qualquer celular, passou a **1.4–1.9** dependendo da largura da
+tela — e a carta jogada mais visível foi de 40% para **até 67%** da altura da carta na mão.
+Conferido nas SEIS telas do `test-telas` (as três cenas de truco em cada uma), sem folga
+negativa em nenhuma — inclusive as duas larguras do defeito histórico da Fila 7 (360×640 e
+390×844), que foram onde a pilha larga tinha sido pega no primeiro lugar.
 
 ### 2º · JOGAR — as perguntas que só o olho no celular responde
 
@@ -557,25 +570,21 @@ disparar para o commit do merge; destravou só depois de mexer em `Settings → 
 (reselecionar a branch). `curl` confirmou nos dois lados (`sw.js` e o HTML servido têm a
 feature) antes de declarar publicado — a régua de sempre.
 
-### 4º · TIRAR AS FIRULAS DE IA — pedido do Ricardo, 21/08/2026
+### 4º · TIRAR AS FIRULAS DE IA — ✔ FECHADO (21/08/2026), nada para mudar
 
-Palavras dele: "tirar as firulas de IA do site". Perguntado o que ele quis dizer, ele marcou
-as três: **gradientes/efeitos genéricos**, **emoji em excesso**, **texto/copy "de IA"**.
-Registrado sem implementar nada — "firula" é gosto, e só ele decide o que fica.
+Palavras do Ricardo: "tirar as firulas de IA do site". Perguntado o que ele quis dizer, ele
+marcou as três: **gradientes/efeitos genéricos**, **emoji em excesso**, **texto/copy "de
+IA"**. As três foram medidas — e a conclusão nas três é a mesma: NÃO HÁ FIRULA.
 
-**O que já está medido, para não redescobrir:**
+| categoria | o que existe hoje | veredito |
+|---|---|---|
+| gradientes | **dois** no CSS inteiro: a luz radial da lâmpada do boteco (`#app`) e um linear sutil na faixa de abas. Nenhum roxo/rosa, nenhum glassmorphism — `.painel` é `blur(7px)` + `rgba` escuro, que é a estética de boteco, não a de app gerado | fica |
+| emoji | **quatro**, todos como ÍCONE de botão, nenhum solto em texto: `♪` (som), `🔇` (mudo), `✕` (sair/fechar), `💬` (conversa). Perguntado direto: **contam como firula?** Resposta do Ricardo: "são só ícone funcional, ficam". Os naipes `♦♠♣♥` no atlas da carta não contam — são o DESENHO da carta, não UI | fica |
+| copy | auditado de ponta a ponta em 21/08: todo texto visível de `pagina.html` (títulos, placeholders, botões) e as mensagens que o jogo gera (`avisar()` em toda a casa, `narrarVaza`/`notaDaVezNoTruco`/`dicaDoTruco` no truco, os rótulos de `300-registro.js`/`590-registro.js`). Nenhuma ocorrência de tom de assistente — sem "Vamos!", sem exclamação de torcida, sem hedging. O padrão é terse e direto ("Bateu!", "Peguei, pode mostrar", "a mão não paga o que está valendo") | fica |
 
-| categoria | o que existe hoje |
-|---|---|
-| gradientes | **dois** no CSS inteiro: a luz radial da lâmpada do boteco (`#app`) e um linear sutil na faixa de abas. Nenhum roxo/rosa, nenhum glassmorphism — `.painel` é `blur(7px)` + `rgba` escuro, que é a estética de boteco, não a de app gerado |
-| emoji | **cinco**, todos como ÍCONE de botão, nenhum solto em texto: `♪` (som), `🔇` (mudo), `✕` (sair/fechar), `💬` (conversa). Os naipes `♦♠♣♥` no atlas da carta não contam — são o DESENHO da carta, não UI |
-| copy | ainda não auditado à mão — os títulos e placeholders são curtos e diretos ("Bateu!", "Fim de partida", "seu nome na mesa"), sem o tom de assistente. Precisa de uma leitura completa dos textos visíveis (`pagina.html` + as frases que os `590-registro.js`/`300-registro.js` mostram) antes de apontar o que cortar |
-
-**Antes de mexer, perguntar a ele:** os emojis de ícone (♪, 🔇, ✕, 💬) contam como firula, ou
-só sobra decorativa? Se contam, a saída é um SVG próprio por botão — mesma técnica dos naipes
-em `085-carta3d.js` (caminho desenhado, não glifo de fonte, que já resolveu o problema do
-tofu em Android antigo). Sem essa resposta, não dá para saber se o trabalho é "trocar cinco
-ícones" ou "reescrever a paleta inteira".
+Item fechado sem mudar uma linha de código — a "firula" que o pedido temia não existe nesta
+casa. Se o Ricardo apontar um exemplo específico depois de olhar com mais calma, é mais
+rápido reabrir o item do que ter arriscado reescrever algo que já estava certo.
 
 ### 5º · ONDA C — quem chega pela primeira vez · ~um dia
 
@@ -665,7 +674,7 @@ celular é o aparelho que mais achou defeito na história do projeto.
 | carta/peça não responde ao toque | `estaNaMesa(JOGOS.x)` nos ouvintes (560/110) — um jogo "roubando" o toque do outro |
 | mesa do truco cortada/escalada errada | `ESCALA_TRUCO_MAX` e `MESA_TRUCO_Z` (550) |
 | carta ilegível / naipe borrado | o atlas em `085-carta3d` (o naipe é CAMINHO, não glifo) |
-| carta jogada pequena numa mesa de 4 | `LADO_DA_PILHA` (`540-layout.js`) estica `caixaDaMesaDoTruco`, que divide a escala inteira — mas não tem folga sobrando, ver Lacunas |
+| carta jogada pequena numa mesa de 4 | consertado em 21/08 (a pilha saiu do eixo X) — se voltar, `LADO_DA_PILHA`/`PROFUNDIDADE_DA_PILHA` (`540-layout.js`) e `caixaDaMesaDoTruco`, ver Lacunas |
 | **a mesa PARA (sem mensagem e sem botão)** | **o defeito que mais dói.** Anote fase, vez e placar — `aplicarNoTruco` recusa em silêncio para quem não está na tela |
 | "continuar a partida" não aparece | `partidaGuardada` (casa) + `partida*Valida` (jogo) |
 | sobras de um jogo na mesa do outro | `JOGO.mesa.limpar` chamado em `abrirJogo` no jogo que SAI (Fila 16) |
@@ -686,10 +695,11 @@ celular é o aparelho que mais achou defeito na história do projeto.
   hostil (`NOME_DA_APOSTA[a.trucar]`).
 - `class="pecaEscolhida"`/`pecas` é vocabulário de dominó no HTML/CSS da casa (4º degrau da
   fronteira). `donoDaCadeira` restaurado não valida faixa (leitores limitados por `MESA.n`).
-- **`LADO_DA_PILHA` (550-truco/540-layout.js) não tem folga sobrando** — medido em 21/08: a
-  0.05 de distância da carta jogada pelo assento de lado, no eixo X. Não encolher sem
-  redesenhar a posição da pilha (tirá-la do eixo X); a asserção nova em `test-truco.mjs`
-  ("a pilha de vazas ganhas não esbarra na vaza em curso") acusa se alguém tentar.
+- **`LADO_DA_PILHA`/`PROFUNDIDADE_DA_PILHA` (50-truco/540-layout.js) não têm folga infinita**
+  — saíram de uma busca por SAT em 21/08 com 0.25 de folga contra a carta jogada pelo
+  assento de lado (o pior caso). Não encolher nenhum dos dois sem rodar a mesma busca; a
+  asserção em `test-truco.mjs` ("a pilha de vazas ganhas não esbarra na vaza em curso") mede
+  por SAT (caixas giradas, não raio nem eixo isolado) e acusa se alguém tentar.
 - O defeito 4 da Fila 6 (CDN caído) confere-se à mão: bloquear `cdn.jsdelivr.net` no DevTools.
 - `#semCarga` fica fora da lista do `mostrarTela` de propósito.
 
@@ -839,7 +849,7 @@ ferro decide a partida, sem truco, vale na mesa de 2 · carta do ferro cai abert
 vez para QUALQUER mesa (título+som, não `Notification`) · link `?sala=` pré-preenche e NÃO
 conecta sozinho · `beforeunload` só no online com partida viva · APK + Amazon, sem Play
 Store · próximo jogo: PIFE · temas de baralho em inventário (Onda E) · Fase 5 adiada até ele
-trocar a conta do GH.
+trocar a conta do GH · os ícones-emoji de botão (♪ 🔇 ✕ 💬) não são firula, ficam como estão.
 
 ---
 
