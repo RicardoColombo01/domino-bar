@@ -9242,6 +9242,23 @@ function layoutDaVaza(mesa, eu, n) {
 // das vazas é a informação mais importante da mesa depois da própria mão.
 //
 // `time` é 0 ou 1; `null` (melou) empilha no MEIO, porque ela não é de ninguém.
+//
+// INVESTIGADO EM 21/08 e a conclusão é NEGATIVA — registrada para não refazer a conta: é a
+// pilha, não `RAIO_DA_VAZA`, quem manda em `caixaDaMesaDoTruco` numa mesa de 4 (1.92 contra
+// 1.25 de alcance da vaza sozinha), e como as três escalas do `sincronizarMesaDoTruco`
+// dividem por essa largura, a pilha larga é o que empurra a carta jogada — a que o relato
+// de campo reclamou ("as letras juntas" e "não dá pra ver a carta no meio") — para baixo do
+// piso: numa mesa de 4 num celular a mesa nasce achatada na escala 1 (o piso "nunca abaixo
+// de uma peça"), e a carta jogada mede só 18–40% da carta na mão, medido projetando a cena
+// de verdade. ENCOLHER `LADO_DA_PILHA` PARECE O CONSERTO E NÃO É: com 2.5 (uma redução de
+// só 4%) a pilha já esbarra na carta jogada pelo pior assento — o de lado, cuja carta gira
+// 90° e estica em X exatamente o que a pilha perdeu. O piso de 2.6 tem só 0.05 de folga
+// nesse eixo (contra o alcance de 1.25 da vaza), e a asserção abaixo (por EIXO, não por
+// raio — o raio superestima o risco dos assentos de frente e escondia que o de lado é quem
+// decide) prova o número: reduzir mais aqui reabre a MESMA classe de defeito que
+// `FOLGA_DO_VIZINHO_NO_TRUCO` existe para evitar, só que entre a pilha e a vaza em vez de
+// entre a mesa e o assento. Crescer a carta jogada de verdade pede outra ideia — tirar a
+// pilha do eixo X (outra posição, não outro número) — e fica para uma sessão própria.
 const LADO_DA_PILHA = CARTA_L * 2.6;
 const PASSO_DA_PILHA = CARTA_E * 1.4;
 

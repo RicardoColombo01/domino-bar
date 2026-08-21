@@ -20,7 +20,7 @@ const mod = await import(buildModule([
   'NIVEIS_TRUCO', 'poderDaCarta', 'poderDaMao', 'escolherCarta', 'querTrucar',
   'responderAposta', 'avaliarAposta', 'informacaoDoTruco', 'jogadaDoBotNoTruco', 'dicaDoTruco',
   'postaDaVaza', 'layoutDaVaza', 'postaDaVazaGanha', 'layoutDasVazas', 'caixaDaMesaDoTruco',
-  'CARTA_C', 'CARTA_L', 'anguloDaCadeira',
+  'CARTA_C', 'CARTA_L', 'anguloDaCadeira', 'RAIO_DA_VAZA', 'LADO_DA_PILHA',
   // A CASA. Estes são os nomes que fazem o truco SENTAR: sem eles a suíte prova o cérebro e
   // deixa o corpo — a mesa 3D, a barra de apostas, o caminho da intenção — sem uma linha.
   'JOGOS', 'JOGO', 'JOGO_ID', 'abrirJogo', 'MESA', 'comecarLocal', 'pedirAcao',
@@ -1332,6 +1332,37 @@ console.log('\na mesa cabe no tampo');
   }
   const c4 = mod.caixaDaMesaDoTruco(4);
   console.log(`  mesa de 4: ${c4.x.toFixed(2)} × ${c4.z.toFixed(2)} de meia-caixa, dentro dos 6.1 do tampo`);
+}
+
+console.log('\na pilha de vazas ganhas não esbarra na vaza em curso');
+{
+  // PONTO CEGO QUE O `test-telas` NÃO FECHA: a pilha e a vaza em curso são IRMÃS dentro do
+  // mesmo grupo 3D (`grupoMesaDoTruco`), e o `folgaEntre` daquela suíte só compara ENTRE
+  // grupos — a mesma lacuna que a vira já pagou (comentário de `540-layout.js`, RAIO_DA_VAZA).
+  // Sem esta conta aqui, `LADO_DA_PILHA` podia encolher até a pilha morder a carta jogada e
+  // nenhuma suíte reclamaria — nem esta, nem uma foto, até alguém jogar de verdade.
+  //
+  // A CONTA É POR EIXO X, que é o único em que a pilha ameaça (ela só se move em x — em z e
+  // y ela empilha para trás e para cima, longe da vaza por desenho). Um "alcance" só de raio
+  // (como `caixaDaMesaDoTruco` usa) é pessimista demais aqui: a carta virada de lado (rotY
+  // perto de 90°) estica sobretudo em Z, não em X. A caixa real de cada carta gira com ela —
+  // `|cos(rotY)|·CARTA_L/2 + |sin(rotY)|·CARTA_C/2` é a meia-largura em X de um retângulo
+  // rotacionado, a mesma conta que uma caixa alinhada aos eixos faz para uma caixa girada.
+  const reachX = (p) => Math.abs(p.x) + Math.abs(Math.cos(p.rotY)) * mod.CARTA_L / 2
+    + Math.abs(Math.sin(p.rotY)) * mod.CARTA_C / 2;
+  for (const n2 of [2, 4]) {
+    let alcanceDaVazaX = 0;
+    for (let i = 0; i < n2; i++) alcanceDaVazaX = Math.max(alcanceDaVazaX, reachX(mod.postaDaVaza(i, 0, n2)));
+    // A pilha (lado ±1) não gira (rotY 0), então a meia-largura dela em X é só CARTA_L/2.
+    const bordaDaPilha = mod.LADO_DA_PILHA - mod.CARTA_L / 2;
+    const folga = bordaDaPilha - alcanceDaVazaX;
+    // 0.04: o piso de hoje (`LADO_DA_PILHA = CARTA_L * 2.6`) dá 0.052 de folga na mesa de 4 —
+    // essa é a régua que a mesa já roda, não uma que se inventou aqui. Abaixo de 0.04 é
+    // encolher além do que já está no ar.
+    ok(folga > 0.04,
+      `mesa de ${n2}: a pilha está perto demais da vaza em curso no eixo X: folga ${folga.toFixed(3)}`);
+    console.log(`  mesa de ${n2}: alcance X da vaza ${alcanceDaVazaX.toFixed(2)} · borda da pilha ${bordaDaPilha.toFixed(2)} · folga ${folga.toFixed(2)}`);
+  }
 }
 
 // ─── O TRUCO SENTA NA MESA ───────────────────────────────────────────────────
