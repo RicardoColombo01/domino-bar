@@ -20,7 +20,7 @@ const mod = await import(buildModule([
   'NIVEIS_TRUCO', 'poderDaCarta', 'poderDaMao', 'escolherCarta', 'querTrucar',
   'responderAposta', 'avaliarAposta', 'informacaoDoTruco', 'jogadaDoBotNoTruco', 'dicaDoTruco',
   'postaDaVaza', 'layoutDaVaza', 'postaDaVazaGanha', 'layoutDasVazas', 'caixaDaMesaDoTruco',
-  'CARTA_C', 'CARTA_L', 'anguloDaCadeira', 'RAIO_DA_VAZA', 'LADO_DA_PILHA',
+  'CARTA_C', 'CARTA_L', 'anguloDaCadeira', 'RAIO_DA_VAZA', 'LADO_DA_PILHA', 'PROFUNDIDADE_DA_PILHA',
   // A CASA. Estes são os nomes que fazem o truco SENTAR: sem eles a suíte prova o cérebro e
   // deixa o corpo — a mesa 3D, a barra de apostas, o caminho da intenção — sem uma linha.
   'JOGOS', 'JOGO', 'JOGO_ID', 'abrirJogo', 'MESA', 'comecarLocal', 'pedirAcao',
@@ -1339,29 +1339,57 @@ console.log('\na pilha de vazas ganhas não esbarra na vaza em curso');
   // PONTO CEGO QUE O `test-telas` NÃO FECHA: a pilha e a vaza em curso são IRMÃS dentro do
   // mesmo grupo 3D (`grupoMesaDoTruco`), e o `folgaEntre` daquela suíte só compara ENTRE
   // grupos — a mesma lacuna que a vira já pagou (comentário de `540-layout.js`, RAIO_DA_VAZA).
-  // Sem esta conta aqui, `LADO_DA_PILHA` podia encolher até a pilha morder a carta jogada e
+  // Sem esta conta aqui, a posição da pilha podia encolher até morder a carta jogada e
   // nenhuma suíte reclamaria — nem esta, nem uma foto, até alguém jogar de verdade.
   //
-  // A CONTA É POR EIXO X, que é o único em que a pilha ameaça (ela só se move em x — em z e
-  // y ela empilha para trás e para cima, longe da vaza por desenho). Um "alcance" só de raio
-  // (como `caixaDaMesaDoTruco` usa) é pessimista demais aqui: a carta virada de lado (rotY
-  // perto de 90°) estica sobretudo em Z, não em X. A caixa real de cada carta gira com ela —
-  // `|cos(rotY)|·CARTA_L/2 + |sin(rotY)|·CARTA_C/2` é a meia-largura em X de um retângulo
-  // rotacionado, a mesma conta que uma caixa alinhada aos eixos faz para uma caixa girada.
-  const reachX = (p) => Math.abs(p.x) + Math.abs(Math.cos(p.rotY)) * mod.CARTA_L / 2
-    + Math.abs(Math.sin(p.rotY)) * mod.CARTA_C / 2;
+  // A CONTA É POR SAT (separating axis theorem) — duas caixas RETANGULARES e GIRADAS, não
+  // um raio (pessimista: nenhuma carta alcança tão longe em toda direção) nem um eixo só
+  // (a versão de 21/08, que ficou cega quando a pilha saiu do X e passou a ameaçar em X e Z
+  // ao mesmo tempo). "Sobreposição se mede com CAIXAS" é a régua do projeto — SAT é a mesma
+  // régua para caixas que giram uma em relação à outra: testa a projeção nos eixos de AMBOS
+  // os retângulos, e a maior folga entre eles é a separação real, positiva se não colidem.
+  const cantos = (o) => {
+    const cs = Math.cos(o.rot), sn = Math.sin(o.rot), pts = [];
+    for (const [lx, lz] of [[o.hx, o.hz], [o.hx, -o.hz], [-o.hx, o.hz], [-o.hx, -o.hz]])
+      pts.push([o.x + lx * cs - lz * sn, o.z + lx * sn + lz * cs]);
+    return pts;
+  };
+  const separacaoOBB = (a, b) => {
+    const eixos = [[Math.cos(a.rot), -Math.sin(a.rot)], [Math.sin(a.rot), Math.cos(a.rot)],
+      [Math.cos(b.rot), -Math.sin(b.rot)], [Math.sin(b.rot), Math.cos(b.rot)]];
+    const ca = cantos(a), cb = cantos(b);
+    let folga = -Infinity;
+    for (const [ex, ez] of eixos) {
+      const proj = pts => pts.map(([x, z]) => x * ex + z * ez);
+      const pa = proj(ca), pb = proj(cb);
+      folga = Math.max(folga, Math.max(Math.min(...pb) - Math.max(...pa), Math.min(...pa) - Math.max(...pb)));
+    }
+    return folga;
+  };
+  const obbDaCarta = (x, z, rot) => ({ x, z, hx: mod.CARTA_L / 2, hz: mod.CARTA_C / 2, rot });
+
   for (const n2 of [2, 4]) {
-    let alcanceDaVazaX = 0;
-    for (let i = 0; i < n2; i++) alcanceDaVazaX = Math.max(alcanceDaVazaX, reachX(mod.postaDaVaza(i, 0, n2)));
-    // A pilha (lado ±1) não gira (rotY 0), então a meia-largura dela em X é só CARTA_L/2.
-    const bordaDaPilha = mod.LADO_DA_PILHA - mod.CARTA_L / 2;
-    const folga = bordaDaPilha - alcanceDaVazaX;
-    // 0.04: o piso de hoje (`LADO_DA_PILHA = CARTA_L * 2.6`) dá 0.052 de folga na mesa de 4 —
-    // essa é a régua que a mesa já roda, não uma que se inventou aqui. Abaixo de 0.04 é
-    // encolher além do que já está no ar.
-    ok(folga > 0.04,
-      `mesa de ${n2}: a pilha está perto demais da vaza em curso no eixo X: folga ${folga.toFixed(3)}`);
-    console.log(`  mesa de ${n2}: alcance X da vaza ${alcanceDaVazaX.toFixed(2)} · borda da pilha ${bordaDaPilha.toFixed(2)} · folga ${folga.toFixed(2)}`);
+    let pior = Infinity, piorDesc = '';
+    for (let cad = 0; cad < n2; cad++) {
+      const p = mod.postaDaVaza(cad, 0, n2);
+      const vaza = obbDaCarta(p.x, p.z, p.rotY);
+      // As três cartas da pilha (índice 0, 1, 2 — três vazas por mão), dos dois times: a
+      // mais perto da vaza é sempre a de índice 0, mas conferir as três é o que prova que
+      // ninguém vai mudar `postaDaVazaGanha` e reabrir a colisão só na 2ª ou 3ª carta.
+      for (const lado of [1, -1]) for (let indice = 0; indice < 3; indice++) {
+        const pilha = obbDaCarta(lado * mod.LADO_DA_PILHA,
+          -mod.PROFUNDIDADE_DA_PILHA - indice * mod.CARTA_C * 0.12, 0);
+        const sep = separacaoOBB(vaza, pilha);
+        if (sep < pior) { pior = sep; piorDesc = `cadeira ${cad} · lado ${lado} · carta ${indice}`; }
+      }
+    }
+    // 0.1: o mesmo tipo de piso que `FOLGA_DO_VIZINHO_NO_TRUCO` usa para os assentos, só que
+    // aqui o preço de errar é cosmético (cartas encostadas), não sobreposição de assento —
+    // por isso o piso é menor. `LADO_DA_PILHA`/`PROFUNDIDADE_DA_PILHA` (540-layout.js) foram
+    // escolhidos por esta mesma busca (SAT) em 21/08, com folga medida de 0.25 na mesa de 4.
+    ok(pior > 0.1,
+      `mesa de ${n2}: a pilha está perto demais da vaza em curso — folga ${pior.toFixed(3)} (${piorDesc})`);
+    console.log(`  mesa de ${n2}: pior folga ${pior.toFixed(2)} (${piorDesc})`);
   }
 }
 
