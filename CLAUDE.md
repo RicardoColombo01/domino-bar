@@ -435,16 +435,16 @@ truco no saguão por três releases.
 viaja com o repositório. As filas enchem por duas fontes: **campo** (jogar — a mais barata; deu
 as Filas 5, 7, 10, 16, 17) e **varredura** (deu as 6, 11, 12, 13).
 
-## ESTADO EM UMA OLHADA (20/08/2026)
+## ESTADO EM UMA OLHADA (21/08/2026)
 
 | | |
 |---|---|
-| commitado | **v4.15.0** — Fila 17: sonda de textura por ASSINATURA, canto da carta maior, leque tombado. Antes: v4.14.4 (Onda D), v4.14.3 (Fila 16, mesa órfã), v4.14.0 (Onda F) |
-| enviado | ✔ `git ls-remote` responde `49a0f83`, igual ao local |
-| PUBLICADO | ✔ `sw.js` servido `149d533767a9`, igual ao local, conferido duas vezes. A régua é o conteúdo servido |
-| em curso | **nada aberto no jogo** — a Onda E fechou nesta sessão, ainda não enviada nem publicada |
-| Filas 1–17 | todas fechadas · da Fila 15 sobra a Onda **C** (a E fechou) |
-| o que vem | **JOGAR** (abaixo, prioridade), depois a Onda **C**, depois o **PIFE**. Fase 5 ⏸ em espera |
+| commitado | **v4.16.0** — Onda E: os temas de baralho. Antes: v4.15.0 (Fila 17), v4.14.4 (Onda D), v4.14.3 (Fila 16, mesa órfã) |
+| enviado | ✔ `git ls-remote` responde `088c3cf`, igual ao local |
+| PUBLICADO | ✔ `sw.js` servido `a5f6c4adc2ad`, igual ao local — mas a fila do Pages TRAVOU de novo (~15 min sem rodada), destravou só depois de mexer em `Settings → Pages`. Quarta vez do padrão |
+| em curso | **nada aberto no jogo** |
+| Filas 1–17 | todas fechadas · da Fila 15 sobra a Onda **C** (a E fechou na v4.16.0) |
+| o que vem | **JOGAR** (prioridade), depois **tirar as firulas de IA** (pedido novo, precisa de resposta dele antes de mexer), a Onda **C**, e o **PIFE**. Fase 5 ⏸ em espera |
 
 ## O que vem, em ordem
 
@@ -462,7 +462,7 @@ data, use-a) · 2· qual jogo, quantas cadeiras, bot de que nível · 3· foto v
 descrição · 4· se a mesa PAROU: de quem era a vez, o que dizia o alto, se havia botão · 5·
 não precisa diagnosticar — a leitura erra muito aqui.
 
-### 2º · ONDA E — TEMAS DE BARALHO ✔ FEITA em 20/08/2026, ainda NÃO enviada nem publicada
+### 2º · ONDA E — TEMAS DE BARALHO ✔ FEITA e PUBLICADA (v4.16.0, 20-21/08/2026)
 
 Ideia do Ricardo (11/08). Branch `v4.16`, um commit. A infraestrutura era mesmo a da Fila
 7 — `pintar()` já guardava a receita para repintar; **trocar de tema é chamar `repintar` com
@@ -504,7 +504,32 @@ no `.grupo` (CSS), sem transbordo, quebra em duas fileiras (foto conferida, não
 **O mesmo inventário para a peça de dominó continua não feito** — ficou de fora de
 propósito, é trabalho de uma sessão própria se algum dia importar.
 
-### 3º · ONDA C — quem chega pela primeira vez · ~um dia
+**O deploy travou de novo — quarta vez do padrão.** ~15 min sem nenhuma rodada do Pages
+disparar para o commit do merge; destravou só depois de mexer em `Settings → Pages`
+(reselecionar a branch). `curl` confirmou nos dois lados (`sw.js` e o HTML servido têm a
+feature) antes de declarar publicado — a régua de sempre.
+
+### 3º · TIRAR AS FIRULAS DE IA — pedido do Ricardo, 21/08/2026
+
+Palavras dele: "tirar as firulas de IA do site". Perguntado o que ele quis dizer, ele marcou
+as três: **gradientes/efeitos genéricos**, **emoji em excesso**, **texto/copy "de IA"**.
+Registrado sem implementar nada — "firula" é gosto, e só ele decide o que fica.
+
+**O que já está medido, para não redescobrir:**
+
+| categoria | o que existe hoje |
+|---|---|
+| gradientes | **dois** no CSS inteiro: a luz radial da lâmpada do boteco (`#app`) e um linear sutil na faixa de abas. Nenhum roxo/rosa, nenhum glassmorphism — `.painel` é `blur(7px)` + `rgba` escuro, que é a estética de boteco, não a de app gerado |
+| emoji | **cinco**, todos como ÍCONE de botão, nenhum solto em texto: `♪` (som), `🔇` (mudo), `✕` (sair/fechar), `💬` (conversa). Os naipes `♦♠♣♥` no atlas da carta não contam — são o DESENHO da carta, não UI |
+| copy | ainda não auditado à mão — os títulos e placeholders são curtos e diretos ("Bateu!", "Fim de partida", "seu nome na mesa"), sem o tom de assistente. Precisa de uma leitura completa dos textos visíveis (`pagina.html` + as frases que os `590-registro.js`/`300-registro.js` mostram) antes de apontar o que cortar |
+
+**Antes de mexer, perguntar a ele:** os emojis de ícone (♪, 🔇, ✕, 💬) contam como firula, ou
+só sobra decorativa? Se contam, a saída é um SVG próprio por botão — mesma técnica dos naipes
+em `085-carta3d.js` (caminho desenhado, não glifo de fonte, que já resolveu o problema do
+tofu em Android antigo). Sem essa resposta, não dá para saber se o trabalho é "trocar cinco
+ícones" ou "reescrever a paleta inteira".
+
+### 4º · ONDA C — quem chega pela primeira vez · ~um dia
 
 **C1 · Estatísticas locais** (casa) — partidas/vitórias/derrotas por jogo; o dado já passa
 por `publicar()`. Armadilha: estado novo no `localStorage` contamina as suítes de navegador —
@@ -512,7 +537,7 @@ cada cena diz o que quer. **C2 · Primeira mão guiada** (casa + jogo) — reapr
 inteira. **C3 · Desfazer no HOTSEAT** (os dois) — `P` é dado puro, é uma cópia. **Só em mesa
 local**: online ou contra bot seria trapaça.
 
-### 4º · O PIFE (decisão do Ricardo, 11/08)
+### 5º · O PIFE (decisão do Ricardo, 11/08)
 
 Herda pronto: o online P2P inteiro, hotseat, som, boteco, telas, partida guardada, o baralho
 de 40 e a carta 3D (`40-cartas/`), os cinco encaixes de HUD (que o truco teve de inventar), e
