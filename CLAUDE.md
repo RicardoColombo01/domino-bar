@@ -439,66 +439,62 @@ as Filas 5, 7, 10, 16, 17) e **varredura** (deu as 6, 11, 12, 13).
 
 | | |
 |---|---|
-| commitado | **v4.16.0** — Onda E: os temas de baralho. Antes: v4.15.0 (Fila 17), v4.14.4 (Onda D), v4.14.3 (Fila 16, mesa órfã) |
-| enviado | ✔ `git ls-remote` responde `088c3cf`, igual ao local |
-| PUBLICADO | ✔ `sw.js` servido `a5f6c4adc2ad`, igual ao local — mas a fila do Pages TRAVOU de novo (~15 min sem rodada), destravou só depois de mexer em `Settings → Pages`. Quarta vez do padrão |
-| em curso | **nada aberto no jogo** — a legibilidade da carta voltou como relato de campo (21/08), registrada e AINDA NÃO investigada a fundo (medi de leve, não implementei) |
+| commitado | **v4.16.3** — a carta legível de novo: o naipe de paus e o vão canto↔valor. Antes: v4.16.2 (registro), v4.16.0 (Onda E) |
+| enviado | ainda não — só local |
+| PUBLICADO | ainda não |
+| em curso | **nada aberto no jogo** — a legibilidade da carta (relato de 21/08) foi medida e consertada nesta sessão; sobra em aberto só o tamanho da carta JOGADA na mesa de 4, registrado abaixo como item próprio |
 | Filas 1–17 | todas fechadas · da Fila 15 sobra a Onda **C** (a E fechou na v4.16.0) |
-| o que vem | **a carta ainda ilegível** (relato novo, prioridade), depois **JOGAR**, **tirar as firulas de IA**, a Onda **C**, e o **PIFE**. Fase 5 ⏸ em espera |
+| o que vem | **crescer a carta jogada na mesa** (item novo, ver abaixo), depois **JOGAR**, **tirar as firulas de IA**, a Onda **C**, e o **PIFE**. Fase 5 ⏸ em espera |
 
 ## O que vem, em ordem
 
-### 1º · A CARTA AINDA ESTÁ RUIM DE VER — relato do Ricardo, 21/08/2026
+### 1º · A CARTA — CONSERTADA (21/08/2026), sobra um item novo
 
-A Fila 17 (v4.15.0, 19/08) já cresceu o canto uma vez por relato de campo idêntico a este
-("não dá para ver os símbolos nem o número") — e o relato voltou depois do conserto. **Não
-implementar nada até MEDIR de novo com uma foto datada** — é a segunda vez que este exato
-sintoma se repete, e a Fila 17 já tinha um antecessor que corrigiu o diagnóstico errado uma
-vez (o centro do naipe não podia crescer por causa da sonda do E3-truco).
+A Fila 17 (v4.15.0, 19/08) já tinha crescido o canto uma vez por relato de campo idêntico a
+este ("não dá para ver os símbolos nem o número"), e o relato voltou. Desta vez o Ricardo
+mandou DUAS fotos datadas do celular — a primeira (14/08) acabou sendo de ANTES de dois
+consertos já publicados (a mesa órfã e o próprio crescimento do canto), e foi descartada só
+por isso; a segunda (21/08, jogo publicado) é que decidiu.
 
-**O que já foi medido nesta sessão, em Chrome headless — e o motivo de não bastar:**
+**O que a foto mostrou, ampliada:** o naipe de PAUS especificamente virava uma mancha de
+"orelhas de rato" na mesa, e o valor do canto encostava no naipe do canto em toda carta, não
+só paus. Duas hipóteses da lista antiga (fonte serifada, tombo da câmera) NÃO eram a causa —
+a medição foi direto nas duas formas, sem testar as outras primeiro, porque a foto já
+apontava exatamente onde olhar.
 
-```
-retrato 360×640    carta  88×113px de tela · valor do canto ~26px · naipe do canto ~11px
-retrato 390×844    carta 117×151px de tela · valor do canto ~35px · naipe do canto ~14px
-paisagem 844×390   carta  68× 89px de tela · valor do canto ~20px · naipe do canto  ~8px
-```
+1. **O naipe de paus** (`src/js/40-cartas/085-carta3d.js`, `naipeNoCanvas`) é feito de três
+   círculos sobrepostos, e os dois de baixo só se TOCAVAM — distância entre os centros
+   exatamente igual à soma dos raios, vão de largura ZERO. Um vão sem largura desaparece
+   debaixo de qualquer achatamento de câmera (e uma carta deitada na mesa, vista de cima, é
+   achatamento). Provado fora do jogo: repintando a mesma receita comprimida a 55% e a 40%
+   na vertical, reproduziu a mancha da foto. Afastei os três lóbulos de verdade e cobri o
+   furo que isso reabre no centro (o mesmo furo de 1px que uma versão anterior já pagou) com
+   um triângulo pequeno.
+2. **O vão entre o valor e o naipe do canto** media ~3px na textura (272px de altura de
+   célula) — quase nada, e por isso qualquer carta um pouco menor funde as duas coisas. O
+   naipe do canto desceu (0.115 → 0.16 da célula, raio 0.12 → 0.11) até abrir ~17px de vão
+   sem esbarrar no naipe grande do centro (a distância entre os dois ainda sobra ~8px no
+   pior caso — contas e prova em `085-carta3d.js`, coordenada da amostra atualizada em
+   `tests/test-textura.mjs`).
 
-As capturas de tela nesses tamanhos **leem razoavelmente bem** a olho nu — o que é
-informação, não conforto: a lacuna entre "legível no Chrome do computador" e "ruim de ver no
-celular de verdade" é EXATAMENTE a mesma classe de gancho que a Fila 7 e a Fila 17 já pagaram
-com a peça preta (o defeito só existe no aparelho real, nunca no headless). **Comece pedindo
-uma FOTO DATADA** (a regra de "como relatar barato", acima) antes de mexer em qualquer
-número — ela pode mostrar algo que uma medida de pixel não mostra: reflexo de tela, ângulo de
-segurar o aparelho, ou um tamanho de fonte do sistema que amplia tudo menos o canvas.
+Provado com `npm run build` + `npm test` + `npm run textura`, sem `✗`.
 
-**Hipóteses para amanhã, cada uma com o motivo — NENHUMA implementada, e a ordem não é
-prioridade, é custo:**
-
-1. **A fonte do valor é serifada** (`Georgia, "Times New Roman", serif`) — traço fino demais
-   para um glifo pequeno rasterizado e depois reamostrado pela GPU. Carta de baralho de
-   verdade usa fonte bold SEM serifa no índice do canto exatamente por isso: o serifado
-   embaça primeiro quando a resolução aperta. Troca de `font-family` é uma linha.
-2. **O canto não tem CONTORNO** — só `fillStyle` sólido. Um traço fino (cor oposta: escuro
-   no papel claro, claro no papel escuro dos temas Noturno/Boteco) mantém o glifo lendo
-   contra qualquer fundo, inclusive contra a carta vizinha encostada atrás dele no leque.
-   Fica mais importante agora que existem TEMAS — o contorno teria de vir do próprio tema
-   (082-temas.js), não de uma cor cravada.
-3. **O TOMBO comprime o glifo pela CÂMERA, e a Fila 17 só mediu o tamanho "de frente".**
-   `MAO_TRUCO_TOMBO` foi para 0.80, mas ninguém mediu quanto do glifo sobra depois da
-   projeção em perspectiva — pode ainda estar perto de metade, como o comentário da Fila 17
-   já registrava antes do conserto. Vale medir a ALTURA PROJETADA do glifo, não só a largura
-   da carta.
-4. **A carta é fisicamente pequena na mesa** (`CARTA_L`/`CARTA_C`) — se as três hipóteses
-   acima não bastarem, o problema pode não ser o DESENHO da carta, é o TAMANHO dela na cena.
-   Crescer a carta física custa reabrir a escala do truco (`ESCALA_TRUCO_MAX`,
-   `MESA_TRUCO_Z`) e a folga contra os assentos — é a hipótese mais cara, e por isso a
-   última a tentar.
-
-**A ordem de amanhã:** (a) pedir a foto datada · (b) comparar contra os números acima — a
-foto pode desmentir a lacuna "Chrome ≠ celular" e mostrar algo mais banal, tipo um tema
-específico com contraste ruim · (c) só então escolher entre 1–4, medir de novo, e provar por
-mutação como de costume.
+**O item que sobrou, e que NÃO foi resolvido nesta sessão — a hipótese 4 da lista antiga,**
+medida de verdade pela primeira vez: projetando a cena real (390×844, mesa de 4), a carta
+JOGADA na mesa mede entre **18% e 40% da altura** da carta na sua mão (62px contra 152px, no
+melhor caso; 28px no pior). É bem mais que "a carta é pequena" — é a câmera mais longe da
+mesa do que da mão, somado ao ângulo de quem jogou. Investigado a fundo: quem estica a mesa
+inteira numa mesa de 4 é a PILHA de vazas ganhas (`LADO_DA_PILHA`, `540-layout.js`), não a
+vaza em curso — 1.92 de meia-caixa contra 1.25 de alcance da própria vaza
+(`caixaDaMesaDoTruco`). Encolher `LADO_DA_PILHA` PARECE o conserto barato e não é: com uma
+redução de só 4% (2.6 → 2.5) a pilha já esbarra na carta jogada pelo assento de LADO (a que
+gira 90° e estica nesse eixo exatamente o que a pilha perdeu) — o valor de hoje (2.6) tem só
+0.05 de folga nesse eixo, quase nada de sobra. Ver a asserção nova em `tests/test-truco.mjs`
+("a pilha de vazas ganhas não esbarra na vaza em curso") — ela fecha um ponto cego que
+nenhuma suíte cobria (pilha e vaza são irmãs dentro do mesmo grupo 3D, e o `folgaEntre` do
+`test-telas` só compara ENTRE grupos, nunca dentro de um). **Crescer a carta jogada de
+verdade pede tirar a pilha do eixo X — outra POSIÇÃO na mesa, não outro número no mesmo
+lugar** — e isso é desenho novo, não ajuste de constante: fica para uma sessão própria.
 
 ### 2º · JOGAR — as perguntas que só o olho no celular responde
 
@@ -669,6 +665,7 @@ celular é o aparelho que mais achou defeito na história do projeto.
 | carta/peça não responde ao toque | `estaNaMesa(JOGOS.x)` nos ouvintes (560/110) — um jogo "roubando" o toque do outro |
 | mesa do truco cortada/escalada errada | `ESCALA_TRUCO_MAX` e `MESA_TRUCO_Z` (550) |
 | carta ilegível / naipe borrado | o atlas em `085-carta3d` (o naipe é CAMINHO, não glifo) |
+| carta jogada pequena numa mesa de 4 | `LADO_DA_PILHA` (`540-layout.js`) estica `caixaDaMesaDoTruco`, que divide a escala inteira — mas não tem folga sobrando, ver Lacunas |
 | **a mesa PARA (sem mensagem e sem botão)** | **o defeito que mais dói.** Anote fase, vez e placar — `aplicarNoTruco` recusa em silêncio para quem não está na tela |
 | "continuar a partida" não aparece | `partidaGuardada` (casa) + `partida*Valida` (jogo) |
 | sobras de um jogo na mesa do outro | `JOGO.mesa.limpar` chamado em `abrirJogo` no jogo que SAI (Fila 16) |
@@ -689,6 +686,10 @@ celular é o aparelho que mais achou defeito na história do projeto.
   hostil (`NOME_DA_APOSTA[a.trucar]`).
 - `class="pecaEscolhida"`/`pecas` é vocabulário de dominó no HTML/CSS da casa (4º degrau da
   fronteira). `donoDaCadeira` restaurado não valida faixa (leitores limitados por `MESA.n`).
+- **`LADO_DA_PILHA` (550-truco/540-layout.js) não tem folga sobrando** — medido em 21/08: a
+  0.05 de distância da carta jogada pelo assento de lado, no eixo X. Não encolher sem
+  redesenhar a posição da pilha (tirá-la do eixo X); a asserção nova em `test-truco.mjs`
+  ("a pilha de vazas ganhas não esbarra na vaza em curso") acusa se alguém tentar.
 - O defeito 4 da Fila 6 (CDN caído) confere-se à mão: bloquear `cdn.jsdelivr.net` no DevTools.
 - `#semCarga` fica fora da lista do `mostrarTela` de propósito.
 
