@@ -3056,13 +3056,26 @@ function naipeNoCanvas(c, id, x, y, r) {
   // bem no meio. A olho isso não aparece (o buraco some no antialiasing); quem viu foi a
   // asserção do atlas, amostrando o centro da célula e lendo "papel" nas dez cartas de paus.
   // É a diferença entre "está desenhado" e "está desenhado certo".
-  const rr = r * 0.46;
-  for (const [dx, dy] of [[0, -0.40], [-0.46, 0.24], [0.46, 0.24]]) {
+  //
+  // E AS TRÊS FOLHAS TÊM DE TER VÃO DE VERDADE ENTRE ELAS — relato de campo em 21/08/2026:
+  // numa carta deitada na mesa (a câmera olha de cima, o naipe fica achatado na vertical) o
+  // trevo virava uma mancha de "orelhas de rato". Medido: as duas folhas de baixo só se
+  // TOCAVAM (a distância entre os centros era exatamente a soma dos raios — vão de largura
+  // ZERO), e um vão sem largura desaparece debaixo de qualquer achatamento de câmera, não
+  // só deste. Repintando a mesma receita achatada a 55% e a 40% (o que a mesa faz com uma
+  // carta deitada), afastar as folhas é o que faz o vão sobreviver e o trevo continuar
+  // lendo como três folhas, não uma mancha. Afastar reabre o furo do meio — um pequeno
+  // triângulo cobre exatamente o ponto que a asserção do atlas sonda, mesmo lugar de antes.
+  const rr = r * 0.40;
+  for (const [dx, dy] of [[0, -0.50], [-0.62, 0.20], [0.62, 0.20]]) {
     c.beginPath(); c.arc(x + dx * r, y + dy * r, rr, 0, 7); c.fill();
   }
   c.beginPath();
-  c.moveTo(x - r * 0.32, y + r * 1.00);
-  c.quadraticCurveTo(x, y + r * 0.42, x + r * 0.32, y + r * 1.00);
+  c.moveTo(x, y - r * 0.16); c.lineTo(x - r * 0.20, y + r * 0.14); c.lineTo(x + r * 0.20, y + r * 0.14);
+  c.closePath(); c.fill();
+  c.beginPath();
+  c.moveTo(x - r * 0.28, y + r * 1.00);
+  c.quadraticCurveTo(x, y + r * 0.42, x + r * 0.28, y + r * 1.00);
   c.closePath(); c.fill();
 }
 
@@ -3123,6 +3136,18 @@ const texCartas = pintar('cartas', CEL_CARTA * COLS_CARTA, CEL_CARTA_A * LINS_CA
       // comprime o glifo em quase metade, e o que se lê são ~12px. Como o canto é a única
       // faixa visível da carta coberta no leque, é ele que carrega a legibilidade: valor a
       // 0.30, naipe a 0.12, e a âncora um tico para dentro para o conjunto caber.
+      //
+      // O VALOR E O NAIPE TÊM DE TER VÃO ENTRE ELES — relato de campo em 21/08: "as letras
+      // juntas" e "não dá pra ver a carta jogada no meio". Medido: o vão nativo entre o pé
+      // do valor e o topo do naipe era de ~3px na célula (272px de altura) — sobra em uma
+      // carta na mão, perto de zero numa carta jogada na mesa (que a foto mostrou rodar a
+      // ~58% do tamanho da carta na mão: mais longe da câmera, sem o `ESCALA_MAO_TRUCO`
+      // dedicado). Empurrar o naipe mais para baixo (0.115 → 0.16) quintuplica o vão sem
+      // esbarrar no naipe grande do centro — a distância entre os dois círculos ainda sobra
+      // ~8px no pior caso, contas com o raio do canto encolhido de 0.12 para 0.11 para
+      // garantir a folga. O tamanho da carta jogada em si (a outra metade do relato) é a
+      // hipótese mais cara da fila — mexe em `MESA_TRUCO_Z`/`ESCALA_TRUCO_MAX` (550-mesa.js)
+      // e precisa de medição em várias telas antes de tocar, não neste arquivo.
       const cantoDe = (px, py, virado) => {
         c.save();
         c.translate(ox + CEL_CARTA * px, oy + CEL_CARTA_A * py);
@@ -3131,7 +3156,7 @@ const texCartas = pintar('cartas', CEL_CARTA * COLS_CARTA, CEL_CARTA_A * LINS_CA
         c.textBaseline = 'middle';
         c.font = `bold ${Math.round(CEL_CARTA * 0.30)}px Georgia, "Times New Roman", serif`;
         c.fillText(rot, 0, -CEL_CARTA_A * 0.055);
-        naipeNoCanvas(c, naipe.id, 0, CEL_CARTA_A * 0.115, CEL_CARTA * 0.12);
+        naipeNoCanvas(c, naipe.id, 0, CEL_CARTA_A * 0.16, CEL_CARTA * 0.11);
         c.restore();
       };
       cantoDe(0.18, 0.16, false);
