@@ -440,11 +440,11 @@ as Filas 5, 7, 10, 16, 17) e **varredura** (deu as 6, 11, 12, 13).
 | | |
 |---|---|
 | commitado | **v4.16.4** — a carta jogada cresce de verdade na mesa de 4 (a pilha saiu do eixo X). Antes: v4.16.3 (naipe de paus + vão do canto), v4.16.0 (Onda E) |
-| enviado | ainda não — só local |
-| PUBLICADO | ainda não |
-| em curso | **nada aberto no jogo** — o item 1 da fila (a carta ilegível, relato de 21/08) fechou de ponta a ponta nesta sessão: naipe de paus, vão canto↔valor, E o tamanho da carta jogada |
+| enviado | ✔ `git ls-remote` responde `eb94588`, igual ao local |
+| PUBLICADO | ✔ `sw.js` servido `2e9b5665794c`, igual ao local — conferido depois do push, sem a fila do Pages travar desta vez |
+| em curso | **nada aberto no jogo.** Os dois itens da sessão de 21/08 fecharam de ponta a ponta: item 1 (a carta ilegível — naipe de paus, vão canto↔valor, E o tamanho da carta jogada) e item 4 (firulas de IA — auditado, nada para mudar) |
 | Filas 1–17 | todas fechadas · da Fila 15 sobra a Onda **C** (a E fechou na v4.16.0) |
-| o que vem | **JOGAR**, **tirar as firulas de IA** (✔ decidido — ícones ficam, copy já auditado, ver abaixo), a Onda **C**, e o **PIFE**. Fase 5 ⏸ em espera |
+| o que vem | **JOGAR** (só o Ricardo faz — precisa das mãos e do celular), depois a Onda **C** e o **PIFE** (trabalho de sessão própria, nenhum dos dois pedido ainda). Fase 5 ⏸ em espera |
 
 ## O que vem, em ordem
 
